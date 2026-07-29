@@ -29,22 +29,56 @@ hepsi bağımsız asset paketleri. Doğrulandı.
 
 ---
 
-## ⚠️ LİSANS DOĞRULANMASI GEREKENLER — yayına çıkmadan önce netleştir
+### `enemies/` + `heroes/` — LuizMelo paketleri
+- **Kaynak:** https://luizmelo.itch.io/ (Monsters Creatures Fantasy, Elementals serisi, Fire Knight)
+- **Lisans:** **CC0 (Creative Commons Zero)** — *"can be used in commercial and non-commercial
+  projects under CC0; credits are not required, but greatly appreciated"*
+- **Durum:** Ticari kullanım TAMAMEN SERBEST. CC0 en güçlü lisans: atıf zorunlu değil,
+  yeniden dağıtım bile serbest. Yine de atıf veriyoruz (takdir edilir).
+- Klasörler: `enemies/`, `heroes/leaf-ranger`, `heroes/water-priestess`,
+  `heroes/metal-bladekeeper`, `heroes/fire-knight`
 
-Aşağıdaki paketler zip içinde **lisans dosyası olmadan** geldi. Görsel imzaları
-LuizMelo'nun (itch.io) ücretsiz paketlerine ait; o paketler ticari kullanıma açık
-ve atıf "takdir edilir" şeklinde. **Ama bunu paketin kendi sayfasından doğrulamadan
-launch etmeyelim.**
+---
 
-| Klasör | Tahmini kaynak | Dosya | Yapılacak |
-|---|---|---|---|
-| `heroes/leaf-ranger` | LuizMelo — Elementals Leaf Ranger (Free v1.0) | 266 | itch.io sayfasından lisans doğrula + atıf ekle |
-| `heroes/water-priestess` | LuizMelo — Elementals Water Priestess (FREE v1.1) | 199 | aynı |
-| `heroes/metal-bladekeeper` | LuizMelo — Elementals Metal Bladekeeper (FREE v1.1) | 184 | aynı |
-| `heroes/fire-knight` | LuizMelo — Fire Knight | 164 | aynı |
-| `enemies/` | LuizMelo — Monsters Creatures Fantasy | 9 | aynı |
-| `ui/`, `ui/borders`, `icons/` | belirsiz (muhtemelen CraftPix / Pixel UI pack 3) | 200 | kaynağı tespit et |
-| `pickups/`, `misc/` | belirsiz | 116 | kaynağı tespit et |
+## ⚠️ KAYNAĞI TESPİT EDİLECEK — yayına çıkmadan önce netleştir
+
+Bu klasörler zip içinde lisans dosyası olmadan geldi ve kaynağı henüz doğrulanmadı.
+Muhtemelen CraftPix / Pixel UI pack 3 (ikisi de ticari serbest), ama **doğrulanmadan
+launch edilmemeli.**
+
+| Klasör | Tahmini kaynak | Dosya |
+|---|---|---|
+| `ui/`, `ui/borders` | Pixel UI pack 3 / CraftPix | 149 |
+| `icons/` | belirsiz | 51 |
+| `pickups/`, `misc/` | belirsiz | 116 |
+
+Riski sıfırlamanın en hızlı yolu: bu kategoriler için CraftPix'ten bilinen ücretsiz
+UI/ikon/pickup paketleri indirip belirsiz olanları değiştirmek.
+
+---
+
+## 🛒 DÜŞMAN ÇEŞİTLİLİĞİ — hazır ücretsiz kaynak listesi
+
+`enemies/` boşluğunu kapatacak, hepsi **ticari kullanıma açık** paketler.
+Gotik/ölü teması GRAVEBORN'a VS'in yarasa-bitki setinden bile daha iyi oturuyor.
+
+**LuizMelo (CC0, elimizdeki asset'lerle aynı stil → görsel tutarlılık garantili):**
+- Monsters Creatures Fantasy ✅ *(zaten elimizde)*
+- Wizard Pack — https://luizmelo.itch.io/wizard-pack
+- Martial Hero — https://luizmelo.itch.io/martial-hero
+- Tüm paketler: https://itch.io/profile/luizmelo
+
+**CraftPix (ücretsiz, royalty-free, "you can sell and distribute games with the assets"):**
+- Free Skeleton Pixel Art Sprite Sheets — **3 iskelet** (kılıç/okçu/mızrak), her biri
+  3 saldırı + walk + run + dead + hurt + idle animasyonlu
+- Free Zombie Sprite Sheet Pack — **3 zombi**
+- Free Urban Zombie Sprite Sheet Pack — idle/walk/attack/damage/fall
+- Free Fantasy Enemies Pixel Art Sprite Pack
+- Free RPG Monster Sprites
+- Free Slime Mobs (top-down)
+
+Bu liste **15+ ayrı düşman tipi** demek — `CLONE-SPEC.md`'nin ihtiyacı olan 5 tip + 3 boss'un
+fazlasıyla üstünde, sıfır maliyet ve sıfır hukuki risk.
 
 ---
 
