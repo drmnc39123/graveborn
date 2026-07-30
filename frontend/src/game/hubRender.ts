@@ -216,10 +216,13 @@ function buildMiniBase(world: MapWorld) {
   if (!g) return null;
   const img = g.createImageData(world.tileW, world.tileH);
   for (let i = 0; i < world.tiles.length; i++) {
-    const src = world.palette[world.tiles[i] - 1] ?? '';
+    const full = world.palette[world.tiles[i] - 1] ?? '';
+    // SADECE dosya adı — klasör adı değil. `/art/world/water/spr_grass_1.png`
+    // mini haritada mavi görünüyordu ve oyuncu bunu fark edip bildirdi.
+    const src = full.slice(full.lastIndexOf('/') + 1);
     let r = 30, gg = 38, b = 30;
-    if (/water|lake/i.test(src)) { r = 38; gg = 74; b = 104; }
-    else if (/path|stone|plaza|cobble/i.test(src)) { r = 104; gg = 98; b = 86; }
+    if (/water|lake|river|pond/i.test(src)) { r = 38; gg = 74; b = 104; }
+    else if (/path|stone|plaza|cobble|floor/i.test(src)) { r = 104; gg = 98; b = 86; }
     else if (/mud|dirt/i.test(src)) { r = 70; gg = 58; b = 44; }
     else if (/grass/i.test(src)) { r = 44; gg = 60; b = 40; }
     img.data[i * 4] = r; img.data[i * 4 + 1] = gg; img.data[i * 4 + 2] = b; img.data[i * 4 + 3] = 255;

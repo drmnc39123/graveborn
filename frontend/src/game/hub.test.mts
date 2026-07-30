@@ -28,6 +28,14 @@ function canWalk(fromX: number, fromY: number, dx: number, dy: number, steps = 3
   return Math.hypot(h.x - x0, h.y - y0) > 12;
 }
 
+/** Belirtilen X'i GEÇEBİLDİ mi? (mesafe değil, hattı aşmak) */
+function crossesX(fromX: number, y: number, targetX: number, steps = 90) {
+  const h = createHub(world);
+  h.x = fromX; h.y = y;
+  for (let i = 0; i < steps; i++) stepHub(h, 1 / 60, 1, 0);
+  return h.x > targetX;
+}
+
 console.log('\n[1] Dünya kurulumu');
 check('nesneler yüklendi', world.objects.length > 2000, `${world.objects.length}`);
 check('çarpışma kutuları var', world.solids.length > 800, `${world.solids.length}`);
@@ -68,18 +76,26 @@ for (const b of world.bridges) {
 check('köprüler geçilebilir', bridgeOk > 0, `${bridgeOk}/${world.bridges.length}`);
 
 console.log('\n[5] Su geçilmez (köprü dışında)');
+// DİKKAT: su tespiti SADECE dosya adından. Bu test önce tüm yolda arıyordu
+// ve `/art/world/water/spr_grass_1.png` (723 çim karosu) su sanılıyordu —
+// oyundaki hatanın aynısı testte de vardı, o yüzden hatayı yakalayamamıştı.
+const baseOf = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 let waterBlocked = 0, waterTried = 0;
 for (let i = 0; i < world.tiles.length && waterTried < 40; i++) {
   const src = world.palette[world.tiles[i] - 1] ?? '';
-  if (!/water|lake/i.test(src)) continue;
+  if (!/water|lake|river|pond/i.test(baseOf(src))) continue;
   const tx = i % world.tileW, ty = Math.floor(i / world.tileW);
   const wx = tx * MAP_TILE + 16, wy = ty * MAP_TILE + 16;
-  if (world.bridges.some((b) => wx > b.x && wx < b.x + b.w && wy > b.y && wy < b.y + b.h)) continue;
+  // Köprüye YAKIN karoları atla: oyuncu yürürken köprüye denk gelip
+  // haklı olarak geçiyor, test bunu "su engellemiyor" sanıyordu.
+  if (world.bridges.some((b) => wy > b.y - 80 && wy < b.y + b.h + 80)) continue;
   waterTried++;
-  // kıyıdan suya doğru yürü
-  if (!canWalk(wx - MAP_TILE * 2, wy, 1, 0, 60)) waterBlocked++;
+  // Kıyıdan başla, suyun ÖTESİNE geçmeye çalış.
+  // (Önce "hiç ilerledi mi" diye bakıyordum: oyuncu suya kadar yürüyordu ve
+  //  bu hareket 'geçti' sayılıyordu — testin kendi hatasıydı.)
+  if (!crossesX(wx - MAP_TILE * 2, wy, wx + MAP_TILE * 2)) waterBlocked++;
 }
-check('su engelli', waterTried === 0 || waterBlocked > waterTried * 0.6, `${waterBlocked}/${waterTried}`);
+check('su aşılamıyor', waterTried === 0 || waterBlocked > waterTried * 0.85, `${waterBlocked}/${waterTried}`);
 
 console.log('\n[6] Zemin nesneleri en altta çiziliyor');
 const ground = world.objects.filter((o) => (o.z ?? 0) < -1000);

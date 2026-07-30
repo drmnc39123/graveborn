@@ -14,6 +14,17 @@ export const HUB_PLAYER = { radius: 11, speed: 215 } as const;
  *  `floor` ve `tile` de dahil: kullanıcı zemin olarak taverna/kale döşemesi
  *  kullanmış, dar bir desen kale kapısını kapatıyordu. */
 const ROAD_LIKE = /path|road|cobble|pattern_stone|pavement|floor|tile(?!set)|brick|plaza|stair/i;
+
+/**
+ * Karo türünü SADECE DOSYA ADINDAN belirle — klasör adından ASLA.
+ *
+ * Bu yüzden 723 çim karosu su sanılıyordu: River paketinin çimi
+ * `/art/world/water/spr_grass_1.png` yolunda duruyor ve tüm yolda 'water'
+ * aradığım için su sayılıp geçilmez oluyordu. Görünmez engellerin sebebi buydu.
+ */
+const baseName = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+const WATER_LIKE = /water|lake|river|pond|sea|ocean/i;
+export const isWaterTile = (src: string) => WATER_LIKE.test(baseName(src));
 // Etkileşim mesafeleri. 62 px çok dardı: oyuncu binanın İÇİNE girmeden
 // "Press E" görünmüyordu. Artık bina cephesine yaklaşınca çıkıyor.
 export const DOOR_RADIUS = 132;
@@ -56,7 +67,7 @@ function blocked(s: HubState, x: number, y: number, r: number) {
   // tetiklenmediği için kapı kapalı kalıyordu.
   const px = Math.floor(x / MAP_TILE), py = Math.floor(y / MAP_TILE);
   const onRoad = px >= 0 && py >= 0 && px < w.tileW && py < w.tileH
-    && ROAD_LIKE.test(w.palette[w.tiles[py * w.tileW + px] - 1] ?? '');
+    && ROAD_LIKE.test(baseName(w.palette[w.tiles[py * w.tileW + px] - 1] ?? ''));
 
   for (const c of w.solids) {
     if (c.wall && onRoad) continue; // kapı geçişi
@@ -67,7 +78,7 @@ function blocked(s: HubState, x: number, y: number, r: number) {
   // Su geçilmez — AMA köprü varsa geçilir. Köprü bir nesne, su bir karo;
   // ikisi üst üste durduğu için karoya bakıp reddetmek köprüyü de kapatıyordu.
   const pal = w.palette[w.tiles[ty * w.tileW + tx] - 1];
-  if (pal && /water|lake/i.test(pal)) {
+  if (pal && isWaterTile(pal)) {
     for (const b of w.bridges) {
       if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) return false;
     }
