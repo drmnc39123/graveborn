@@ -12,6 +12,45 @@ import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState } from './hub';
 import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldObject } from './mapWorld';
 
+/**
+ * HATA AYIKLAMA — F1 ile açılır. Çarpışma kutularını, oyuncu yarıçapını ve
+ * etkileşim mesafelerini çizer.
+ * Neden var: "görünmez engel" şikayetlerini tahminle kovalamak yerine
+ * doğrudan görmek için. Kutu görünüyorsa sebebi bellidir.
+ */
+export const DEBUG = { collision: false };
+
+function drawCollisionDebug(
+  ctx: CanvasRenderingContext2D, s: HubState,
+  vl: number, vr: number, vt: number, vb: number,
+) {
+  const w = s.world;
+  ctx.save();
+  ctx.lineWidth = 2;
+  for (const c of w.solids) {
+    if (c.x + c.w < vl || c.x > vr || c.y + c.h < vt || c.y > vb) continue;
+    // duvarlar mavi (yol bunları deler), diğerleri kırmızı
+    ctx.fillStyle = c.wall ? 'rgba(90,150,255,0.28)' : 'rgba(255,60,80,0.28)';
+    ctx.strokeStyle = c.wall ? 'rgba(90,150,255,0.9)' : 'rgba(255,60,80,0.9)';
+    ctx.fillRect(c.x, c.y, c.w, c.h);
+    ctx.strokeRect(c.x, c.y, c.w, c.h);
+  }
+  // köprüler yeşil
+  ctx.strokeStyle = 'rgba(95,200,120,0.95)';
+  ctx.fillStyle = 'rgba(95,200,120,0.2)';
+  for (const b of w.bridges) {
+    if (b.x + b.w < vl || b.x > vr) continue;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+  }
+  // oyuncu yarıçapı
+  ctx.strokeStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, HUB_PLAYER.radius, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function renderHub(
   ctx: CanvasRenderingContext2D, s: HubState,
   w: number, h: number, dpr: number, time: number,
@@ -49,6 +88,7 @@ export function renderHub(
   for (let i = split; i < objs.length; i++) drawObject(ctx, objs[i], viewL, viewR, viewT, viewB, time);
 
   drawInteractGlow(ctx, s, time);
+  if (DEBUG.collision) drawCollisionDebug(ctx, s, viewL, viewR, viewT, viewB);
   ctx.restore();
 
   drawVignette(ctx, w, h);

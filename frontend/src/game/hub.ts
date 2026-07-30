@@ -9,10 +9,17 @@ import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldDoor, WorldTravel } from './mapWorld';
 
 export const HUB_PLAYER = { radius: 11, speed: 215 } as const;
+
+/** Yürünmek için yapılmış yüzeyler — bunların üstünde duvar engeli delinir.
+ *  `floor` ve `tile` de dahil: kullanıcı zemin olarak taverna/kale döşemesi
+ *  kullanmış, dar bir desen kale kapısını kapatıyordu. */
+const ROAD_LIKE = /path|road|cobble|pattern_stone|pavement|floor|tile(?!set)|brick|plaza|stair/i;
 // Etkileşim mesafeleri. 62 px çok dardı: oyuncu binanın İÇİNE girmeden
 // "Press E" görünmüyordu. Artık bina cephesine yaklaşınca çıkıyor.
 export const DOOR_RADIUS = 132;
 export const PORTAL_RADIUS = 108;
+/** Bu mesafeye girince seyahat portalı kendiliğinden çalışır (E gerekmez) */
+export const TRAVEL_TRIGGER = 34;
 
 export type BuildingId = string;
 
@@ -25,13 +32,15 @@ export interface HubState {
   atFight: boolean;
   /** ışınlanma sonrası kısa kilit — portalın üstünde durup geri zıplamayı önler */
   warpLock: number;
+  /** son ışınlanmanın adı — HUD kısa bir bildirim gösterir */
+  justWarped: string | null;
 }
 
 export function createHub(world: MapWorld): HubState {
   return {
     x: world.spawn.x, y: world.spawn.y,
     facingRight: true, moving: false, animT: 0,
-    world, atDoor: null, atTravel: null, atFight: false, warpLock: 0,
+    world, atDoor: null, atTravel: null, atFight: false, warpLock: 0, justWarped: null,
   };
 }
 
@@ -42,9 +51,12 @@ function blocked(s: HubState, x: number, y: number, r: number) {
   // Ayakların altındaki karo YOL mu? Öyleyse duvar/çit engelleri delinir:
   // harita yapan duvarın içinden yol geçirdiyse orada kapı vardır.
   // (Kalenin kapısına giden yol duvar tarafından kapatılıyordu.)
+  // "Yol" = yürünmek için yapılmış her yüzey. Sadece 'path|road' aramak
+  // yetmedi: kale kapısının zemini `spr_Traven_Floor_1.png` idi ve kural
+  // tetiklenmediği için kapı kapalı kalıyordu.
   const px = Math.floor(x / MAP_TILE), py = Math.floor(y / MAP_TILE);
   const onRoad = px >= 0 && py >= 0 && px < w.tileW && py < w.tileH
-    && /path|road|cobble|pattern_stone|pavement/i.test(w.palette[w.tiles[py * w.tileW + px] - 1] ?? '');
+    && ROAD_LIKE.test(w.palette[w.tiles[py * w.tileW + px] - 1] ?? '');
 
   for (const c of w.solids) {
     if (c.wall && onRoad) continue; // kapı geçişi
@@ -105,6 +117,17 @@ export function stepHub(s: HubState, dt: number, inx: number, iny: number) {
     }
   }
   s.atTravel = s.atFight ? null : bt;
+
+  // SEYAHAT PORTALI: içine girince KENDİLİĞİNDEN ışınlar.
+  // Oyuncu "içinden geçiyor" dedi — portalın üstünden yürüyüp hiçbir şey
+  // olmaması yanlış. E'ye basmayı beklemek de gereksiz; portal zaten geçit.
+  if (bt && !locked) {
+    const d = Math.hypot(bt.x - s.x, bt.y - s.y);
+    if (d < TRAVEL_TRIGGER) {
+      warp(s, bt.toX, bt.toY);
+      s.justWarped = bt.label;
+    }
+  }
 
   // bina kapısı (portallar öncelikli — istemler üst üste binmesin)
   let bd: WorldDoor | null = null;

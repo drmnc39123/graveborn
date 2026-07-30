@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createHub, stepHub, warp, type HubState } from '@/game/hub';
-import { renderHub } from '@/game/hubRender';
+import { renderHub, DEBUG } from '@/game/hubRender';
 import { loadMapWorld } from '@/game/mapWorld';
 import { preloadAll } from '@/game/sprites';
 import { unlockAudio, play } from '@/game/sfx';
@@ -28,6 +28,8 @@ export function HubCanvas({
 
   const [hint, setHint] = useState<Hint | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [debug, setDebug] = useState(false);
+  const [warpMsg, setWarpMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -81,6 +83,8 @@ export function HubCanvas({
         keysRef.current.add(k);
         if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
         if (k === 'e' || k === 'enter') interact();
+        // F1: çarpışma kutularını göster/gizle — "görünmez engel" avı için
+        if (e.key === 'F1') { e.preventDefault(); DEBUG.collision = !DEBUG.collision; setDebug(DEBUG.collision); }
       };
       const onKeyUp = (e: KeyboardEvent) => keysRef.current.delete(e.key.toLowerCase());
       window.addEventListener('keydown', onKeyDown);
@@ -137,6 +141,7 @@ export function HubCanvas({
         hintAcc += dt;
         if (hintAcc > 0.1) {
           hintAcc = 0;
+          if (hub.justWarped) { setWarpMsg(hub.justWarped); hub.justWarped = null; setTimeout(() => setWarpMsg(null), 1800); }
           if (hub.atFight) setHint({ kind: 'fight', title: hub.world.fight?.label ?? 'Fight Portal', sub: 'Choose a stage and descend' });
           else if (hub.atTravel) setHint({ kind: 'travel', title: hub.atTravel.label, sub: 'Step through to travel' });
           else if (hub.atDoor) setHint({ kind: 'door', title: hub.atDoor.label, sub: 'Enter' });
@@ -190,8 +195,15 @@ export function HubCanvas({
         </div>
       )}
 
-      <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 11, color: C.boneFaint }}>
-        WASD / arrows · E to interact
+      {warpMsg && (
+        <div style={{ position: 'absolute', top: '32%', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.ok }}>TRAVELLED</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: C.bone, textShadow: `0 0 20px ${C.ok}` }}>{warpMsg}</div>
+        </div>
+      )}
+
+      <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 11, color: debug ? C.blood : C.boneFaint }}>
+        WASD / arrows · E to interact · <b>F1</b> {debug ? 'çarpışma AÇIK' : 'çarpışma'}
       </div>
     </div>
   );
