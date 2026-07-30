@@ -13,6 +13,12 @@ export interface Enemy {
   x: number; y: number; hp: number; maxHp: number;
   speed: number; damage: number; radius: number; xp: number;
   color: string; hitFlash: number;
+  /** sprites.ts ENEMY_ART anahtarı (yoksa daire çizilir) */
+  art?: string;
+  /** animasyon zamanı — spawn'da rastgele ofsetlenir, yoksa 400 düşman
+   *  aynı frame'de yürür ve sürü robot gibi durur */
+  animT: number;
+  facingRight: boolean;
 }
 export interface Projectile {
   x: number; y: number; vx: number; vy: number;
@@ -43,6 +49,10 @@ export class Game {
   px = 0; py = 0;
   hp: number = PLAYER.maxHp;
   iframe = 0;
+  // sunum durumu — simülasyonu etkilemez, render okur
+  animT = 0;
+  moving = false;
+  facingRight = true;
   level = 1;
   xp = 0;
   xpNext: number = xpForLevel(1);
@@ -74,6 +84,7 @@ export class Game {
   // dahili
   private fireCd = 0;
   private spawnAcc = 0;
+  private spawnCount = 0; // sadece kozmetik animasyon ofseti için (RNG değil)
   private grid = new SpatialHash<Enemy>(64);
   private scratch: Enemy[] = [];
   /** ekran yarı-boyutu — spawn ringi için (render katmanı bildirir) */
@@ -121,6 +132,10 @@ export class Game {
     const sp = PLAYER.speed * this.stats.speedMul;
     this.px += this.inx * sp * dt;
     this.py += this.iny * sp * dt;
+    this.animT += dt;
+    this.moving = this.inx !== 0 || this.iny !== 0;
+    if (this.inx > 0.01) this.facingRight = true;
+    else if (this.inx < -0.01) this.facingRight = false;
     // arena sınırı
     const d = Math.hypot(this.px, this.py);
     if (d > RUN.arenaRadius) {
@@ -165,6 +180,10 @@ export class Game {
         hp: t.hp * hpScale, maxHp: t.hp * hpScale,
         speed: t.speed * spScale, damage: t.damage, radius: t.radius,
         xp: t.xp, color: t.color, hitFlash: 0,
+        // animT KOZMETİK → rng'den ALINMAZ. Aksi hâlde bir görsel değişiklik
+        // RNG akışını kaydırır ve aynı günlük seed başka bir run üretir.
+        // Spawn sayacından türetiliyor: deterministik, çeşitli, RNG'ye dokunmuyor.
+        art: t.art, animT: (this.spawnCount++ * 0.37) % 2, facingRight: true,
       });
     }
   }
@@ -177,6 +196,9 @@ export class Game {
       const d = Math.hypot(dx, dy) || 1;
       e.x += (dx / d) * e.speed * dt;
       e.y += (dy / d) * e.speed * dt;
+      e.animT += dt;
+      if (dx > 0.5) e.facingRight = true;
+      else if (dx < -0.5) e.facingRight = false;
       if (e.hitFlash > 0) e.hitFlash -= dt;
     }
   }

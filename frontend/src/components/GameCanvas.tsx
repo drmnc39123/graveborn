@@ -8,6 +8,7 @@ import { Game } from '@/game/engine';
 import { render } from '@/game/render';
 import { MAX_CATCHUP, RUN, TICK } from '@/game/config';
 import { seedFromString } from '@/game/rng';
+import { preloadAll } from '@/game/sprites';
 import { C, glass, ctaButton } from '@/lib/theme';
 
 interface Hud {
@@ -37,6 +38,7 @@ export function GameCanvas({ seedText }: { seedText: string }) {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
+    preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
     const game = new Game(seedFromString(seedText));
     gameRef.current = game;
 

@@ -5,6 +5,7 @@
 import { C } from '@/lib/theme';
 import { PLAYER, RUN } from './config';
 import type { Game } from './engine';
+import { drawActor, ENEMY_ART, PLAYER_ART } from './sprites';
 
 export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number, dpr: number) {
   const cx = w / 2;
@@ -12,6 +13,7 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
 
   // zemin
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false; // pixel-art: nearest-neighbor ZORUNLU, yoksa bulanıklaşır
   ctx.fillStyle = C.void;
   ctx.fillRect(0, 0, w, h);
 
@@ -68,11 +70,18 @@ function drawGems(ctx: CanvasRenderingContext2D, g: Game) {
 }
 
 function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
-  // renk bazlı gruplama: her tip tek path
+  // Sprite'ı olanları sprite ile çiz; olmayanlar (veya görsel henüz yüklenmediyse)
+  // renk bazlı daire path'ine düşer. Oyun asla boş ekran vermez.
   const byColor = new Map<string, typeof g.enemies>();
   const flashing: typeof g.enemies = [];
   for (let i = 0; i < g.enemies.length; i++) {
     const e = g.enemies[i];
+    if (e.art) {
+      const art = ENEMY_ART[e.art];
+      // vuruş anında 'hit' animasyonu varsa onu oynat
+      const anim = e.hitFlash > 0 && art?.anims.hit ? 'hit' : 'walk';
+      if (art && drawActor(ctx, art, anim, e.animT, e.x, e.y, e.facingRight)) continue;
+    }
     if (e.hitFlash > 0) { flashing.push(e); continue; }
     let arr = byColor.get(e.color);
     if (!arr) { arr = []; byColor.set(e.color, arr); }
@@ -129,6 +138,18 @@ function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {
   ctx.arc(g.px, g.py, PLAYER.pickupRadius * g.stats.magnetMul, 0, Math.PI * 2);
   ctx.stroke();
 
+  // sprite varsa onu çiz; dokunulmazlık penceresinde yarı saydam yanıp söner
+  if (!blink) {
+    if (drawActor(ctx, PLAYER_ART, g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight)) return;
+  } else {
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    const drawn = drawActor(ctx, PLAYER_ART, g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight);
+    ctx.restore();
+    if (drawn) return;
+  }
+
+  // görsel yüklenmediyse daireye düş
   ctx.fillStyle = blink ? C.blood : C.bone;
   ctx.strokeStyle = C.void;
   ctx.lineWidth = 3;

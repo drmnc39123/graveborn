@@ -48,11 +48,15 @@ export interface EnemyType {
   color: string;
   /** kaçıncı dakikadan sonra çıkmaya başlar */
   fromMinute: number;
+  /** sprites.ts ENEMY_ART anahtarı. Yoksa/yüklenmezse renkli daireye düşer. */
+  art?: string;
 }
 
 // Renkler theme.ts paletinden — MOR YOK
 export const ENEMIES: readonly EnemyType[] = [
-  { id: 'husk', hp: 10, speed: 42, damage: 6, radius: 11, xp: 1, color: '#8a97a3', fromMinute: 0 },
+  // NOT: şu an tam animasyonlu tek düşman sprite'ımız var (CC0 iskelet).
+  // Diğer tipler daireye düşüyor — meşru paketler gelince sadece `art` alanı eklenecek.
+  { id: 'husk', hp: 10, speed: 42, damage: 6, radius: 11, xp: 1, color: '#8a97a3', fromMinute: 0, art: 'skeleton' },
   { id: 'crawler', hp: 18, speed: 62, damage: 8, radius: 10, xp: 2, color: '#b8ae98', fromMinute: 2 },
   { id: 'brute', hp: 55, speed: 33, damage: 14, radius: 18, xp: 5, color: '#a01226', fromMinute: 4 },
   { id: 'shade', hp: 30, speed: 82, damage: 10, radius: 12, xp: 4, color: '#5f9e4a', fromMinute: 6 },
