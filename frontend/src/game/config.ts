@@ -52,6 +52,8 @@ export interface WeaponDef {
   name: string;
   desc: string;
   pattern: WeaponPattern;
+  /** true ise level-up havuzunda ÇIKMAZ — sadece evrimle gelir */
+  evolved?: boolean;
   maxLevel: number;
   damage: number;
   cooldownSec: number;
@@ -108,6 +110,81 @@ export const WEAPONS: readonly WeaponDef[] = [
     auraRadius: 74, areaPerLevel: 1.09,
   },
 ] as const;
+
+// ── EVRİMLEŞMİŞ SİLAHLAR ──────────────────────────────────────────────
+// VS kuralı: taban silah MAX + doğru pasif envanterde + boss sandığı.
+// Evrimleşmişler level-up havuzunda ÇIKMAZ (evolved: true) — sadece evrimle gelir.
+export const EVOLVED: readonly WeaponDef[] = [
+  {
+    id: 'reliquary', name: 'Reliquary', desc: 'Evolved Bone Shard', evolved: true,
+    pattern: 'aimed', maxLevel: 1, damage: 58, cooldownSec: 0.24,
+    dmgPerLevel: 1, cdPerLevel: 1, projectileSpeed: 560, spreadRad: 0.2,
+    pierce: 4, range: 760, lifeSec: 1.9, countLevels: [],
+  },
+  {
+    id: 'weeping', name: 'Weeping Wound', desc: 'Evolved Grave Lash', evolved: true,
+    pattern: 'sweep', maxLevel: 1, damage: 74, cooldownSec: 0.62,
+    dmgPerLevel: 1, cdPerLevel: 1, sweepW: 230, sweepH: 78, sweepLifeSec: 0.26,
+    areaPerLevel: 1, countLevels: [1], // her zaman iki yana birden
+  },
+  {
+    id: 'vespers', name: 'Black Vespers', desc: 'Evolved Litany', evolved: true,
+    pattern: 'orbit', maxLevel: 1, damage: 40, cooldownSec: 0.28,
+    dmgPerLevel: 1, cdPerLevel: 1, orbitRadius: 104, orbitSpeed: 3.1,
+    orbRadius: 20, areaPerLevel: 1, countLevels: [1, 1, 1, 1, 1], // 6 orb
+  },
+  {
+    id: 'glutton', name: 'Soul Glutton', desc: 'Evolved Wardsalt', evolved: true,
+    pattern: 'aura', maxLevel: 1, damage: 30, cooldownSec: 0.34,
+    dmgPerLevel: 1, cdPerLevel: 1, auraRadius: 132, areaPerLevel: 1,
+  },
+] as const;
+
+export interface EvolutionDef {
+  /** taban silah id — MAX seviyede olmalı */
+  weapon: string;
+  /** gereken pasif id — MAX seviyede olmalı (VS 1.0 sonrası kuralı) */
+  passive: string;
+  /** sonuç */
+  to: string;
+}
+
+export const EVOLUTIONS: readonly EvolutionDef[] = [
+  { weapon: 'shard', passive: 'hands', to: 'reliquary' },   // Bone Shard + Restless Hands
+  { weapon: 'lash', passive: 'flesh', to: 'weeping' },      // Grave Lash + Stubborn Flesh
+  { weapon: 'litany', passive: 'sigil', to: 'vespers' },    // Litany + Binding Sigil
+  { weapon: 'ward', passive: 'slowknit', to: 'glutton' },   // Wardsalt + Slow Knit
+] as const;
+
+/** id → tanım (taban + evrimleşmiş hepsi) */
+export function weaponById(id: string): WeaponDef | undefined {
+  return WEAPONS.find((w) => w.id === id) ?? EVOLVED.find((w) => w.id === id);
+}
+
+// ── BOSS'LAR ve SANDIK ────────────────────────────────────────────────
+// VS'te 25:00'te boss + 10:00 sonrası sandıklar evrim verir. Run'ımız 20 dk,
+// o yüzden ölçekledik: 5/10/15. 10:00'dan SONRAKİ sandıklar evrim verir.
+export interface BossSpawn {
+  atSec: number;
+  hp: number;
+  speed: number;
+  damage: number;
+  radius: number;
+  xp: number;
+  art: string;
+  label: string;
+  /** sandığı evrim verir mi (VS'in 10 dakika kuralı) */
+  evolutionChest: boolean;
+}
+
+export const BOSSES: readonly BossSpawn[] = [
+  { atSec: 5 * 60, hp: 2600, speed: 42, damage: 22, radius: 34, xp: 120, art: 'boss_mini', label: 'The Gorged', evolutionChest: false },
+  { atSec: 10 * 60, hp: 9000, speed: 46, damage: 28, radius: 42, xp: 320, art: 'boss_mega', label: 'Bell Warden', evolutionChest: true },
+  { atSec: 15 * 60, hp: 24000, speed: 52, damage: 36, radius: 50, xp: 800, art: 'boss_nightmare', label: 'The Unburied', evolutionChest: true },
+] as const;
+
+/** Sandık toplama yarıçapı — mücevherden büyük, kaçırmak zor olsun */
+export const CHEST_RADIUS = 22;
 
 /** Aynı anda taşınabilecek silah sayısı (VS: 6) */
 export const MAX_WEAPONS = 6;

@@ -245,5 +245,78 @@ console.log('\n[9] Pasifler ve istatistikler');
   check('pasif slot tavanı asilmiyor', g.passives.length <= MAX_PASSIVES, `${g.passives.length}/${MAX_PASSIVES}`);
 }
 
+// ── 10) Boss, sandık ve evrim ──
+console.log('\n[10] Boss / sandık / evrim');
+{
+  // Boss zamanında doğuyor mu
+  const g = new Game(seedFromString('boss'));
+  g.setViewport(1280, 720);
+  let firstBossAt = -1;
+  for (let i = 0; i < Math.round(330 / TICK); i++) {
+    g.hp = g.stats.maxHp;
+    if (g.phase === 'levelup') g.choose(g.offers[0].id);
+    g.setInput(...fleeInput(g));
+    g.step();
+    if (firstBossAt < 0 && g.enemies.some((e) => e.boss)) firstBossAt = g.time;
+  }
+  check('ilk boss 5. dakikada doğuyor', firstBossAt > 299 && firstBossAt < 302, `${firstBossAt.toFixed(1)} sn`);
+  const boss = g.enemies.find((e) => e.boss);
+  check('boss normal düşmandan çok daha güçlü', !boss || boss.maxHp > 2000, `${boss ? Math.round(boss.maxHp) : 'öldü'} HP`);
+}
+
+// Evrim ŞARTLARI: eksik pasifle evrim OLMAMALI, tam şartla OLMALI
+function evolveScenario(weaponMax: boolean, passiveMax: boolean) {
+  const g = new Game(1);
+  g.setViewport(1280, 720);
+  const w = g.weapons.find((x) => x.def.id === 'shard')!;
+  w.level = weaponMax ? w.def.maxLevel : 1;
+  (g as any).givePassive('hands');
+  const p = g.passives.find((x) => x.def.id === 'hands')!;
+  p.level = passiveMax ? p.def.maxLevel : 1;
+  (g as any).recomputeStats();
+  // evrim sandığını doğrudan oyuncunun üstüne koy
+  g.chests.push({ x: g.px, y: g.py, evolution: true });
+  g.step();
+  return g.weapons.find((x) => x.def.id === 'reliquary') !== undefined;
+}
+check('silah MAX değilse evrim OLMUYOR', !evolveScenario(false, true));
+check('pasif MAX değilse evrim OLMUYOR', !evolveScenario(true, false));
+check('ikisi de MAX ise evrim OLUYOR', evolveScenario(true, true));
+
+// Evrim sandığı OLMAYAN sandık evrim vermemeli, ama ödül vermeli
+{
+  const g = new Game(1);
+  g.setViewport(1280, 720);
+  const w = g.weapons.find((x) => x.def.id === 'shard')!;
+  w.level = w.def.maxLevel;
+  (g as any).givePassive('hands');
+  g.passives[0].level = g.passives[0].def.maxLevel;
+  const goldBefore = g.gold;
+  g.chests.push({ x: g.px, y: g.py, evolution: false });
+  g.step();
+  check('normal sandık evrim VERMİYOR', g.weapons.every((x) => x.def.id !== 'reliquary'));
+  check('normal sandık ödül veriyor', g.gold > goldBefore + 100, `+${Math.round(g.gold - goldBefore)} gold`);
+}
+
+// Evrimleşmiş silah level-up havuzunda ÇIKMAMALI
+{
+  const g = new Game(1);
+  g.setViewport(1280, 720);
+  const w = g.weapons.find((x) => x.def.id === 'shard')!;
+  w.level = w.def.maxLevel;
+  (g as any).givePassive('hands');
+  g.passives[0].level = g.passives[0].def.maxLevel;
+  g.chests.push({ x: g.px, y: g.py, evolution: true });
+  g.step();
+  let sawEvolvedOffer = false;
+  for (let i = 0; i < 60; i++) {
+    (g as any).rollOffers();
+    if (g.offers.some((o) => o.id === 'w:reliquary' || o.name === 'Reliquary')) sawEvolvedOffer = true;
+  }
+  check('evrimleşmiş silah level-up havuzunda çıkmıyor', !sawEvolvedOffer);
+  check('evrim sonrası taban silah gitti', g.weapons.every((x) => x.def.id !== 'shard'));
+  console.log(`     evrim sonrası: ${g.weapons.map((x) => x.def.name).join(', ')}`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

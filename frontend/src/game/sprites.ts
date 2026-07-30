@@ -77,6 +77,12 @@ export const ENEMY_ART: Record<string, ActorArt> = {
   mon_warrior: monster('09', 0.662, 0.812, 42),
   mon_hulk: monster('10', 0.562, 0.75, 48),
 
+  // Boss'lar — aynı sheet'ler, çok daha büyük çizilir. Silüet farkı yeterli:
+  // ekranda 400 düşman varken boyut en okunaklı "bu farklı" sinyali.
+  boss_mini: monster('01', 0.675, 0.838, 110),
+  boss_mega: monster('09', 0.662, 0.812, 140),
+  boss_nightmare: monster('10', 0.562, 0.75, 175),
+
   // LuizMelo (CC0) yandan görünüm — çeşitlilik için karışımda kalıyor
   skeleton: {
     drawHeight: 36, // ölçülen içerik 45×51 px / 150×150 frame

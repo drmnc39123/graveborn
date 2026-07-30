@@ -8,9 +8,10 @@
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatial';
 import {
-  CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, GEM, MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER,
-  RUN, SPAWN, STAT_BASE, STAT_CAP, TICK, WEAPONS,
-  xpForLevel, type EnemyType, type PassiveDef, type StatKey, type WeaponDef,
+  BOSSES, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
+  MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAT_BASE, STAT_CAP, TICK,
+  WEAPONS, weaponById, xpForLevel,
+  type EnemyType, type PassiveDef, type StatKey, type WeaponDef,
 } from './config';
 
 export interface Enemy {
@@ -25,7 +26,12 @@ export interface Enemy {
   facingRight: boolean;
   /** alan hasarı (aura/orbit) bekleme sayacı — sürekli temas anında eritmesin */
   contactCd: number;
+  /** boss ise: ölünce sandık düşürür, HP barı çizilir */
+  boss?: { label: string; evolutionChest: boolean };
 }
+
+/** Boss'un düşürdüğü sandık — toplanınca evrim veya ödül */
+export interface Chest { x: number; y: number; evolution: boolean }
 export interface Projectile {
   x: number; y: number; vx: number; vy: number;
   damage: number; radius: number; life: number; pierce: number;
@@ -106,6 +112,12 @@ export class Game {
   projectiles: Projectile[] = [];
   gems: Gem[] = [];
   hitZones: HitZone[] = [];
+  chests: Chest[] = [];
+
+  /** kaç boss doğdu — zamanlama tablosundaki sıradaki indeks */
+  private bossIndex = 0;
+  /** son evrim (HUD duyurusu için); render/HUD okur, simülasyonu etkilemez */
+  lastEvolution: { name: string; at: number } | null = null;
 
   /**
    * KOZMETİK olay kuyruğu — render katmanı her frame boşaltır.
@@ -208,6 +220,7 @@ export class Game {
 
     this.movePlayer(dt);
     this.rebuildGrid();
+    this.spawnBoss();
     this.spawn(dt);
     this.moveEnemies(dt);
     this.fire(dt);            // 4 desen: aimed / sweep / orbit / aura
@@ -217,6 +230,7 @@ export class Game {
     this.reapDead();          // TÜM hasar kaynaklarından sonra tek temizlik
     this.collidePlayer(dt);
     this.updateGems(dt);
+    this.updateChests();
 
     if (this.stats.recovery > 0 && this.hp > 0) {
       this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.recovery * dt);
@@ -286,6 +300,70 @@ export class Game {
         contactCd: 0,
       });
     }
+  }
+
+  /** Zamanı gelen boss'u doğur (tablodan, sırayla) */
+  private spawnBoss() {
+    if (this.bossIndex >= BOSSES.length) return;
+    const b = BOSSES[this.bossIndex];
+    if (this.time < b.atSec) return;
+    this.bossIndex += 1;
+
+    // Curse boss'u da güçlendirir — pasifin riski her yerde tutarlı olmalı
+    const hp = b.hp * this.stats.curse;
+    const ang = this.rng.range(0, Math.PI * 2);
+    const rx = this.viewW / 2 + SPAWN.ringMargin;
+    const ry = this.viewH / 2 + SPAWN.ringMargin;
+    this.enemies.push({
+      x: this.px + Math.cos(ang) * rx,
+      y: this.py + Math.sin(ang) * ry,
+      hp, maxHp: hp,
+      speed: b.speed, damage: b.damage, radius: b.radius,
+      xp: b.xp, color: '#a01226', hitFlash: 0,
+      art: b.art, animT: 0, facingRight: true, contactCd: 0,
+      boss: { label: b.label, evolutionChest: b.evolutionChest },
+    });
+  }
+
+  /** Sandık toplama — evrim sandığıysa evrim dene, olmazsa ödüle çevir */
+  private updateChests() {
+    for (let i = this.chests.length - 1; i >= 0; i--) {
+      const c = this.chests[i];
+      const dx = c.x - this.px, dy = c.y - this.py;
+      const rr = PLAYER.radius + CHEST_RADIUS;
+      if (dx * dx + dy * dy > rr * rr) continue;
+
+      this.swapRemove(this.chests, i);
+      const evolved = c.evolution ? this.tryEvolve() : false;
+      if (!evolved) {
+        // Evrim yoksa sandık boşa gitmesin (VS: sandık altın/XP verir)
+        this.gold += 200 * this.stats.greed;
+        this.addXp(60);
+      }
+    }
+  }
+
+  /**
+   * VS evrim kuralı: taban silah MAX + gereken pasif MAX + evrim sandığı.
+   * Uygun ilk eşleşme evrimleşir (VS'te de sandık başına bir evrim).
+   */
+  private tryEvolve(): boolean {
+    for (const ev of EVOLUTIONS) {
+      const w = this.weapons.find((x) => x.def.id === ev.weapon);
+      if (!w || w.level < w.def.maxLevel) continue;
+      const p = this.passives.find((x) => x.def.id === ev.passive);
+      if (!p || p.level < p.def.maxLevel) continue;
+
+      const to = weaponById(ev.to);
+      if (!to) continue;
+      // Taban silah gider, yerine evrimleşmiş gelir. Pasif KALIR (VS ile aynı).
+      w.def = to;
+      w.level = 1;
+      w.cd = 0;
+      this.lastEvolution = { name: to.name, at: this.time };
+      return true;
+    }
+    return false;
   }
 
   private moveEnemies(dt: number) {
@@ -505,6 +583,7 @@ export class Game {
     this.kills += 1;
     this.gold += this.stats.greed; // Coin Mask
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
+    if (e.boss) this.chests.push({ x: e.x, y: e.y, evolution: e.boss.evolutionChest });
     // headless koşuda render boşaltmaz → tavan koy, sonsuz büyümesin
     if (this.deaths.length < 256) this.deaths.push({ x: e.x, y: e.y });
   }

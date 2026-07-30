@@ -19,6 +19,7 @@ interface Hud {
   weapons: { name: string; level: number }[];
   passives: { name: string; level: number }[];
   revives: number;
+  evolution: { name: string; at: number } | null;
 }
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -153,6 +154,7 @@ export function GameCanvas({ seedText }: { seedText: string }) {
           weapons: game.weapons.map((w) => ({ name: w.def.name, level: w.level })),
           passives: game.passives.map((p) => ({ name: p.def.name, level: p.level })),
           revives: game.revives,
+          evolution: game.lastEvolution,
         });
       }
     };
@@ -191,6 +193,17 @@ export function GameCanvas({ seedText }: { seedText: string }) {
               <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
             </div>
           </div>
+
+          {/* Evrim duyurusu — 4 saniye görünür. Oyuncu bunu kaçırmamalı,
+              run'ın en büyük anı. */}
+          {hud.evolution && hud.time - hud.evolution.at < 4 && (
+            <div style={{ position: 'absolute', top: '30%', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
+              <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 3, color: C.candle, marginBottom: 4 }}>EVOLVED</div>
+              <div style={{ fontSize: 34, fontWeight: 900, color: C.bone, textShadow: `0 0 26px ${C.candle}, 0 2px 0 ${C.void}` }}>
+                {hud.evolution.name}
+              </div>
+            </div>
+          )}
 
           {/* alt sol: can + istatistik */}
           <div style={{ position: 'absolute', bottom: 12, left: 12, pointerEvents: 'none' }}>

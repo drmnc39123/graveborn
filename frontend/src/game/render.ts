@@ -68,7 +68,9 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawGround(ctx, g, w, h);
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
+  drawChests(ctx, g);
   drawEnemies(ctx, g);
+  drawBossBars(ctx, g);
   drawEffects(ctx); // ölüm patlamaları düşmanların üstünde, oyuncunun altında
   drawHitZones(ctx, g);
   drawOrbits(ctx, g);
@@ -161,6 +163,63 @@ function drawGems(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.lineTo(m.x - 4, m.y);
   }
   ctx.fill();
+}
+
+/** Boss sandığı — nabız gibi parlar, kaçırılmasın */
+function drawChests(ctx: CanvasRenderingContext2D, g: Game) {
+  if (!g.chests.length) return;
+  const t = g.time;
+  for (const c of g.chests) {
+    const pulse = 0.72 + Math.sin(t * 5) * 0.28;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 44 * pulse);
+    const tint = c.evolution ? '239,167,46' : '138,151,163';
+    glow.addColorStop(0, `rgba(${tint},0.5)`);
+    glow.addColorStop(1, `rgba(${tint},0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, 44 * pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // sandık gövdesi
+    ctx.fillStyle = c.evolution ? C.candle : C.ice;
+    ctx.strokeStyle = C.void;
+    ctx.lineWidth = 3;
+    const s = 15;
+    ctx.beginPath();
+    ctx.roundRect(c.x - s, c.y - s * 0.75, s * 2, s * 1.5, 4);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(10,8,6,0.55)';
+    ctx.fillRect(c.x - s, c.y - 2.5, s * 2, 5);
+  }
+}
+
+/** Boss HP barı — üstünde isim ve can. Normal düşmanda gösterilmez. */
+function drawBossBars(ctx: CanvasRenderingContext2D, g: Game) {
+  for (const e of g.enemies) {
+    if (!e.boss) continue;
+    const w = 118, h = 8;
+    const x = e.x - w / 2;
+    const y = e.y - e.radius - 34;
+    const k = Math.max(0, e.hp / e.maxHp);
+
+    ctx.fillStyle = 'rgba(10,8,6,0.75)';
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = C.blood;
+    ctx.fillRect(x, y, w * k, h);
+    ctx.strokeStyle = 'rgba(227,216,192,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.fillStyle = C.bone;
+    ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(e.boss.label, e.x, y - 6);
+    ctx.textAlign = 'left';
+  }
 }
 
 function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
