@@ -18,9 +18,16 @@ export interface AnimDef {
 }
 
 export interface ActorArt {
-  /** Ekranda kaplayacağı yükseklik (px). Frame yüksekliğinden bağımsız. */
+  /** KARAKTERİN ekrandaki yüksekliği (px) — frame'in değil. */
   drawHeight: number;
-  /** Frame içinde figürün ayak hizası (0=üst, 1=alt). LuizMelo frame'leri bol boşluklu. */
+  /**
+   * Karakterin frame yüksekliğine oranı (0..1). Bu paketlerin frame'leri bol
+   * boşluklu: 150×150 karenin içinde 51 px'lik iskelet var. Bu alan olmadan
+   * ölçekleme frame'e göre yapılır ve karakter minik çıkar (ilk sürümde öyle oldu).
+   * Değerler alfa sınır kutusu ÖLÇÜLEREK bulundu, tahmin değil.
+   */
+  contentRatio: number;
+  /** Ayak hizasının frame yüksekliğine oranı (0=üst, 1=alt). Ölçülmüş. */
   anchorY: number;
   /** Sprite sağa bakıyorsa hareket yönüne göre çevir */
   flipByVelocity: boolean;
@@ -35,8 +42,9 @@ const SEQ = (src: string, frames: number, fps = 10): AnimDef => ({ kind: 'sequen
 /** Düşman görselleri — config.ts'teki EnemyType.art anahtarıyla eşleşir */
 export const ENEMY_ART: Record<string, ActorArt> = {
   skeleton: {
-    drawHeight: 46,
-    anchorY: 0.78,
+    drawHeight: 36, // ölçülen içerik 45×51 px / 150×150 frame
+    contentRatio: 0.34,
+    anchorY: 0.673,
     flipByVelocity: true,
     anims: {
       walk: SHEET('/art/enemies/Walk.png', 4, 8),
@@ -49,8 +57,9 @@ export const ENEMY_ART: Record<string, ActorArt> = {
 };
 
 export const PLAYER_ART: ActorArt = {
-  drawHeight: 58,
-  anchorY: 0.72,
+  drawHeight: 44, // ölçülen içerik 60×44 px / 288×128 frame
+  contentRatio: 0.344,
+  anchorY: 0.992,
   flipByVelocity: true,
   anims: {
     idle: SEQ('/art/heroes/fire-knight/idle_{i}.png', 8, 8),
@@ -123,12 +132,13 @@ export function drawActor(
     sh = img.height;
   }
 
-  const scale = art.drawHeight / sh;
-  const dw = sw * scale;
-  const dh = art.drawHeight;
-  // x merkez, y ayak hizası
-  const dx = x - dw / 2;
-  const dy = y - dh * art.anchorY;
+  // drawHeight KARAKTERİN boyu → ölçek içerik oranı üzerinden hesaplanır.
+  // (Frame yüksekliğine bölmek karakteri %34 boyunda çizer — ilk sürümdeki hata.)
+  const scale = art.drawHeight / (sh * art.contentRatio);
+  const dw = sw * scale;   // çizilen TÜM frame genişliği
+  const dh = sh * scale;   // çizilen TÜM frame yüksekliği
+  const dx = x - dw / 2;                  // yatayda frame ortalanır
+  const dy = y - dh * art.anchorY;        // dikeyde ayak hizası world y'ye oturur
 
   if (art.flipByVelocity && !facingRight) {
     ctx.save();
