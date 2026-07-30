@@ -45,6 +45,9 @@ export default function EditorPage() {
   /** silgi modu — açıkken tıklama/sürükleme siler */
   const [erase, setErase] = useState(false);
   const [autoAt, setAutoAt] = useState<string>('');
+  /** çizim gerekiyor mu — boştayken kare harcamamak için */
+  const dirtyRef = useRef(true);
+  const markDirty = useCallback(() => { dirtyRef.current = true; }, []);
 
   /**
    * OTOMATİK KAYDETME — 30 dakikalık emek kaybının sebebi buydu, artık var.
@@ -136,6 +139,13 @@ export default function EditorPage() {
 
     const draw = () => {
       raf = requestAnimationFrame(draw);
+      // ── DONMA HATASI 3: boşa çizim ──
+      // Editör çoğu zaman durağan ama döngü saniyede 60 kez tüm sahneyi
+      // çiziyordu. Artık SADECE bir şey değiştiğinde çiziyor; boştayken
+      // kare maliyeti sıfır.
+      if (!dirtyRef.current) return;
+      dirtyRef.current = false;
+
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = cv.clientWidth, h = cv.clientHeight;
       if (cv.width !== w * dpr) { cv.width = w * dpr; cv.height = h * dpr; }
@@ -151,13 +161,24 @@ export default function EditorPage() {
       const T = MAP_TILE;
       const { terrain } = doc;
 
+      // ── GÖRÜNÜR ALAN (culling) ──
+      // DONMA HATASI 2: burada tüm harita her karede çiziliyordu.
+      // 6144 karo + 1294 nesne × 60 fps = saniyede ~444.000 çizim çağrısı.
+      // Artık sadece kameraya giren çiziliyor; harita büyüdükçe maliyet artmıyor.
+      const viewL = camRef.current.x, viewT = camRef.current.y;
+      const viewR = viewL + w / zoom, viewB = viewT + h / zoom;
+
       // zemin — sürükleyerek boyarken tampondan oku, böylece anlık görünür
-      // (tampon setDoc'a girmiyor; donmayı önleyen şey bu)
+      // (tampon setDoc'a girmiyor; ilk donmayı önleyen şey oydu)
       const buf = paintBufRef.current;
       const tData = buf ? buf.data : terrain.data;
       const tPal = buf ? buf.palette : terrain.palette;
-      for (let ty = 0; ty < terrain.h; ty++) {
-        for (let tx = 0; tx < terrain.w; tx++) {
+      const tx0 = Math.max(0, Math.floor(viewL / T));
+      const tx1 = Math.min(terrain.w - 1, Math.ceil(viewR / T));
+      const ty0 = Math.max(0, Math.floor(viewT / T));
+      const ty1 = Math.min(terrain.h - 1, Math.ceil(viewB / T));
+      for (let ty = ty0; ty <= ty1; ty++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
           const v = tData[ty * terrain.w + tx];
           if (!v) continue;
           const im = img(tPal[v - 1]);
@@ -165,13 +186,15 @@ export default function EditorPage() {
         }
       }
 
-      // karo ızgarası
-      ctx.strokeStyle = 'rgba(227,216,192,0.07)';
-      ctx.lineWidth = 1 / zoom;
-      ctx.beginPath();
-      for (let x = 0; x <= terrain.w; x++) { ctx.moveTo(x * T, 0); ctx.lineTo(x * T, terrain.h * T); }
-      for (let y = 0; y <= terrain.h; y++) { ctx.moveTo(0, y * T); ctx.lineTo(terrain.w * T, y * T); }
-      ctx.stroke();
+      // karo ızgarası — sadece görünen aralık (yakınlaşınca çizgi seli olmasın)
+      if (zoom > 0.35) {
+        ctx.strokeStyle = 'rgba(227,216,192,0.07)';
+        ctx.lineWidth = 1 / zoom;
+        ctx.beginPath();
+        for (let x = tx0; x <= tx1 + 1; x++) { ctx.moveTo(x * T, ty0 * T); ctx.lineTo(x * T, (ty1 + 1) * T); }
+        for (let y = ty0; y <= ty1 + 1; y++) { ctx.moveTo(tx0 * T, y * T); ctx.lineTo((tx1 + 1) * T, y * T); }
+        ctx.stroke();
+      }
 
       // EKRAN IZGARASI — harita kaç ekran ediyor, gözle ölç.
       // "Her şeyi görünen alana mı dizeceğim?" sorusunun cevabı: hayır, ama
@@ -180,19 +203,28 @@ export default function EditorPage() {
         const CW = 1280, CH = 720;
         ctx.strokeStyle = 'rgba(122,190,255,0.35)';
         ctx.lineWidth = 2 / zoom;
+        const gx0 = Math.floor(viewL / CW) * CW, gx1 = Math.ceil(viewR / CW) * CW;
+        const gy0 = Math.floor(viewT / CH) * CH, gy1 = Math.ceil(viewB / CH) * CH;
         ctx.beginPath();
-        for (let x = 0; x <= terrain.w * T; x += CW) { ctx.moveTo(x, 0); ctx.lineTo(x, terrain.h * T); }
-        for (let y = 0; y <= terrain.h * T; y += CH) { ctx.moveTo(0, y); ctx.lineTo(terrain.w * T, y); }
+        for (let x = gx0; x <= gx1; x += CW) { ctx.moveTo(x, gy0); ctx.lineTo(x, gy1); }
+        for (let y = gy0; y <= gy1; y += CH) { ctx.moveTo(gx0, y); ctx.lineTo(gx1, y); }
         ctx.stroke();
         ctx.fillStyle = 'rgba(122,190,255,0.55)';
         ctx.font = `${13 / zoom}px ui-sans-serif`;
-        let n = 1;
-        for (let y = 0; y < terrain.h * T; y += CH)
-          for (let x = 0; x < terrain.w * T; x += CW) ctx.fillText(`ekran ${n++}`, x + 8, y + 20);
+        const perRow = Math.ceil((terrain.w * T) / CW);
+        for (let y = Math.max(0, gy0); y < gy1; y += CH)
+          for (let x = Math.max(0, gx0); x < gx1; x += CW) {
+            const n = (y / CH) * perRow + x / CW + 1;
+            ctx.fillText(`ekran ${n}`, x + 8, y + 20);
+          }
       }
 
-      // nesneler — ayak Y'sine göre sıralı (oyundaki derinlikle aynı)
-      const objs = [...doc.objects].sort((a, b) => a.y + a.h - (b.y + b.h));
+      // nesneler — ayak Y'sine göre sıralı (oyundaki derinlikle aynı).
+      // Önce GÖRÜNÜR olanları ele, sonra sırala: 1294 nesneyi her karede
+      // sıralamak da başlı başına maliyetti.
+      const objs = doc.objects
+        .filter((o) => o.x + o.w >= viewL && o.x <= viewR && o.y + o.h >= viewT && o.y <= viewB)
+        .sort((a, b) => a.y + a.h - (b.y + b.h));
       for (const o of objs) {
         const im = img(o.src);
         if (im) {
@@ -216,8 +248,9 @@ export default function EditorPage() {
         }
       }
 
-      // işaretçiler
+      // işaretçiler (görünür olanlar)
       for (const m of doc.markers) {
+        if (m.x < viewL - 40 || m.x > viewR + 40 || m.y < viewT - 40 || m.y > viewB + 40) continue;
         const col = m.kind === 'fight' ? '#a01226' : m.kind === 'travel' ? '#5f9e4a' : '#8a97a3';
         ctx.fillStyle = col;
         ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, Math.PI * 2); ctx.fill();
@@ -262,6 +295,7 @@ export default function EditorPage() {
 
       ctx.restore();
     };
+    dirtyRef.current = true; // bağımlılıklar değişti → bir kez çiz
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [doc, selId, zoom, img, screenGrid, rectPreview]);
@@ -402,6 +436,7 @@ export default function EditorPage() {
         // sürükleme boyunca tek tampon — setDoc bırakınca bir kez çağrılır
         paintBufRef.current = { data: [...doc.terrain.data], palette: [...doc.terrain.palette] };
         paintAt(p.x, p.y);
+        markDirty();
       }
     } else if (tool === 'object' && sel && e.altKey) {
       // Alt basılı + sürükle = aynı nesneden sıra dizer (ağaç sırası, çit)
@@ -420,10 +455,12 @@ export default function EditorPage() {
       if (Math.hypot(p.x - dr.lastX, p.y - dr.lastY) < 8) return;
       dr.lastX = p.x; dr.lastY = p.y;
       eraseAt(p.x, p.y);
+      markDirty();
       return;
     }
 
     if (dr.mode === 'paint') {
+      markDirty(); // tampon setDoc'a girmiyor → çizimi elle tetikle
       // ara noktaları da doldur — hızlı sürüklemede boşluk kalmasın
       const steps = Math.max(1, Math.ceil(Math.hypot(p.x - dr.lastX, p.y - dr.lastY) / (MAP_TILE / 2)));
       for (let i = 1; i <= steps; i++) {
@@ -498,10 +535,10 @@ export default function EditorPage() {
         }));
       }
       const pan = 120;
-      if (k === 'w') camRef.current.y -= pan;
-      if (k === 's') camRef.current.y += pan;
-      if (k === 'a') camRef.current.x -= pan;
-      if (k === 'd') camRef.current.x += pan;
+      if (k === 'w') { camRef.current.y -= pan; markDirty(); }
+      if (k === 's') { camRef.current.y += pan; markDirty(); }
+      if (k === 'a') { camRef.current.x -= pan; markDirty(); }
+      if (k === 'd') { camRef.current.x += pan; markDirty(); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
