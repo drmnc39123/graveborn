@@ -3,7 +3,7 @@
 // bu bileşen sadece köprü: girdi, döngü ve React tarafı istemler.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createHub, stepHub, type BuildingId, type HubState } from '@/game/hub';
+import { createHub, stepHub, warp, type BuildingId, type HubState } from '@/game/hub';
 import { renderHub } from '@/game/hubRender';
 import { preloadAll } from '@/game/sprites';
 import { unlockAudio, play } from '@/game/sfx';
@@ -24,7 +24,7 @@ export function HubCanvas({
   const cbRef = useRef({ onEnterBuilding, onEnterStage, unlocked: progress?.unlockedStage ?? 1 });
   cbRef.current = { onEnterBuilding, onEnterStage, unlocked: progress?.unlockedStage ?? 1 };
 
-  const [hint, setHint] = useState<{ title: string; sub: string; kind: 'door' | 'portal'; stageId?: number } | null>(null);
+  const [hint, setHint] = useState<{ title: string; sub: string; kind: 'door' | 'fight' | 'travel' } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -49,11 +49,14 @@ export function HubCanvas({
     window.addEventListener('pointerdown', unlock, { once: true });
 
     const interact = () => {
-      const { onEnterBuilding: ob, onEnterStage: os, unlocked } = cbRef.current;
-      if (hub.atPortal) {
-        if (hub.atPortal.stageId > unlocked) return; // kilitli portal
+      const { onEnterBuilding: ob, onEnterStage: os } = cbRef.current;
+      const p = hub.atPortal;
+      if (p) {
         play('chest');
-        os(hub.atPortal.stageId);
+        // TEK dövüş portalı — bölüm seçimi panelden yapılır.
+        // Diğer portallar sadece keşif: uzak bölgelere ışınlar, savaş yok.
+        if (p.kind === 'fight') os(0);
+        else if (p.toX !== undefined && p.toY !== undefined) warp(hub, p.toX, p.toY);
       } else if (hub.atDoor) {
         play('chest');
         ob(hub.atDoor.id);
@@ -112,14 +115,11 @@ export function HubCanvas({
       hintAcc += dt;
       if (hintAcc > 0.1) {
         hintAcc = 0;
-        if (hub.atPortal) {
-          const st = stageById(hub.atPortal.stageId);
-          const locked = hub.atPortal.stageId > cbRef.current.unlocked;
-          setHint({
-            kind: 'portal', stageId: hub.atPortal.stageId,
-            title: locked ? 'Sealed Portal' : (st?.name ?? `Stage ${hub.atPortal.stageId}`),
-            sub: locked ? `Clear stage ${hub.atPortal.stageId - 1} to break the seal` : `${st?.enemyCount ?? 0} enemies await`,
-          });
+        const p = hub.atPortal;
+        if (p) {
+          setHint(p.kind === 'fight'
+            ? { kind: 'fight', title: p.label, sub: 'Choose a stage and descend' }
+            : { kind: 'travel', title: p.label, sub: 'Step through to travel' });
         } else if (hub.atDoor) {
           setHint({ kind: 'door', title: hub.atDoor.name, sub: hub.atDoor.hint });
         } else setHint(null);
@@ -140,19 +140,6 @@ export function HubCanvas({
     };
   }, []);
 
-  const act = useCallback(() => {
-    if (!hint) return;
-    if (hint.kind === 'portal' && hint.stageId) {
-      if (hint.stageId > (progress?.unlockedStage ?? 1)) return;
-      play('chest');
-      onEnterStage(hint.stageId);
-    }
-  }, [hint, onEnterStage, progress]);
-
-  const goldLeft = hint?.kind === 'portal' && hint.stageId && progress
-    ? remainingGold(progress, hint.stageId) : 0;
-  const locked = hint?.kind === 'portal' && hint.stageId ? hint.stageId > (progress?.unlockedStage ?? 1) : false;
-
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: C.void }}>
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
@@ -167,22 +154,15 @@ export function HubCanvas({
       {hint && (
         <div style={{ position: 'absolute', bottom: 26, left: '50%', transform: 'translateX(-50%)', width: 'min(92vw, 330px)' }}>
           <div style={{ ...glass(13), padding: '13px 18px', textAlign: 'center' }}>
-            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 2, color: hint.kind === 'portal' ? C.blood : C.ice, marginBottom: 3 }}>
-              {hint.kind === 'portal' ? 'PORTAL' : 'BUILDING'}
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 2, marginBottom: 3,
+              color: hint.kind === 'fight' ? C.blood : hint.kind === 'travel' ? C.ok : C.ice }}>
+              {hint.kind === 'fight' ? 'FIGHT PORTAL' : hint.kind === 'travel' ? 'TRAVEL PORTAL' : 'BUILDING'}
             </div>
             <div style={{ fontSize: 16, fontWeight: 900, color: C.bone }}>{hint.title}</div>
             <div style={{ fontSize: 12, color: C.boneDim, marginTop: 2 }}>{hint.sub}</div>
-            {hint.kind === 'portal' && !locked && goldLeft > 0 && (
-              <div style={{ fontSize: 11.5, color: C.candle, marginTop: 4 }}>{goldLeft} gold still available</div>
-            )}
-            {!locked && (
-              <button onClick={hint.kind === 'portal' ? act : undefined}
-                style={{ marginTop: 10, padding: '9px 24px', borderRadius: 10, border: 'none',
-                  cursor: 'pointer', fontWeight: 900, fontSize: 13, color: '#1a0508',
-                  background: `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})` }}>
-                {hint.kind === 'portal' ? 'DESCEND' : 'ENTER'} <span style={{ opacity: 0.6 }}>(E)</span>
-              </button>
-            )}
+            <div style={{ marginTop: 10, fontSize: 12, fontWeight: 800, color: C.candle }}>
+              Press <span style={{ padding: '2px 7px', borderRadius: 5, background: 'rgba(239,167,46,0.16)', border: `1px solid ${C.candle}55` }}>E</span>
+            </div>
           </div>
         </div>
       )}
