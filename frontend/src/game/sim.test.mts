@@ -8,7 +8,7 @@
 // test hiçbir şey ölçmediği hâlde "geçer". İlk sürümde tam bu tuzağa düşüldü.
 
 import { Game } from './engine.js';
-import { SPAWN, TICK } from './config.js';
+import { MAX_WEAPONS, SPAWN, TICK, WEAPONS } from './config.js';
 import { seedFromString } from './rng.js';
 
 const FAIL: string[] = [];
@@ -137,6 +137,50 @@ const perTick = (performance.now() - t0) / N;
 const budget = TICK * 1000;
 check('tick maliyeti frame bütçesinin %25 altında', perTick < budget * 0.25,
   `${perTick.toFixed(3)} ms/tick (bütçe ${budget.toFixed(1)} ms → %${((perTick / budget) * 100).toFixed(1)})`);
+
+// ── 8) Silah sistemi: dört desen de gerçekten hasar veriyor mu ──
+// Her deseni İZOLE test et — biri sessizce çalışmazsa 20 dk oynayana kadar fark edilmez.
+console.log('\n[8] Silah desenleri');
+function patternDamages(id: string): { dealt: boolean; hp: number } {
+  const g = new Game(seedFromString(`pat-${id}`));
+  g.setViewport(1280, 720);
+  const def = WEAPONS.find((w) => w.id === id)!;
+  g.weapons = [{ def, level: 1, cd: 0 }]; // sadece test edilen silah
+
+  // Kuklayı DESENİN ETKİLİ MESAFESİNE koy. Yörünge silahı halka üzerinde vurur;
+  // sabit 40 px'e koyunca orb'lar kuklanın dışından geçiyordu ve test "hasar yok"
+  // diyordu — bu VS'teki King Bible davranışının aynısı, hata değil.
+  const dist =
+    def.pattern === 'orbit' ? (def.orbitRadius ?? 78) :
+    def.pattern === 'aura' ? (def.auraRadius ?? 70) * 0.6 :
+    40;
+
+  const dummy = {
+    x: dist, y: 0, hp: 1e6, maxHp: 1e6, speed: 0, damage: 0, radius: 12, xp: 0,
+    color: '#fff', hitFlash: 0, animT: 0, facingRight: true, contactCd: 0,
+  };
+  g.enemies.push(dummy as any);
+  g.setInput(0, 0);
+  for (let i = 0; i < Math.round(3 / TICK); i++) {
+    if (g.phase === 'levelup') g.choose(g.offers[0].id);
+    g.hp = g.stats.maxHp; // kukla dışı spawn'lar oyuncuyu öldürmesin
+    dummy.x = g.px + dist; dummy.y = g.py; // menzilde tut
+    g.step();
+  }
+  return { dealt: dummy.hp < 1e6, hp: dummy.hp };
+}
+for (const id of ['shard', 'lash', 'litany', 'ward']) {
+  const r = patternDamages(id);
+  const def = WEAPONS.find((w) => w.id === id)!;
+  check(`${def.name} (${def.pattern}) hasar veriyor`, r.dealt, `3 sn'de ${Math.round(1e6 - r.hp)} hasar`);
+}
+
+// silahlar level-up'ta gerçekten toplanıyor mu
+const acq = run(seedFromString('acquire'), { seconds: 480, driver: 'flee', invincible: true });
+console.log(`     8 dk sonunda taşınan silahlar: ${acq.weapons.map((w) => `${w.def.name} L${w.level}`).join(', ')}`);
+check('level-up birden fazla silah veriyor', acq.weapons.length >= 2, `${acq.weapons.length} silah`);
+check('silah slot tavanı aşılmıyor', acq.weapons.length <= MAX_WEAPONS, `${acq.weapons.length}/${MAX_WEAPONS}`);
+check('silah seviyesi tavani asmiyor', acq.weapons.every((w) => w.level <= w.def.maxLevel));
 
 console.log(`\n${FAIL.length === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

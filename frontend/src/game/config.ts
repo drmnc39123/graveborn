@@ -38,6 +38,82 @@ export const WEAPON = {
   range: 620, // hedef arama menzili
 } as const;
 
+// ── SİLAHLAR ──────────────────────────────────────────────────────────
+// CLONE-SPEC.md'deki 15 saldırı arketipinden ilk 4'ü. Motor tek, desen veri.
+// Yeni silah eklemek = buraya bir kayıt. Motor kodu değişmez.
+export type WeaponPattern =
+  | 'aimed'  // #1 en yakın düşmana mermi (Bone Shard)
+  | 'sweep'  // #2 yatay kesik, düşmandan geçer (Grave Lash)
+  | 'orbit'  // #6 karakterin etrafında yörünge (Litany)
+  | 'aura';  // #8 yakın alan aurası (Wardsalt)
+
+export interface WeaponDef {
+  id: string;
+  name: string;
+  desc: string;
+  pattern: WeaponPattern;
+  maxLevel: number;
+  damage: number;
+  cooldownSec: number;
+  /** seviye başına hasar çarpanı */
+  dmgPerLevel: number;
+  /** seviye başına bekleme çarpanı (1'den küçük = hızlanır) */
+  cdPerLevel: number;
+  /** kaçıncı seviyelerde +1 adet (mermi/orb) kazanır */
+  countLevels?: number[];
+
+  // aimed
+  projectileSpeed?: number;
+  spreadRad?: number;
+  pierce?: number;
+  range?: number;
+  lifeSec?: number;
+  // sweep — oyuncunun önünde beliren dikdörtgen hitbox
+  sweepW?: number;
+  sweepH?: number;
+  sweepLifeSec?: number;
+  /** seviye başına alan çarpanı (sweep/aura) */
+  areaPerLevel?: number;
+  // orbit
+  orbitRadius?: number;
+  orbitSpeed?: number; // rad/sn
+  orbRadius?: number;
+  // aura
+  auraRadius?: number;
+}
+
+export const WEAPONS: readonly WeaponDef[] = [
+  {
+    id: 'shard', name: 'Bone Shard', desc: 'Fires at the nearest enemy',
+    pattern: 'aimed', maxLevel: 8, damage: 20, cooldownSec: 0.42,
+    dmgPerLevel: 1.18, cdPerLevel: 0.94, countLevels: [3, 5, 7],
+    projectileSpeed: 470, spreadRad: 0.16, pierce: 1, range: 620, lifeSec: 1.5,
+  },
+  {
+    id: 'lash', name: 'Grave Lash', desc: 'Slashes horizontally, passes through enemies',
+    pattern: 'sweep', maxLevel: 8, damage: 26, cooldownSec: 1.05,
+    dmgPerLevel: 1.2, cdPerLevel: 0.93, countLevels: [4, 7],
+    sweepW: 132, sweepH: 46, sweepLifeSec: 0.18, areaPerLevel: 1.07,
+  },
+  {
+    id: 'litany', name: 'Litany', desc: 'Pages orbit you, striking what they touch',
+    pattern: 'orbit', maxLevel: 8, damage: 14, cooldownSec: 0.5,
+    dmgPerLevel: 1.16, cdPerLevel: 0.97, countLevels: [2, 4, 6, 8],
+    orbitRadius: 78, orbitSpeed: 2.3, orbRadius: 13, areaPerLevel: 1.05,
+  },
+  {
+    id: 'ward', name: 'Wardsalt', desc: 'Burns everything near you',
+    pattern: 'aura', maxLevel: 8, damage: 9, cooldownSec: 0.62,
+    dmgPerLevel: 1.22, cdPerLevel: 0.95,
+    auraRadius: 74, areaPerLevel: 1.09,
+  },
+] as const;
+
+/** Aynı anda taşınabilecek silah sayısı (VS: 6) */
+export const MAX_WEAPONS = 6;
+/** Alan hasarı (aura/orbit) aynı düşmana en sık bu aralıkla vurur */
+export const CONTACT_HIT_CD = 0.42;
+
 export interface EnemyType {
   id: string;
   hp: number;

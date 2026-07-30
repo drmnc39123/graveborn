@@ -70,6 +70,9 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawGems(ctx, g);
   drawEnemies(ctx, g);
   drawEffects(ctx); // ölüm patlamaları düşmanların üstünde, oyuncunun altında
+  drawHitZones(ctx, g);
+  drawOrbits(ctx, g);
+  drawAuras(ctx, g);
   drawProjectiles(ctx, g);
   drawPlayer(ctx, g);
 
@@ -203,6 +206,79 @@ function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
       ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
     }
     ctx.fill();
+  }
+}
+
+/** Grave Lash — kesik izi. Ömrü boyunca solar ve hafifçe genişler. */
+function drawHitZones(ctx: CanvasRenderingContext2D, g: Game) {
+  if (!g.hitZones.length) return;
+  ctx.save();
+  for (let i = 0; i < g.hitZones.length; i++) {
+    const z = g.hitZones[i];
+    const k = z.life / z.maxLife;      // 1 → 0
+    const grow = 1 + (1 - k) * 0.18;
+    ctx.globalAlpha = Math.min(1, k * 1.6);
+    const grad = ctx.createLinearGradient(z.x - z.w / 2, z.y, z.x + z.w / 2, z.y);
+    const inner = z.facingRight ? 0 : 1;
+    grad.addColorStop(inner, 'rgba(227,216,192,0.0)');
+    grad.addColorStop(0.5, 'rgba(239,167,46,0.55)');
+    grad.addColorStop(1 - inner, 'rgba(200,50,74,0.85)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.ellipse(z.x, z.y, (z.w / 2) * grow, (z.h / 2) * grow, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Litany — dönen orb'lar. Motorla AYNI formülü kullanır, yoksa görsel ile
+ *  hasar noktası ayrışır ve oyuncu "vurmuyor" hisseder. */
+function drawOrbits(ctx: CanvasRenderingContext2D, g: Game) {
+  for (const w of g.weapons) {
+    if (w.def.pattern !== 'orbit') continue;
+    const area = Math.pow(w.def.areaPerLevel ?? 1, w.level - 1);
+    const rad = (w.def.orbitRadius ?? 78) * area;
+    const orbR = (w.def.orbRadius ?? 13) * area;
+    const n = 1 + (w.def.countLevels?.filter((l) => w.level >= l).length ?? 0);
+    for (let k = 0; k < n; k++) {
+      const a = g.orbitAngle + (k * Math.PI * 2) / n;
+      const ox = g.px + Math.cos(a) * rad;
+      const oy = g.py + Math.sin(a) * rad;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, orbR);
+      grad.addColorStop(0, 'rgba(247,196,106,0.95)');
+      grad.addColorStop(0.6, 'rgba(239,167,46,0.5)');
+      grad.addColorStop(1, 'rgba(239,167,46,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(ox, oy, orbR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+/** Wardsalt — yakın alan aurası. Nabız gibi atar ki tik anı okunsun. */
+function drawAuras(ctx: CanvasRenderingContext2D, g: Game) {
+  for (const w of g.weapons) {
+    if (w.def.pattern !== 'aura') continue;
+    const area = Math.pow(w.def.areaPerLevel ?? 1, w.level - 1);
+    const r = (w.def.auraRadius ?? 70) * area;
+    // cd 0'a yaklaşırken parlaklık artar → tik anı görünür
+    const cdMax = w.def.cooldownSec;
+    const pulse = 1 - Math.min(1, Math.max(0, w.cd) / cdMax);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const grad = ctx.createRadialGradient(g.px, g.py, r * 0.35, g.px, g.py, r);
+    grad.addColorStop(0, 'rgba(160,18,38,0)');
+    grad.addColorStop(0.75, `rgba(200,50,74,${0.05 + pulse * 0.1})`);
+    grad.addColorStop(1, `rgba(239,167,46,${0.12 + pulse * 0.22})`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(g.px, g.py, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
   }
 }
 

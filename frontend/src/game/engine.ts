@@ -7,7 +7,10 @@
 
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatial';
-import { ENEMIES, GEM, PLAYER, RUN, SPAWN, TICK, UPGRADES, WEAPON, xpForLevel, type EnemyType } from './config';
+import {
+  CONTACT_HIT_CD, ENEMIES, GEM, MAX_WEAPONS, PLAYER, RUN, SPAWN, TICK, UPGRADES, WEAPONS,
+  xpForLevel, type EnemyType, type WeaponDef,
+} from './config';
 
 export interface Enemy {
   x: number; y: number; hp: number; maxHp: number;
@@ -19,12 +22,36 @@ export interface Enemy {
    *  aynı frame'de yürür ve sürü robot gibi durur */
   animT: number;
   facingRight: boolean;
+  /** alan hasarı (aura/orbit) bekleme sayacı — sürekli temas anında eritmesin */
+  contactCd: number;
 }
 export interface Projectile {
   x: number; y: number; vx: number; vy: number;
   damage: number; radius: number; life: number; pierce: number;
 }
 export interface Gem { x: number; y: number; xp: number; life: number }
+
+/** Sweep saldırısının geçici hitbox'ı — render de bunu çizer */
+export interface HitZone {
+  x: number; y: number; w: number; h: number;
+  life: number; maxLife: number; damage: number;
+  facingRight: boolean;
+  /** aynı kesikte aynı düşmana iki kez vurmasın */
+  hit: Set<Enemy>;
+}
+
+/** Sahip olunan silah — seviyesi ve kendi bekleme sayacı */
+export interface OwnedWeapon { def: WeaponDef; level: number; cd: number }
+
+/** Level-up'ta sunulan seçenek: yeni silah, silah yükseltmesi veya istatistik */
+export interface Offer {
+  kind: 'weapon-new' | 'weapon-up' | 'stat';
+  id: string;
+  name: string;
+  desc: string;
+  /** silah seçeneklerinde mevcut seviye (yükseltmede gösterilir) */
+  level?: number;
+}
 
 export type Phase = 'running' | 'levelup' | 'dead' | 'won';
 
@@ -63,19 +90,26 @@ export class Game {
   kills = 0;
   gold = 0;
 
-  // yükseltmeler
+  // yükseltmeler — genel istatistikler (silahlara çarpan olarak uygulanır)
   stats: Stats = {
-    damageMul: 1, cooldownMul: 1, projCount: WEAPON.count, pierce: WEAPON.pierce,
+    damageMul: 1, cooldownMul: 1, projCount: 1, pierce: 0,
     speedMul: 1, magnetMul: 1, maxHp: PLAYER.maxHp, regen: PLAYER.regenPerSec,
   };
   private taken = new Map<string, number>();
-  /** levelup fazında sunulan 3 seçenek */
-  offers: typeof UPGRADES[number][] = [];
+
+  /** Taşınan silahlar. Run başında Bone Shard ile başlanır. */
+  weapons: OwnedWeapon[] = [];
+  /** Yörünge silahlarının ortak açısı — tüm orb'lar birlikte döner */
+  orbitAngle = 0;
+
+  /** levelup fazında sunulan 3 seçenek (silah veya istatistik) */
+  offers: Offer[] = [];
 
   // varlıklar
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
   gems: Gem[] = [];
+  hitZones: HitZone[] = [];
 
   /**
    * KOZMETİK olay kuyruğu — render katmanı her frame boşaltır.
@@ -89,7 +123,6 @@ export class Game {
   private iny = 0;
 
   // dahili
-  private fireCd = 0;
   private spawnAcc = 0;
   private spawnCount = 0; // sadece kozmetik animasyon ofseti için (RNG değil)
   private grid = new SpatialHash<Enemy>(64);
@@ -101,6 +134,34 @@ export class Game {
   constructor(seed: number) {
     this.seed = seed;
     this.rng = createRng(seed);
+    // Başlangıç silahı: Bone Shard (VS'te her karakter bir silahla başlar)
+    this.giveWeapon('shard');
+  }
+
+  private giveWeapon(id: string) {
+    const def = WEAPONS.find((w) => w.id === id);
+    if (!def || this.weapons.length >= MAX_WEAPONS) return;
+    if (this.weapons.some((w) => w.def.id === id)) return;
+    this.weapons.push({ def, level: 1, cd: 0 });
+  }
+
+  /** Silahın o seviyedeki hasarı — genel damageMul da uygulanır */
+  private wDamage(w: OwnedWeapon) {
+    return w.def.damage * Math.pow(w.def.dmgPerLevel, w.level - 1) * this.stats.damageMul;
+  }
+  /** Silahın o seviyedeki bekleme süresi */
+  private wCooldown(w: OwnedWeapon) {
+    return w.def.cooldownSec * Math.pow(w.def.cdPerLevel, w.level - 1) * this.stats.cooldownMul;
+  }
+  /** Alan çarpanı (sweep/orbit/aura) */
+  private wArea(w: OwnedWeapon) {
+    const per = w.def.areaPerLevel ?? 1;
+    return Math.pow(per, w.level - 1);
+  }
+  /** Adet (mermi/orb) — countLevels'ta geçilen her eşik +1 */
+  private wCount(w: OwnedWeapon) {
+    const base = 1 + (w.def.countLevels?.filter((l) => w.level >= l).length ?? 0);
+    return w.def.pattern === 'aimed' ? base + (this.stats.projCount - 1) : base;
   }
 
   setInput(x: number, y: number) {
@@ -123,9 +184,11 @@ export class Game {
     this.rebuildGrid();
     this.spawn(dt);
     this.moveEnemies(dt);
-    this.fire(dt);
+    this.fire(dt);            // 4 desen: aimed / sweep / orbit / aura
+    this.updateHitZones(dt);  // sweep hitbox'ları
     this.moveProjectiles(dt);
     this.collideProjectiles();
+    this.reapDead();          // TÜM hasar kaynaklarından sonra tek temizlik
     this.collidePlayer(dt);
     this.updateGems(dt);
 
@@ -191,6 +254,7 @@ export class Game {
         // RNG akışını kaydırır ve aynı günlük seed başka bir run üretir.
         // Spawn sayacından türetiliyor: deterministik, çeşitli, RNG'ye dokunmuyor.
         art: t.art, animT: (this.spawnCount++ * 0.37) % 2, facingRight: true,
+        contactCd: 0,
       });
     }
   }
@@ -207,12 +271,13 @@ export class Game {
       if (dx > 0.5) e.facingRight = true;
       else if (dx < -0.5) e.facingRight = false;
       if (e.hitFlash > 0) e.hitFlash -= dt;
+      if (e.contactCd > 0) e.contactCd -= dt;
     }
   }
 
-  private nearestEnemy(): Enemy | null {
+  private nearestEnemy(range: number): Enemy | null {
     let best: Enemy | null = null;
-    let bestD = WEAPON.range * WEAPON.range;
+    let bestD = range * range;
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i];
       const dx = e.x - this.px, dy = e.y - this.py;
@@ -222,28 +287,148 @@ export class Game {
     return best;
   }
 
+  /** Tüm silahları ilerlet. Motor tek, desen veri — yeni silah = config kaydı. */
   private fire(dt: number) {
-    this.fireCd -= dt;
-    if (this.fireCd > 0) return;
-    const target = this.nearestEnemy();
-    if (!target) return; // menzilde hedef yoksa cooldown beklemede kalır
+    // Yörünge açısı sürekli döner (silah olmasa da; kayıt tutmak ucuz)
+    this.orbitAngle = (this.orbitAngle + 2.3 * dt) % (Math.PI * 2);
 
-    this.fireCd = WEAPON.cooldownSec * this.stats.cooldownMul;
+    for (let i = 0; i < this.weapons.length; i++) {
+      const w = this.weapons[i];
+      const def = w.def;
+
+      // Yörünge sürekli aktif — bekleme sayacı sadece hasar tiki için
+      if (def.pattern === 'orbit') {
+        w.cd -= dt;
+        if (w.cd <= 0) { w.cd = this.wCooldown(w); this.orbitHit(w); }
+        continue;
+      }
+
+      w.cd -= dt;
+      if (w.cd > 0) continue;
+
+      if (def.pattern === 'aimed') {
+        const target = this.nearestEnemy(def.range ?? 600);
+        if (!target) continue; // menzilde hedef yoksa bekle, cooldown harcanmaz
+        w.cd = this.wCooldown(w);
+        this.fireAimed(w, target);
+      } else if (def.pattern === 'sweep') {
+        w.cd = this.wCooldown(w);
+        this.fireSweep(w);
+      } else if (def.pattern === 'aura') {
+        w.cd = this.wCooldown(w);
+        this.fireAura(w);
+      }
+    }
+  }
+
+  /** #1 aimed — en yakın düşmana mermi(ler) */
+  private fireAimed(w: OwnedWeapon, target: Enemy) {
+    const def = w.def;
     const baseAng = Math.atan2(target.y - this.py, target.x - this.px);
-    const n = this.stats.projCount;
+    const n = this.wCount(w);
+    const spd = def.projectileSpeed ?? 450;
     for (let i = 0; i < n; i++) {
-      // tek mermi tam hedefe; çoklu mermi hedefin etrafına simetrik yayılır
-      const off = n === 1 ? 0 : (i - (n - 1) / 2) * WEAPON.spreadRad;
+      const off = n === 1 ? 0 : (i - (n - 1) / 2) * (def.spreadRad ?? 0.16);
       const a = baseAng + off;
       this.projectiles.push({
         x: this.px, y: this.py,
-        vx: Math.cos(a) * WEAPON.projectileSpeed,
-        vy: Math.sin(a) * WEAPON.projectileSpeed,
-        damage: WEAPON.damage * this.stats.damageMul,
-        radius: WEAPON.projectileRadius,
-        life: WEAPON.projectileLifeSec,
-        pierce: this.stats.pierce,
+        vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+        damage: this.wDamage(w), radius: 5,
+        life: def.lifeSec ?? 1.5,
+        pierce: (def.pierce ?? 0) + this.stats.pierce,
       });
+    }
+  }
+
+  /** #2 sweep — oyuncunun baktığı yöne yatay kesik; düşmandan geçer */
+  private fireSweep(w: OwnedWeapon) {
+    const def = w.def;
+    const area = this.wArea(w);
+    const wdt = (def.sweepW ?? 130) * area;
+    const hgt = (def.sweepH ?? 45) * area;
+    const n = this.wCount(w); // 2+ olunca her iki yana birden vurur
+    const dirs = n >= 2 ? [true, false] : [this.facingRight];
+    for (const right of dirs) {
+      this.hitZones.push({
+        x: this.px + (right ? wdt / 2 : -wdt / 2),
+        y: this.py,
+        w: wdt, h: hgt,
+        life: def.sweepLifeSec ?? 0.18,
+        maxLife: def.sweepLifeSec ?? 0.18,
+        damage: this.wDamage(w),
+        facingRight: right,
+        hit: new Set<Enemy>(),
+      });
+    }
+  }
+
+  /** #8 aura — yakındaki her düşmana tek seferde hasar */
+  private fireAura(w: OwnedWeapon) {
+    const r = (w.def.auraRadius ?? 70) * this.wArea(w);
+    const dmg = this.wDamage(w);
+    const cand = this.grid.query(this.px, this.py, r + 30, this.scratch);
+    for (let i = 0; i < cand.length; i++) {
+      const e = cand[i];
+      if (e.hp <= 0) continue;
+      const dx = e.x - this.px, dy = e.y - this.py;
+      const rr = r + e.radius;
+      if (dx * dx + dy * dy > rr * rr) continue;
+      this.damageEnemy(e, dmg);
+    }
+  }
+
+  /** #6 orbit — dönen orb'lar temas ettiğine vurur (düşman başına bekleme ile) */
+  private orbitHit(w: OwnedWeapon) {
+    const def = w.def;
+    const rad = (def.orbitRadius ?? 78) * this.wArea(w);
+    const orbR = (def.orbRadius ?? 13) * this.wArea(w);
+    const n = this.wCount(w);
+    const dmg = this.wDamage(w);
+    for (let k = 0; k < n; k++) {
+      const a = this.orbitAngle + (k * Math.PI * 2) / n;
+      const ox = this.px + Math.cos(a) * rad;
+      const oy = this.py + Math.sin(a) * rad;
+      const cand = this.grid.query(ox, oy, orbR + 30, this.scratch);
+      for (let i = 0; i < cand.length; i++) {
+        const e = cand[i];
+        if (e.hp <= 0 || e.contactCd > 0) continue;
+        const dx = e.x - ox, dy = e.y - oy;
+        const rr = orbR + e.radius;
+        if (dx * dx + dy * dy > rr * rr) continue;
+        e.contactCd = CONTACT_HIT_CD;
+        this.damageEnemy(e, dmg);
+      }
+    }
+  }
+
+  /** Tek noktadan hasar — ölüm/gem/efekt mantığı burada toplanır */
+  private damageEnemy(e: Enemy, dmg: number) {
+    e.hp -= dmg;
+    e.hitFlash = 0.09;
+    if (e.hp <= 0) this.killEnemy(e);
+  }
+
+  /** Sweep hitbox'larını ilerlet ve temas edenlere vur */
+  private updateHitZones(dt: number) {
+    for (let i = this.hitZones.length - 1; i >= 0; i--) {
+      const z = this.hitZones[i];
+      // kesik oyuncuyla birlikte hareket etsin (yerinde asılı kalmasın)
+      z.x = this.px + (z.facingRight ? z.w / 2 : -z.w / 2);
+      z.y = this.py;
+
+      const cand = this.grid.query(z.x, z.y, Math.max(z.w, z.h) / 2 + 30, this.scratch);
+      const hw = z.w / 2, hh = z.h / 2;
+      for (let j = 0; j < cand.length; j++) {
+        const e = cand[j];
+        if (e.hp <= 0 || z.hit.has(e)) continue;
+        if (Math.abs(e.x - z.x) > hw + e.radius) continue;
+        if (Math.abs(e.y - z.y) > hh + e.radius) continue;
+        z.hit.add(e);
+        this.damageEnemy(e, z.damage);
+      }
+
+      z.life -= dt;
+      if (z.life <= 0) this.swapRemove(this.hitZones, i);
     }
   }
 
@@ -269,9 +454,7 @@ export class Game {
         const dx = e.x - p.x, dy = e.y - p.y;
         if (dx * dx + dy * dy > rr * rr) continue;
 
-        e.hp -= p.damage;
-        e.hitFlash = 0.09;
-        if (e.hp <= 0) this.killEnemy(e);
+        this.damageEnemy(e, p.damage);
 
         if (p.pierce > 0) { p.pierce -= 1; continue; }
         consumed = true;
@@ -279,7 +462,11 @@ export class Game {
       }
       if (consumed) this.swapRemove(this.projectiles, i);
     }
-    // ölenleri temizle
+  }
+
+  /** Ölenleri diziden çıkar. TÜM hasar kaynakları (mermi/sweep/orbit/aura)
+   *  işledikten SONRA bir kez çağrılır — yoksa aynı düşman iki kez ödül verir. */
+  private reapDead() {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       if (this.enemies[i].hp <= 0) this.swapRemove(this.enemies, i);
     }
@@ -341,28 +528,77 @@ export class Game {
     }
   }
 
-  /** Alınabilir 3 yükseltme seç (maxStack dolmuşları hariç) */
+  /**
+   * 3 seçenek üret: silah yükseltmesi + yeni silah + istatistik karışımı.
+   * VS deseni: silahlar istatistiklerden ÖNCELİKLİ, yoksa oyuncu tek silahta kalır.
+   */
   private rollOffers() {
-    const pool = UPGRADES.filter((u) => (this.taken.get(u.id) ?? 0) < u.maxStack);
-    this.offers = this.rng.shuffle([...pool]).slice(0, 3);
+    const pool: Offer[] = [];
+
+    // sahip olunan ve max'a ulaşmamış silahlar
+    for (const w of this.weapons) {
+      if (w.level >= w.def.maxLevel) continue;
+      pool.push({
+        kind: 'weapon-up', id: `w:${w.def.id}`, name: w.def.name,
+        desc: `Level ${w.level} → ${w.level + 1}`, level: w.level,
+      });
+    }
+    // slot varsa henüz alınmamış silahlar
+    if (this.weapons.length < MAX_WEAPONS) {
+      for (const def of WEAPONS) {
+        if (this.weapons.some((w) => w.def.id === def.id)) continue;
+        pool.push({ kind: 'weapon-new', id: `w:${def.id}`, name: def.name, desc: def.desc });
+      }
+    }
+    // istatistikler
+    for (const u of UPGRADES) {
+      if ((this.taken.get(u.id) ?? 0) >= u.maxStack) continue;
+      pool.push({ kind: 'stat', id: u.id, name: u.name, desc: u.desc });
+    }
+
+    const shuffled = this.rng.shuffle(pool);
+    // en az bir silah seçeneği garanti — build çeşitliliği istatistiklere boğulmasın
+    const weaponsFirst = shuffled.filter((o) => o.kind !== 'stat');
+    const rest = shuffled.filter((o) => o.kind === 'stat');
+    const picked: Offer[] = [];
+    if (weaponsFirst.length) picked.push(weaponsFirst[0]);
+    for (const o of shuffled) {
+      if (picked.length >= 3) break;
+      if (picked.includes(o)) continue;
+      picked.push(o);
+    }
+    // havuz 3'ten azsa (her şey max) kalanı istatistikten doldur
+    for (const o of rest) {
+      if (picked.length >= 3) break;
+      if (!picked.includes(o)) picked.push(o);
+    }
+    this.offers = picked;
   }
 
   /** levelup fazında seçim uygula */
   choose(id: string) {
     if (this.phase !== 'levelup') return;
-    const u = this.offers.find((o) => o.id === id);
-    if (!u) return;
-    this.taken.set(id, (this.taken.get(id) ?? 0) + 1);
-    const s = this.stats;
-    switch (id) {
-      case 'dmg': s.damageMul *= 1.2; break;
-      case 'rate': s.cooldownMul *= 0.88; break;
-      case 'count': s.projCount += 1; break;
-      case 'pierce': s.pierce += 1; break;
-      case 'speed': s.speedMul *= 1.1; break;
-      case 'magnet': s.magnetMul *= 1.35; break;
-      case 'hp': s.maxHp += 20; this.hp = s.maxHp; break;
-      case 'regen': s.regen += 0.4; break;
+    const o = this.offers.find((x) => x.id === id);
+    if (!o) return;
+
+    if (o.kind === 'weapon-new') {
+      this.giveWeapon(id.slice(2));
+    } else if (o.kind === 'weapon-up') {
+      const w = this.weapons.find((x) => x.def.id === id.slice(2));
+      if (w && w.level < w.def.maxLevel) w.level += 1;
+    } else {
+      this.taken.set(id, (this.taken.get(id) ?? 0) + 1);
+      const s = this.stats;
+      switch (id) {
+        case 'dmg': s.damageMul *= 1.2; break;
+        case 'rate': s.cooldownMul *= 0.88; break;
+        case 'count': s.projCount += 1; break;
+        case 'pierce': s.pierce += 1; break;
+        case 'speed': s.speedMul *= 1.1; break;
+        case 'magnet': s.magnetMul *= 1.35; break;
+        case 'hp': s.maxHp += 20; this.hp = s.maxHp; break;
+        case 'regen': s.regen += 0.4; break;
+      }
     }
     this.offers = [];
     this.phase = 'running';
