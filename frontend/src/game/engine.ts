@@ -126,6 +126,13 @@ export class Game {
    */
   deaths: { x: number; y: number }[] = [];
 
+  /**
+   * Ses ipuçları. Set kullanılıyor çünkü aynı frame'de 200 ölüm olsa da
+   * tek 'kill' sesi çalınacak — dizi olsaydı sınırsız büyürdü.
+   * Ses katmanı her frame boşaltır; simülasyonu ETKİLEMEZ.
+   */
+  events = new Set<string>();
+
   // girdi (birim vektör)
   private inx = 0;
   private iny = 0;
@@ -323,6 +330,7 @@ export class Game {
       art: b.art, animT: 0, facingRight: true, contactCd: 0,
       boss: { label: b.label, evolutionChest: b.evolutionChest },
     });
+    this.events.add('boss');
   }
 
   /** Sandık toplama — evrim sandığıysa evrim dene, olmazsa ödüle çevir */
@@ -334,6 +342,7 @@ export class Game {
       if (dx * dx + dy * dy > rr * rr) continue;
 
       this.swapRemove(this.chests, i);
+      this.events.add('chest');
       const evolved = c.evolution ? this.tryEvolve() : false;
       if (!evolved) {
         // Evrim yoksa sandık boşa gitmesin (VS: sandık altın/XP verir)
@@ -361,6 +370,7 @@ export class Game {
       w.level = 1;
       w.cd = 0;
       this.lastEvolution = { name: to.name, at: this.time };
+      this.events.add('evolve');
       return true;
     }
     return false;
@@ -512,6 +522,7 @@ export class Game {
   private damageEnemy(e: Enemy, dmg: number) {
     e.hp -= dmg;
     e.hitFlash = 0.09;
+    this.events.add('hit');
     if (e.hp <= 0) this.killEnemy(e);
   }
 
@@ -583,6 +594,7 @@ export class Game {
     this.kills += 1;
     this.gold += this.stats.greed; // Coin Mask
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
+    this.events.add('kill');
     if (e.boss) this.chests.push({ x: e.x, y: e.y, evolution: e.boss.evolutionChest });
     // headless koşuda render boşaltmaz → tavan koy, sonsuz büyümesin
     if (this.deaths.length < 256) this.deaths.push({ x: e.x, y: e.y });
@@ -601,6 +613,7 @@ export class Game {
       const taken = Math.max(1, e.damage - this.stats.armor);
       this.hp -= taken;
       this.iframe = PLAYER.iframeSec;
+      this.events.add('hurt');
       if (this.hp <= 0) {
         if (this.stats.revival > 0) {
           // Second Burial — VS'teki gibi %50 canla dirilir, hak tükenir
@@ -634,6 +647,7 @@ export class Game {
       }
       if (d < PLAYER.radius + GEM.radius) {
         this.addXp(g.xp);
+        this.events.add('gem');
         this.swapRemove(this.gems, i);
       }
     }
@@ -646,6 +660,7 @@ export class Game {
       this.level += 1;
       this.xpNext = xpForLevel(this.level);
       this.rollOffers();
+      this.events.add('levelup');
       this.phase = 'levelup';
     }
   }

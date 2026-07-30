@@ -9,6 +9,7 @@ import { render, resetEffects } from '@/game/render';
 import { MAX_CATCHUP, RUN, TICK } from '@/game/config';
 import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
+import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import { C, glass, ctaButton } from '@/lib/theme';
 
 interface Hud {
@@ -31,6 +32,7 @@ export function GameCanvas({ seedText }: { seedText: string }) {
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
   const [hud, setHud] = useState<Hud | null>(null);
   const [runId, setRunId] = useState(0); // artırınca yeni run başlar
+  const [muted, setMuted] = useState(false);
 
   const choose = useCallback((id: string) => {
     gameRef.current?.choose(id);
@@ -62,6 +64,13 @@ export function GameCanvas({ seedText }: { seedText: string }) {
     window.addEventListener('resize', resize);
 
     // ── girdi ──
+    // Tarayıcı otomatik oynatmayı engeller — ilk kullanıcı hareketinde aç.
+    // Bu olmadan ses hiç çalmaz ve sebebi de görünmez (sessiz başarısızlık).
+    const onFirstGesture = () => unlockAudio();
+    window.addEventListener('keydown', onFirstGesture, { once: true });
+    window.addEventListener('pointerdown', onFirstGesture, { once: true });
+    window.addEventListener('touchstart', onFirstGesture, { once: true });
+
     const onKeyDown = (e: KeyboardEvent) => {
       keysRef.current.add(e.key.toLowerCase());
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) e.preventDefault();
@@ -137,6 +146,12 @@ export function GameCanvas({ seedText }: { seedText: string }) {
 
       render(ctx, game, cssW, cssH, dpr, dt);
 
+      // ses ipuçlarını boşalt (sfx kendi içinde kısıyor)
+      if (game.events.size) {
+        for (const e of game.events) play(e as any);
+        game.events.clear();
+      }
+
       // fps ölçümü
       frames++;
       fpsTimer += rawDt;
@@ -162,6 +177,9 @@ export function GameCanvas({ seedText }: { seedText: string }) {
 
     return () => {
       cancelAnimationFrame(raf);
+      window.removeEventListener('keydown', onFirstGesture);
+      window.removeEventListener('pointerdown', onFirstGesture);
+      window.removeEventListener('touchstart', onFirstGesture);
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
@@ -190,7 +208,17 @@ export function GameCanvas({ seedText }: { seedText: string }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: C.candle }}>LV {hud.level}</span>
               <span style={{ color: C.bone, fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(hud.time)}</span>
-              <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
+                <button
+                  onClick={() => { const next = !isSoundEnabled(); setSoundEnabled(next); setMuted(!next); unlockAudio(); }}
+                  aria-label={muted ? 'Unmute' : 'Mute'}
+                  style={{ pointerEvents: 'auto', width: 26, height: 22, borderRadius: 6, cursor: 'pointer',
+                    border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.4)', color: muted ? C.boneFaint : C.candle,
+                    fontSize: 12, lineHeight: 1, padding: 0 }}>
+                  {muted ? '🔇' : '🔊'}
+                </button>
+              </span>
             </div>
           </div>
 
