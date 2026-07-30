@@ -104,6 +104,35 @@ export const PLAYER_ART: ActorArt = {
   },
 };
 
+// ── mermi ve efektler ──
+// Mermi: BDragon "All Fire Bullet" atlası, 16×16 hücre. Satır 4 = yöne dönebilen
+// dart formu (5 frame). Turuncu/altın zaten paletimizde (C.candle).
+export const BULLET = { src: '/art/fx/bullets/All_Fire_Bullet_Pixel_16x16_00.png', cell: 16, row: 4, frames: 5, fps: 14, size: 18 } as const;
+
+// Efekt: BDragon RPG Effect, 64×64 frame, SATIR = RENK, SÜTUN = frame (12).
+// Palet kuralı: MOR SATIRLAR (1, 6, 8) KULLANILMAZ.
+//   0 turuncu · 2 mavi · 3 yeşil · 4 kahve · 5 KEMİK BEYAZI · 7 KAN KIRMIZISI
+export const FX = {
+  hit: { src: '/art/fx/rpg/1010.png', cell: 64, row: 5, frames: 12, fps: 26, size: 40 },
+  death: { src: '/art/fx/rpg/1010.png', cell: 64, row: 7, frames: 12, fps: 22, size: 58 },
+} as const;
+
+export interface CellAnim { src: string; cell: number; row: number; frames: number; fps: number; size: number }
+
+/** Atlas hücresini çizer. Hazır değilse false döner → çağıran basit şekle düşer. */
+export function drawCell(ctx: CanvasRenderingContext2D, a: CellAnim, frame: number, x: number, y: number, angle = 0): boolean {
+  const img = get(a.src);
+  if (!img) return false;
+  const idx = Math.min(Math.max(frame, 0), a.frames - 1);
+  const s = a.size;
+  ctx.save();
+  ctx.translate(x, y);
+  if (angle) ctx.rotate(angle);
+  ctx.drawImage(img, idx * a.cell, a.row * a.cell, a.cell, a.cell, -s / 2, -s / 2, s, s);
+  ctx.restore();
+  return true;
+}
+
 // ── yükleyici ──
 // Yüklenmemiş görsel için render daireye düşer (oyun asla siyah ekran vermez).
 const cache = new Map<string, HTMLImageElement>();
@@ -132,6 +161,9 @@ export function preload(art: ActorArt) {
 export function preloadAll() {
   preload(PLAYER_ART);
   for (const art of Object.values(ENEMY_ART)) preload(art);
+  get(BULLET.src);
+  get(FX.hit.src);
+  get(FX.death.src);
 }
 
 /**

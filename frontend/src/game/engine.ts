@@ -77,6 +77,13 @@ export class Game {
   projectiles: Projectile[] = [];
   gems: Gem[] = [];
 
+  /**
+   * KOZMETİK olay kuyruğu — render katmanı her frame boşaltır.
+   * Simülasyon durumunu ETKİLEMEZ ve RNG tüketmez; determinizm bozulmaz.
+   * Render çalışmasa bile (headless test) tavanla sınırlı, sızıntı yapmaz.
+   */
+  deaths: { x: number; y: number }[] = [];
+
   // girdi (birim vektör)
   private inx = 0;
   private iny = 0;
@@ -282,6 +289,8 @@ export class Game {
     this.kills += 1;
     this.gold += 1;
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
+    // headless koşuda render boşaltmaz → tavan koy, sonsuz büyümesin
+    if (this.deaths.length < 256) this.deaths.push({ x: e.x, y: e.y });
   }
 
   private collidePlayer(dt: number) {

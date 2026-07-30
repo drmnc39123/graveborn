@@ -5,7 +5,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Game } from '@/game/engine';
-import { render } from '@/game/render';
+import { render, resetEffects } from '@/game/render';
 import { MAX_CATCHUP, RUN, TICK } from '@/game/config';
 import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
@@ -41,6 +41,7 @@ export function GameCanvas({ seedText }: { seedText: string }) {
     preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
     const game = new Game(seedFromString(seedText));
     gameRef.current = game;
+    resetEffects(); // önceki run'ın patlamaları yeni run'a taşmasın
 
     let dpr = 1;
     let cssW = 0;
@@ -130,7 +131,7 @@ export function GameCanvas({ seedText }: { seedText: string }) {
       }
       if (acc > TICK * MAX_CATCHUP) acc = 0; // birikmiş açığı at
 
-      render(ctx, game, cssW, cssH, dpr);
+      render(ctx, game, cssW, cssH, dpr, dt);
 
       // fps ölçümü
       frames++;

@@ -3,11 +3,53 @@
 // Kural: aynı renkteki nesneler tek path'te toplanır (ctx durum değişimi pahalı).
 
 import { C } from '@/lib/theme';
-import { PLAYER, RUN } from './config';
+import { PLAYER, RUN, WEAPON } from './config';
 import type { Game } from './engine';
-import { drawActor, ENEMY_ART, PLAYER_ART } from './sprites';
+import { BULLET, drawActor, drawCell, ENEMY_ART, FX, PLAYER_ART } from './sprites';
 
-export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number, dpr: number) {
+// ── Kozmetik efektler ──
+// Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
+// Engine ölüm konumlarını kuyruğa atar, burada boşaltılır.
+interface Fx { x: number; y: number; t: number }
+const deathFx: Fx[] = [];
+const MAX_FX = 90; // ekranda aynı anda en fazla; sürü ölümünde çizim patlamasın
+
+/** Yeni run başlarken çağrılır — modül seviyesindeki efektler önceki run'dan taşmasın. */
+export function resetEffects() {
+  deathFx.length = 0;
+  groundPattern = null; // yeni canvas bağlamı gelirse pattern yeniden üretilsin
+}
+
+function pumpEffects(g: Game, dt: number) {
+  for (let i = 0; i < g.deaths.length; i++) {
+    if (deathFx.length >= MAX_FX) break;
+    const d = g.deaths[i];
+    deathFx.push({ x: d.x, y: d.y, t: 0 });
+  }
+  g.deaths.length = 0; // kuyruğu boşalt
+
+  const life = FX.death.frames / FX.death.fps;
+  for (let i = deathFx.length - 1; i >= 0; i--) {
+    deathFx[i].t += dt;
+    if (deathFx[i].t >= life) {
+      deathFx[i] = deathFx[deathFx.length - 1];
+      deathFx.pop();
+    }
+  }
+}
+
+function drawEffects(ctx: CanvasRenderingContext2D) {
+  if (!deathFx.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter'; // patlama parlasın
+  for (let i = 0; i < deathFx.length; i++) {
+    const f = deathFx[i];
+    drawCell(ctx, FX.death, Math.floor(f.t * FX.death.fps), f.x, f.y);
+  }
+  ctx.restore();
+}
+
+export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number, dpr: number, dt = 1 / 60) {
   const cx = w / 2;
   const cy = h / 2;
 
@@ -21,10 +63,13 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   ctx.save();
   ctx.translate(cx - g.px, cy - g.py);
 
+  pumpEffects(g, dt);
+
   drawGround(ctx, g, w, h);
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
   drawEnemies(ctx, g);
+  drawEffects(ctx); // ölüm patlamaları düşmanların üstünde, oyuncunun altında
   drawProjectiles(ctx, g);
   drawPlayer(ctx, g);
 
@@ -75,8 +120,9 @@ function drawGround(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number
     ctx.translate(x0, y0);
     ctx.fillRect(0, 0, ww, hh);
     ctx.restore();
-    // hafif karartma — karakterler zeminden ayrışsın
-    ctx.fillStyle = 'rgba(10,8,6,0.28)';
+    // Çok hafif sıcak yıkama — karo zaten koyu, karartma eklersek siyaha gidiyor.
+    // (0.28 karartma denendi: zemin okunmaz oldu.)
+    ctx.fillStyle = 'rgba(43,31,22,0.10)';
     ctx.fillRect(x0, y0, ww, hh);
     return;
   }
@@ -162,10 +208,20 @@ function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
 
 function drawProjectiles(ctx: CanvasRenderingContext2D, g: Game) {
   if (!g.projectiles.length) return;
-  ctx.fillStyle = C.bone;
-  ctx.beginPath();
+  // Sprite varsa yöne döndürerek çiz; yoksa daireye düş.
+  const fallback: typeof g.projectiles = [];
   for (let i = 0; i < g.projectiles.length; i++) {
     const p = g.projectiles[i];
+    // uçuş süresinden frame türet — her mermi kendi fazında, sürü senkron olmasın
+    const frame = Math.floor((WEAPON.projectileLifeSec - p.life) * BULLET.fps) % BULLET.frames;
+    const angle = Math.atan2(p.vy, p.vx);
+    if (!drawCell(ctx, BULLET, frame, p.x, p.y, angle)) fallback.push(p);
+  }
+  if (!fallback.length) return;
+  ctx.fillStyle = C.bone;
+  ctx.beginPath();
+  for (let i = 0; i < fallback.length; i++) {
+    const p = fallback[i];
     ctx.moveTo(p.x + p.radius, p.y);
     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
   }
