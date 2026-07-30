@@ -280,17 +280,40 @@ export default function EditorPage() {
         }
       }
 
-      // işaretçiler (görünür olanlar)
+      // İŞARETÇİLER — her şeyin ÜSTÜNDE, tıklanabilir olduğu belli olacak şekilde.
+      // Ayarsız olanlar (panel/hedef seçilmemiş) kırmızı halkayla işaretlenir.
       for (const m of doc.markers) {
-        if (m.x < viewL - 40 || m.x > viewR + 40 || m.y < viewT - 40 || m.y > viewB + 40) continue;
+        if (m.x < viewL - 60 || m.x > viewR + 60 || m.y < viewT - 60 || m.y > viewB + 60) continue;
         const col = m.kind === 'fight' ? '#a01226' : m.kind === 'travel' ? '#5f9e4a' : '#8a97a3';
+        const unset = (m.kind === 'door' && !m.target) || (m.kind === 'travel' && m.toX === undefined);
+
+        // tıklama alanını görünür kıl — halka, yarıçap seçimle aynı (22px)
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, 22, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fill();
+        ctx.strokeStyle = unset ? '#ff5470' : col;
+        ctx.lineWidth = (unset ? 3 : 2) / zoom;
+        ctx.stroke();
+
         ctx.fillStyle = col;
         ctx.beginPath(); ctx.arc(m.x, m.y, 9, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = '#000'; ctx.lineWidth = 2 / zoom; ctx.stroke();
-        ctx.fillStyle = C.bone;
-        ctx.font = `${11 / zoom}px ui-sans-serif, system-ui`;
-        ctx.fillText(m.label || m.kind, m.x + 12, m.y + 4);
-        if (m.id === selId) { ctx.strokeStyle = C.candle; ctx.strokeRect(m.x - 12, m.y - 12, 24, 24); }
+
+        // etiket — arkasına şerit koy ki kalabalık haritada okunsun
+        const txt = (m.label || m.kind) + (unset ? '  ⚠ AYARSIZ' : '');
+        ctx.font = `700 ${12 / zoom}px ui-sans-serif, system-ui`;
+        const tw = ctx.measureText(txt).width;
+        ctx.fillStyle = 'rgba(10,8,6,0.82)';
+        ctx.fillRect(m.x + 26, m.y - 9 / zoom, tw + 10 / zoom, 18 / zoom);
+        ctx.fillStyle = unset ? '#ff8b9c' : C.bone;
+        ctx.fillText(txt, m.x + 31, m.y + 4 / zoom);
+
+        if (m.id === selId) {
+          ctx.strokeStyle = C.candle;
+          ctx.lineWidth = 3 / zoom;
+          ctx.strokeRect(m.x - 26, m.y - 26, 52, 52);
+        }
       }
 
       // dikdörtgen doldurma önizlemesi
@@ -393,16 +416,16 @@ export default function EditorPage() {
   /** İmlecin altındaki nesneyi/işaretçiyi/karoyu sil */
   const eraseAt = useCallback((wx: number, wy: number) => {
     setDoc((d) => {
-      // önce nesne (en üstteki)
+      // ÖNCE işaretçi — nesnelerin altında kalıp erişilemez olmasınlar
+      const mk = d.markers.find((m) => Math.hypot(m.x - wx, m.y - wy) < 22);
+      if (mk) return { ...d, markers: d.markers.filter((m) => m.id !== mk.id) };
+      // sonra nesne (en üstteki)
       for (let i = d.objects.length - 1; i >= 0; i--) {
         const o = d.objects[i];
         if (wx >= o.x && wx <= o.x + o.w && wy >= o.y && wy <= o.y + o.h) {
           return { ...d, objects: d.objects.filter((x) => x.id !== o.id) };
         }
       }
-      // sonra işaretçi
-      const mk = d.markers.find((m) => Math.hypot(m.x - wx, m.y - wy) < 18);
-      if (mk) return { ...d, markers: d.markers.filter((m) => m.id !== mk.id) };
       // en son zemin karosu (0 = boş)
       const tx = Math.floor(wx / MAP_TILE), ty = Math.floor(wy / MAP_TILE);
       if (tx < 0 || ty < 0 || tx >= d.terrain.w || ty >= d.terrain.h) return d;
@@ -434,6 +457,14 @@ export default function EditorPage() {
     }
     if (e.shiftKey && tool !== 'tile') { setDoc((d) => ({ ...d, spawn: { x: Math.round(p.x), y: Math.round(p.y) } })); return; }
     if (erase) { pushUndo(); eraseAt(p.x, p.y); return; }
+
+    // İŞARETÇİ SEÇİMİ HER ARAÇTA ÖNCELİKLİ.
+    // 2086 nesnenin altında kalıyorlardı: tıklayınca hep üstteki nesne
+    // seçiliyor, işaretçiye asla sıra gelmiyordu. Küçük ve kasıtlı
+    // hedefler oldukları için önce onlara bakılır.
+    const hitMarker = doc.markers.find((m) => Math.hypot(m.x - p.x, m.y - p.y) < 22);
+    if (hitMarker) { setSelId(hitMarker.id); markDirty(); return; }
+
     if (tool === 'tile') return; // zemin artık sürükleme ile (pointer olayları)
 
     if (tool === 'marker') {
@@ -547,13 +578,15 @@ export default function EditorPage() {
     if (!cv) return;
     const r = cv.getBoundingClientRect();
 
-    // en üstteki nesne (ters sırada ara — üstte çizilen önce bulunsun)
+    // İşaretçi ÖNCELİKLİ (nesnelerin altında kalmasınlar)
+    const marker = doc.markers.find((m) => Math.hypot(m.x - p.x, m.y - p.y) < 22) ?? null;
     let obj: MapObject | null = null;
-    for (let i = doc.objects.length - 1; i >= 0; i--) {
-      const o = doc.objects[i];
-      if (p.x >= o.x && p.x <= o.x + o.w && p.y >= o.y && p.y <= o.y + o.h) { obj = o; break; }
+    if (!marker) {
+      for (let i = doc.objects.length - 1; i >= 0; i--) {
+        const o = doc.objects[i];
+        if (p.x >= o.x && p.x <= o.x + o.w && p.y >= o.y && p.y <= o.y + o.h) { obj = o; break; }
+      }
     }
-    const marker = doc.markers.find((m) => Math.hypot(m.x - p.x, m.y - p.y) < 18) ?? null;
 
     const tx = Math.floor(p.x / MAP_TILE), ty = Math.floor(p.y / MAP_TILE);
     let tileSrc: string | null = null;
