@@ -54,13 +54,19 @@ export interface EnemyType {
 
 // Renkler theme.ts paletinden — MOR YOK
 export const ENEMIES: readonly EnemyType[] = [
-  // NOT: şu an tam animasyonlu tek düşman sprite'ımız var (CC0 iskelet).
-  // Diğer tipler daireye düşüyor — meşru paketler gelince sadece `art` alanı eklenecek.
-  { id: 'husk', hp: 10, speed: 42, damage: 6, radius: 11, xp: 1, color: '#8a97a3', fromMinute: 0, art: 'skeleton' },
-  { id: 'crawler', hp: 18, speed: 62, damage: 8, radius: 10, xp: 2, color: '#b8ae98', fromMinute: 2 },
-  { id: 'brute', hp: 55, speed: 33, damage: 14, radius: 18, xp: 5, color: '#a01226', fromMinute: 4 },
-  { id: 'shade', hp: 30, speed: 82, damage: 10, radius: 12, xp: 4, color: '#5f9e4a', fromMinute: 6 },
-  { id: 'gorger', hp: 140, speed: 28, damage: 20, radius: 25, xp: 12, color: '#efa72e', fromMinute: 9 },
+  // Her tip ayrı sprite'a bağlı — sürüde görsel çeşitlilik oyunun "ucuz klon"
+  // görünmemesinin en belirgin işareti (tür incelemesinden çıkan ders).
+  { id: 'imp', hp: 10, speed: 46, damage: 6, radius: 10, xp: 1, color: '#8a97a3', fromMinute: 0, art: 'mon_imp' },
+  { id: 'rogue', hp: 14, speed: 58, damage: 7, radius: 10, xp: 1, color: '#b8ae98', fromMinute: 0, art: 'mon_rogue' },
+  { id: 'skeleton', hp: 18, speed: 44, damage: 8, radius: 11, xp: 2, color: '#ddd3bb', fromMinute: 1.5, art: 'skeleton' },
+  { id: 'wretch', hp: 22, speed: 62, damage: 8, radius: 11, xp: 2, color: '#8a97a3', fromMinute: 2, art: 'mon_wretch' },
+  { id: 'horned', hp: 30, speed: 48, damage: 10, radius: 12, xp: 3, color: '#5f9e4a', fromMinute: 3, art: 'mon_horned' },
+  { id: 'bird', hp: 26, speed: 78, damage: 9, radius: 11, xp: 3, color: '#efa72e', fromMinute: 4, art: 'mon_bird' },
+  { id: 'brute', hp: 62, speed: 34, damage: 14, radius: 16, xp: 5, color: '#a01226', fromMinute: 5, art: 'mon_brute' },
+  { id: 'fiend', hp: 48, speed: 66, damage: 12, radius: 13, xp: 5, color: '#c8324a', fromMinute: 6, art: 'mon_fiend' },
+  { id: 'crab', hp: 90, speed: 38, damage: 16, radius: 17, xp: 7, color: '#efa72e', fromMinute: 8, art: 'mon_crab' },
+  { id: 'warrior', hp: 110, speed: 52, damage: 18, radius: 15, xp: 9, color: '#a01226', fromMinute: 10, art: 'mon_warrior' },
+  { id: 'hulk', hp: 210, speed: 30, damage: 22, radius: 22, xp: 14, color: '#5f9e4a', fromMinute: 12, art: 'mon_hulk' },
 ] as const;
 
 /** DENGE NOTU: ilk değerler (base 2.4 / perMinute 1.7 / cap 620 / hp +%34) ile
