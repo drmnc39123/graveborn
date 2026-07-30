@@ -27,6 +27,10 @@ export interface MapObject {
   z?: number;
   /** köprü: altındaki su karolarını YÜRÜNEBİLİR yapar */
   bridge?: boolean;
+  /** çarpışma kutusunun genişlik oranı (0..1) — duvar geniş, ağaç dar */
+  solidW?: number;
+  /** duvar/çit: üstünden YOL geçiyorsa orada engel olmaz (kapı geçişi) */
+  wall?: boolean;
 }
 
 /** Zemin boyası — karo indeksi → karo görseli */

@@ -38,7 +38,16 @@ export function createHub(world: MapWorld): HubState {
 /** Katı nesnelerle ve su karolarıyla çarpışma */
 function blocked(s: HubState, x: number, y: number, r: number) {
   const w = s.world;
+
+  // Ayakların altındaki karo YOL mu? Öyleyse duvar/çit engelleri delinir:
+  // harita yapan duvarın içinden yol geçirdiyse orada kapı vardır.
+  // (Kalenin kapısına giden yol duvar tarafından kapatılıyordu.)
+  const px = Math.floor(x / MAP_TILE), py = Math.floor(y / MAP_TILE);
+  const onRoad = px >= 0 && py >= 0 && px < w.tileW && py < w.tileH
+    && /path|road|cobble|pattern_stone|pavement/i.test(w.palette[w.tiles[py * w.tileW + px] - 1] ?? '');
+
   for (const c of w.solids) {
+    if (c.wall && onRoad) continue; // kapı geçişi
     if (x + r > c.x && x - r < c.x + c.w && y + r > c.y && y - r < c.y + c.h) return true;
   }
   const tx = Math.floor(x / MAP_TILE), ty = Math.floor(y / MAP_TILE);

@@ -26,7 +26,7 @@ export interface MapWorld {
   tiles: number[];      // palet indeksi (0 = boş)
   objects: WorldObject[];
   /** çarpışma dikdörtgenleri — nesnelerin solid alt kısmı */
-  solids: { x: number; y: number; w: number; h: number }[];
+  solids: { x: number; y: number; w: number; h: number; wall: boolean }[];
   doors: WorldDoor[];
   travels: WorldTravel[];
   fight: WorldFight | null;
@@ -43,8 +43,18 @@ export function buildMapWorld(doc: MapDoc): MapWorld {
   const solids = doc.objects
     .filter((o) => (o.solid ?? 0) > 0)
     // Çarpışma gövdenin ALT kısmı: ağacın tepesinden geçilir, gövdesinden geçilmez.
-    // Genişlikte de daraltıyoruz — sprite'ın şeffaf kenarları duvar olmasın.
-    .map((o) => ({ x: o.x + o.w * 0.18, y: o.y + o.h - (o.solid ?? 0), w: o.w * 0.64, h: o.solid ?? 0 }));
+    // Genişlik oranı nesneye göre: duvar neredeyse tam (bitişik duvarlar arasında
+    // delik kalmasın), ağaç dar (sadece gövde).
+    .map((o) => {
+      const wf = o.solidW ?? 0.8;
+      return {
+        x: o.x + o.w * (1 - wf) / 2,
+        y: o.y + o.h - (o.solid ?? 0),
+        w: o.w * wf,
+        h: o.solid ?? 0,
+        wall: !!o.wall,
+      };
+    });
 
   const doors: WorldDoor[] = [];
   const travels: WorldTravel[] = [];
