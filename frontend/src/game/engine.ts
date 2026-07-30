@@ -8,10 +8,10 @@
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatial';
 import {
-  BOSSES, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
-  MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAT_BASE, STAT_CAP, TICK,
+  CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
+  MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
   WEAPONS, weaponById, xpForLevel,
-  type EnemyType, type PassiveDef, type StatKey, type WeaponDef,
+  type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
 } from './config';
 
 export interface Enemy {
@@ -61,6 +61,17 @@ export interface Offer {
 }
 
 export type Phase = 'running' | 'levelup' | 'dead' | 'won';
+
+/** Bölüm ilerlemesi — HUD "kaç düşman kaldı" göstergesi için */
+export interface StageState {
+  def: StageDef;
+  /** henüz salınmamış düşman */
+  toSpawn: number;
+  /** bu bölümde toplam kaç düşman öldürüldü */
+  killed: number;
+  /** boss çağrıldı mı */
+  bossSpawned: boolean;
+}
 
 /** VS istatistik sistemi (CLONE-SPEC §1). Yüzdeler 1.0 = %100. */
 export type Stats = Record<StatKey, number>;
@@ -114,8 +125,8 @@ export class Game {
   hitZones: HitZone[] = [];
   chests: Chest[] = [];
 
-  /** kaç boss doğdu — zamanlama tablosundaki sıradaki indeks */
-  private bossIndex = 0;
+  /** Oynanan bölüm — sabit düşman havuzu, "hepsi öldü" bitiş koşulu */
+  stage: StageState;
   /** son evrim (HUD duyurusu için); render/HUD okur, simülasyonu etkilemez */
   lastEvolution: { name: string; at: number } | null = null;
 
@@ -146,11 +157,17 @@ export class Game {
   private viewW = 800;
   private viewH = 600;
 
-  constructor(seed: number) {
+  constructor(seed: number, stageDef: StageDef = STAGES[0]) {
     this.seed = seed;
     this.rng = createRng(seed);
+    this.stage = { def: stageDef, toSpawn: stageDef.enemyCount, killed: 0, bossSpawned: false };
     // Başlangıç silahı: Bone Shard (VS'te her karakter bir silahla başlar)
     this.giveWeapon('shard');
+  }
+
+  /** Bölümde kalan düşman (salınmamış + sahnedeki). 0 = bölüm bitti. */
+  get remaining() {
+    return this.stage.toSpawn + this.enemies.length;
   }
 
   private giveWeapon(id: string) {
@@ -223,7 +240,8 @@ export class Game {
     if (this.phase !== 'running') return;
     const dt = TICK;
     this.time += dt;
-    if (this.time >= RUN.durationSec) { this.phase = 'won'; return; }
+    // Güvenlik tavanı — bölüm bir şekilde bitmezse run sonsuza kadar sürmesin
+    if (this.time >= RUN.durationSec) { this.phase = 'dead'; return; }
 
     this.movePlayer(dt);
     this.rebuildGrid();
@@ -243,6 +261,13 @@ export class Game {
       this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.recovery * dt);
     }
     if (this.iframe > 0) this.iframe -= dt;
+
+    // BÖLÜM TAMAMLANDI: havuz boş, sahne temiz, boss (varsa) devrilmiş.
+    // Sandık bekleyen varsa bitirme — oyuncu evrim sandığını kaçırmasın.
+    if (this.remaining === 0 && this.chests.length === 0) {
+      const needsBoss = !!this.stage.def.boss && !this.stage.bossSpawned;
+      if (!needsBoss) this.phase = 'won';
+    }
   }
 
   private movePlayer(dt: number) {
@@ -269,26 +294,32 @@ export class Game {
     }
   }
 
+  /** Bölümün düşman havuzu (config'den) — en az 1 tip garanti */
   private availableTypes(): readonly EnemyType[] {
-    const m = this.minute;
-    // fromMinute geçmiş tipler; en az 1 tip garanti
-    const list = ENEMIES.filter((t) => t.fromMinute <= m);
+    const ids = this.stage.def.enemies;
+    const list = ENEMIES.filter((t) => ids.includes(t.id));
     return list.length ? list : [ENEMIES[0]];
   }
 
   private spawn(dt: number) {
-    // Curse (Cursed Skull): düşman hızı, canı, adedi ve sıklığı artar — VS ile aynı.
-    // Riskli ama daha çok XP/gold demek; bilinçli bir "zorluğu satın al" seçeneği.
+    const st = this.stage;
+    if (st.toSpawn <= 0) return; // havuz bitti — bölümdeki her düşman salındı
+
+    // Curse (Cursed Skull): düşman hızı/canı/sıklığı artar — VS ile aynı.
+    // Bölüm sisteminde ADET artmaz (havuz sabit), sadece güç ve hız artar;
+    // yoksa gold tavanı ile düşman sayısı arasındaki bağ kopardı.
     const curse = this.stats.curse;
-    const rate = (SPAWN.base + this.minute * SPAWN.perMinute) * curse;
+    const rate = st.def.spawnRate * curse;
     this.spawnAcc += rate * dt;
     const types = this.availableTypes();
-    const hpScale = (1 + this.minute * SPAWN.hpScalePerMinute) * curse;
-    const spScale = (1 + this.minute * SPAWN.speedScalePerMinute) * curse;
+    const hpScale = st.def.hpMul * curse;
+    const spScale = st.def.speedMul * curse;
 
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
-      if (this.enemies.length >= SPAWN.maxAlive) { this.spawnAcc = 0; break; }
+      if (st.toSpawn <= 0) { this.spawnAcc = 0; break; }
+      if (this.enemies.length >= st.def.maxAlive) { this.spawnAcc = 0; break; }
+      st.toSpawn -= 1;
       const t = this.rng.pick(types);
       // ekran dikdörtgeninin dışındaki bir elipste doğ
       const ang = this.rng.range(0, Math.PI * 2);
@@ -309,12 +340,16 @@ export class Game {
     }
   }
 
-  /** Zamanı gelen boss'u doğur (tablodan, sırayla) */
+  /**
+   * Bölüm boss'u — havuzdaki tüm normal düşmanlar salınıp ölünce gelir.
+   * Yani boss bölümün FİNALİ, zaman bazlı değil ilerleme bazlı.
+   */
   private spawnBoss() {
-    if (this.bossIndex >= BOSSES.length) return;
-    const b = BOSSES[this.bossIndex];
-    if (this.time < b.atSec) return;
-    this.bossIndex += 1;
+    const st = this.stage;
+    const b = st.def.boss;
+    if (!b || st.bossSpawned) return;
+    if (st.toSpawn > 0 || this.enemies.length > 0) return; // önce sürü temizlensin
+    st.bossSpawned = true;
 
     // Curse boss'u da güçlendirir — pasifin riski her yerde tutarlı olmalı
     const hp = b.hp * this.stats.curse;
@@ -326,17 +361,28 @@ export class Game {
       y: this.py + Math.sin(ang) * ry,
       hp, maxHp: hp,
       speed: b.speed, damage: b.damage, radius: b.radius,
-      xp: b.xp, color: '#a01226', hitFlash: 0,
+      xp: 400, color: '#a01226', hitFlash: 0,
       art: b.art, animT: 0, facingRight: true, contactCd: 0,
-      boss: { label: b.label, evolutionChest: b.evolutionChest },
+      boss: { label: b.label, evolutionChest: true },
     });
     this.events.add('boss');
   }
 
   /** Sandık toplama — evrim sandığıysa evrim dene, olmazsa ödüle çevir */
   private updateChests() {
+    // Sürü temizlenince sandıklar oyuncuya AKAR.
+    // Yoksa oyuncu sandığı fark etmezse bölüm asla bitmiyor (bitiş koşulu
+    // sandık bekliyor) ve gold'unu alamadan kilitleniyor. Testte tam bu oldu.
+    const cleared = this.stage.toSpawn === 0 && this.enemies.length === 0;
     for (let i = this.chests.length - 1; i >= 0; i--) {
       const c = this.chests[i];
+      if (cleared) {
+        const ddx = this.px - c.x, ddy = this.py - c.y;
+        const d = Math.hypot(ddx, ddy) || 1;
+        const pull = 420 * TICK;
+        c.x += (ddx / d) * pull;
+        c.y += (ddy / d) * pull;
+      }
       const dx = c.x - this.px, dy = c.y - this.py;
       const rr = PLAYER.radius + CHEST_RADIUS;
       if (dx * dx + dy * dy > rr * rr) continue;
@@ -377,13 +423,35 @@ export class Game {
   }
 
   private moveEnemies(dt: number) {
+    // AV MODU: bölümün son düşmanları hızlanır ve sonunda oyuncudan HIZLI olur.
+    //
+    // Bölüm tabanlı oyunda kaçan son birkaç düşman oyuncuyu bölümde kilitler.
+    // Testte Ossuary Halls 14 düşmanla 25 dakika sürdü ve hiç bitmedi: o bölümün
+    // düşmanları oyuncudan yavaş, kaçanı ASLA yakalayamıyorlar.
+    // Bu yüzden hız garantisi düşmanın kendi hızına değil OYUNCU hızına bağlandı —
+    // son düşmanlardan kaçılamaz, dönüp savaşmak zorundasın. Bölüm her zaman yakınsar.
+    // OYUN TESTİ DÜZELTMESİ: ilk sürüm eşiği 20'ydi ve tabanı oyuncu hızının
+    // 1.15 katına çıkarıyordu → oyuncu "düşmanlar koşuyor, full canla öldüm" dedi.
+    // 100 düşmanlık bölümde son %20'nin kaçılamaz olması kuşatma demek.
+    // Artık SADECE son 8 düşman ve taban oyuncu hızının ALTINDA kalıyor:
+    // kaçabilirsin ama mesafe açamazsın → menzilde kalırlar, silah onları biçer.
+    // Yakınsama garantisi korunuyor, haksız hız yok.
+    const left = this.remaining;
+    const playerSpeed = PLAYER.speed * this.stats.moveSpeed;
+    let huntFloor = 0;
+    if (left > 0 && left <= 8) {
+      const t = (8 - left) / 8;                    // 0 → 1 (azaldıkça artar)
+      huntFloor = playerSpeed * (0.6 + 0.35 * t);  // son düşmanda ~0.95x oyuncu hızı
+    }
+
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i];
       const dx = this.px - e.x;
       const dy = this.py - e.y;
       const d = Math.hypot(dx, dy) || 1;
-      e.x += (dx / d) * e.speed * dt;
-      e.y += (dy / d) * e.speed * dt;
+      const sp = e.boss ? e.speed : Math.max(e.speed, huntFloor);
+      e.x += (dx / d) * sp * dt;
+      e.y += (dy / d) * sp * dt;
       e.animT += dt;
       if (dx > 0.5) e.facingRight = true;
       else if (dx < -0.5) e.facingRight = false;
@@ -592,7 +660,8 @@ export class Game {
 
   private killEnemy(e: Enemy) {
     this.kills += 1;
-    this.gold += this.stats.greed; // Coin Mask
+    this.stage.killed += 1;
+    this.gold += this.stage.def.goldPerKill * this.stats.greed; // Coin Mask
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
     this.events.add('kill');
     if (e.boss) this.chests.push({ x: e.x, y: e.y, evolution: e.boss.evolutionChest });

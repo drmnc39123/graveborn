@@ -5,10 +5,77 @@ export const TICK = 1 / 60; // sabit timestep — simülasyon 60Hz, render ayrı
 export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana gidince donma olmasın)
 
 export const RUN = {
-  /** Run hedef süresi (saniye). VS'de 30 dk; biz 20 dk ile daha sıkı tutuyoruz. */
-  durationSec: 20 * 60,
+  /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
+  durationSec: 30 * 60,
   arenaRadius: 2400, // oyuncu bu daireden çıkamaz (sonsuz kaçışı engeller)
 } as const;
+
+// ── BÖLÜMLER ──────────────────────────────────────────────────────────
+// TASARIM KARARI: sonsuz koşu DEĞİL, bitirilebilir bölümler.
+// Her bölümde SABİT sayıda düşman var; hepsi ölünce bölüm biter.
+// Bu hem oyunu VS klonlarından ayırıyor hem de sonsuz spawn'daki denge
+// uçurumunu ortadan kaldırıyor (sürü duvara dönüşüp DPS'i boğamıyor).
+//
+// EKONOMİ KURALI (exploit kapatma):
+// Her bölümün TOPLAM gold tavanı var ve bu tavan TÜM DENEMELER boyunca geçerli.
+// 700 gold'luk bölümde 695 kazanıp ölen oyuncu, tekrar oynadığında o bölümden
+// en fazla 5 gold daha alabilir. Yoksa oyuncu kolay bölümü sonsuz tekrar edip
+// gold basardı ve shop ekonomisi anlamsızlaşırdı.
+export interface StageDef {
+  id: number;
+  name: string;
+  /** Bu bölümde toplam kaç düşman gelecek — hepsi ölünce bölüm biter */
+  enemyCount: number;
+  /** Bölümden kazanılabilecek TOPLAM gold (tüm denemeler boyunca) */
+  goldCap: number;
+  /** Öldürme başına gold */
+  goldPerKill: number;
+  /** Saniyede kaç düşman salınır */
+  spawnRate: number;
+  /** Aynı anda sahnede en fazla kaç düşman */
+  maxAlive: number;
+  /** Düşman havuzu — bu bölümde hangi tipler çıkar */
+  enemies: string[];
+  /** Düşman can/hız çarpanı (bölüm zorluğu) */
+  hpMul: number;
+  speedMul: number;
+  /** Bölüm sonunda boss gelir mi (kalan düşman 0'a inince) */
+  boss?: { hp: number; speed: number; damage: number; radius: number; art: string; label: string };
+}
+
+export const STAGES: readonly StageDef[] = [
+  {
+    id: 1, name: 'The Hollow Wood', enemyCount: 100, goldCap: 300, goldPerKill: 3,
+    spawnRate: 1.6, maxAlive: 40, enemies: ['imp', 'rogue'], hpMul: 1, speedMul: 1,
+  },
+  {
+    id: 2, name: 'Ossuary Halls', enemyCount: 200, goldCap: 700, goldPerKill: 3.5,
+    spawnRate: 2.2, maxAlive: 60, enemies: ['imp', 'rogue', 'skeleton', 'wretch'],
+    hpMul: 1.35, speedMul: 1.04,
+  },
+  {
+    id: 3, name: 'The Charnel Works', enemyCount: 350, goldCap: 1400, goldPerKill: 4,
+    spawnRate: 3.0, maxAlive: 90, enemies: ['skeleton', 'wretch', 'horned', 'bird'],
+    hpMul: 1.9, speedMul: 1.08,
+    boss: { hp: 4200, speed: 44, damage: 24, radius: 38, art: 'boss_mini', label: 'The Gorged' },
+  },
+  {
+    id: 4, name: 'The Toll Tower', enemyCount: 550, goldCap: 2400, goldPerKill: 4.5,
+    spawnRate: 3.8, maxAlive: 130, enemies: ['horned', 'bird', 'brute', 'fiend'],
+    hpMul: 2.7, speedMul: 1.12,
+    boss: { hp: 11000, speed: 48, damage: 30, radius: 44, art: 'boss_mega', label: 'Bell Warden' },
+  },
+  {
+    id: 5, name: 'The Black Chapel', enemyCount: 800, goldCap: 4000, goldPerKill: 5,
+    spawnRate: 4.6, maxAlive: 180, enemies: ['brute', 'fiend', 'crab', 'warrior', 'hulk'],
+    hpMul: 3.8, speedMul: 1.16,
+    boss: { hp: 30000, speed: 54, damage: 38, radius: 52, art: 'boss_nightmare', label: 'The Unburied' },
+  },
+] as const;
+
+export function stageById(id: number): StageDef | undefined {
+  return STAGES.find((s) => s.id === id);
+}
 
 export const PLAYER = {
   radius: 13,
@@ -209,17 +276,20 @@ export interface EnemyType {
 export const ENEMIES: readonly EnemyType[] = [
   // Her tip ayrı sprite'a bağlı — sürüde görsel çeşitlilik oyunun "ucuz klon"
   // görünmemesinin en belirgin işareti (tür incelemesinden çıkan ders).
-  { id: 'imp', hp: 10, speed: 46, damage: 6, radius: 10, xp: 1, color: '#8a97a3', fromMinute: 0, art: 'mon_imp' },
-  { id: 'rogue', hp: 14, speed: 58, damage: 7, radius: 10, xp: 1, color: '#b8ae98', fromMinute: 0, art: 'mon_rogue' },
-  { id: 'skeleton', hp: 18, speed: 44, damage: 8, radius: 11, xp: 2, color: '#ddd3bb', fromMinute: 1.5, art: 'skeleton' },
-  { id: 'wretch', hp: 22, speed: 62, damage: 8, radius: 11, xp: 2, color: '#8a97a3', fromMinute: 2, art: 'mon_wretch' },
-  { id: 'horned', hp: 30, speed: 48, damage: 10, radius: 12, xp: 3, color: '#5f9e4a', fromMinute: 3, art: 'mon_horned' },
-  { id: 'bird', hp: 26, speed: 78, damage: 9, radius: 11, xp: 3, color: '#efa72e', fromMinute: 4, art: 'mon_bird' },
-  { id: 'brute', hp: 62, speed: 34, damage: 14, radius: 16, xp: 5, color: '#a01226', fromMinute: 5, art: 'mon_brute' },
-  { id: 'fiend', hp: 48, speed: 66, damage: 12, radius: 13, xp: 5, color: '#c8324a', fromMinute: 6, art: 'mon_fiend' },
-  { id: 'crab', hp: 90, speed: 38, damage: 16, radius: 17, xp: 7, color: '#efa72e', fromMinute: 8, art: 'mon_crab' },
-  { id: 'warrior', hp: 110, speed: 52, damage: 18, radius: 15, xp: 9, color: '#a01226', fromMinute: 10, art: 'mon_warrior' },
-  { id: 'hulk', hp: 210, speed: 30, damage: 22, radius: 22, xp: 14, color: '#5f9e4a', fromMinute: 12, art: 'mon_hulk' },
+  // HIZ DENGESİ (oyun testi: "bir tık hızlılar") — hepsi ~%14 düşürüldü.
+  // Referans: oyuncu 165 px/sn. En hızlı düşman artık oyuncunun ~%41'i (önce %47),
+  // yani kaçış her zaman mümkün ama rahat değil.
+  { id: 'imp', hp: 10, speed: 39, damage: 6, radius: 10, xp: 1, color: '#8a97a3', fromMinute: 0, art: 'mon_imp' },
+  { id: 'rogue', hp: 14, speed: 50, damage: 7, radius: 10, xp: 1, color: '#b8ae98', fromMinute: 0, art: 'mon_rogue' },
+  { id: 'skeleton', hp: 18, speed: 38, damage: 8, radius: 11, xp: 2, color: '#ddd3bb', fromMinute: 1.5, art: 'skeleton' },
+  { id: 'wretch', hp: 22, speed: 53, damage: 8, radius: 11, xp: 2, color: '#8a97a3', fromMinute: 2, art: 'mon_wretch' },
+  { id: 'horned', hp: 30, speed: 41, damage: 10, radius: 12, xp: 3, color: '#5f9e4a', fromMinute: 3, art: 'mon_horned' },
+  { id: 'bird', hp: 26, speed: 67, damage: 9, radius: 11, xp: 3, color: '#efa72e', fromMinute: 4, art: 'mon_bird' },
+  { id: 'brute', hp: 62, speed: 29, damage: 14, radius: 16, xp: 5, color: '#a01226', fromMinute: 5, art: 'mon_brute' },
+  { id: 'fiend', hp: 48, speed: 57, damage: 12, radius: 13, xp: 5, color: '#c8324a', fromMinute: 6, art: 'mon_fiend' },
+  { id: 'crab', hp: 90, speed: 33, damage: 16, radius: 17, xp: 7, color: '#efa72e', fromMinute: 8, art: 'mon_crab' },
+  { id: 'warrior', hp: 110, speed: 45, damage: 18, radius: 15, xp: 9, color: '#a01226', fromMinute: 10, art: 'mon_warrior' },
+  { id: 'hulk', hp: 210, speed: 26, damage: 22, radius: 22, xp: 14, color: '#5f9e4a', fromMinute: 12, art: 'mon_hulk' },
 ] as const;
 
 /** DENGE NOTU: ilk değerler (base 2.4 / perMinute 1.7 / cap 620 / hp +%34) ile
@@ -228,14 +298,20 @@ export const ENEMIES: readonly EnemyType[] = [
 export const SPAWN = {
   /** Ekran kenarının bu kadar dışında doğar (aniden içeride belirmesin) */
   ringMargin: 90,
-  /** Saniyede doğan düşman: base + minute * perMinute */
-  base: 2.0,
-  perMinute: 0.85,
+  /**
+   * Saniyede doğan düşman: base + minute * perMinute
+   * DENGE NOTU (oyun testi): base 2.0 iken 1. dakikada ~145 düşman doğuyordu —
+   * oyuncu "anında sel oluyor" dedi. Açılış üçe bölündü; eğim korundu ki
+   * geç oyun baskısı kaybolmasın.
+   */
+  base: 0.7,
+  perMinute: 0.8,
   /** Aynı anda sahnede en fazla kaç düşman (performans + okunabilirlik tavanı) */
   maxAlive: 420,
   /** Düşman HP/hız dakika bazlı ölçeklenmesi */
   hpScalePerMinute: 0.17,
-  speedScalePerMinute: 0.018,
+  /** Oyun testi: "bir tık hızlılar" → 0.018'den düşürüldü */
+  speedScalePerMinute: 0.011,
 } as const;
 
 /** Level n'e geçmek için gereken toplam XP */

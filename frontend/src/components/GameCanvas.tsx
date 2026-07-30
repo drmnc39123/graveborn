@@ -21,6 +21,9 @@ interface Hud {
   passives: { name: string; level: number }[];
   revives: number;
   evolution: { name: string; at: number } | null;
+  stageName: string;
+  stageTotal: number;
+  remaining: number;
 }
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -170,6 +173,9 @@ export function GameCanvas({ seedText }: { seedText: string }) {
           passives: game.passives.map((p) => ({ name: p.def.name, level: p.level })),
           revives: game.revives,
           evolution: game.lastEvolution,
+          stageName: game.stage.def.name,
+          stageTotal: game.stage.def.enemyCount,
+          remaining: game.remaining,
         });
       }
     };
@@ -207,7 +213,13 @@ export function GameCanvas({ seedText }: { seedText: string }) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: C.candle }}>LV {hud.level}</span>
-              <span style={{ color: C.bone, fontSize: 20, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(hud.time)}</span>
+              {/* Bölüm ilerlemesi — bitirilebilir oyunda oyuncunun en çok istediği bilgi */}
+              <span style={{ textAlign: 'center', lineHeight: 1.15 }}>
+                <span style={{ display: 'block', fontSize: 10, color: C.boneFaint, letterSpacing: 1 }}>{hud.stageName.toUpperCase()}</span>
+                <span style={{ display: 'block', fontSize: 19, color: C.bone, fontVariantNumeric: 'tabular-nums' }}>
+                  {hud.remaining} <span style={{ fontSize: 11, color: C.boneDim }}>left</span>
+                </span>
+              </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
                 <button
@@ -291,13 +303,15 @@ export function GameCanvas({ seedText }: { seedText: string }) {
       {(hud?.phase === 'dead' || hud?.phase === 'won') && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ fontSize: 34, fontWeight: 900, color: hud.phase === 'won' ? C.candle : C.blood, marginBottom: 6 }}>
-            {hud.phase === 'won' ? 'SURVIVED' : 'YOU DIED'}
+            {hud.phase === 'won' ? 'STAGE CLEARED' : 'YOU DIED'}
           </div>
           <div style={{ fontSize: 13, color: C.boneDim, marginBottom: 20, textAlign: 'center' }}>
-            {fmtTime(hud.time)} · LV {hud.level} · {hud.kills} kill · {hud.gold} gold
+            {hud.stageName} · {fmtTime(hud.time)} · LV {hud.level} · {hud.kills} kill · {Math.floor(hud.gold)} gold
             <br />
             <span style={{ color: C.boneFaint, fontSize: 12 }}>
-              {hud.phase === 'won' ? `${RUN.durationSec / 60} minutes survived` : 'Death is progress — the gold you earned is yours to keep'}
+              {hud.phase === 'won'
+                ? `All ${hud.stageTotal} enemies destroyed`
+                : `${hud.remaining} enemies left — the gold you earned is yours to keep`}
             </span>
           </div>
           <button onClick={() => setRunId((n) => n + 1)} style={ctaButton(true)}>Rise Again</button>
