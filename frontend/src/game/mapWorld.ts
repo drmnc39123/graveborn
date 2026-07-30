@@ -33,6 +33,8 @@ export interface MapWorld {
   spawn: { x: number; y: number };
   /** köprü alanları — su karoları burada yürünebilir */
   bridges: { x: number; y: number; w: number; h: number }[];
+  /** ışık kaynakları — fener, meşale, ateş, mum */
+  lights: { x: number; y: number; r: number }[];
 }
 
 export function buildMapWorld(doc: MapDoc): MapWorld {
@@ -78,6 +80,17 @@ export function buildMapWorld(doc: MapDoc): MapWorld {
     .filter((o) => o.bridge)
     .map((o) => ({ x: o.x - 6, y: o.y - 6, w: o.w + 12, h: o.h + 12 }));
 
+  // Işık kaynakları — fener/meşale/ateş/mum. Haritadan türetiliyor:
+  // ayrı bir "ışık" nesnesi koydurmak yerine ateşi olan şey ışık verir.
+  const lights = doc.objects
+    .filter((o) => /lamp(?!_off)|lantern(?!s_off)|torch(?!_off)|fire(?!_portal)|flame|candle|brazier|campfire|fire_pit/i.test(o.src)
+      && !/_off\.png$/i.test(o.src))
+    .map((o) => ({
+      x: o.x + o.w / 2,
+      y: o.y + o.h * 0.45,
+      r: Math.max(110, Math.min(230, o.w * 2.2)),
+    }));
+
   return {
     w: doc.terrain.w * MAP_TILE,
     h: doc.terrain.h * MAP_TILE,
@@ -92,6 +105,7 @@ export function buildMapWorld(doc: MapDoc): MapWorld {
     fight,
     spawn: doc.spawn,
     bridges,
+    lights,
   };
 }
 

@@ -85,8 +85,14 @@ export function renderHub(
 
   for (let i = 0; i < split; i++) drawObject(ctx, objs[i], viewL, viewR, viewT, viewB, time);
   drawPlayer(ctx, s);
-  for (let i = split; i < objs.length; i++) drawObject(ctx, objs[i], viewL, viewR, viewT, viewB, time);
+  // Oyuncunun ÜSTÜNE gelen nesneler: eğer oyuncuyu örtüyorlarsa saydamlaşır.
+  // Duvarın/binanın arkasına geçmek doğru, ama içinde kaybolmak değil —
+  // kale kapısından geçerken karakter tamamen gömülüyordu.
+  for (let i = split; i < objs.length; i++) {
+    drawObject(ctx, objs[i], viewL, viewR, viewT, viewB, time, occludes(objs[i], s.x, s.y));
+  }
 
+  drawLights(ctx, s, time, viewL, viewR, viewT, viewB);
   drawInteractGlow(ctx, s, time);
   if (DEBUG.collision) drawCollisionDebug(ctx, s, viewL, viewR, viewT, viewB);
   ctx.restore();
@@ -95,16 +101,49 @@ export function renderHub(
   drawMinimap(ctx, s, w);
 }
 
+/** Bu nesne oyuncunun üstünü örtüyor mu (gövdesi oyuncuyu kapsıyor mu)? */
+function occludes(o: WorldObject, px: number, py: number): boolean {
+  return px > o.x + 4 && px < o.x + o.w - 4 && py > o.y && py < o.y + o.h;
+}
+
 function drawObject(
   ctx: CanvasRenderingContext2D, o: WorldObject,
-  vl: number, vr: number, vt: number, vb: number, time: number,
+  vl: number, vr: number, vt: number, vb: number, time: number, fade = false,
 ) {
   if (o.x + o.w < vl || o.x > vr || o.y + o.h < vt || o.y > vb) return;
+  if (fade) ctx.globalAlpha = 0.42;
   drawFrame(ctx, o.src, o.x, o.y, {
     w: o.w, h: o.h,
     cols: o.frames, rows: o.rows, row: o.row, col: o.col,
     fps: o.fps, t: time,
   });
+  if (fade) ctx.globalAlpha = 1;
+}
+
+/** Fener/meşale/ateş parıltısı — sıcak, hafif titreşimli */
+function drawLights(
+  ctx: CanvasRenderingContext2D, s: HubState, time: number,
+  vl: number, vr: number, vt: number, vb: number,
+) {
+  const lights = s.world.lights;
+  if (!lights.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < lights.length; i++) {
+    const l = lights[i];
+    if (l.x + l.r < vl || l.x - l.r > vr || l.y + l.r < vt || l.y - l.r > vb) continue;
+    const flicker = 0.86 + Math.sin(time * 3.3 + i * 1.9) * 0.14;
+    const r = l.r * flicker;
+    const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
+    g.addColorStop(0, 'rgba(255,196,110,0.34)');
+    g.addColorStop(0.45, 'rgba(220,140,50,0.14)');
+    g.addColorStop(1, 'rgba(239,167,46,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(l.x, l.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, s: HubState) {
