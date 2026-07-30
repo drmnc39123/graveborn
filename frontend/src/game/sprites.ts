@@ -139,6 +139,49 @@ export function drawCell(ctx: CanvasRenderingContext2D, a: CellAnim, frame: numb
   return true;
 }
 
+// ── genel amaçlı görsel yardımcıları (hub/dünya çizimi için) ──
+
+/**
+ * Dosya adındaki `_stripN` ekinden frame sayısını OKUR.
+ * Paketlerin tamamı bu kurala uyuyor (spr_isim_walk_strip9.png), o yüzden
+ * frame sayısını elle girmiyoruz — yanlış sayı girme hatası tümden kalkıyor.
+ * strip yoksa 1 döner (tek kare görsel).
+ */
+export function framesFromName(src: string): number {
+  const m = /_strip(\d+)\b/i.exec(src);
+  return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+}
+
+/** Görseli getir (yüklenmediyse null) — dış modüller de kullanabilsin */
+export function image(src: string): HTMLImageElement | null {
+  return get(src);
+}
+
+/**
+ * Tek kare veya strip'ten bir kare çizer. Frame sayısı dosya adından okunur.
+ * x,y = ÇİZİM MERKEZİ değil, sol-üst (dünya karolarıyla hizalamak için).
+ */
+export function drawFrame(
+  ctx: CanvasRenderingContext2D, src: string, x: number, y: number,
+  opts: { frame?: number; fps?: number; t?: number; w?: number; h?: number; anchor?: 'topleft' | 'bottom' } = {},
+): boolean {
+  const img = get(src);
+  if (!img) return false;
+  const frames = framesFromName(src);
+  const fw = Math.floor(img.width / frames);
+  const fh = img.height;
+  const idx = opts.frame !== undefined
+    ? opts.frame % frames
+    : opts.fps && opts.t !== undefined ? Math.floor(opts.t * opts.fps) % frames : 0;
+
+  const dw = opts.w ?? fw;
+  const dh = opts.h ?? fh;
+  const dx = x;
+  const dy = opts.anchor === 'bottom' ? y - dh : y;
+  ctx.drawImage(img, idx * fw, 0, fw, fh, Math.round(dx), Math.round(dy), dw, dh);
+  return true;
+}
+
 // ── yükleyici ──
 // Yüklenmemiş görsel için render daireye düşer (oyun asla siyah ekran vermez).
 const cache = new Map<string, HTMLImageElement>();

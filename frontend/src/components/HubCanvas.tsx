@@ -1,26 +1,30 @@
 'use client';
-// Hub sahnesi — gezilebilir harabe köy + bina panelleri.
-// Tileset gelene kadar binalar renkli bloklarla çiziliyor; yerleşim ve
-// etkileşim mantığı hazır, sanat geldiğinde sadece çizim fonksiyonu değişecek.
+// Hub sahnesi — gezilebilir harabe köy. Çizim hubRender.ts'te, mantık hub.ts'te;
+// bu bileşen sadece köprü: girdi, döngü ve React tarafı istemler.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BUILDINGS, DOOR_RADIUS, HUB_BOUNDS, HUB_PLAYER, createHub, stepHub, type Building, type BuildingId } from '@/game/hub';
-import { drawActor, PLAYER_ART, preloadAll } from '@/game/sprites';
+import { createHub, stepHub, type BuildingId, type HubState } from '@/game/hub';
+import { renderHub } from '@/game/hubRender';
+import { preloadAll } from '@/game/sprites';
 import { unlockAudio, play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
-import { loadProgress, type Progress } from '@/game/progress';
+import { loadProgress, remainingGold, type Progress } from '@/game/progress';
+import { stageById } from '@/game/config';
 
-export function HubCanvas({ onEnter }: { onEnter: (id: BuildingId) => void }) {
+export function HubCanvas({
+  onEnterBuilding, onEnterStage, progress,
+}: {
+  onEnterBuilding: (id: BuildingId) => void;
+  onEnterStage: (stageId: number) => void;
+  progress: Progress | null;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef(new Set<string>());
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
-  const enterRef = useRef(onEnter);
-  enterRef.current = onEnter;
+  const cbRef = useRef({ onEnterBuilding, onEnterStage, unlocked: progress?.unlockedStage ?? 1 });
+  cbRef.current = { onEnterBuilding, onEnterStage, unlocked: progress?.unlockedStage ?? 1 };
 
-  const [prompt, setPrompt] = useState<Building | null>(null);
-  const [progress, setProgress] = useState<Progress | null>(null);
-
-  useEffect(() => { setProgress(loadProgress()); }, []);
+  const [hint, setHint] = useState<{ title: string; sub: string; kind: 'door' | 'portal'; stageId?: number } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -29,7 +33,7 @@ export function HubCanvas({ onEnter }: { onEnter: (id: BuildingId) => void }) {
     if (!ctx) return;
     preloadAll();
 
-    const hub = createHub();
+    const hub: HubState = createHub();
     let dpr = 1, cssW = 0, cssH = 0;
     const resize = () => {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -44,20 +48,28 @@ export function HubCanvas({ onEnter }: { onEnter: (id: BuildingId) => void }) {
     window.addEventListener('keydown', unlock, { once: true });
     window.addEventListener('pointerdown', unlock, { once: true });
 
+    const interact = () => {
+      const { onEnterBuilding: ob, onEnterStage: os, unlocked } = cbRef.current;
+      if (hub.atPortal) {
+        if (hub.atPortal.stageId > unlocked) return; // kilitli portal
+        play('chest');
+        os(hub.atPortal.stageId);
+      } else if (hub.atDoor) {
+        play('chest');
+        ob(hub.atDoor.id);
+      }
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       const k = e.key.toLowerCase();
       keysRef.current.add(k);
-      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
-      if ((k === 'e' || k === 'enter') && hub.atDoor) {
-        play('chest');
-        enterRef.current(hub.atDoor.id);
-      }
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+      if (k === 'e' || k === 'enter') interact();
     };
     const onKeyUp = (e: KeyboardEvent) => keysRef.current.delete(e.key.toLowerCase());
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // mobil: sanal joystick (bölüm sahnesiyle aynı desen)
     let origin = { x: 0, y: 0 };
     const onTouchStart = (e: TouchEvent) => {
       const t = e.touches[0];
@@ -78,11 +90,12 @@ export function HubCanvas({ onEnter }: { onEnter: (id: BuildingId) => void }) {
     canvas.addEventListener('touchmove', onTouchMove, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd);
 
-    let raf = 0, last = performance.now(), promptAcc = 0;
+    let raf = 0, last = performance.now(), t = 0, hintAcc = 0;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min((now - last) / 1000, 0.05);
       last = now;
+      t += dt;
 
       const k = keysRef.current;
       let ix = 0, iy = 0;
@@ -93,11 +106,24 @@ export function HubCanvas({ onEnter }: { onEnter: (id: BuildingId) => void }) {
       if (stickRef.current.active) { ix = stickRef.current.dx; iy = stickRef.current.dy; }
       stepHub(hub, dt, ix, iy);
 
-      drawHub(ctx, hub, cssW, cssH, dpr);
+      renderHub(ctx, hub, cssW, cssH, dpr, t, cbRef.current.unlocked);
 
-      // React state'i ~10Hz örnekle — her frame güncellemek re-render fırtınası
-      promptAcc += dt;
-      if (promptAcc > 0.1) { promptAcc = 0; setPrompt(hub.atDoor); }
+      // React state ~10Hz — her frame güncellemek re-render fırtınası olur
+      hintAcc += dt;
+      if (hintAcc > 0.1) {
+        hintAcc = 0;
+        if (hub.atPortal) {
+          const st = stageById(hub.atPortal.stageId);
+          const locked = hub.atPortal.stageId > cbRef.current.unlocked;
+          setHint({
+            kind: 'portal', stageId: hub.atPortal.stageId,
+            title: locked ? 'Sealed Portal' : (st?.name ?? `Stage ${hub.atPortal.stageId}`),
+            sub: locked ? `Clear stage ${hub.atPortal.stageId - 1} to break the seal` : `${st?.enemyCount ?? 0} enemies await`,
+          });
+        } else if (hub.atDoor) {
+          setHint({ kind: 'door', title: hub.atDoor.name, sub: hub.atDoor.hint });
+        } else setHint(null);
+      }
     };
     raf = requestAnimationFrame(loop);
 
@@ -114,110 +140,62 @@ export function HubCanvas({ onEnter }: { onEnter: (id: BuildingId) => void }) {
     };
   }, []);
 
-  const enter = useCallback(() => { if (prompt) { play('chest'); onEnter(prompt.id); } }, [prompt, onEnter]);
+  const act = useCallback(() => {
+    if (!hint) return;
+    if (hint.kind === 'portal' && hint.stageId) {
+      if (hint.stageId > (progress?.unlockedStage ?? 1)) return;
+      play('chest');
+      onEnterStage(hint.stageId);
+    }
+  }, [hint, onEnterStage, progress]);
+
+  const goldLeft = hint?.kind === 'portal' && hint.stageId && progress
+    ? remainingGold(progress, hint.stageId) : 0;
+  const locked = hint?.kind === 'portal' && hint.stageId ? hint.stageId > (progress?.unlockedStage ?? 1) : false;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: C.void }}>
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
 
-      {/* Cüzdan — Kintara deseni: para birimleri her zaman görünür */}
+      {/* Cüzdan */}
       <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 8 }}>
-        <span style={{ ...glass(9), padding: '6px 12px', fontSize: 13, fontWeight: 800, color: C.candle }}>
-          {Math.floor(progress?.gold ?? 0)} GOLD
-        </span>
-        <span style={{ ...glass(9), padding: '6px 12px', fontSize: 13, fontWeight: 800, color: C.boneFaint }}>
-          0 $GRAVE
-        </span>
+        <Pill color={C.candle}>{Math.floor(progress?.gold ?? 0)} GOLD</Pill>
+        <Pill color={C.boneFaint}>0 $GRAVE</Pill>
       </div>
 
-      {/* Kapı istemi */}
-      {prompt && (
-        <div style={{ position: 'absolute', bottom: 28, left: '50%', transform: 'translateX(-50%)', textAlign: 'center' }}>
-          <div style={{ ...glass(12), padding: '12px 20px', minWidth: 240 }}>
-            <div style={{ fontSize: 15, fontWeight: 900, color: C.bone }}>{prompt.name}</div>
-            <div style={{ fontSize: 12, color: C.boneDim, marginTop: 2 }}>{prompt.hint}</div>
-            <button onClick={enter}
-              style={{ marginTop: 10, padding: '8px 22px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                fontWeight: 900, fontSize: 13, color: '#1a0508',
-                background: `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})` }}>
-              ENTER <span style={{ opacity: 0.6 }}>(E)</span>
-            </button>
+      {/* Etkileşim istemi */}
+      {hint && (
+        <div style={{ position: 'absolute', bottom: 26, left: '50%', transform: 'translateX(-50%)', width: 'min(92vw, 330px)' }}>
+          <div style={{ ...glass(13), padding: '13px 18px', textAlign: 'center' }}>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 2, color: hint.kind === 'portal' ? C.blood : C.ice, marginBottom: 3 }}>
+              {hint.kind === 'portal' ? 'PORTAL' : 'BUILDING'}
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 900, color: C.bone }}>{hint.title}</div>
+            <div style={{ fontSize: 12, color: C.boneDim, marginTop: 2 }}>{hint.sub}</div>
+            {hint.kind === 'portal' && !locked && goldLeft > 0 && (
+              <div style={{ fontSize: 11.5, color: C.candle, marginTop: 4 }}>{goldLeft} gold still available</div>
+            )}
+            {!locked && (
+              <button onClick={hint.kind === 'portal' ? act : undefined}
+                style={{ marginTop: 10, padding: '9px 24px', borderRadius: 10, border: 'none',
+                  cursor: 'pointer', fontWeight: 900, fontSize: 13, color: '#1a0508',
+                  background: `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})` }}>
+                {hint.kind === 'portal' ? 'DESCEND' : 'ENTER'} <span style={{ opacity: 0.6 }}>(E)</span>
+              </button>
+            )}
           </div>
         </div>
       )}
 
       <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 11, color: C.boneFaint }}>
-        WASD / arrows to walk
+        WASD / arrows · E to interact
       </div>
     </div>
   );
 }
 
-// ── çizim ──
-function drawHub(ctx: CanvasRenderingContext2D, hub: ReturnType<typeof createHub>, w: number, h: number, dpr: number) {
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.imageSmoothingEnabled = false;
-  ctx.fillStyle = C.void;
-  ctx.fillRect(0, 0, w, h);
-
-  // kamera oyuncuyu ortalar ama harita sınırında durur
-  const camX = Math.max(w / 2, Math.min(HUB_BOUNDS.w - w / 2, hub.x));
-  const camY = Math.max(h / 2, Math.min(HUB_BOUNDS.h - h / 2, hub.y));
-  ctx.save();
-  ctx.translate(w / 2 - camX, h / 2 - camY);
-
-  // zemin
-  ctx.fillStyle = '#1c211f'; // solmuş teal-gri — tileset'in zemin tonuna yakın
-  ctx.fillRect(0, 0, HUB_BOUNDS.w, HUB_BOUNDS.h);
-  ctx.strokeStyle = 'rgba(227,216,192,0.04)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let x = 0; x <= HUB_BOUNDS.w; x += 64) { ctx.moveTo(x, 0); ctx.lineTo(x, HUB_BOUNDS.h); }
-  for (let y = 0; y <= HUB_BOUNDS.h; y += 64) { ctx.moveTo(0, y); ctx.lineTo(HUB_BOUNDS.w, y); }
-  ctx.stroke();
-
-  // binalar (YER TUTUCU — tileset gelince sprite'a dönecek)
-  for (const b of BUILDINGS) {
-    const x = b.x - b.w / 2, y = b.y - b.h / 2;
-    ctx.fillStyle = 'rgba(10,8,6,0.55)';
-    ctx.fillRect(x + 6, y + 10, b.w, b.h); // gölge
-    ctx.fillStyle = '#2b2f2c';
-    ctx.fillRect(x, y, b.w, b.h);
-    ctx.strokeStyle = b.color;
-    ctx.lineWidth = 3;
-    ctx.strokeRect(x, y, b.w, b.h);
-
-    // tabela
-    ctx.fillStyle = C.bone;
-    ctx.font = '800 13px ui-sans-serif, system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(b.name, b.x, b.y);
-    ctx.textAlign = 'left';
-
-    // kapı
-    ctx.fillStyle = b.color;
-    ctx.fillRect(b.doorX - 16, b.doorY - 22, 32, 26);
-    // kapı ışığı (yaklaşınca parlar)
-    const near = Math.hypot(hub.x - b.doorX, hub.y - b.doorY) < DOOR_RADIUS;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(b.doorX, b.doorY, 0, b.doorX, b.doorY, near ? 60 : 34);
-    g.addColorStop(0, `rgba(239,167,46,${near ? 0.45 : 0.18})`);
-    g.addColorStop(1, 'rgba(239,167,46,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(b.doorX, b.doorY, near ? 60 : 34, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // oyuncu
-  if (!drawActor(ctx, PLAYER_ART, hub.moving ? 'run' : 'idle', hub.animT, hub.x, hub.y, hub.facingRight)) {
-    ctx.fillStyle = C.bone;
-    ctx.beginPath();
-    ctx.arc(hub.x, hub.y, HUB_PLAYER.radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
+function Pill({ children, color }: { children: React.ReactNode; color: string }) {
+  return (
+    <span style={{ ...glass(9), padding: '6px 12px', fontSize: 13, fontWeight: 800, color }}>{children}</span>
+  );
 }

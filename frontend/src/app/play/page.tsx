@@ -47,7 +47,11 @@ export default function PlayPage() {
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
-      <HubCanvas onEnter={onEnter} />
+      <HubCanvas
+        progress={progress}
+        onEnterBuilding={onEnter}
+        onEnterStage={(id) => setScreen({ kind: 'stage', stageId: id })}
+      />
 
       {panel && (
         <div onClick={() => setPanel(null)}
