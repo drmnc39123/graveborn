@@ -48,6 +48,10 @@ export default function EditorPage() {
   /** çizim gerekiyor mu — boştayken kare harcamamak için */
   const dirtyRef = useRef(true);
   const markDirty = useCallback(() => { dirtyRef.current = true; }, []);
+  /** panel katlama — ekran alanı dar geldiğinde kapatılır */
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [helpOpen, setHelpOpen] = useState(true);
 
   /**
    * OTOMATİK KAYDETME — 30 dakikalık emek kaybının sebebi buydu, artık var.
@@ -99,7 +103,16 @@ export default function EditorPage() {
 
   const img = useCallback((src: string) => {
     let i = imgCache.current.get(src);
-    if (!i) { i = new Image(); i.src = src; imgCache.current.set(src, i); }
+    if (!i) {
+      i = new Image();
+      // Görseller ASENKRON yükleniyor. Dirty-flag geldikten sonra döngü
+      // sürekli çizmediği için yüklenen görsel tek başına ekrana gelmiyordu
+      // (her şey turuncu yer tutucu kalıyordu). Yükleme bitince çizim iste.
+      i.onload = () => { dirtyRef.current = true; };
+      i.onerror = () => { dirtyRef.current = true; };
+      i.src = src;
+      imgCache.current.set(src, i);
+    }
     return i.complete && i.naturalWidth ? i : null;
   }, []);
 
@@ -297,7 +310,14 @@ export default function EditorPage() {
     };
     dirtyRef.current = true; // bağımlılıklar değişti → bir kez çiz
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+
+    // GÜVENLİK AĞI: görseller akarken ilk 6 saniye düzenli çizim iste.
+    // Tek başına img.onload'a güvenmek kırılgan — önbellekten gelen, hata
+    // veren veya yarışan yüklemelerde ekran siyah kalıyordu.
+    const warmup = setInterval(() => { dirtyRef.current = true; }, 250);
+    const stop = setTimeout(() => clearInterval(warmup), 6000);
+
+    return () => { cancelAnimationFrame(raf); clearInterval(warmup); clearTimeout(stop); };
   }, [doc, selId, zoom, img, screenGrid, rectPreview]);
 
   // ── girdi ──
@@ -486,6 +506,34 @@ export default function EditorPage() {
     }
   };
 
+  /**
+   * Fare tekerleği ile zoom — İMLECİN ALTINDAKİ nokta sabit kalır.
+   * Ekranın ortasına göre zoomlarsak kullanıcı baktığı yeri kaybediyor.
+   * Matematik: dünya noktası wx = cam.x + sx/zoom sabit tutulacak şekilde
+   * yeni cam hesaplanır.
+   */
+  const onWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const r = cv.getBoundingClientRect();
+    const sx = e.clientX - r.left, sy = e.clientY - r.top;
+
+    const old = zoom;
+    const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    const next = Math.min(3, Math.max(0.15, +(old * factor).toFixed(3)));
+    if (next === old) return;
+
+    // imlecin altındaki dünya noktası
+    const wx = camRef.current.x + sx / old;
+    const wy = camRef.current.y + sy / old;
+    camRef.current.x = wx - sx / next;
+    camRef.current.y = wy - sy / next;
+
+    setZoom(next);
+    markDirty();
+  };
+
   const onPointerUp = () => {
     const dr = dragRef.current;
     if (dr.mode === 'rect' && rectPreview) {
@@ -564,7 +612,11 @@ export default function EditorPage() {
   return (
     <div style={{ position: 'fixed', inset: 0, display: 'flex', color: C.bone, fontSize: 13 }}>
       {/* SOL: asset paleti */}
-      <div style={{ width: 250, flexShrink: 0, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: '#14120f' }}>
+      {/* Kapalıyken display:none — width:0 denendi, flex düzeninde hesaplanan
+          genişlik 250'de takılı kaldı (inline 0px olmasına rağmen). Elemanı
+          tamamen kaldırmak tek kesin yol. */}
+      <div style={{ width: 250, flexShrink: 0, borderRight: `1px solid ${C.border}`,
+        display: leftOpen ? 'flex' : 'none', flexDirection: 'column', background: '#14120f', overflow: 'hidden' }}>
         <div style={{ padding: 10, borderBottom: `1px solid ${C.border}` }}>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ara…"
             style={{ width: '100%', padding: '7px 9px', borderRadius: 7, background: 'rgba(0,0,0,0.4)', border: `1px solid ${C.border}`, color: C.bone, outline: 'none', fontSize: 12 }} />
@@ -636,7 +688,14 @@ export default function EditorPage() {
 
       {/* ORTA: harita */}
       <div style={{ flex: 1, position: 'relative' }}>
-        <canvas ref={canvasRef} onClick={onClick}
+        {/* Panel katlama düğmeleri — kenarlarda, harita alanını açmak için */}
+        <button onClick={() => setLeftOpen((v) => !v)} title={leftOpen ? 'Paleti gizle' : 'Paleti göster'}
+          style={sideTab(0)}>{leftOpen ? '◀' : '▶'}</button>
+        <button onClick={() => setRightOpen((v) => !v)} title={rightOpen ? 'Paneli gizle' : 'Paneli göster'}
+          style={sideTab(1)}>{rightOpen ? '▶' : '◀'}</button>
+
+        <canvas ref={canvasRef} onClick={onClick} onWheel={onWheel}
+          onContextMenu={(e) => e.preventDefault()} /* sağ tık = sil, menü açılmasın */
           onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}
           style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none', cursor: tool === 'tile' ? 'cell' : 'crosshair' }} />
         <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -682,18 +741,29 @@ export default function EditorPage() {
             </select>
           )}
         </div>
-        <div style={{ position: 'absolute', bottom: 10, left: 10, ...glass(8), padding: '7px 11px', fontSize: 11, color: C.boneFaint, lineHeight: 1.7 }}>
-          <b style={{ color: C.candle }}>ZEMİN:</b> basılı tut + sürükle = boya ·
-          <b style={{ color: C.candle }}> Shift+sürükle</b> = dikdörtgen doldur · fırça 1/3/5/9<br />
-          <b style={{ color: C.candle }}>NESNE:</b> <b style={{ color: C.candle }}>Alt+sürükle</b> = arka arkaya diz ·
-          üstüne tık = seç · boşluğa tık = tek koy · Shift+tık = spawn taşı<br />
-          <b style={{ color: C.boneDim }}>WASD</b> kaydır · <b style={{ color: C.boneDim }}>Ctrl+Z</b> geri al ·
-          <b style={{ color: C.boneDim }}>Del</b> sil · <b style={{ color: C.boneDim }}>Ok</b> taşı (Shift = karo adım)
+        <div style={{ position: 'absolute', bottom: 10, left: 10, ...glass(8), padding: helpOpen ? '7px 11px' : '5px 9px', fontSize: 11, color: C.boneFaint, lineHeight: 1.7, maxWidth: '62%' }}>
+          <button onClick={() => setHelpOpen((v) => !v)}
+            style={{ background: 'none', border: 'none', color: C.candle, cursor: 'pointer', fontSize: 11, fontWeight: 800, padding: 0 }}>
+            {helpOpen ? '▾ Kısayollar' : '▸ Kısayollar'}
+          </button>
+          {helpOpen && (
+            <div style={{ marginTop: 4 }}>
+              <b style={{ color: C.candle }}>ZEMİN:</b> basılı tut + sürükle = boya ·
+              <b style={{ color: C.candle }}> Shift+sürükle</b> = dikdörtgen doldur · fırça 1/3/5/9<br />
+              <b style={{ color: C.candle }}>NESNE:</b> <b style={{ color: C.candle }}>Alt+sürükle</b> = arka arkaya diz ·
+              üstüne tık = seç · boşluğa tık = tek koy · Shift+tık = spawn taşı<br />
+              <b style={{ color: C.blood }}>SİL:</b> sağ tık (veya Silgi) · sürükleyerek de siler<br />
+              <b style={{ color: C.boneDim }}>Tekerlek</b> zoom (imlece doğru) · <b style={{ color: C.boneDim }}>WASD</b> kaydır ·
+              <b style={{ color: C.boneDim }}>Ctrl+Z</b> geri al · <b style={{ color: C.boneDim }}>Del</b> sil
+            </div>
+          )}
         </div>
       </div>
 
       {/* SAĞ: özellikler */}
-      <div style={{ width: 250, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: '#14120f', padding: 12, overflowY: 'auto' }}>
+      <div style={{ width: rightOpen ? 250 : 0, minWidth: 0, flexShrink: 0,
+        borderLeft: rightOpen ? `1px solid ${C.border}` : 'none',
+        background: '#14120f', padding: rightOpen ? 12 : 0, overflowY: 'auto', overflowX: 'hidden', transition: 'width 120ms' }}>
         <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
           <button onClick={() => { saveMapLocal(doc); setSaved(Date.now()); setAutoAt(new Date().toLocaleTimeString()); }} style={btn(C.ok)}>Kaydet</button>
           <button onClick={download} style={btn(C.candle)}>İndir</button>
@@ -814,6 +884,16 @@ export default function EditorPage() {
 const btn = (col: string) => ({
   flex: 1, padding: '8px 0', borderRadius: 8, border: `1px solid ${col}66`,
   background: `${col}22`, color: col, fontWeight: 800, fontSize: 12, cursor: 'pointer',
+});
+
+/** Kenardaki katlama sekmesi — 0 = sol, 1 = sağ */
+const sideTab = (side: 0 | 1): React.CSSProperties => ({
+  position: 'absolute', top: '50%', transform: 'translateY(-50%)',
+  [side === 0 ? 'left' : 'right']: 0,
+  width: 18, height: 62, zIndex: 5, cursor: 'pointer',
+  border: `1px solid ${C.border}`,
+  borderRadius: side === 0 ? '0 7px 7px 0' : '7px 0 0 7px',
+  background: 'rgba(20,18,15,0.92)', color: C.boneDim, fontSize: 11, padding: 0,
 });
 
 function MiniNum({ label, v, on }: { label: string; v: number; on: (v: number) => void }) {
