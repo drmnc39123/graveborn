@@ -52,6 +52,11 @@ export default function EditorPage() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [helpOpen, setHelpOpen] = useState(true);
+  /** sağ tık menüsü — imlecin altındakine göre seçenek sunar */
+  const [menu, setMenu] = useState<{
+    sx: number; sy: number; wx: number; wy: number;
+    obj: MapObject | null; marker: MapMarker | null; tileSrc: string | null;
+  } | null>(null);
 
   /**
    * OTOMATİK KAYDETME — 30 dakikalık emek kaybının sebebi buydu, artık var.
@@ -237,7 +242,8 @@ export default function EditorPage() {
       // sıralamak da başlı başına maliyetti.
       const objs = doc.objects
         .filter((o) => o.x + o.w >= viewL && o.x <= viewR && o.y + o.h >= viewT && o.y <= viewB)
-        .sort((a, b) => a.y + a.h - (b.y + b.h));
+        // z = "öne/arkaya al" kaydırması; ayak Y'sine eklenir
+        .sort((a, b) => (a.y + a.h + (a.z ?? 0)) - (b.y + b.h + (b.z ?? 0)));
       for (const o of objs) {
         const im = img(o.src);
         if (im) {
@@ -439,12 +445,14 @@ export default function EditorPage() {
   // ── SÜRÜKLEME ── zemin boyama ve nesne dizme
   const onPointerDown = (e: React.PointerEvent) => {
     const p = toWorld(e as unknown as React.MouseEvent);
+    setMenu(null); // herhangi bir tık menüyü kapatır
+    if (e.button === 2) return; // sağ tık menüyü onContextMenu açar
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
     const dr = dragRef.current;
     dr.sx = p.x; dr.sy = p.y; dr.lastX = p.x; dr.lastY = p.y; dr.active = true;
 
-    // Sağ tık VEYA silgi modu = sil (sürükleyerek de siler)
-    if (e.button === 2 || erase) {
+    // Silgi modu = sürükleyerek sil
+    if (erase) {
       dr.mode = 'erase'; pushUndo(); eraseAt(p.x, p.y);
       return;
     }
@@ -505,6 +513,52 @@ export default function EditorPage() {
       setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
     }
   };
+
+  /** Sağ tık — imlecin altındakini bulup menü aç */
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const p = toWorld(e);
+    const cv = canvasRef.current;
+    if (!cv) return;
+    const r = cv.getBoundingClientRect();
+
+    // en üstteki nesne (ters sırada ara — üstte çizilen önce bulunsun)
+    let obj: MapObject | null = null;
+    for (let i = doc.objects.length - 1; i >= 0; i--) {
+      const o = doc.objects[i];
+      if (p.x >= o.x && p.x <= o.x + o.w && p.y >= o.y && p.y <= o.y + o.h) { obj = o; break; }
+    }
+    const marker = doc.markers.find((m) => Math.hypot(m.x - p.x, m.y - p.y) < 18) ?? null;
+
+    const tx = Math.floor(p.x / MAP_TILE), ty = Math.floor(p.y / MAP_TILE);
+    let tileSrc: string | null = null;
+    if (tx >= 0 && ty >= 0 && tx < doc.terrain.w && ty < doc.terrain.h) {
+      const v = doc.terrain.data[ty * doc.terrain.w + tx];
+      if (v) tileSrc = doc.terrain.palette[v - 1] ?? null;
+    }
+
+    if (obj) setSelId(obj.id);
+    setMenu({ sx: e.clientX - r.left, sy: e.clientY - r.top, wx: p.x, wy: p.y, obj, marker, tileSrc });
+  };
+
+  /** Nesneyi çoğalt — hafif kaydırarak koy ki üst üste binmesin */
+  const duplicateObj = useCallback((o: MapObject) => {
+    pushUndo();
+    const copy: MapObject = { ...o, id: nextId.current++, x: o.x + 24, y: o.y + 24 };
+    setDoc((d) => ({ ...d, objects: [...d.objects, copy] }));
+    setSelId(copy.id);
+    markDirty();
+  }, [pushUndo, markDirty]);
+
+  /** Çizim sırası — ayak Y'sine göre sıralandığı için z ile kaydırıyoruz */
+  const reorder = useCallback((o: MapObject, front: boolean) => {
+    pushUndo();
+    setDoc((d) => ({
+      ...d,
+      objects: d.objects.map((x) => (x.id === o.id ? { ...x, z: (x.z ?? 0) + (front ? 64 : -64) } : x)),
+    }));
+    markDirty();
+  }, [pushUndo, markDirty]);
 
   /**
    * Fare tekerleği ile zoom — İMLECİN ALTINDAKİ nokta sabit kalır.
@@ -694,8 +748,7 @@ export default function EditorPage() {
         <button onClick={() => setRightOpen((v) => !v)} title={rightOpen ? 'Paneli gizle' : 'Paneli göster'}
           style={sideTab(1)}>{rightOpen ? '▶' : '◀'}</button>
 
-        <canvas ref={canvasRef} onClick={onClick} onWheel={onWheel}
-          onContextMenu={(e) => e.preventDefault()} /* sağ tık = sil, menü açılmasın */
+        <canvas ref={canvasRef} onClick={onClick} onWheel={onWheel} onContextMenu={onContextMenu}
           onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}
           style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none', cursor: tool === 'tile' ? 'cell' : 'crosshair' }} />
         <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -741,6 +794,50 @@ export default function EditorPage() {
             </select>
           )}
         </div>
+        {/* SAĞ TIK MENÜSÜ — imlecin altındakine göre seçenekler */}
+        {menu && (
+          <div
+            onMouseLeave={() => setMenu(null)}
+            style={{ position: 'absolute', left: Math.min(menu.sx, (canvasRef.current?.clientWidth ?? 800) - 190), top: menu.sy,
+              zIndex: 20, width: 182, ...glass(10), padding: 5, boxShadow: '0 8px 26px rgba(0,0,0,0.6)' }}>
+            {menu.obj && (
+              <>
+                <MenuLabel>{menu.obj.src.split('/').pop()}</MenuLabel>
+                <MenuItem onClick={() => { duplicateObj(menu.obj!); setMenu(null); }}>⧉ Kopyala</MenuItem>
+                <MenuItem onClick={() => { pushUndo(); setDoc((d) => ({ ...d, objects: d.objects.filter((x) => x.id !== menu.obj!.id) })); setSelId(null); setMenu(null); markDirty(); }} danger>🗑 Sil</MenuItem>
+                <MenuItem onClick={() => { reorder(menu.obj!, true); setMenu(null); }}>▲ Öne al</MenuItem>
+                <MenuItem onClick={() => { reorder(menu.obj!, false); setMenu(null); }}>▼ Arkaya al</MenuItem>
+                <MenuItem onClick={() => {
+                  const a = assets.find((x) => x.src === menu.obj!.src);
+                  if (a) { setSel(a); setTool('object'); }
+                  setMenu(null);
+                }}>🎯 Bunu seç (paletten)</MenuItem>
+              </>
+            )}
+            {!menu.obj && menu.marker && (
+              <>
+                <MenuLabel>{menu.marker.label || menu.marker.kind}</MenuLabel>
+                <MenuItem onClick={() => { pushUndo(); setDoc((d) => ({ ...d, markers: d.markers.filter((m) => m.id !== menu.marker!.id) })); setMenu(null); markDirty(); }} danger>🗑 İşaretçiyi sil</MenuItem>
+              </>
+            )}
+            {!menu.obj && !menu.marker && (
+              <>
+                <MenuLabel>{menu.tileSrc ? menu.tileSrc.split('/').pop() : 'boş karo'}</MenuLabel>
+                {menu.tileSrc && (
+                  <MenuItem onClick={() => {
+                    const a = assets.find((x) => x.src === menu.tileSrc);
+                    if (a) { setSel(a); setTool('tile'); }
+                    setMenu(null);
+                  }}>🎯 Bu karoyu seç</MenuItem>
+                )}
+                <MenuItem onClick={() => { pushUndo(); eraseAt(menu.wx, menu.wy); setMenu(null); markDirty(); }} danger>
+                  🗑 Karoyu sil ({brush}×{brush})
+                </MenuItem>
+              </>
+            )}
+          </div>
+        )}
+
         <div style={{ position: 'absolute', bottom: 10, left: 10, ...glass(8), padding: helpOpen ? '7px 11px' : '5px 9px', fontSize: 11, color: C.boneFaint, lineHeight: 1.7, maxWidth: '62%' }}>
           <button onClick={() => setHelpOpen((v) => !v)}
             style={{ background: 'none', border: 'none', color: C.candle, cursor: 'pointer', fontSize: 11, fontWeight: 800, padding: 0 }}>
@@ -895,6 +992,28 @@ const sideTab = (side: 0 | 1): React.CSSProperties => ({
   borderRadius: side === 0 ? '0 7px 7px 0' : '7px 0 0 7px',
   background: 'rgba(20,18,15,0.92)', color: C.boneDim, fontSize: 11, padding: 0,
 });
+
+function MenuLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 10, color: C.boneFaint, padding: '4px 8px 6px', borderBottom: `1px solid ${C.border}`,
+      marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      {children}
+    </div>
+  );
+}
+
+function MenuItem({ children, onClick, danger }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
+  return (
+    <button onClick={onClick}
+      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 9px', borderRadius: 6,
+        border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+        color: danger ? '#ff8b9c' : C.bone }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = danger ? 'rgba(160,18,38,0.22)' : 'rgba(255,255,255,0.07)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+      {children}
+    </button>
+  );
+}
 
 function MiniNum({ label, v, on }: { label: string; v: number; on: (v: number) => void }) {
   return (
