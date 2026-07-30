@@ -13,6 +13,41 @@ hepsi bağımsız asset paketleri. Doğrulandı.
 
 ## ✅ Lisansı doğrulanmış
 
+### `hub/`, `interior/`, `npc/`, `portals/`, `loot/`, `chests/`, `stage/`, `enemies/undead`, `enemies/vermin`
+**MutterPixel Studio** (itch.io) — 2026-07-31'de alınan "ALL ASSETS" derlemesinden seçilenler:
+Haunted Graveyard Builder Kit · Ruined Village Builder Kit · Ruined Medieval Buildings ·
+Cozy Churchyard · Cozy Outdoor Lights · Cozy Market Stalls · Village Merchant/Guard/Scholar ·
+Tiny NPC Pack · Cozy Interior (Tavern/General Store/Royal Armory) · Fantasy Portal Gates (8) ·
+Animated Skeleton NPC Pack · Vermin · Cozy Loot & Currency · Cozy Chests & Mimics ·
+Dark Dungeon Builder Kit · Dark Forest Trees · Forest Ground Tiles
+
+- **Lisans:** *"Use these assets in your own commercial or non-commercial indie games... You are free to remix or edit the sprites"*
+- **Yasaklar:** ham asset'i yeniden satmak · NFT · üretken AI eğitim verisi olarak kullanmak · ham dosyaları tek başına dağıtmak (derlenmiş oyunun içinde olmalı)
+- **Kredi:** zorunlu değil ama takdir ediliyor → **oyunun Credits bölümüne "Art by MutterPixel Studio" eklenecek**
+- **Durum:** Ticari kullanım SERBEST. Bizim kullanımımız (oyunun içine gömülü) uyumlu.
+
+### `ui/kit/` + `public/fonts/`
+**Franuka** — RPG UI pack v1.6 (https://franuka.itch.io/)
+- **Lisans:** *"You may use this pack on both commercial AND non-commercial projects, just remember to add a link to my itch page and/or Twitter/X"*
+- **Yasak:** olduğu gibi yeniden dağıtmak veya başka yerde satmak
+- **ZORUNLU:** Credits'te **franuka.itch.io linki** olacak — bu istek, takdir değil
+- Fontlar: `FantasyRPGtext` **8'in katlarında**, `FantasyRPGtitle` **11'in katlarında** kullanılmalı;
+  aksi hâlde piksel görünümü bozulur (vektör font değiller)
+
+---
+
+## ❌ KULLANILMAYACAK — sahte paket
+
+**"Pixel_RPG_Pack" / "Ultimate Fantasy RPG UI Mega Pack" (500+ assets)** — 2026-07-31'de incelendi.
+Mağaza önizlemesi zengin bir arayüz kiti gösteriyor ama **dosyaların içi boş**: 500 PNG'nin
+hepsi aynı 256×256 şablon — renkli bir çerçeve, 2-3 yuvarlak baloncuk ve "Icons 77" gibi bir
+metin etiketi. Buttons/Icons/Panels/Items/HUDs klasörlerinden örneklendi, hepsi aynı.
+**Repoya alınmadı.** Önizlemeye bakıp indirme hatası tekrarlanmasın diye buraya not edildi.
+
+---
+
+## ✅ Lisansı doğrulanmış (önceki)
+
 ### `tiles/` — RF_Catacombs v1.0
 - **Sanatçı:** Szadi art
 - **Lisans:** *"Public domain and free to use, personal or commercial. Credit is not required but appreciated. You can edit, but not resell the asset pack (original or changed)."*
