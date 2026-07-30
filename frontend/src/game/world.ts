@@ -256,6 +256,37 @@ export function buildWorld(): World {
   return { terrain: t, scatter, solids };
 }
 
+/**
+ * Bir karonun ÇİZİLECEK görselini döndürür (autotile dahil).
+ * hubRender ile AYNI kuralları uygular — editör "koddaki dünyayı yükle"
+ * derken bunu kullanıyor ki editördeki görüntü oyundakiyle birebir olsun.
+ */
+export function tileSrcAt(world: World, x: number, y: number): string {
+  const at = (a: number, b: number): number =>
+    a < 0 || b < 0 || a >= MAP_W || b >= MAP_H ? T.GRASS : world.terrain[b * MAP_W + a];
+  const v = at(x, y);
+
+  if (v === T.WATER) {
+    const wl = at(x - 1, y) !== T.WATER;
+    const e = at(x + 1, y) !== T.WATER;
+    return wl ? TILESET.waterEdge.left : e ? TILESET.waterEdge.right : TILESET.water;
+  }
+  if (v === T.BRIDGE) return TILESET.water;
+  if (v === T.PATH) {
+    const n = at(x, y - 1) === T.PATH, s = at(x, y + 1) === T.PATH;
+    const wl = at(x - 1, y) === T.PATH, e = at(x + 1, y) === T.PATH;
+    const P = TILESET.path;
+    return n && s && wl && e ? P.cross
+      : n && s && e ? P.tUp : n && s && wl ? P.tDown
+      : s && e ? P.ul : s && wl ? P.ur
+      : n && e ? P.dl : n && wl ? P.dr
+      : n || s ? P.v : P.h;
+  }
+  if (v === T.PLAZA) return TILESET.plazaTile;
+  if (v === T.DIRT) return TILESET.dirt[(x * 7 + y * 13) % TILESET.dirt.length];
+  return TILESET.grass[(x * 5 + y * 11) % TILESET.grass.length];
+}
+
 export function lampLights(w: World) {
   return w.scatter.filter((s) => s.src.includes('outdoor_lamp')).map((s) => ({ x: s.x + 32, y: s.y + 42, r: 170 }));
 }

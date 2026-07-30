@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { C, glass } from '@/lib/theme';
+import { importCodeWorld } from '@/game/importWorld';
 import {
   MAP_TILE, emptyMap, loadMapLocal, paletteIndex, saveMapLocal,
   type MapDoc, type MapMarker, type MapObject, type MarkerKind,
@@ -37,10 +38,36 @@ export default function EditorPage() {
   /** nesne dizerken kopyalar arası en az mesafe (px) */
   const [spacing, setSpacing] = useState(64);
   /** sürükleme durumu */
-  const dragRef = useRef<{ active: boolean; mode: 'paint' | 'rect' | 'scatter' | null; sx: number; sy: number; lastX: number; lastY: number }>(
+  const dragRef = useRef<{ active: boolean; mode: 'paint' | 'rect' | 'scatter' | 'erase' | null; sx: number; sy: number; lastX: number; lastY: number }>(
     { active: false, mode: null, sx: 0, sy: 0, lastX: 0, lastY: 0 },
   );
   const [rectPreview, setRectPreview] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  /** silgi modu — açıkken tıklama/sürükleme siler */
+  const [erase, setErase] = useState(false);
+  const [autoAt, setAutoAt] = useState<string>('');
+
+  /**
+   * OTOMATİK KAYDETME — 30 dakikalık emek kaybının sebebi buydu, artık var.
+   * Her değişiklikten 1.5 sn sonra yazar (debounce); sürekli yazıp donmaz.
+   */
+  useEffect(() => {
+    const id = setTimeout(() => {
+      saveMapLocal(doc);
+      setAutoAt(new Date().toLocaleTimeString());
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [doc]);
+
+  /** Sekme kapanırken/gizlenirken son hâli garanti yaz */
+  useEffect(() => {
+    const flush = () => saveMapLocal(doc);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      document.removeEventListener('visibilitychange', flush);
+    };
+  }, [doc]);
   // Geri alma yığını — her değişiklikten ÖNCE anlık görüntü alınır.
   const undoRef = useRef<MapDoc[]>([]);
   const pushUndo = useCallback(() => {
@@ -124,12 +151,16 @@ export default function EditorPage() {
       const T = MAP_TILE;
       const { terrain } = doc;
 
-      // zemin
+      // zemin — sürükleyerek boyarken tampondan oku, böylece anlık görünür
+      // (tampon setDoc'a girmiyor; donmayı önleyen şey bu)
+      const buf = paintBufRef.current;
+      const tData = buf ? buf.data : terrain.data;
+      const tPal = buf ? buf.palette : terrain.palette;
       for (let ty = 0; ty < terrain.h; ty++) {
         for (let tx = 0; tx < terrain.w; tx++) {
-          const v = terrain.data[ty * terrain.w + tx];
+          const v = tData[ty * terrain.w + tx];
           if (!v) continue;
-          const im = img(terrain.palette[v - 1]);
+          const im = img(tPal[v - 1]);
           if (im) ctx.drawImage(im, tx * T, ty * T, T, T);
         }
       }
@@ -245,23 +276,31 @@ export default function EditorPage() {
   };
   const snapped = (v: number) => (snap ? Math.round(v / MAP_TILE) * MAP_TILE : Math.round(v));
 
-  /** Fırça boyutuna göre karo boya (tek noktada brush×brush kare) */
+  /**
+   * Fırça boyutuna göre karo boya.
+   *
+   * PERFORMANS — DONMA HATASI BURADAYDI: eskiden her ara karo için ayrı
+   * setDoc çağrılıyordu. Hızlı sürüklemede saniyede binlerce çağrı × 6144
+   * elemanlık dizi kopyası + React render = sayfa kilitleniyordu.
+   * ŞİMDİ: sürükleme boyunca TEK bir tampon dizide birikiyor (mutasyon),
+   * setDoc sadece pointer bırakılınca bir kez çağrılıyor.
+   */
+  const paintBufRef = useRef<{ data: number[]; palette: string[] } | null>(null);
+
   const paintAt = useCallback((wx: number, wy: number) => {
-    if (!sel) return;
-    setDoc((d) => {
-      const t = { ...d.terrain, palette: [...d.terrain.palette], data: [...d.terrain.data] };
-      const pi = paletteIndex(t, sel.src);
-      const cx = Math.floor(wx / MAP_TILE), cy = Math.floor(wy / MAP_TILE);
-      const r = Math.floor(brush / 2);
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          const tx = cx + dx, ty = cy + dy;
-          if (tx >= 0 && ty >= 0 && tx < t.w && ty < t.h) t.data[ty * t.w + tx] = pi;
-        }
+    const buf = paintBufRef.current;
+    if (!sel || !buf) return;
+    let pi = buf.palette.indexOf(sel.src);
+    if (pi < 0) { buf.palette.push(sel.src); pi = buf.palette.length - 1; }
+    const cx = Math.floor(wx / MAP_TILE), cy = Math.floor(wy / MAP_TILE);
+    const r = Math.floor(brush / 2);
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const tx = cx + dx, ty = cy + dy;
+        if (tx >= 0 && ty >= 0 && tx < doc.terrain.w && ty < doc.terrain.h) buf.data[ty * doc.terrain.w + tx] = pi;
       }
-      return { ...d, terrain: t };
-    });
-  }, [sel, brush]);
+    }
+  }, [sel, brush, doc.terrain.w, doc.terrain.h]);
 
   /** Dikdörtgen doldur — iki köşe arası tüm karolar */
   const fillRectTiles = useCallback((x0: number, y0: number, x1: number, y1: number) => {
@@ -278,9 +317,38 @@ export default function EditorPage() {
     });
   }, [sel]);
 
+  /** İmlecin altındaki nesneyi/işaretçiyi/karoyu sil */
+  const eraseAt = useCallback((wx: number, wy: number) => {
+    setDoc((d) => {
+      // önce nesne (en üstteki)
+      for (let i = d.objects.length - 1; i >= 0; i--) {
+        const o = d.objects[i];
+        if (wx >= o.x && wx <= o.x + o.w && wy >= o.y && wy <= o.y + o.h) {
+          return { ...d, objects: d.objects.filter((x) => x.id !== o.id) };
+        }
+      }
+      // sonra işaretçi
+      const mk = d.markers.find((m) => Math.hypot(m.x - wx, m.y - wy) < 18);
+      if (mk) return { ...d, markers: d.markers.filter((m) => m.id !== mk.id) };
+      // en son zemin karosu (0 = boş)
+      const tx = Math.floor(wx / MAP_TILE), ty = Math.floor(wy / MAP_TILE);
+      if (tx < 0 || ty < 0 || tx >= d.terrain.w || ty >= d.terrain.h) return d;
+      if (!d.terrain.data[ty * d.terrain.w + tx]) return d;
+      const data = [...d.terrain.data];
+      const r = Math.floor(brush / 2);
+      for (let dy = -r; dy <= r; dy++)
+        for (let dx = -r; dx <= r; dx++) {
+          const a = tx + dx, b = ty + dy;
+          if (a >= 0 && b >= 0 && a < d.terrain.w && b < d.terrain.h) data[b * d.terrain.w + a] = 0;
+        }
+      return { ...d, terrain: { ...d.terrain, data } };
+    });
+  }, [brush]);
+
   const onClick = (e: React.MouseEvent) => {
     const p = toWorld(e);
     if (e.shiftKey && tool !== 'tile') { setDoc((d) => ({ ...d, spawn: { x: Math.round(p.x), y: Math.round(p.y) } })); return; }
+    if (erase) { pushUndo(); eraseAt(p.x, p.y); return; }
     if (tool === 'tile') return; // zemin artık sürükleme ile (pointer olayları)
 
     if (tool === 'marker') {
@@ -321,9 +389,20 @@ export default function EditorPage() {
     const dr = dragRef.current;
     dr.sx = p.x; dr.sy = p.y; dr.lastX = p.x; dr.lastY = p.y; dr.active = true;
 
+    // Sağ tık VEYA silgi modu = sil (sürükleyerek de siler)
+    if (e.button === 2 || erase) {
+      dr.mode = 'erase'; pushUndo(); eraseAt(p.x, p.y);
+      return;
+    }
+
     if (tool === 'tile' && sel) {
       if (e.shiftKey) { dr.mode = 'rect'; setRectPreview({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }); }
-      else { dr.mode = 'paint'; pushUndo(); paintAt(p.x, p.y); }
+      else {
+        dr.mode = 'paint'; pushUndo();
+        // sürükleme boyunca tek tampon — setDoc bırakınca bir kez çağrılır
+        paintBufRef.current = { data: [...doc.terrain.data], palette: [...doc.terrain.palette] };
+        paintAt(p.x, p.y);
+      }
     } else if (tool === 'object' && sel && e.altKey) {
       // Alt basılı + sürükle = aynı nesneden sıra dizer (ağaç sırası, çit)
       dr.mode = 'scatter'; pushUndo();
@@ -336,6 +415,13 @@ export default function EditorPage() {
     const dr = dragRef.current;
     if (!dr.active || !dr.mode) return;
     const p = toWorld(e as unknown as React.MouseEvent);
+
+    if (dr.mode === 'erase') {
+      if (Math.hypot(p.x - dr.lastX, p.y - dr.lastY) < 8) return;
+      dr.lastX = p.x; dr.lastY = p.y;
+      eraseAt(p.x, p.y);
+      return;
+    }
 
     if (dr.mode === 'paint') {
       // ara noktaları da doldur — hızlı sürüklemede boşluk kalmasın
@@ -368,6 +454,12 @@ export default function EditorPage() {
     if (dr.mode === 'rect' && rectPreview) {
       pushUndo();
       fillRectTiles(rectPreview.x0, rectPreview.y0, rectPreview.x1, rectPreview.y1);
+    }
+    // boyama tamponunu TEK seferde işle (sürükleme boyunca setDoc çağrılmadı)
+    if (dr.mode === 'paint' && paintBufRef.current) {
+      const buf = paintBufRef.current;
+      setDoc((d) => ({ ...d, terrain: { ...d.terrain, data: buf.data, palette: buf.palette } }));
+      paintBufRef.current = null;
     }
     setRectPreview(null);
     dr.active = false; dr.mode = null;
@@ -518,6 +610,13 @@ export default function EditorPage() {
               {i + 1}. {t === 'object' ? 'Nesne koy' : t === 'tile' ? 'Zemin boya' : 'Kapı/Portal'}
             </button>
           ))}
+          <button onClick={() => setErase((v) => !v)}
+            style={{ padding: '7px 14px', borderRadius: 8, fontWeight: 800, fontSize: 12.5, cursor: 'pointer',
+              border: `1px solid ${erase ? C.blood : C.border}`,
+              background: erase ? 'rgba(160,18,38,0.25)' : 'transparent',
+              color: erase ? '#ff8b9c' : C.boneDim }}>
+            🧽 Silgi {erase ? 'AÇIK' : ''}
+          </button>
           {tool === 'tile' && (
             <span style={{ ...glass(8), padding: '5px 10px', fontSize: 11.5, color: C.boneDim, display: 'flex', alignItems: 'center', gap: 7 }}>
               Fırça
@@ -559,7 +658,7 @@ export default function EditorPage() {
       {/* SAĞ: özellikler */}
       <div style={{ width: 250, flexShrink: 0, borderLeft: `1px solid ${C.border}`, background: '#14120f', padding: 12, overflowY: 'auto' }}>
         <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-          <button onClick={() => { saveMapLocal(doc); setSaved(Date.now()); }} style={btn(C.ok)}>Kaydet</button>
+          <button onClick={() => { saveMapLocal(doc); setSaved(Date.now()); setAutoAt(new Date().toLocaleTimeString()); }} style={btn(C.ok)}>Kaydet</button>
           <button onClick={download} style={btn(C.candle)}>İndir</button>
         </div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -580,9 +679,24 @@ export default function EditorPage() {
           </label>
         </div>
 
-        <div style={{ fontSize: 11, color: C.boneFaint, marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: C.boneFaint, marginBottom: 3 }}>
           {doc.objects.length} nesne · {doc.markers.length} işaretçi
         </div>
+        <div style={{ fontSize: 10.5, color: autoAt ? C.ok : C.boneFaint, marginBottom: 8 }}>
+          {autoAt ? `✓ otomatik kaydedildi ${autoAt}` : 'otomatik kayıt bekleniyor…'}
+        </div>
+
+        {/* MEVCUT DÜNYAYI İÇE AKTAR — koddaki köyü editöre getirir,
+            sıfırdan başlamak yerine üstünde çalışılır. */}
+        <button onClick={() => {
+          if (doc.objects.length && !confirm('Mevcut haritanın üstüne kodda tanımlı dünya yüklenecek. Devam?')) return;
+          pushUndo();
+          setDoc(importCodeWorld());
+        }}
+          style={{ width: '100%', padding: '9px 0', marginBottom: 8, borderRadius: 8, cursor: 'pointer',
+            border: `1px solid ${C.ice}66`, background: 'rgba(138,151,163,0.14)', color: C.bone, fontWeight: 800, fontSize: 12 }}>
+          ⬇ Koddaki dünyayı yükle
+        </button>
 
         {selObj && (
           <div style={{ ...glass(9), padding: 10 }}>
