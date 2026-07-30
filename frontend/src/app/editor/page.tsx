@@ -32,6 +32,15 @@ export default function EditorPage() {
   const [screenGrid, setScreenGrid] = useState(true);
   /** Seçili asset bir SAYFA ise: kaç sütun/satır ve hangi hücre kullanılacak */
   const [slice, setSlice] = useState({ cols: 1, rows: 1, cx: 0, cy: 0 });
+  /** fırça boyutu (karo) — zemin boyarken tek tek tıklamamak için */
+  const [brush, setBrush] = useState(1);
+  /** nesne dizerken kopyalar arası en az mesafe (px) */
+  const [spacing, setSpacing] = useState(64);
+  /** sürükleme durumu */
+  const dragRef = useRef<{ active: boolean; mode: 'paint' | 'rect' | 'scatter' | null; sx: number; sy: number; lastX: number; lastY: number }>(
+    { active: false, mode: null, sx: 0, sy: 0, lastX: 0, lastY: 0 },
+  );
+  const [rectPreview, setRectPreview] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   // Geri alma yığını — her değişiklikten ÖNCE anlık görüntü alınır.
   const undoRef = useRef<MapDoc[]>([]);
   const pushUndo = useCallback(() => {
@@ -188,6 +197,21 @@ export default function EditorPage() {
         if (m.id === selId) { ctx.strokeStyle = C.candle; ctx.strokeRect(m.x - 12, m.y - 12, 24, 24); }
       }
 
+      // dikdörtgen doldurma önizlemesi
+      if (rectPreview) {
+        const a = Math.floor(Math.min(rectPreview.x0, rectPreview.x1) / T) * T;
+        const b = Math.floor(Math.max(rectPreview.x0, rectPreview.x1) / T) * T + T;
+        const c = Math.floor(Math.min(rectPreview.y0, rectPreview.y1) / T) * T;
+        const e2 = Math.floor(Math.max(rectPreview.y0, rectPreview.y1) / T) * T + T;
+        ctx.fillStyle = 'rgba(239,167,46,0.22)';
+        ctx.fillRect(a, c, b - a, e2 - c);
+        ctx.strokeStyle = C.candle; ctx.lineWidth = 2 / zoom;
+        ctx.strokeRect(a, c, b - a, e2 - c);
+        ctx.fillStyle = C.candle;
+        ctx.font = `${12 / zoom}px ui-sans-serif`;
+        ctx.fillText(`${(b - a) / T} × ${(e2 - c) / T} karo`, a + 4, c - 6);
+      }
+
       // spawn
       ctx.strokeStyle = '#efa72e'; ctx.lineWidth = 2 / zoom;
       ctx.beginPath(); ctx.arc(doc.spawn.x, doc.spawn.y, 13, 0, Math.PI * 2); ctx.stroke();
@@ -209,7 +233,7 @@ export default function EditorPage() {
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [doc, selId, zoom, img, screenGrid]);
+  }, [doc, selId, zoom, img, screenGrid, rectPreview]);
 
   // ── girdi ──
   const toWorld = (e: React.MouseEvent) => {
@@ -221,21 +245,43 @@ export default function EditorPage() {
   };
   const snapped = (v: number) => (snap ? Math.round(v / MAP_TILE) * MAP_TILE : Math.round(v));
 
+  /** Fırça boyutuna göre karo boya (tek noktada brush×brush kare) */
+  const paintAt = useCallback((wx: number, wy: number) => {
+    if (!sel) return;
+    setDoc((d) => {
+      const t = { ...d.terrain, palette: [...d.terrain.palette], data: [...d.terrain.data] };
+      const pi = paletteIndex(t, sel.src);
+      const cx = Math.floor(wx / MAP_TILE), cy = Math.floor(wy / MAP_TILE);
+      const r = Math.floor(brush / 2);
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const tx = cx + dx, ty = cy + dy;
+          if (tx >= 0 && ty >= 0 && tx < t.w && ty < t.h) t.data[ty * t.w + tx] = pi;
+        }
+      }
+      return { ...d, terrain: t };
+    });
+  }, [sel, brush]);
+
+  /** Dikdörtgen doldur — iki köşe arası tüm karolar */
+  const fillRectTiles = useCallback((x0: number, y0: number, x1: number, y1: number) => {
+    if (!sel) return;
+    setDoc((d) => {
+      const t = { ...d.terrain, palette: [...d.terrain.palette], data: [...d.terrain.data] };
+      const pi = paletteIndex(t, sel.src);
+      const a = Math.floor(Math.min(x0, x1) / MAP_TILE), b = Math.floor(Math.max(x0, x1) / MAP_TILE);
+      const c = Math.floor(Math.min(y0, y1) / MAP_TILE), e2 = Math.floor(Math.max(y0, y1) / MAP_TILE);
+      for (let ty = c; ty <= e2; ty++)
+        for (let tx = a; tx <= b; tx++)
+          if (tx >= 0 && ty >= 0 && tx < t.w && ty < t.h) t.data[ty * t.w + tx] = pi;
+      return { ...d, terrain: t };
+    });
+  }, [sel]);
+
   const onClick = (e: React.MouseEvent) => {
     const p = toWorld(e);
-    if (e.shiftKey) { setDoc((d) => ({ ...d, spawn: { x: Math.round(p.x), y: Math.round(p.y) } })); return; }
-
-    if (tool === 'tile') {
-      if (!sel) return;
-      setDoc((d) => {
-        const t = { ...d.terrain, palette: [...d.terrain.palette], data: [...d.terrain.data] };
-        const pi = paletteIndex(t, sel.src);
-        const tx = Math.floor(p.x / MAP_TILE), ty = Math.floor(p.y / MAP_TILE);
-        if (tx >= 0 && ty >= 0 && tx < t.w && ty < t.h) t.data[ty * t.w + tx] = pi;
-        return { ...d, terrain: t };
-      });
-      return;
-    }
+    if (e.shiftKey && tool !== 'tile') { setDoc((d) => ({ ...d, spawn: { x: Math.round(p.x), y: Math.round(p.y) } })); return; }
+    if (tool === 'tile') return; // zemin artık sürükleme ile (pointer olayları)
 
     if (tool === 'marker') {
       const m: MapMarker = { id: nextId.current++, kind: markerKind, x: Math.round(p.x), y: Math.round(p.y), label: markerKind };
@@ -266,6 +312,65 @@ export default function EditorPage() {
     };
     setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
     setSelId(o.id);
+  };
+
+  // ── SÜRÜKLEME ── zemin boyama ve nesne dizme
+  const onPointerDown = (e: React.PointerEvent) => {
+    const p = toWorld(e as unknown as React.MouseEvent);
+    (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
+    const dr = dragRef.current;
+    dr.sx = p.x; dr.sy = p.y; dr.lastX = p.x; dr.lastY = p.y; dr.active = true;
+
+    if (tool === 'tile' && sel) {
+      if (e.shiftKey) { dr.mode = 'rect'; setRectPreview({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }); }
+      else { dr.mode = 'paint'; pushUndo(); paintAt(p.x, p.y); }
+    } else if (tool === 'object' && sel && e.altKey) {
+      // Alt basılı + sürükle = aynı nesneden sıra dizer (ağaç sırası, çit)
+      dr.mode = 'scatter'; pushUndo();
+    } else {
+      dr.mode = null;
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const dr = dragRef.current;
+    if (!dr.active || !dr.mode) return;
+    const p = toWorld(e as unknown as React.MouseEvent);
+
+    if (dr.mode === 'paint') {
+      // ara noktaları da doldur — hızlı sürüklemede boşluk kalmasın
+      const steps = Math.max(1, Math.ceil(Math.hypot(p.x - dr.lastX, p.y - dr.lastY) / (MAP_TILE / 2)));
+      for (let i = 1; i <= steps; i++) {
+        paintAt(dr.lastX + (p.x - dr.lastX) * (i / steps), dr.lastY + (p.y - dr.lastY) * (i / steps));
+      }
+      dr.lastX = p.x; dr.lastY = p.y;
+    } else if (dr.mode === 'rect') {
+      setRectPreview({ x0: dr.sx, y0: dr.sy, x1: p.x, y1: p.y });
+    } else if (dr.mode === 'scatter' && sel) {
+      if (Math.hypot(p.x - dr.lastX, p.y - dr.lastY) < spacing) return;
+      dr.lastX = p.x; dr.lastY = p.y;
+      const fullW = sel.w * sel.frames, fullH = sel.h;
+      const cw = Math.floor(fullW / slice.cols), ch = Math.floor(fullH / slice.rows);
+      const sc = Math.min(1, 256 / Math.max(cw, ch));
+      const pw = Math.round(cw * sc), ph = Math.round(ch * sc);
+      const o: MapObject = {
+        id: nextId.current++, src: sel.src,
+        x: snapped(p.x - pw / 2), y: snapped(p.y - ph / 2), w: pw, h: ph,
+        frames: slice.cols, rows: slice.rows, row: slice.cy, col: slice.cx,
+        fps: 0, solid: 0,
+      };
+      setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
+    }
+  };
+
+  const onPointerUp = () => {
+    const dr = dragRef.current;
+    if (dr.mode === 'rect' && rectPreview) {
+      pushUndo();
+      fillRectTiles(rectPreview.x0, rectPreview.y0, rectPreview.x1, rectPreview.y1);
+    }
+    setRectPreview(null);
+    dr.active = false; dr.mode = null;
   };
 
   // klavye
@@ -403,7 +508,8 @@ export default function EditorPage() {
       {/* ORTA: harita */}
       <div style={{ flex: 1, position: 'relative' }}>
         <canvas ref={canvasRef} onClick={onClick}
-          style={{ width: '100%', height: '100%', display: 'block', cursor: tool === 'tile' ? 'cell' : 'crosshair' }} />
+          onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp}
+          style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none', cursor: tool === 'tile' ? 'cell' : 'crosshair' }} />
         <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {(['object', 'tile', 'marker'] as Tool[]).map((t, i) => (
             <button key={t} onClick={() => setTool(t)}
@@ -412,6 +518,25 @@ export default function EditorPage() {
               {i + 1}. {t === 'object' ? 'Nesne koy' : t === 'tile' ? 'Zemin boya' : 'Kapı/Portal'}
             </button>
           ))}
+          {tool === 'tile' && (
+            <span style={{ ...glass(8), padding: '5px 10px', fontSize: 11.5, color: C.boneDim, display: 'flex', alignItems: 'center', gap: 7 }}>
+              Fırça
+              {[1, 3, 5, 9].map((b) => (
+                <button key={b} onClick={() => setBrush(b)}
+                  style={{ padding: '3px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11, fontWeight: 800,
+                    border: `1px solid ${brush === b ? C.candle : C.border}`,
+                    background: brush === b ? 'rgba(239,167,46,0.18)' : 'transparent',
+                    color: brush === b ? C.candle : C.boneDim }}>{b}×{b}</button>
+              ))}
+            </span>
+          )}
+          {tool === 'object' && (
+            <span style={{ ...glass(8), padding: '5px 10px', fontSize: 11.5, color: C.boneDim, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Dizme aralığı
+              <input type="range" min={24} max={200} step={8} value={spacing} onChange={(e) => setSpacing(Number(e.target.value))} style={{ width: 80 }} />
+              <b style={{ color: C.candle }}>{spacing}px</b>
+            </span>
+          )}
           {tool === 'marker' && (
             <select value={markerKind} onChange={(e) => setMarkerKind(e.target.value as MarkerKind)}
               style={{ ...glass(8), padding: '6px 8px', fontSize: 12, color: C.bone, border: `1px solid ${C.border}` }}>
@@ -422,10 +547,12 @@ export default function EditorPage() {
           )}
         </div>
         <div style={{ position: 'absolute', bottom: 10, left: 10, ...glass(8), padding: '7px 11px', fontSize: 11, color: C.boneFaint, lineHeight: 1.7 }}>
-          <b style={{ color: C.boneDim }}>WASD</b> haritayı kaydır · <b style={{ color: C.boneDim }}>Ctrl+Z</b> geri al ·
-          <b style={{ color: C.boneDim }}> Del</b> sil · <b style={{ color: C.boneDim }}>Ok</b> taşı (Shift = karo adım)<br />
-          Nesnenin üstüne tık = <b style={{ color: C.boneDim }}>seç</b> · boşluğa tık = <b style={{ color: C.boneDim }}>koy</b> ·
-          <b style={{ color: C.boneDim }}> Alt+tık</b> = üst üste koy · <b style={{ color: C.boneDim }}>Shift+tık</b> = spawn taşı
+          <b style={{ color: C.candle }}>ZEMİN:</b> basılı tut + sürükle = boya ·
+          <b style={{ color: C.candle }}> Shift+sürükle</b> = dikdörtgen doldur · fırça 1/3/5/9<br />
+          <b style={{ color: C.candle }}>NESNE:</b> <b style={{ color: C.candle }}>Alt+sürükle</b> = arka arkaya diz ·
+          üstüne tık = seç · boşluğa tık = tek koy · Shift+tık = spawn taşı<br />
+          <b style={{ color: C.boneDim }}>WASD</b> kaydır · <b style={{ color: C.boneDim }}>Ctrl+Z</b> geri al ·
+          <b style={{ color: C.boneDim }}>Del</b> sil · <b style={{ color: C.boneDim }}>Ok</b> taşı (Shift = karo adım)
         </div>
       </div>
 
