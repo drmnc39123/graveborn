@@ -31,6 +31,8 @@ export interface MapWorld {
   travels: WorldTravel[];
   fight: WorldFight | null;
   spawn: { x: number; y: number };
+  /** köprü alanları — su karoları burada yürünebilir */
+  bridges: { x: number; y: number; w: number; h: number }[];
 }
 
 export function buildMapWorld(doc: MapDoc): MapWorld {
@@ -60,6 +62,12 @@ export function buildMapWorld(doc: MapDoc): MapWorld {
     }
   }
 
+  // Köprüler: su üstünde yürünebilir alan. Kenarlardan biraz taşırıyoruz ki
+  // köprüye adım atarken kıyıda takılma olmasın.
+  const bridges = doc.objects
+    .filter((o) => o.bridge)
+    .map((o) => ({ x: o.x - 6, y: o.y - 6, w: o.w + 12, h: o.h + 12 }));
+
   return {
     w: doc.terrain.w * MAP_TILE,
     h: doc.terrain.h * MAP_TILE,
@@ -73,6 +81,7 @@ export function buildMapWorld(doc: MapDoc): MapWorld {
     travels,
     fight,
     spawn: doc.spawn,
+    bridges,
   };
 }
 

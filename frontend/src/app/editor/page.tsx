@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { C, glass } from '@/lib/theme';
 import { importCodeWorld } from '@/game/importWorld';
+import { autoFps, autoSolid, isBridge } from '@/game/autoProps';
 import {
   MAP_TILE, emptyMap, loadMapLocal, paletteIndex, saveMapLocal,
   type MapDoc, type MapMarker, type MapObject, type MarkerKind,
@@ -486,13 +487,17 @@ export default function EditorPage() {
     const cw = Math.floor(fullW / slice.cols), ch = Math.floor(fullH / slice.rows);
     const scale = Math.min(1, 256 / Math.max(cw, ch));
     const pw = Math.round(cw * scale), ph = Math.round(ch * scale);
+    // Çarpışma ve animasyon SPRITE ADINDAN çıkarılıyor: bina katı, çiçek
+    // geçilebilir, portal animasyonlu. 2000 nesnenin ayarını elle yapmak
+    // gerçekçi değildi — hepsi solid:0/fps:0 kalıp oyunu bozuyordu.
     const o: MapObject = {
       id: nextId.current++, src: sel.src,
       x: snapped(p.x - pw / 2), y: snapped(p.y - ph / 2),
       w: pw, h: ph,
       frames: slice.cols, rows: slice.rows, row: slice.cy, col: slice.cx,
-      fps: 0, // duruk başlar; animasyon istenirse sağdan FPS verilir
-      solid: 0,
+      fps: autoFps(sel.src),
+      solid: autoSolid(sel.src, ph),
+      ...(isBridge(sel.src) ? { bridge: true } : {}),
     };
     setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
     setSelId(o.id);
@@ -564,7 +569,8 @@ export default function EditorPage() {
         id: nextId.current++, src: sel.src,
         x: snapped(p.x - pw / 2), y: snapped(p.y - ph / 2), w: pw, h: ph,
         frames: slice.cols, rows: slice.rows, row: slice.cy, col: slice.cx,
-        fps: 0, solid: 0,
+        fps: autoFps(sel.src), solid: autoSolid(sel.src, ph),
+        ...(isBridge(sel.src) ? { bridge: true } : {}),
       };
       setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
     }

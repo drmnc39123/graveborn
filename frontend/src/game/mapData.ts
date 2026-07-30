@@ -25,6 +25,8 @@ export interface MapObject {
   solid?: number;
   /** çizim sırası için ek kaydırma (ağaç tepesi gibi) */
   z?: number;
+  /** köprü: altındaki su karolarını YÜRÜNEBİLİR yapar */
+  bridge?: boolean;
 }
 
 /** Zemin boyası — karo indeksi → karo görseli */

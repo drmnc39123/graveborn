@@ -9,8 +9,10 @@ import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldDoor, WorldTravel } from './mapWorld';
 
 export const HUB_PLAYER = { radius: 11, speed: 215 } as const;
-export const DOOR_RADIUS = 62;
-export const PORTAL_RADIUS = 60;
+// Etkileşim mesafeleri. 62 px çok dardı: oyuncu binanın İÇİNE girmeden
+// "Press E" görünmüyordu. Artık bina cephesine yaklaşınca çıkıyor.
+export const DOOR_RADIUS = 132;
+export const PORTAL_RADIUS = 108;
 
 export type BuildingId = string;
 
@@ -41,10 +43,15 @@ function blocked(s: HubState, x: number, y: number, r: number) {
   }
   const tx = Math.floor(x / MAP_TILE), ty = Math.floor(y / MAP_TILE);
   if (tx < 0 || ty < 0 || tx >= w.tileW || ty >= w.tileH) return true;
-  // Su geçilmez. Karo görselinin adından anlıyoruz — editörde su karosu
-  // seçilirken ayrı bir "tip" verilmiyor, tek doğru kaynak dosya yolu.
+  // Su geçilmez — AMA köprü varsa geçilir. Köprü bir nesne, su bir karo;
+  // ikisi üst üste durduğu için karoya bakıp reddetmek köprüyü de kapatıyordu.
   const pal = w.palette[w.tiles[ty * w.tileW + tx] - 1];
-  if (pal && /water|lake/i.test(pal) && !/bridge/i.test(pal)) return true;
+  if (pal && /water|lake/i.test(pal)) {
+    for (const b of w.bridges) {
+      if (x > b.x && x < b.x + b.w && y > b.y && y < b.y + b.h) return false;
+    }
+    return true;
+  }
   return false;
 }
 
