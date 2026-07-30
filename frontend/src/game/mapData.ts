@@ -15,6 +15,8 @@ export interface MapObject {
   frames?: number;
   /** Izgara sayfasında hangi SATIR (0 tabanlı). Tek sıra sayfalarda 0. */
   row?: number;
+  /** Izgara sayfasında hangi SÜTUN (0 tabanlı). Animasyon varsa başlangıç karesi. */
+  col?: number;
   /** Sayfadaki toplam satır sayısı — kare yüksekliğini hesaplamak için */
   rows?: number;
   /** animasyon hızı (frames>1 ise) */

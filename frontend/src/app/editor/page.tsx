@@ -30,6 +30,8 @@ export default function EditorPage() {
   const [zoom, setZoom] = useState(1);
   const [saved, setSaved] = useState(0);
   const [screenGrid, setScreenGrid] = useState(true);
+  /** Seçili asset bir SAYFA ise: kaç sütun/satır ve hangi hücre kullanılacak */
+  const [slice, setSlice] = useState({ cols: 1, rows: 1, cx: 0, cy: 0 });
   // Geri alma yığını — her değişiklikten ÖNCE anlık görüntü alınır.
   const undoRef = useRef<MapDoc[]>([]);
   const pushUndo = useCallback(() => {
@@ -61,6 +63,27 @@ export default function EditorPage() {
     if (!i) { i = new Image(); i.src = src; imgCache.current.set(src, i); }
     return i.complete && i.naturalWidth ? i : null;
   }, []);
+
+  /**
+   * Sayfa ızgarasını TAHMİN ET. Paketlerin bir kısmı `_stripN` yazıyor
+   * (o zaman zaten biliyoruz), bir kısmı yazmıyor ve 640×1440 gibi dev
+   * ızgaralar geliyor. Yaygın hücre boyutlarından ikisini de tam bölen
+   * EN BÜYÜĞÜNÜ seçiyoruz — 640×1440 için 80 → 8×18 çıkıyor.
+   */
+  const guessSlice = useCallback((a: Asset) => {
+    if (a.frames > 1) return { cols: a.frames, rows: 1, cx: 0, cy: 0 };
+    const fullW = a.w * a.frames, fullH = a.h;
+    if (fullW <= 128 && fullH <= 128) return { cols: 1, rows: 1, cx: 0, cy: 0 };
+    for (const cell of [128, 96, 80, 64, 48, 32]) {
+      if (fullW % cell === 0 && fullH % cell === 0) {
+        const cols = fullW / cell, rows = fullH / cell;
+        if (cols * rows > 1) return { cols, rows, cx: 0, cy: 0 };
+      }
+    }
+    return { cols: 1, rows: 1, cx: 0, cy: 0 };
+  }, []);
+
+  useEffect(() => { if (sel) setSlice(guessSlice(sel)); }, [sel, guessSlice]);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -138,7 +161,7 @@ export default function EditorPage() {
           const cols = o.frames ?? 1, rws = o.rows ?? 1;
           const fw = Math.floor(im.width / cols);
           const fh = Math.floor(im.height / rws);
-          ctx.drawImage(im, 0, (o.row ?? 0) * fh, fw, fh, o.x, o.y, o.w, o.h);
+          ctx.drawImage(im, (o.col ?? 0) * fw, (o.row ?? 0) * fh, fw, fh, o.x, o.y, o.w, o.h);
         } else {
           ctx.fillStyle = 'rgba(239,167,46,0.25)';
           ctx.fillRect(o.x, o.y, o.w, o.h);
@@ -227,18 +250,18 @@ export default function EditorPage() {
     if (hit && !e.altKey) { setSelId(hit.id); return; }
     if (!sel) return;
     pushUndo();
-    // Boyut kırpma: pakette 1080×1080 diyalog portreleri var; gerçek boyutta
-    // konunca ekranı kaplıyor ve "bu ne?" oluyor. Harita nesnesi olarak makul
-    // bir tavana indiriyoruz — sağdaki alanlardan istenirse büyütülür.
-    const scale = Math.min(1, 256 / Math.max(sel.w, sel.h));
-    const pw = Math.round(sel.w * scale), ph = Math.round(sel.h * scale);
+    // Seçilen HÜCRENİN boyutu (sayfa dilimlemesi uygulanmış).
+    // 1080×1080 diyalog portreleri gerçek boyutta ekranı kaplıyordu → 256 tavan.
+    const fullW = sel.w * sel.frames, fullH = sel.h;
+    const cw = Math.floor(fullW / slice.cols), ch = Math.floor(fullH / slice.rows);
+    const scale = Math.min(1, 256 / Math.max(cw, ch));
+    const pw = Math.round(cw * scale), ph = Math.round(ch * scale);
     const o: MapObject = {
       id: nextId.current++, src: sel.src,
       x: snapped(p.x - pw / 2), y: snapped(p.y - ph / 2),
       w: pw, h: ph,
-      frames: sel.frames > 1 ? sel.frames : undefined,
-      rows: 1, row: 0,
-      fps: sel.frames > 1 ? 8 : undefined,
+      frames: slice.cols, rows: slice.rows, row: slice.cy, col: slice.cx,
+      fps: 0, // duruk başlar; animasyon istenirse sağdan FPS verilir
       solid: 0,
     };
     setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
@@ -317,6 +340,40 @@ export default function EditorPage() {
           </select>
           <div style={{ fontSize: 11, color: C.boneFaint, marginTop: 6 }}>{shown.length} asset</div>
         </div>
+
+        {/* SAYFA DİLİMLEYİCİ — çok kareli görsellerde HANGİ kareyi koyacağını seç.
+            Bu olmadan 640×1440'lık canavar sayfası tek parça olarak konuyordu. */}
+        {sel && slice.cols * slice.rows > 1 && (
+          <div style={{ padding: 10, borderBottom: `1px solid ${C.border}`, background: 'rgba(239,167,46,0.05)' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: C.candle, marginBottom: 6 }}>
+              SAYFA — kareyi seç ({slice.cols}×{slice.rows})
+            </div>
+            <div style={{ position: 'relative', width: '100%', aspectRatio: `${slice.cols}/${slice.rows}`, maxHeight: 190, overflow: 'hidden' }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={sel.src} alt="" style={{ width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated', display: 'block' }} />
+              <div style={{ position: 'absolute', inset: 0, display: 'grid',
+                gridTemplateColumns: `repeat(${slice.cols},1fr)`, gridTemplateRows: `repeat(${slice.rows},1fr)` }}>
+                {Array.from({ length: slice.cols * slice.rows }, (_, i) => {
+                  const cx = i % slice.cols, cy = Math.floor(i / slice.cols);
+                  const on = cx === slice.cx && cy === slice.cy;
+                  return (
+                    <button key={i} onClick={() => setSlice((s) => ({ ...s, cx, cy }))}
+                      title={`sütun ${cx}, satır ${cy}`}
+                      style={{ border: on ? `2px solid ${C.candle}` : '1px solid rgba(255,255,255,0.12)',
+                        background: on ? 'rgba(239,167,46,0.22)' : 'transparent', cursor: 'pointer', padding: 0 }} />
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 5, marginTop: 7 }}>
+              <MiniNum label="sütun" v={slice.cols} on={(v) => setSlice((s) => ({ ...s, cols: Math.max(1, v), cx: 0 }))} />
+              <MiniNum label="satır" v={slice.rows} on={(v) => setSlice((s) => ({ ...s, rows: Math.max(1, v), cy: 0 }))} />
+            </div>
+            <div style={{ fontSize: 10, color: C.boneFaint, marginTop: 5 }}>
+              Seçtiğin kare haritaya konur. Izgara yanlışsa sütun/satır sayısını düzelt.
+            </div>
+          </div>
+        )}
         <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 5, padding: 8 }}>
           {shown.slice(0, 400).map((a) => (
             // Küçük resim SADECE İLK KAREYİ gösterir. Düz <img> kullanınca
@@ -427,6 +484,7 @@ export default function EditorPage() {
               <Num label="Sütun (kare)" v={selObj.frames ?? 1} on={(v) => patch({ frames: Math.max(1, v) })} />
               <Num label="Satır sayısı" v={selObj.rows ?? 1} on={(v) => patch({ rows: Math.max(1, v) })} />
               <Num label="Kullanılan satır" v={selObj.row ?? 0} on={(v) => patch({ row: Math.max(0, v) })} />
+              <Num label="Kullanılan sütun" v={selObj.col ?? 0} on={(v) => patch({ col: Math.max(0, v) })} />
               {(selObj.frames ?? 1) > 1 && <Num label="FPS (0 = duruk)" v={selObj.fps ?? 8} on={(v) => patch({ fps: v })} />}
             </div>
             <button onClick={() => { setDoc((d) => ({ ...d, objects: d.objects.filter((o) => o.id !== selId) })); setSelId(null); }}
@@ -479,6 +537,16 @@ const btn = (col: string) => ({
   flex: 1, padding: '8px 0', borderRadius: 8, border: `1px solid ${col}66`,
   background: `${col}22`, color: col, fontWeight: 800, fontSize: 12, cursor: 'pointer',
 });
+
+function MiniNum({ label, v, on }: { label: string; v: number; on: (v: number) => void }) {
+  return (
+    <label style={{ flex: 1, fontSize: 10, color: C.boneFaint }}>
+      {label}
+      <input type="number" value={v} onChange={(e) => on(Number(e.target.value))}
+        style={{ width: '100%', padding: '3px 5px', borderRadius: 5, background: 'rgba(0,0,0,0.4)', border: `1px solid ${C.border}`, color: C.bone, fontSize: 11 }} />
+    </label>
+  );
+}
 
 function Num({ label, v, on }: { label: string; v: number; on: (v: number) => void }) {
   return (
