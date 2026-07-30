@@ -17,6 +17,17 @@ import {
 interface Asset { src: string; cat: string; name: string; w: number; h: number; frames: number }
 type Tool = 'object' | 'tile' | 'marker';
 
+/** Oyunun tanıdığı bina rolleri. Kapı işaretçisi bunlardan BİRİNE bağlanmalı,
+ *  yoksa bina dekor kalır. Serbest metin kutusuydu — kimse doğru id'yi bilemezdi. */
+const DOOR_ROLES = [
+  { id: 'quests', name: "The Warden's Post — bölüm seçimi" },
+  { id: 'upgrade', name: 'The Forge — kalıcı yükseltme' },
+  { id: 'shop', name: 'General Store — item satın alma' },
+  { id: 'market', name: 'Market Hall — oyuncu ticareti' },
+  { id: 'exchange', name: 'The Exchange — GOLD ↔ $GRAVE' },
+  { id: 'tavern', name: 'The Rest — profil / kayıtlar' },
+] as const;
+
 export default function EditorPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [cats, setCats] = useState<string[]>([]);
@@ -52,6 +63,8 @@ export default function EditorPage() {
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [helpOpen, setHelpOpen] = useState(true);
+  /** seyahat portalının hedefini haritadan seçme modu (işaretçi id'si) */
+  const [pickTarget, setPickTarget] = useState<number | null>(null);
   /** sağ tık menüsü — imlecin altındakine göre seçenek sunar */
   const [menu, setMenu] = useState<{
     sx: number; sy: number; wx: number; wy: number;
@@ -407,6 +420,18 @@ export default function EditorPage() {
 
   const onClick = (e: React.MouseEvent) => {
     const p = toWorld(e);
+
+    // Seyahat portalı hedefi seçme modu — tıklanan nokta hedef olur
+    if (pickTarget !== null) {
+      pushUndo();
+      setDoc((d) => ({
+        ...d,
+        markers: d.markers.map((m) => (m.id === pickTarget ? { ...m, toX: Math.round(p.x), toY: Math.round(p.y) } : m)),
+      }));
+      setPickTarget(null);
+      markDirty();
+      return;
+    }
     if (e.shiftKey && tool !== 'tile') { setDoc((d) => ({ ...d, spawn: { x: Math.round(p.x), y: Math.round(p.y) } })); return; }
     if (erase) { pushUndo(); eraseAt(p.x, p.y); return; }
     if (tool === 'tile') return; // zemin artık sürükleme ile (pointer olayları)
@@ -890,6 +915,34 @@ export default function EditorPage() {
           {autoAt ? `✓ otomatik kaydedildi ${autoAt}` : 'otomatik kayıt bekleniyor…'}
         </div>
 
+        {/* HARİTA DENETİMİ — oyuna geçmeden önce eksikleri göster.
+            İşaretçi koyup ayarını unutmak sessizce çalışmayan bina üretiyordu. */}
+        {(() => {
+          const doors = doc.markers.filter((m) => m.kind === 'door');
+          const fights = doc.markers.filter((m) => m.kind === 'fight');
+          const travels = doc.markers.filter((m) => m.kind === 'travel');
+          const badDoors = doors.filter((m) => !m.target);
+          const badTravel = travels.filter((m) => !m.toX && !m.toY);
+          const roles = new Set(doors.map((m) => m.target).filter(Boolean));
+          const missing = DOOR_ROLES.filter((r) => !roles.has(r.id));
+          const problems = badDoors.length + badTravel.length + (fights.length === 1 ? 0 : 1) + missing.length;
+          return (
+            <div style={{ ...glass(9), padding: 9, marginBottom: 8,
+              border: `1px solid ${problems ? '#a01226' : C.ok}66` }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: problems ? '#ff8b9c' : C.ok, marginBottom: 5 }}>
+                {problems ? `⚠ ${problems} eksik` : '✓ harita oyuna hazır'}
+              </div>
+              <div style={{ fontSize: 10.5, color: C.boneDim, lineHeight: 1.7 }}>
+                {fights.length !== 1 && <div>• Dövüş portalı {fights.length === 0 ? 'YOK' : `${fights.length} tane (1 olmalı)`}</div>}
+                {badDoors.length > 0 && <div>• {badDoors.length} kapının paneli seçilmemiş</div>}
+                {badTravel.length > 0 && <div>• {badTravel.length} seyahat portalının hedefi yok</div>}
+                {missing.length > 0 && <div>• Kapısı olmayan: {missing.map((r) => r.id).join(', ')}</div>}
+                {!problems && <div>{doors.length} kapı · {travels.length} seyahat · spawn hazır</div>}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* MEVCUT DÜNYAYI İÇE AKTAR — koddaki köyü editöre getirir,
             sıfırdan başlamak yerine üstünde çalışılır. */}
         <button onClick={() => {
@@ -939,14 +992,64 @@ export default function EditorPage() {
 
         {selMarker && (
           <div style={{ ...glass(9), padding: 10 }}>
-            <div style={{ fontWeight: 800, marginBottom: 8, fontSize: 12 }}>{selMarker.kind}</div>
-            <Txt label="Etiket" v={selMarker.label} on={(v) => patchM({ label: v })} />
-            {selMarker.kind === 'door' && <Txt label="Panel (id)" v={selMarker.target ?? ''} on={(v) => patchM({ target: v })} />}
-            {selMarker.kind === 'travel' && (<>
-              <Num label="Hedef X" v={selMarker.toX ?? 0} on={(v) => patchM({ toX: v })} />
-              <Num label="Hedef Y" v={selMarker.toY ?? 0} on={(v) => patchM({ toY: v })} />
-            </>)}
-            <button onClick={() => { setDoc((d) => ({ ...d, markers: d.markers.filter((m) => m.id !== selId) })); setSelId(null); }}
+            <div style={{ fontWeight: 800, marginBottom: 8, fontSize: 12, color: selMarker.kind === 'fight' ? C.blood : selMarker.kind === 'travel' ? C.ok : C.ice }}>
+              {selMarker.kind === 'door' ? 'BİNA KAPISI' : selMarker.kind === 'fight' ? 'DÖVÜŞ PORTALI' : 'SEYAHAT PORTALI'}
+            </div>
+            <Txt label="Etiket (oyuncuya görünen ad)" v={selMarker.label} on={(v) => patchM({ label: v })} />
+
+            {selMarker.kind === 'door' && (
+              <>
+                {/* Serbest metin kutusuydu — ne yazılacağı bilinemiyordu.
+                    Geçerli roller sabit, o yüzden açılır liste. */}
+                <label style={{ display: 'block', fontSize: 11, color: C.boneFaint, marginTop: 8 }}>
+                  Hangi panel açılsın?
+                  <select value={selMarker.target ?? ''} onChange={(e) => {
+                    const t = e.target.value;
+                    const r = DOOR_ROLES.find((x) => x.id === t);
+                    patchM({ target: t, ...(r && (!selMarker.label || selMarker.label === 'door') ? { label: r.name } : {}) });
+                  }}
+                    style={{ width: '100%', marginTop: 4, padding: '7px 8px', borderRadius: 7, fontSize: 12,
+                      background: selMarker.target ? 'rgba(0,0,0,0.4)' : 'rgba(160,18,38,0.22)',
+                      border: `1px solid ${selMarker.target ? C.border : C.blood}`, color: C.bone, outline: 'none' }}>
+                    <option value="">— seçilmedi (kapı çalışmaz) —</option>
+                    {DOOR_ROLES.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                  </select>
+                </label>
+                {!selMarker.target && (
+                  <div style={{ fontSize: 10.5, color: '#ff8b9c', marginTop: 5 }}>
+                    Panel seçmezsen bu kapı oyunda hiçbir şey yapmaz.
+                  </div>
+                )}
+              </>
+            )}
+
+            {selMarker.kind === 'travel' && (
+              <>
+                <div style={{ fontSize: 11, color: C.boneFaint, marginTop: 8 }}>Işınlanacak nokta</div>
+                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                  <MiniNum label="X" v={selMarker.toX ?? 0} on={(v) => patchM({ toX: v })} />
+                  <MiniNum label="Y" v={selMarker.toY ?? 0} on={(v) => patchM({ toY: v })} />
+                </div>
+                <button onClick={() => setPickTarget(selMarker.id)}
+                  style={{ ...btn(pickTarget === selMarker.id ? C.candle : C.ice), width: '100%', marginTop: 7 }}>
+                  {pickTarget === selMarker.id ? 'Haritada bir yere tıkla…' : '📍 Hedefi haritadan seç'}
+                </button>
+                {!selMarker.toX && !selMarker.toY && (
+                  <div style={{ fontSize: 10.5, color: '#ff8b9c', marginTop: 5 }}>
+                    Hedef verilmedi — portal oyuncuyu hiçbir yere götürmez.
+                  </div>
+                )}
+              </>
+            )}
+
+            {selMarker.kind === 'fight' && (
+              <div style={{ fontSize: 11, color: C.boneDim, marginTop: 8, lineHeight: 1.6 }}>
+                Bölüm seçim paneli açar. Ek ayar gerekmez — haritada
+                <b style={{ color: C.bone }}> tek tane</b> olmalı.
+              </div>
+            )}
+
+            <button onClick={() => { setDoc((d) => ({ ...d, markers: d.markers.filter((m) => m.id !== selId) })); setSelId(null); markDirty(); }}
               style={{ ...btn(C.blood), width: '100%', marginTop: 8 }}>Sil</button>
           </div>
         )}
