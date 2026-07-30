@@ -163,22 +163,34 @@ export function image(src: string): HTMLImageElement | null {
  */
 export function drawFrame(
   ctx: CanvasRenderingContext2D, src: string, x: number, y: number,
-  opts: { frame?: number; fps?: number; t?: number; w?: number; h?: number; anchor?: 'topleft' | 'bottom' } = {},
+  opts: {
+    frame?: number; fps?: number; t?: number; w?: number; h?: number;
+    anchor?: 'topleft' | 'bottom';
+    /** IZGARA SAYFASI: sütun/satır sayısı ve kullanılacak hücre.
+     *  Editörde seçilen kare oyunda da aynı çıksın diye gerekli. */
+    cols?: number; rows?: number; row?: number; col?: number;
+  } = {},
 ): boolean {
   const img = get(src);
   if (!img) return false;
-  const frames = framesFromName(src);
-  const fw = Math.floor(img.width / frames);
-  const fh = img.height;
+
+  // Sütun sayısı: açıkça verilmişse o, yoksa dosya adındaki _stripN
+  const cols = Math.max(1, opts.cols ?? framesFromName(src));
+  const rows = Math.max(1, opts.rows ?? 1);
+  const fw = Math.floor(img.width / cols);
+  const fh = Math.floor(img.height / rows);
+
+  // Animasyon YALNIZCA fps verilmişse; yoksa sabit hücre çizilir.
+  // (Editörde fps 0 bırakılan nesneler oyunda da durgun kalmalı.)
+  const baseCol = opts.col ?? 0;
   const idx = opts.frame !== undefined
-    ? opts.frame % frames
-    : opts.fps && opts.t !== undefined ? Math.floor(opts.t * opts.fps) % frames : 0;
+    ? opts.frame % cols
+    : opts.fps && opts.t !== undefined ? Math.floor(opts.t * opts.fps) % cols : baseCol;
 
   const dw = opts.w ?? fw;
   const dh = opts.h ?? fh;
-  const dx = x;
   const dy = opts.anchor === 'bottom' ? y - dh : y;
-  ctx.drawImage(img, idx * fw, 0, fw, fh, Math.round(dx), Math.round(dy), dw, dh);
+  ctx.drawImage(img, idx * fw, (opts.row ?? 0) * fh, fw, fh, Math.round(x), Math.round(dy), dw, dh);
   return true;
 }
 

@@ -1,16 +1,15 @@
 'use client';
 // Koddaki dünyayı (world.ts) EDİTÖR BELGESİNE çevirir.
 //
-// Amaç: sıfır haritadan başlamamak. Mevcut köy — binalar, yollar, ağaçlar,
-// portallar, kapılar — editöre yüklenir, üstünde çalışılır.
+// Amaç: sıfır haritadan başlamamak. Kodda tanımlı köy — binalar, yollar,
+// ağaçlar, portallar, kapılar — editöre yüklenir, üstünde çalışılır.
 //
-// Tek yönlü: kod → editör. Editörde kaydettiğin harita artık tek doğru
-// kaynak olur; kodda tanımlı dünya sadece başlangıç şablonu.
+// Tek yönlü: kod → editör. Editörde kaydedilen harita artık tek doğru
+// kaynak; kodda tanımlı dünya sadece başlangıç şablonu.
 
 import {
   BUILDINGS, DECOR, MAP_H, MAP_W, PORTALS, TILE, buildWorld, tileSrcAt,
 } from './world';
-import { createHub } from './hub';
 import type { MapDoc, MapObject, MapMarker } from './mapData';
 
 export function importCodeWorld(): MapDoc {
@@ -36,26 +35,17 @@ export function importCodeWorld(): MapDoc {
 
   // binalar — çarpışma yüksekliği foot kutusundan gelir
   for (const b of BUILDINGS) {
-    objects.push({
-      id: id++, src: b.src, x: b.x, y: b.y, w: b.w, h: b.h,
-      solid: b.foot.h, fps: 0,
-    });
+    objects.push({ id: id++, src: b.src, x: b.x, y: b.y, w: b.w, h: b.h, solid: b.foot.h, fps: 0 });
   }
 
   // dekoratif binalar
   for (const d of DECOR) {
-    objects.push({
-      id: id++, src: d.src, x: d.x, y: d.y, w: d.w, h: d.h,
-      solid: d.solid ?? 0, fps: d.fps ?? 0,
-    });
+    objects.push({ id: id++, src: d.src, x: d.x, y: d.y, w: d.w, h: d.h, solid: d.solid ?? 0, fps: d.fps ?? 0 });
   }
 
   // serpiştirilmiş doğa (ağaç, çalı, kaya, fener…)
   for (const s of world.scatter) {
-    objects.push({
-      id: id++, src: s.src, x: s.x, y: s.y, w: s.w, h: s.h,
-      solid: 0, fps: s.fps ?? 0,
-    });
+    objects.push({ id: id++, src: s.src, x: s.x, y: s.y, w: s.w, h: s.h, solid: 0, fps: s.fps ?? 0 });
   }
 
   // portal görselleri de nesne olarak dursun ki editörde görünsünler
@@ -72,19 +62,17 @@ export function importCodeWorld(): MapDoc {
     markers.push({ id: id++, kind: 'door', x: b.doorX, y: b.doorY, label: b.name, target: b.id });
   }
   for (const p of PORTALS) {
-    markers.push({
-      id: id++, kind: p.kind, x: p.x + 48, y: p.y + 60, label: p.label,
-      toX: p.toX, toY: p.toY,
-    });
+    markers.push({ id: id++, kind: p.kind, x: p.x + 48, y: p.y + 60, label: p.label, toX: p.toX, toY: p.toY });
   }
 
-  const start = createHub();
+  // Şablon spawn'ı: köy meydanı. createHub artık MapWorld istediği için
+  // burada sabit veriliyor (henüz MapWorld yok).
   return {
     version: 1,
     name: 'Koddaki köy',
     terrain: { w: MAP_W, h: MAP_H, palette, data },
     objects,
     markers,
-    spawn: { x: Math.round(start.x), y: Math.round(start.y) },
+    spawn: { x: 45 * TILE, y: 34 * TILE },
   };
 }
