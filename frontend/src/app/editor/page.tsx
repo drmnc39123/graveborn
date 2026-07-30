@@ -29,6 +29,7 @@ export default function EditorPage() {
   const [snap, setSnap] = useState(true);
   const [zoom, setZoom] = useState(1);
   const [saved, setSaved] = useState(0);
+  const [screenGrid, setScreenGrid] = useState(true);
   // Geri alma yığını — her değişiklikten ÖNCE anlık görüntü alınır.
   const undoRef = useRef<MapDoc[]>([]);
   const pushUndo = useCallback(() => {
@@ -101,13 +102,31 @@ export default function EditorPage() {
         }
       }
 
-      // ızgara
+      // karo ızgarası
       ctx.strokeStyle = 'rgba(227,216,192,0.07)';
       ctx.lineWidth = 1 / zoom;
       ctx.beginPath();
       for (let x = 0; x <= terrain.w; x++) { ctx.moveTo(x * T, 0); ctx.lineTo(x * T, terrain.h * T); }
       for (let y = 0; y <= terrain.h; y++) { ctx.moveTo(0, y * T); ctx.lineTo(terrain.w * T, y * T); }
       ctx.stroke();
+
+      // EKRAN IZGARASI — harita kaç ekran ediyor, gözle ölç.
+      // "Her şeyi görünen alana mı dizeceğim?" sorusunun cevabı: hayır, ama
+      // önemli şeyler spawn'a 1-2 ekran mesafede kalmalı.
+      if (screenGrid) {
+        const CW = 1280, CH = 720;
+        ctx.strokeStyle = 'rgba(122,190,255,0.35)';
+        ctx.lineWidth = 2 / zoom;
+        ctx.beginPath();
+        for (let x = 0; x <= terrain.w * T; x += CW) { ctx.moveTo(x, 0); ctx.lineTo(x, terrain.h * T); }
+        for (let y = 0; y <= terrain.h * T; y += CH) { ctx.moveTo(0, y); ctx.lineTo(terrain.w * T, y); }
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(122,190,255,0.55)';
+        ctx.font = `${13 / zoom}px ui-sans-serif`;
+        let n = 1;
+        for (let y = 0; y < terrain.h * T; y += CH)
+          for (let x = 0; x < terrain.w * T; x += CW) ctx.fillText(`ekran ${n++}`, x + 8, y + 20);
+      }
 
       // nesneler — ayak Y'sine göre sıralı (oyundaki derinlikle aynı)
       const objs = [...doc.objects].sort((a, b) => a.y + a.h - (b.y + b.h));
@@ -167,7 +186,7 @@ export default function EditorPage() {
     };
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
-  }, [doc, selId, zoom, img]);
+  }, [doc, selId, zoom, img, screenGrid]);
 
   // ── girdi ──
   const toWorld = (e: React.MouseEvent) => {
@@ -367,6 +386,9 @@ export default function EditorPage() {
         <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
           <label style={{ fontSize: 11, color: C.boneDim, display: 'flex', alignItems: 'center', gap: 5 }}>
             <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Izgara
+          </label>
+          <label style={{ fontSize: 11, color: '#7abeff', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <input type="checkbox" checked={screenGrid} onChange={(e) => setScreenGrid(e.target.checked)} /> Ekranlar
           </label>
           <label style={{ fontSize: 11, color: C.boneDim, display: 'flex', alignItems: 'center', gap: 5 }}>
             Zoom
