@@ -6,7 +6,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Game } from '@/game/engine';
 import { render, resetEffects } from '@/game/render';
-import { MAX_CATCHUP, RUN, TICK } from '@/game/config';
+import { MAX_CATCHUP, TICK, type StageDef } from '@/game/config';
+
+// Günlük seed — aynı gün aynı bölüm herkeste aynı akışı verir (adil kıyas)
+function dailySeed() {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
 import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
 import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
@@ -28,7 +34,9 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ seedText }: { seedText: string }) {
+export function GameCanvas({ stage, onFinish }: { stage: StageDef; onFinish: (goldEarned: number, cleared: boolean) => void }) {
+  // Seed bölüme + güne bağlı: aynı gün aynı bölüm herkeste aynı akış
+  const seedText = `${stage.id}:${dailySeed()}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   const keysRef = useRef(new Set<string>());
@@ -48,7 +56,7 @@ export function GameCanvas({ seedText }: { seedText: string }) {
     if (!ctx) return;
 
     preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(seedFromString(seedText));
+    const game = new Game(seedFromString(seedText), stage);
     gameRef.current = game;
     resetEffects(); // önceki run'ın patlamaları yeni run'a taşmasın
 
@@ -314,7 +322,13 @@ export function GameCanvas({ seedText }: { seedText: string }) {
                 : `${hud.remaining} enemies left — the gold you earned is yours to keep`}
             </span>
           </div>
-          <button onClick={() => setRunId((n) => n + 1)} style={ctaButton(true)}>Rise Again</button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button onClick={() => setRunId((n) => n + 1)} style={ctaButton(true)}>Try Again</button>
+            <button onClick={() => onFinish(gameRef.current?.gold ?? 0, hud.phase === 'won')}
+              style={{ ...ctaButton(true), background: 'rgba(255,255,255,0.08)', color: C.bone }}>
+              Return to Village
+            </button>
+          </div>
         </div>
       )}
     </div>
