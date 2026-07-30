@@ -15,7 +15,10 @@ interface Hud {
   time: number; hp: number; maxHp: number; level: number;
   xp: number; xpNext: number; kills: number; gold: number;
   enemies: number; phase: string; fps: number;
-  offers: { id: string; name: string; desc: string }[];
+  offers: { id: string; name: string; desc: string; kind: string }[];
+  weapons: { name: string; level: number }[];
+  passives: { name: string; level: number }[];
+  revives: number;
 }
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
@@ -146,7 +149,10 @@ export function GameCanvas({ seedText }: { seedText: string }) {
           time: game.time, hp: game.hp, maxHp: game.stats.maxHp, level: game.level,
           xp: game.xp, xpNext: game.xpNext, kills: game.kills, gold: game.gold,
           enemies: game.enemies.length, phase: game.phase, fps,
-          offers: game.offers.map((o) => ({ id: o.id, name: o.name, desc: o.desc })),
+          offers: game.offers.map((o) => ({ id: o.id, name: o.name, desc: o.desc, kind: o.kind })),
+          weapons: game.weapons.map((w) => ({ name: w.def.name, level: w.level })),
+          passives: game.passives.map((p) => ({ name: p.def.name, level: p.level })),
+          revives: game.revives,
         });
       }
     };
@@ -192,7 +198,21 @@ export function GameCanvas({ seedText }: { seedText: string }) {
               <div style={{ height: '100%', width: `${hpPct}%`, background: `linear-gradient(90deg, ${C.blood}, ${C.bloodSoft})`, transition: 'width 90ms linear' }} />
             </div>
             <div style={{ marginTop: 6, fontSize: 11, color: C.boneFaint, fontVariantNumeric: 'tabular-nums' }}>
-              {Math.ceil(hud.hp)}/{hud.maxHp} HP · {hud.gold} gold · {hud.enemies} enemies · {hud.fps} fps
+              {Math.ceil(hud.hp)}/{Math.round(hud.maxHp)} HP · {Math.floor(hud.gold)} gold · {hud.enemies} enemies · {hud.fps} fps
+            </div>
+
+            {/* Taşınan build — oyuncu neye sahip olduğunu görmeli */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8, maxWidth: 300 }}>
+              {hud.weapons.map((w) => (
+                <span key={w.name} style={{ fontSize: 10, fontWeight: 800, color: C.candle, background: 'rgba(239,167,46,0.13)', border: `1px solid ${C.candle}44`, padding: '2px 6px', borderRadius: 6 }}>
+                  {w.name} <span style={{ opacity: 0.75 }}>L{w.level}</span>
+                </span>
+              ))}
+              {hud.passives.map((p) => (
+                <span key={p.name} style={{ fontSize: 10, fontWeight: 700, color: C.ice, background: 'rgba(138,151,163,0.12)', border: `1px solid ${C.ice}44`, padding: '2px 6px', borderRadius: 6 }}>
+                  {p.name} <span style={{ opacity: 0.75 }}>L{p.level}</span>
+                </span>
+              ))}
             </div>
           </div>
         </>
@@ -207,8 +227,16 @@ export function GameCanvas({ seedText }: { seedText: string }) {
               <button key={o.id} onClick={() => choose(o.id)}
                 style={{ ...glass(12), padding: '14px 16px', textAlign: 'left', cursor: 'pointer', color: C.bone, display: 'flex', alignItems: 'center', gap: 12 }}>
                 <span style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, background: 'rgba(239,167,46,0.16)', border: `1px solid ${C.candle}55`, color: C.candle, fontSize: 12, fontWeight: 900, display: 'grid', placeItems: 'center' }}>{i + 1}</span>
-                <span>
-                  <span style={{ display: 'block', fontWeight: 800, fontSize: 14.5 }}>{o.name}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, fontSize: 14.5 }}>{o.name}</span>
+                    {/* Silah mı pasif mi, yeni mi yükseltme mi — kararı hızlandırır */}
+                    <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, padding: '1px 5px', borderRadius: 4,
+                      color: o.kind.startsWith('weapon') ? C.candle : C.ice,
+                      background: o.kind.startsWith('weapon') ? 'rgba(239,167,46,0.14)' : 'rgba(138,151,163,0.14)' }}>
+                      {o.kind.endsWith('new') ? 'NEW' : 'UPGRADE'}
+                    </span>
+                  </span>
                   <span style={{ display: 'block', fontSize: 12, color: C.boneDim, marginTop: 2 }}>{o.desc}</span>
                 </span>
               </button>

@@ -312,7 +312,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {
   ctx.strokeStyle = 'rgba(239,167,46,0.16)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(g.px, g.py, PLAYER.pickupRadius * g.stats.magnetMul, 0, Math.PI * 2);
+  ctx.arc(g.px, g.py, PLAYER.pickupRadius * g.stats.magnet, 0, Math.PI * 2);
   ctx.stroke();
 
   // sprite varsa onu çiz; dokunulmazlık penceresinde yarı saydam yanıp söner

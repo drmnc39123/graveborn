@@ -8,7 +8,9 @@
 // test hiçbir şey ölçmediği hâlde "geçer". İlk sürümde tam bu tuzağa düşüldü.
 
 import { Game } from './engine.js';
-import { MAX_WEAPONS, SPAWN, TICK, WEAPONS } from './config.js';
+import {
+  COOLDOWN_FLOOR, MAX_PASSIVES, MAX_WEAPONS, PASSIVES, SPAWN, STAT_BASE, STAT_CAP, TICK, WEAPONS,
+} from './config.js';
 import { seedFromString } from './rng.js';
 
 const FAIL: string[] = [];
@@ -181,6 +183,67 @@ console.log(`     8 dk sonunda taşınan silahlar: ${acq.weapons.map((w) => `${w
 check('level-up birden fazla silah veriyor', acq.weapons.length >= 2, `${acq.weapons.length} silah`);
 check('silah slot tavanı aşılmıyor', acq.weapons.length <= MAX_WEAPONS, `${acq.weapons.length}/${MAX_WEAPONS}`);
 check('silah seviyesi tavani asmiyor', acq.weapons.every((w) => w.level <= w.def.maxLevel));
+
+// ── 9) Pasif item sistemi + VS istatistik kalibrasyonu ──
+console.log('\n[9] Pasifler ve istatistikler');
+{
+  const g = new Game(1);
+  g.setViewport(1280, 720);
+  const base = { ...g.stats };
+  check('taban istatistikler VS ile aynı',
+    base.might === 1 && base.armor === 0 && base.cooldown === 1 && base.amount === 0 && base.maxHp === 100,
+    `might ${base.might}, armor ${base.armor}, cd ${base.cooldown}, amount ${base.amount}, hp ${base.maxHp}`);
+
+  // her pasifi max seviyeye çıkar ve istatistiğe yansıyor mu bak
+  for (const def of PASSIVES.slice(0, 4)) {
+    const t = new Game(1);
+    t.setViewport(1280, 720);
+    (t as any).givePassive(def.id);
+    const p = t.passives.find((x) => x.def.id === def.id)!;
+    p.level = def.maxLevel;
+    (t as any).recomputeStats();
+    const before = STAT_BASE[def.stat];
+    const after = t.stats[def.stat];
+    const moved = def.stat === 'cooldown' ? after < before : after > before;
+    check(`${def.name} → ${def.stat} değişiyor`, moved, `${before} → ${after.toFixed(2)}`);
+  }
+
+  // tavanlar tutuyor mu — cooldown dibi ve amount tavanı
+  const capTest = new Game(1);
+  capTest.setViewport(1280, 720);
+  (capTest as any).passives = PASSIVES.map((def) => ({ def, level: def.maxLevel * 20 })); // absürt seviye
+  (capTest as any).recomputeStats();
+  check('cooldown %10 dibinin altına inmiyor', capTest.stats.cooldown >= COOLDOWN_FLOOR - 1e-9,
+    `${capTest.stats.cooldown.toFixed(3)}`);
+  check('amount tavanı (10) aşılmıyor', capTest.stats.amount <= STAT_CAP.amount!, `${capTest.stats.amount}`);
+  check('might tavanı (%1000) aşılmıyor', capTest.stats.might <= STAT_CAP.might!, `${capTest.stats.might}`);
+  check('armor tavanı (50) aşılmıyor', capTest.stats.armor <= STAT_CAP.armor!, `${capTest.stats.armor}`);
+}
+
+// Second Burial gerçekten diriltiyor mu — ölümü engellemeli
+{
+  const g = new Game(seedFromString('revive'));
+  g.setViewport(1280, 720);
+  (g as any).givePassive('burial');
+  g.setInput(0, 0);
+  let sawRevive = false;
+  for (let i = 0; i < Math.round(300 / TICK); i++) {
+    if (g.phase === 'levelup') g.choose(g.offers[0].id);
+    if (g.phase !== 'running') break;
+    g.step();
+    if (g.revives > 0) sawRevive = true;
+  }
+  check('Second Burial ölümü diriliş ile karşılıyor', sawRevive, `${g.revives} diriliş, faz: ${g.phase}`);
+}
+
+// Level-up gerçekten pasif de sunuyor mu (sadece silah döndürmüyor)
+{
+  const g = run(seedFromString('offers'), { seconds: 600, driver: 'flee', invincible: true });
+  console.log(`     10 dk: ${g.weapons.length} silah, ${g.passives.length} pasif`);
+  console.log(`     pasifler: ${g.passives.map((p) => `${p.def.name} L${p.level}`).join(', ') || '(yok)'}`);
+  check('pasif item toplanıyor', g.passives.length > 0, `${g.passives.length} pasif`);
+  check('pasif slot tavanı asilmiyor', g.passives.length <= MAX_PASSIVES, `${g.passives.length}/${MAX_PASSIVES}`);
+}
 
 console.log(`\n${FAIL.length === 0 ? '✅ TÜM TESTLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

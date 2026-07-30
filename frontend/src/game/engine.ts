@@ -8,8 +8,9 @@
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatial';
 import {
-  CONTACT_HIT_CD, ENEMIES, GEM, MAX_WEAPONS, PLAYER, RUN, SPAWN, TICK, UPGRADES, WEAPONS,
-  xpForLevel, type EnemyType, type WeaponDef,
+  CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, GEM, MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER,
+  RUN, SPAWN, STAT_BASE, STAT_CAP, TICK, WEAPONS,
+  xpForLevel, type EnemyType, type PassiveDef, type StatKey, type WeaponDef,
 } from './config';
 
 export interface Enemy {
@@ -45,7 +46,7 @@ export interface OwnedWeapon { def: WeaponDef; level: number; cd: number }
 
 /** Level-up'ta sunulan seçenek: yeni silah, silah yükseltmesi veya istatistik */
 export interface Offer {
-  kind: 'weapon-new' | 'weapon-up' | 'stat';
+  kind: 'weapon-new' | 'weapon-up' | 'passive-new' | 'passive-up';
   id: string;
   name: string;
   desc: string;
@@ -55,16 +56,11 @@ export interface Offer {
 
 export type Phase = 'running' | 'levelup' | 'dead' | 'won';
 
-export interface Stats {
-  damageMul: number;
-  cooldownMul: number;
-  projCount: number;
-  pierce: number;
-  speedMul: number;
-  magnetMul: number;
-  maxHp: number;
-  regen: number;
-}
+/** VS istatistik sistemi (CLONE-SPEC §1). Yüzdeler 1.0 = %100. */
+export type Stats = Record<StatKey, number>;
+
+/** Sahip olunan pasif item */
+export interface OwnedPassive { def: PassiveDef; level: number }
 
 export class Game {
   readonly seed: number;
@@ -89,16 +85,16 @@ export class Game {
   phase: Phase = 'running';
   kills = 0;
   gold = 0;
+  /** kaç kez dirilindi (Second Burial) — run özetinde raporlanır */
+  revives = 0;
 
-  // yükseltmeler — genel istatistikler (silahlara çarpan olarak uygulanır)
-  stats: Stats = {
-    damageMul: 1, cooldownMul: 1, projCount: 1, pierce: 0,
-    speedMul: 1, magnetMul: 1, maxHp: PLAYER.maxHp, regen: PLAYER.regenPerSec,
-  };
-  private taken = new Map<string, number>();
+  /** VS istatistikleri — pasif item'lardan türetilir, doğrudan yazılmaz */
+  stats: Stats = { ...STAT_BASE };
 
   /** Taşınan silahlar. Run başında Bone Shard ile başlanır. */
   weapons: OwnedWeapon[] = [];
+  /** Taşınan pasif item'lar — istatistikleri besler, evrimin ön koşulu */
+  passives: OwnedPassive[] = [];
   /** Yörünge silahlarının ortak açısı — tüm orb'lar birlikte döner */
   orbitAngle = 0;
 
@@ -145,23 +141,53 @@ export class Game {
     this.weapons.push({ def, level: 1, cd: 0 });
   }
 
-  /** Silahın o seviyedeki hasarı — genel damageMul da uygulanır */
+  private givePassive(id: string) {
+    const def = PASSIVES.find((p) => p.id === id);
+    if (!def || this.passives.length >= MAX_PASSIVES) return;
+    if (this.passives.some((p) => p.def.id === id)) return;
+    this.passives.push({ def, level: 1 });
+    this.recomputeStats();
+  }
+
+  /**
+   * İstatistikleri pasiflerden YENİDEN HESAPLA.
+   * Artımlı yazmak yerine türetmek kasıtlı: seviye/pasif değişince tek doğru
+   * kaynak var, kayan yuvarlama hatası birikmiyor ve tavanlar tek yerde uygulanıyor.
+   */
+  private recomputeStats() {
+    const s: Stats = { ...STAT_BASE };
+    for (const p of this.passives) {
+      const add = p.def.perLevel * p.level;
+      if (p.def.stat === 'cooldown') s.cooldown -= add;      // bekleme AZALIR
+      else if (p.def.stat === 'maxHp') s.maxHp = PLAYER.maxHp * (1 + add);
+      else s[p.def.stat] += add;
+    }
+    // VS tavanları
+    for (const k of Object.keys(STAT_CAP) as StatKey[]) {
+      const cap = STAT_CAP[k]!;
+      if (s[k] > cap) s[k] = cap;
+    }
+    if (s.cooldown < COOLDOWN_FLOOR) s.cooldown = COOLDOWN_FLOOR;
+    this.stats = s;
+    if (this.hp > s.maxHp) this.hp = s.maxHp;
+  }
+
+  /** Silahın o seviyedeki hasarı — Might çarpanı uygulanır */
   private wDamage(w: OwnedWeapon) {
-    return w.def.damage * Math.pow(w.def.dmgPerLevel, w.level - 1) * this.stats.damageMul;
+    return w.def.damage * Math.pow(w.def.dmgPerLevel, w.level - 1) * this.stats.might;
   }
-  /** Silahın o seviyedeki bekleme süresi */
+  /** Silahın o seviyedeki bekleme süresi — Cooldown istatistiği uygulanır */
   private wCooldown(w: OwnedWeapon) {
-    return w.def.cooldownSec * Math.pow(w.def.cdPerLevel, w.level - 1) * this.stats.cooldownMul;
+    return w.def.cooldownSec * Math.pow(w.def.cdPerLevel, w.level - 1) * this.stats.cooldown;
   }
-  /** Alan çarpanı (sweep/orbit/aura) */
+  /** Alan çarpanı (sweep/orbit/aura) — Area istatistiği uygulanır */
   private wArea(w: OwnedWeapon) {
-    const per = w.def.areaPerLevel ?? 1;
-    return Math.pow(per, w.level - 1);
+    return Math.pow(w.def.areaPerLevel ?? 1, w.level - 1) * this.stats.area;
   }
-  /** Adet (mermi/orb) — countLevels'ta geçilen her eşik +1 */
+  /** Adet (mermi/orb) — countLevels eşikleri + Amount istatistiği */
   private wCount(w: OwnedWeapon) {
     const base = 1 + (w.def.countLevels?.filter((l) => w.level >= l).length ?? 0);
-    return w.def.pattern === 'aimed' ? base + (this.stats.projCount - 1) : base;
+    return base + this.stats.amount;
   }
 
   setInput(x: number, y: number) {
@@ -192,14 +218,14 @@ export class Game {
     this.collidePlayer(dt);
     this.updateGems(dt);
 
-    if (this.stats.regen > 0 && this.hp > 0) {
-      this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.regen * dt);
+    if (this.stats.recovery > 0 && this.hp > 0) {
+      this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.recovery * dt);
     }
     if (this.iframe > 0) this.iframe -= dt;
   }
 
   private movePlayer(dt: number) {
-    const sp = PLAYER.speed * this.stats.speedMul;
+    const sp = PLAYER.speed * this.stats.moveSpeed;
     this.px += this.inx * sp * dt;
     this.py += this.iny * sp * dt;
     this.animT += dt;
@@ -230,11 +256,14 @@ export class Game {
   }
 
   private spawn(dt: number) {
-    const rate = SPAWN.base + this.minute * SPAWN.perMinute;
+    // Curse (Cursed Skull): düşman hızı, canı, adedi ve sıklığı artar — VS ile aynı.
+    // Riskli ama daha çok XP/gold demek; bilinçli bir "zorluğu satın al" seçeneği.
+    const curse = this.stats.curse;
+    const rate = (SPAWN.base + this.minute * SPAWN.perMinute) * curse;
     this.spawnAcc += rate * dt;
     const types = this.availableTypes();
-    const hpScale = 1 + this.minute * SPAWN.hpScalePerMinute;
-    const spScale = 1 + this.minute * SPAWN.speedScalePerMinute;
+    const hpScale = (1 + this.minute * SPAWN.hpScalePerMinute) * curse;
+    const spScale = (1 + this.minute * SPAWN.speedScalePerMinute) * curse;
 
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
@@ -326,7 +355,7 @@ export class Game {
     const def = w.def;
     const baseAng = Math.atan2(target.y - this.py, target.x - this.px);
     const n = this.wCount(w);
-    const spd = def.projectileSpeed ?? 450;
+    const spd = (def.projectileSpeed ?? 450) * this.stats.projSpeed; // Sinew Wrap
     for (let i = 0; i < n; i++) {
       const off = n === 1 ? 0 : (i - (n - 1) / 2) * (def.spreadRad ?? 0.16);
       const a = baseAng + off;
@@ -334,8 +363,8 @@ export class Game {
         x: this.px, y: this.py,
         vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
         damage: this.wDamage(w), radius: 5,
-        life: def.lifeSec ?? 1.5,
-        pierce: (def.pierce ?? 0) + this.stats.pierce,
+        life: (def.lifeSec ?? 1.5) * this.stats.duration, // Binding Sigil
+        pierce: def.pierce ?? 0,
       });
     }
   }
@@ -353,8 +382,8 @@ export class Game {
         x: this.px + (right ? wdt / 2 : -wdt / 2),
         y: this.py,
         w: wdt, h: hgt,
-        life: def.sweepLifeSec ?? 0.18,
-        maxLife: def.sweepLifeSec ?? 0.18,
+        life: (def.sweepLifeSec ?? 0.18) * this.stats.duration,
+        maxLife: (def.sweepLifeSec ?? 0.18) * this.stats.duration,
         damage: this.wDamage(w),
         facingRight: right,
         hit: new Set<Enemy>(),
@@ -474,7 +503,7 @@ export class Game {
 
   private killEnemy(e: Enemy) {
     this.kills += 1;
-    this.gold += 1;
+    this.gold += this.stats.greed; // Coin Mask
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
     // headless koşuda render boşaltmaz → tavan koy, sonsuz büyümesin
     if (this.deaths.length < 256) this.deaths.push({ x: e.x, y: e.y });
@@ -488,15 +517,29 @@ export class Game {
       const rr = PLAYER.radius + e.radius;
       const dx = e.x - this.px, dy = e.y - this.py;
       if (dx * dx + dy * dy > rr * rr) continue;
-      this.hp -= e.damage;
+      // Armor düz azaltma (VS) — ama en az 1 hasar geçer, yoksa yüksek armor
+      // oyuncuyu tamamen dokunulmaz yapar ve run hiç bitmez.
+      const taken = Math.max(1, e.damage - this.stats.armor);
+      this.hp -= taken;
       this.iframe = PLAYER.iframeSec;
-      if (this.hp <= 0) { this.hp = 0; this.phase = 'dead'; }
+      if (this.hp <= 0) {
+        if (this.stats.revival > 0) {
+          // Second Burial — VS'teki gibi %50 canla dirilir, hak tükenir
+          this.stats.revival -= 1;
+          this.hp = this.stats.maxHp * 0.5;
+          this.iframe = 2.5; // dirilişten sonra nefes payı
+          this.revives += 1;
+        } else {
+          this.hp = 0;
+          this.phase = 'dead';
+        }
+      }
       return; // tek tick'te tek vuruş
     }
   }
 
   private updateGems(dt: number) {
-    const magnet = PLAYER.pickupRadius * this.stats.magnetMul;
+    const magnet = PLAYER.pickupRadius * this.stats.magnet;
     for (let i = this.gems.length - 1; i >= 0; i--) {
       const g = this.gems[i];
       g.life -= dt;
@@ -518,7 +561,7 @@ export class Game {
   }
 
   private addXp(amount: number) {
-    this.xp += amount;
+    this.xp += amount * this.stats.growth; // Grave Crown
     if (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.level += 1;
@@ -550,29 +593,36 @@ export class Game {
         pool.push({ kind: 'weapon-new', id: `w:${def.id}`, name: def.name, desc: def.desc });
       }
     }
-    // istatistikler
-    for (const u of UPGRADES) {
-      if ((this.taken.get(u.id) ?? 0) >= u.maxStack) continue;
-      pool.push({ kind: 'stat', id: u.id, name: u.name, desc: u.desc });
+    // sahip olunan ve max'a ulaşmamış pasifler
+    for (const p of this.passives) {
+      if (p.level >= p.def.maxLevel) continue;
+      pool.push({
+        kind: 'passive-up', id: `p:${p.def.id}`, name: p.def.name,
+        desc: `${p.def.desc}  (Lv ${p.level} → ${p.level + 1})`, level: p.level,
+      });
+    }
+    // slot varsa henüz alınmamış pasifler
+    if (this.passives.length < MAX_PASSIVES) {
+      for (const def of PASSIVES) {
+        if (this.passives.some((p) => p.def.id === def.id)) continue;
+        pool.push({ kind: 'passive-new', id: `p:${def.id}`, name: def.name, desc: def.desc });
+      }
     }
 
     const shuffled = this.rng.shuffle(pool);
-    // en az bir silah seçeneği garanti — build çeşitliliği istatistiklere boğulmasın
-    const weaponsFirst = shuffled.filter((o) => o.kind !== 'stat');
-    const rest = shuffled.filter((o) => o.kind === 'stat');
+    // En az bir SİLAH seçeneği garanti — yoksa oyuncu pasif yağmuruna tutulup
+    // tek silahla kalıyor ve build derinliği oluşmuyor.
+    const weaponOffers = shuffled.filter((o) => o.kind === 'weapon-up' || o.kind === 'weapon-new');
     const picked: Offer[] = [];
-    if (weaponsFirst.length) picked.push(weaponsFirst[0]);
+    if (weaponOffers.length) picked.push(weaponOffers[0]);
     for (const o of shuffled) {
       if (picked.length >= 3) break;
       if (picked.includes(o)) continue;
       picked.push(o);
     }
-    // havuz 3'ten azsa (her şey max) kalanı istatistikten doldur
-    for (const o of rest) {
-      if (picked.length >= 3) break;
-      if (!picked.includes(o)) picked.push(o);
-    }
-    this.offers = picked;
+    // KONUM YANLILIĞINI KIR: garantili silah hep 0. sırada kalırsa "hep ilkine
+    // basan" oyuncu ömür boyu pasif görmez. Garanti listede OLMAK, sırada değil.
+    this.offers = this.rng.shuffle(picked);
   }
 
   /** levelup fazında seçim uygula */
@@ -580,24 +630,30 @@ export class Game {
     if (this.phase !== 'levelup') return;
     const o = this.offers.find((x) => x.id === id);
     if (!o) return;
+    const key = id.slice(2); // "w:" / "p:" önekini at
 
-    if (o.kind === 'weapon-new') {
-      this.giveWeapon(id.slice(2));
-    } else if (o.kind === 'weapon-up') {
-      const w = this.weapons.find((x) => x.def.id === id.slice(2));
-      if (w && w.level < w.def.maxLevel) w.level += 1;
-    } else {
-      this.taken.set(id, (this.taken.get(id) ?? 0) + 1);
-      const s = this.stats;
-      switch (id) {
-        case 'dmg': s.damageMul *= 1.2; break;
-        case 'rate': s.cooldownMul *= 0.88; break;
-        case 'count': s.projCount += 1; break;
-        case 'pierce': s.pierce += 1; break;
-        case 'speed': s.speedMul *= 1.1; break;
-        case 'magnet': s.magnetMul *= 1.35; break;
-        case 'hp': s.maxHp += 20; this.hp = s.maxHp; break;
-        case 'regen': s.regen += 0.4; break;
+    switch (o.kind) {
+      case 'weapon-new':
+        this.giveWeapon(key);
+        break;
+      case 'weapon-up': {
+        const w = this.weapons.find((x) => x.def.id === key);
+        if (w && w.level < w.def.maxLevel) w.level += 1;
+        break;
+      }
+      case 'passive-new':
+        this.givePassive(key);
+        break;
+      case 'passive-up': {
+        const p = this.passives.find((x) => x.def.id === key);
+        if (p && p.level < p.def.maxLevel) {
+          p.level += 1;
+          // Max HP artışı anında iyileştirir (VS: Hollow Heart aldığında canın artar)
+          const before = this.stats.maxHp;
+          this.recomputeStats();
+          if (this.stats.maxHp > before) this.hp += this.stats.maxHp - before;
+        }
+        break;
       }
     }
     this.offers = [];

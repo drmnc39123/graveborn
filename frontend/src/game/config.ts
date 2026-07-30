@@ -172,26 +172,64 @@ export const GEM = {
   lifeSec: 45, // toplanmayan mücevhel bir süre sonra kaybolur (birikme = performans)
 } as const;
 
-/** Level-up'ta sunulan yükseltmeler. VS'nin "3 seçenekten 1" deseni. */
-export interface Upgrade {
+// ── PASİF ITEM'LAR ────────────────────────────────────────────────────
+// CLONE-SPEC.md §3'ün birebir uygulaması. Her pasif BİR istatistiği besler;
+// istatistik taban değerleri ve tavanları VS'ten alındı (CLONE-SPEC §1).
+export type StatKey =
+  | 'might' | 'armor' | 'maxHp' | 'recovery' | 'cooldown' | 'area'
+  | 'projSpeed' | 'duration' | 'amount' | 'moveSpeed' | 'magnet'
+  | 'luck' | 'growth' | 'greed' | 'curse' | 'revival';
+
+/** VS taban değerleri. Yüzdeler 1.0 = %100. */
+export const STAT_BASE: Record<StatKey, number> = {
+  might: 1, armor: 0, maxHp: PLAYER.maxHp, recovery: 0, cooldown: 1, area: 1,
+  projSpeed: 1, duration: 1, amount: 0, moveSpeed: 1, magnet: 1,
+  luck: 1, growth: 1, greed: 1, curse: 1, revival: 0,
+};
+
+/** VS tavanları. cooldown TABAN değil TAVAN sınırı (%10'un altına inemez). */
+export const STAT_CAP: Partial<Record<StatKey, number>> = {
+  might: 10,      // %1000
+  armor: 50,
+  area: 10,       // %1000
+  projSpeed: 5,   // %500
+  duration: 5,    // %500
+  amount: 10,
+};
+export const COOLDOWN_FLOOR = 0.10; // %10 — VS'in dibi
+
+export interface PassiveDef {
   id: string;
   name: string;
+  /** VS'teki karşılığı — referans için, oyuncuya gösterilmez */
+  vs: string;
+  stat: StatKey;
+  /** seviye başına artış. Yüzde istatistiklerde toplamsal (0.10 = +%10) */
+  perLevel: number;
+  maxLevel: number;
   desc: string;
-  /** kaç kez alınabilir */
-  maxStack: number;
 }
 
-// İsimler CLONE-SPEC.md'deki pasif item haritasıyla hizalı (Bloodmeal=Might,
-// Restless Hands=Cooldown, Echo Charm=Amount, Unquiet Step=Move Speed,
-// Soul Pull=Magnet, Stubborn Flesh=Max Health, Slow Knit=Recovery).
-// OYUNCU-YÜZÜ TÜM METİNLER İNGİLİZCE — kod yorumları Türkçe.
-export const UPGRADES: readonly Upgrade[] = [
-  { id: 'dmg', name: 'Bloodmeal', desc: '+20% damage', maxStack: 8 },
-  { id: 'rate', name: 'Restless Hands', desc: '-12% cooldown', maxStack: 8 },
-  { id: 'count', name: 'Echo Charm', desc: '+1 projectile', maxStack: 4 },
-  { id: 'pierce', name: 'Grave Iron', desc: '+1 pierce', maxStack: 3 },
-  { id: 'speed', name: 'Unquiet Step', desc: '+10% move speed', maxStack: 5 },
-  { id: 'magnet', name: 'Soul Pull', desc: '+35% pickup radius', maxStack: 4 },
-  { id: 'hp', name: 'Stubborn Flesh', desc: '+20 max health, full heal', maxStack: 5 },
-  { id: 'regen', name: 'Slow Knit', desc: '+0.4 HP/sec', maxStack: 4 },
+export const PASSIVES: readonly PassiveDef[] = [
+  { id: 'bloodmeal', name: 'Bloodmeal', vs: 'Spinach', stat: 'might', perLevel: 0.10, maxLevel: 5, desc: '+10% damage' },
+  { id: 'boneplate', name: 'Bone Plate', vs: 'Armor', stat: 'armor', perLevel: 1, maxLevel: 5, desc: '+1 armor' },
+  { id: 'flesh', name: 'Stubborn Flesh', vs: 'Hollow Heart', stat: 'maxHp', perLevel: 0.20, maxLevel: 5, desc: '+20% max health' },
+  { id: 'slowknit', name: 'Slow Knit', vs: 'Pummarola', stat: 'recovery', perLevel: 0.2, maxLevel: 5, desc: '+0.2 HP/sec' },
+  { id: 'hands', name: 'Restless Hands', vs: 'Empty Tome', stat: 'cooldown', perLevel: 0.08, maxLevel: 5, desc: '-8% cooldown' },
+  { id: 'tallow', name: 'Tallow Candle', vs: 'Candelabrador', stat: 'area', perLevel: 0.10, maxLevel: 5, desc: '+10% area' },
+  { id: 'sinew', name: 'Sinew Wrap', vs: 'Bracer', stat: 'projSpeed', perLevel: 0.10, maxLevel: 5, desc: '+10% projectile speed' },
+  { id: 'sigil', name: 'Binding Sigil', vs: 'Spellbinder', stat: 'duration', perLevel: 0.10, maxLevel: 5, desc: '+10% duration' },
+  { id: 'echo', name: 'Echo Charm', vs: 'Duplicator', stat: 'amount', perLevel: 1, maxLevel: 2, desc: '+1 projectile' },
+  { id: 'step', name: 'Unquiet Step', vs: 'Wings', stat: 'moveSpeed', perLevel: 0.10, maxLevel: 5, desc: '+10% move speed' },
+  { id: 'soulpull', name: 'Soul Pull', vs: 'Attractorb', stat: 'magnet', perLevel: 0.25, maxLevel: 5, desc: '+25% pickup radius' },
+  { id: 'luck', name: "Dead Man's Luck", vs: 'Clover', stat: 'luck', perLevel: 0.10, maxLevel: 5, desc: '+10% luck' },
+  { id: 'crown', name: 'Grave Crown', vs: 'Crown', stat: 'growth', perLevel: 0.08, maxLevel: 5, desc: '+8% experience' },
+  { id: 'coinmask', name: 'Coin Mask', vs: 'Stone Mask', stat: 'greed', perLevel: 0.10, maxLevel: 5, desc: '+10% gold' },
+  { id: 'skull', name: 'Cursed Skull', vs: "Skull O'Maniac", stat: 'curse', perLevel: 0.10, maxLevel: 5, desc: '+10% curse — deadlier, richer' },
+  { id: 'burial', name: 'Second Burial', vs: 'Tirajisú', stat: 'revival', perLevel: 1, maxLevel: 2, desc: '+1 revival' },
 ] as const;
+
+/** Aynı anda taşınabilecek pasif sayısı (VS: 6, silahlardan ayrı) */
+export const MAX_PASSIVES = 6;
+
+
