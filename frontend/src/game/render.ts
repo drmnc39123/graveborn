@@ -76,6 +76,7 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawOrbits(ctx, g);
   drawAuras(ctx, g);
   drawProjectiles(ctx, g);
+  drawEnemyShots(ctx, g);   // oyuncunun ÜSTÜNDE değil altında: karakteri örtmesin
   drawPlayer(ctx, g);
 
   ctx.restore();
@@ -361,6 +362,32 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
   }
   ctx.fill();
+}
+
+/**
+ * Düşman mermileri. Oyuncunun mermisinden AYRI ve KAN KIRMIZISI çizilir —
+ * hangi merminin sana zarar verdiğini yarım saniyede ayırt edebilmelisin.
+ * Halka + dolgu: koyu zeminde de parlak zeminde de okunur.
+ */
+function drawEnemyShots(ctx: CanvasRenderingContext2D, g: Game) {
+  if (!g.enemyShots.length) return;
+  ctx.fillStyle = C.blood;
+  ctx.beginPath();
+  for (let i = 0; i < g.enemyShots.length; i++) {
+    const s = g.enemyShots[i];
+    ctx.moveTo(s.x + s.radius, s.y);
+    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+  }
+  ctx.fill();
+  ctx.strokeStyle = C.bloodSoft;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < g.enemyShots.length; i++) {
+    const s = g.enemyShots[i];
+    ctx.moveTo(s.x + s.radius + 2, s.y);
+    ctx.arc(s.x, s.y, s.radius + 2, 0, Math.PI * 2);
+  }
+  ctx.stroke();
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {

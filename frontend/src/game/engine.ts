@@ -10,8 +10,8 @@ import { SpatialHash } from './spatial';
 import {
   CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
-  WEAPONS, descentStage, rareDropAmount, rareDropChance, weaponById, xpForLevel,
-  type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
+  WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, weaponById, xpForLevel,
+  type Behavior, type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
 } from './config';
 
 export interface Enemy {
@@ -28,6 +28,24 @@ export interface Enemy {
   contactCd: number;
   /** boss ise: ölünce sandık düşürür, HP barı çizilir */
   boss?: { label: string; evolutionChest: boolean };
+
+  // ── davranış durumu ──
+  behavior: Behavior;
+  /** menzillide ateş bekleme · hücumcuda faz sayacı */
+  atkCd: number;
+  /** hücumcu fazı: 0 yaklaş · 1 yükleniyor · 2 hücum · 3 nefeslen */
+  cState: 0 | 1 | 2 | 3;
+  /** hücumun KİLİTLENMİŞ yönü — fırladıktan sonra oyuncuyu takip etmez,
+   *  yoksa kaçınmak imkânsız olur ve telegraf anlamını yitirir */
+  cdx: number; cdy: number;
+  /** weave salınımının faz ofseti — spawn sayacından türetilir (RNG'ye dokunmaz) */
+  phase: number;
+}
+
+/** Düşman mermisi — oyuncuya zarar verir. Oyuncununkinden AYRI dizi. */
+export interface EnemyShot {
+  x: number; y: number; vx: number; vy: number;
+  damage: number; radius: number; life: number;
 }
 
 /** Boss'un düşürdüğü sandık — toplanınca evrim veya ödül */
@@ -134,6 +152,8 @@ export class Game {
   // varlıklar
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
+  /** düşman mermileri — render bunları da çizer */
+  enemyShots: EnemyShot[] = [];
   gems: Gem[] = [];
   hitZones: HitZone[] = [];
   chests: Chest[] = [];
@@ -307,6 +327,7 @@ export class Game {
     this.collideProjectiles();
     this.reapDead();          // TÜM hasar kaynaklarından sonra tek temizlik
     this.collidePlayer(dt);
+    this.updateEnemyShots(dt);
     this.updateGems(dt);
     this.updateChests();
 
@@ -411,8 +432,15 @@ export class Game {
         // animT KOZMETİK → rng'den ALINMAZ. Aksi hâlde bir görsel değişiklik
         // RNG akışını kaydırır ve aynı günlük seed başka bir run üretir.
         // Spawn sayacından türetiliyor: deterministik, çeşitli, RNG'ye dokunmuyor.
-        art: t.art, animT: (this.spawnCount++ * 0.37) % 2, facingRight: true,
+        art: t.art, animT: (this.spawnCount * 0.37) % 2, facingRight: true,
         contactCd: 0,
+        behavior: t.behavior ?? 'chase',
+        // Ateş/salınım fazları spawn sayacından türetiliyor: deterministik ve
+        // çeşitli, ama RNG akışına DOKUNMUYOR. rng'den alsaydık kozmetik bir
+        // ekleme aynı günlük seed'in başka bir run üretmesine yol açardı.
+        atkCd: BEHAVIOR.ranged.fireCd * (0.35 + ((this.spawnCount * 0.61) % 1) * 0.65),
+        cState: 0, cdx: 0, cdy: 0,
+        phase: (this.spawnCount++ * 1.13) % (Math.PI * 2),
       });
     }
   }
@@ -440,6 +468,9 @@ export class Game {
       speed: b.speed, damage: b.damage, radius: b.radius,
       xp: 400, color: '#a01226', hitFlash: 0,
       art: b.art, animT: 0, facingRight: true, contactCd: 0,
+      // Boss KOVALAR. Menzilli/hücumcu bir boss tek başına sahnedeyken
+      // mesafe tutarsa bölüm finali sonsuza kadar uzar.
+      behavior: 'chase', atkCd: 0, cState: 0, cdx: 0, cdy: 0, phase: 0,
       boss: { label: b.label, evolutionChest: true },
     });
     this.events.add('boss');
@@ -526,14 +557,127 @@ export class Game {
       const dx = this.px - e.x;
       const dy = this.py - e.y;
       const d = Math.hypot(dx, dy) || 1;
+      const nx = dx / d, ny = dy / d;
       const sp = e.boss ? e.speed : Math.max(e.speed, huntFloor);
-      e.x += (dx / d) * sp * dt;
-      e.y += (dy / d) * sp * dt;
+
+      // AV MODU davranışı EZER: son 8 düşman kaldığında herkes kovalar.
+      // Menzilli/hücumcu bir düşman mesafe tutmaya devam ederse bölüm
+      // kilitlenir; yakınsama garantisi her şeyin üstünde.
+      const bh: Behavior = huntFloor > 0 ? 'chase' : e.behavior;
+
+      switch (bh) {
+        case 'ranged': this.moveRanged(e, dt, nx, ny, d, sp); break;
+        case 'charger': this.moveCharger(e, dt, nx, ny, d, sp); break;
+        case 'weave': {
+          // İleri gitmeye devam eder ama yanal salınır → nişanlı mermiler ıskalar
+          const s = Math.sin(this.time * BEHAVIOR.weave.freq + e.phase);
+          e.x += (nx + -ny * s * BEHAVIOR.weave.amp) * sp * dt;
+          e.y += (ny + nx * s * BEHAVIOR.weave.amp) * sp * dt;
+          break;
+        }
+        default:
+          e.x += nx * sp * dt;
+          e.y += ny * sp * dt;
+      }
+
       e.animT += dt;
       if (dx > 0.5) e.facingRight = true;
       else if (dx < -0.5) e.facingRight = false;
       if (e.hitFlash > 0) e.hitFlash -= dt;
       if (e.contactCd > 0) e.contactCd -= dt;
+    }
+  }
+
+  /** Menzilli: tercih ettiği mesafeyi korur, arada ok atar. */
+  private moveRanged(e: Enemy, dt: number, nx: number, ny: number, d: number, sp: number) {
+    const R = BEHAVIOR.ranged;
+    if (d > R.prefer + R.band) {
+      e.x += nx * sp * dt;
+      e.y += ny * sp * dt;
+    } else if (d < R.prefer - R.band) {
+      // geri çekil — ürkek, tam hızda değil
+      e.x -= nx * sp * R.retreatMul * dt;
+      e.y -= ny * sp * R.retreatMul * dt;
+    }
+    // ölü bantta durur ve nişan alır
+
+    e.atkCd -= dt;
+    // Tavan: derin inişte sahnede 400 düşman olabilir, hepsi okçuysa saniyede
+    // ~190 ok doğar. Okunabilirlik de fps de çöker. Bekleme yine işler, sadece
+    // atış düşmez — yani "ateş edemiyor" hissi vermeden yoğunluk sınırlanır.
+    if (e.atkCd <= 0 && d < R.prefer + R.band * 3 && this.enemyShots.length < R.maxAlive) {
+      e.atkCd = R.fireCd;
+      this.enemyShots.push({
+        x: e.x, y: e.y,
+        vx: nx * R.shotSpeed, vy: ny * R.shotSpeed,
+        damage: e.damage * R.shotDamageMul,
+        radius: R.shotRadius,
+        life: R.shotLifeSec,
+      });
+      this.events.add('eshot');
+    }
+  }
+
+  /**
+   * Hücumcu: yaklaş → YÜKLEN (dur, telegraf) → fırla → nefeslen.
+   * Yön yüklenme BİTİNCE kilitlenir; hücum sırasında oyuncuyu takip etmez,
+   * yoksa telegrafın anlamı kalmaz ve kaçınmak imkânsız olur.
+   */
+  private moveCharger(e: Enemy, dt: number, nx: number, ny: number, d: number, sp: number) {
+    const K = BEHAVIOR.charger;
+    switch (e.cState) {
+      case 0: // yaklaş
+        e.x += nx * sp * dt;
+        e.y += ny * sp * dt;
+        if (d < K.trigger) { e.cState = 1; e.atkCd = K.windupSec; }
+        break;
+      case 1: // yükleniyor — yerinde durur, oyuncuya kaçma penceresi
+        e.atkCd -= dt;
+        if (e.atkCd <= 0) {
+          e.cState = 2;
+          e.atkCd = K.dashSec;
+          e.cdx = nx; e.cdy = ny;   // yön ŞİMDİ kilitlenir
+          this.events.add('charge');
+        }
+        break;
+      case 2: // hücum
+        e.x += e.cdx * sp * K.dashMul * dt;
+        e.y += e.cdy * sp * K.dashMul * dt;
+        e.atkCd -= dt;
+        if (e.atkCd <= 0) { e.cState = 3; e.atkCd = K.recoverSec; }
+        break;
+      default: // nefeslen — yavaş yaklaşır, tekrar yüklenmeden önce açık verir
+        e.x += nx * sp * K.recoverMul * dt;
+        e.y += ny * sp * K.recoverMul * dt;
+        e.atkCd -= dt;
+        if (e.atkCd <= 0) e.cState = 0;
+    }
+  }
+
+  /** Düşman mermileri — uçur, oyuncuya çarpanı işle, süresi dolanı at */
+  private updateEnemyShots(dt: number) {
+    const pr = PLAYER.radius;
+    for (let i = this.enemyShots.length - 1; i >= 0; i--) {
+      const s = this.enemyShots[i];
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      s.life -= dt;
+
+      const dx = s.x - this.px, dy = s.y - this.py;
+      const rr = s.radius + pr;
+      if (dx * dx + dy * dy <= rr * rr) {
+        // Dokunulmazlık penceresindeyken mermi SÖNMEZ, sadece geçer —
+        // yoksa iframe boyunca gelen atışlar bedava emiliyor olurdu.
+        if (this.iframe <= 0) {
+          const taken = Math.max(1, s.damage - this.stats.armor);
+          this.hp -= taken;
+          this.iframe = PLAYER.iframeSec;
+          this.events.add('hurt');
+          this.swapRemove(this.enemyShots, i);
+          continue;
+        }
+      }
+      if (s.life <= 0) this.swapRemove(this.enemyShots, i);
     }
   }
 

@@ -413,6 +413,18 @@ export const MAX_WEAPONS = 6;
 /** Alan hasarı (aura/orbit) aynı düşmana en sık bu aralıkla vurur */
 export const CONTACT_HIT_CD = 0.42;
 
+/**
+ * Düşman davranışı. Şimdiye kadar HEPSİ 'chase' idi — 16 farklı sprite ama tek
+ * bir hareket: "oyuncuya doğru yürü". Sürü ne kadar kalabalıklaşırsa
+ * kalabalıklaşsın oyuncunun verdiği karar değişmiyordu.
+ *
+ * ⚠️ BÖLÜM YAKINSAMA GARANTİSİ: son 8 düşman kaldığında motor davranışı
+ * ZORLA 'chase'e çevirir. Yoksa menzilli/hücumcu bir düşman sonsuza kadar
+ * mesafe tutup bölümü kilitleyebilir (bu tuzağa bir kez düşüldü: Ossuary
+ * Halls 14 düşmanla 25 dakika sürdü ve hiç bitmedi).
+ */
+export type Behavior = 'chase' | 'weave' | 'ranged' | 'charger';
+
 export interface EnemyType {
   id: string;
   hp: number;
@@ -425,7 +437,45 @@ export interface EnemyType {
   fromMinute: number;
   /** sprites.ts ENEMY_ART anahtarı. Yoksa/yüklenmezse renkli daireye düşer. */
   art?: string;
+  /** hareket kalıbı — yazılmazsa 'chase' */
+  behavior?: Behavior;
 }
+
+/** Davranış ayarları — tek yerde, motorda gömülü sayı yok. */
+export const BEHAVIOR = {
+  weave: {
+    /** yanal salınımın genliği (px/sn) ve frekansı (rad/sn) */
+    amp: 0.55,
+    freq: 3.4,
+  },
+  ranged: {
+    /** bu mesafeyi korumaya çalışır: yakınsa geri çekilir, uzaksa yaklaşır */
+    prefer: 250,
+    /** ölü bant — sürekli ileri geri titrememesi için */
+    band: 55,
+    /** geri çekilirken hız çarpanı (ürkek görünsün) */
+    retreatMul: 0.8,
+    fireCd: 2.1,
+    shotSpeed: 210,
+    shotRadius: 5,
+    /** temas hasarının bu oranı kadar vurur */
+    shotDamageMul: 0.75,
+    shotLifeSec: 3.2,
+    /** sahnedeki düşman mermisi tavanı — okunabilirlik + fps emniyeti */
+    maxAlive: 90,
+  },
+  charger: {
+    /** bu mesafeye girince yüklenmeye başlar */
+    trigger: 230,
+    /** yüklenme süresi — oyuncuya kaçma penceresi verir (telegraf) */
+    windupSec: 0.62,
+    dashSec: 0.42,
+    dashMul: 3.4,
+    /** hücum sonrası nefeslenme */
+    recoverSec: 0.95,
+    recoverMul: 0.45,
+  },
+} as const;
 
 // Renkler theme.ts paletinden — MOR YOK
 export const ENEMIES: readonly EnemyType[] = [
@@ -449,11 +499,15 @@ export const ENEMIES: readonly EnemyType[] = [
   // ── GEÇ KAMPANYA / DERİN İNİŞ SÜRÜSÜ ──
   // MutterPixel undead + vermin. Topdown canavarlar önden bakan çizimler;
   // bunlar yandan. Silüet farkı, geç bölümlerin "aynı sürü" hissini kırıyor.
-  { id: 'rat', hp: 34, speed: 74, damage: 8, radius: 9, xp: 3, color: '#b8ae98', fromMinute: 3, art: 'rat_small' },
-  { id: 'dire_rat', hp: 70, speed: 62, damage: 13, radius: 12, xp: 6, color: '#8a97a3', fromMinute: 6, art: 'rat_large' },
+  // Fareler kıvrılarak koşar: nişanlı mermiler ıskalar, sürü "duvar" olmaz.
+  { id: 'rat', hp: 34, speed: 74, damage: 8, radius: 9, xp: 3, color: '#b8ae98', fromMinute: 3, art: 'rat_small', behavior: 'weave' },
+  { id: 'dire_rat', hp: 70, speed: 62, damage: 13, radius: 12, xp: 6, color: '#8a97a3', fromMinute: 6, art: 'rat_large', behavior: 'weave' },
   { id: 'bone_thrall', hp: 130, speed: 43, damage: 16, radius: 13, xp: 10, color: '#ddd3bb', fromMinute: 9, art: 'skel_basic' },
-  { id: 'bone_archer', hp: 150, speed: 40, damage: 19, radius: 13, xp: 12, color: '#e3d8c0', fromMinute: 11, art: 'bone_archer' },
-  { id: 'grave_knight', hp: 320, speed: 34, damage: 26, radius: 16, xp: 20, color: '#8a97a3', fromMinute: 14, art: 'skel_armored' },
+  // MENZİLLİ: mesafe tutar ve ok atar. Oyuncuyu "sürüden kaç" yerine
+  // "atışı da savuştur" kararına zorlayan ilk düşman.
+  { id: 'bone_archer', hp: 150, speed: 40, damage: 19, radius: 13, xp: 12, color: '#e3d8c0', fromMinute: 11, art: 'bone_archer', behavior: 'ranged' },
+  // HÜCUMCU: yaklaşır, durur (telegraf), sonra fırlar. Tehlike ani ve okunabilir.
+  { id: 'grave_knight', hp: 320, speed: 34, damage: 26, radius: 16, xp: 20, color: '#8a97a3', fromMinute: 14, art: 'skel_armored', behavior: 'charger' },
 ] as const;
 
 /** DENGE NOTU: ilk değerler (base 2.4 / perMinute 1.7 / cap 620 / hp +%34) ile

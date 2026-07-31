@@ -139,6 +139,98 @@ console.log('\n[2B] Veri bütünlüğü');
   check('sahne tavanı perf sınırında', STAGES.every((s) => s.maxAlive <= 420));
 }
 
+// ── 2C) DÜŞMAN DAVRANIŞLARI ──
+// Davranışlar sessizce bozulur: bir düşman "menzilli" yazar ama yine kovalarsa
+// hiçbir hata çıkmaz, sadece oyun sıkıcı olur. Her kalıp ÖLÇÜLEREK doğrulanıyor.
+console.log('\n[2C] Düşman davranışları');
+{
+  /** Tek bir düşmanı elle koyup n saniye simüle et, ölçümleri döndür */
+  const probe = (behavior: string, dist: number, seconds: number) => {
+    const g = new Game(seedFromString(`bh-${behavior}`), STAGES[0]);
+    g.setViewport(1280, 720);
+    g.setInput(0, 0);
+    const e = ENEMIES.find((x) => (x.behavior ?? 'chase') === behavior)!;
+    const mk = () => {
+      (g as any).enemies.length = 0;
+      (g as any).enemies.push({
+        x: g.px + dist, y: g.py, hp: 1e9, maxHp: 1e9,
+        speed: e.speed, damage: e.damage, radius: e.radius, xp: 1,
+        color: e.color, hitFlash: 0, art: e.art, animT: 0, facingRight: true,
+        contactCd: 0, behavior: e.behavior ?? 'chase',
+        atkCd: 0.05, cState: 0, cdx: 0, cdy: 0, phase: 0,
+      });
+    };
+    mk();
+    let minD = Infinity, maxD = 0, maxStep = 0, lateral = 0;
+    let px = (g as any).enemies[0].x, py = (g as any).enemies[0].y;
+    for (let i = 0; i < Math.round(seconds / TICK); i++) {
+      // Havuz boşalıp "av modu" devreye girmesin: sahnede hep düşman kalsın
+      (g as any).stage.toSpawn = 999;
+      // ⚠️ Canı BURADA doldurma: ilk sürümde her tick doldurulunca menzillinin
+      // verdiği hasar silindi ve test "ok atmıyor" sandı. Temas hasarı zaten
+      // çalışmıyor (collidePlayer çağrılmıyor), tek hasar kaynağı ok.
+      (g as any).moveEnemies(TICK);
+      (g as any).updateEnemyShots(TICK);
+      (g as any).time += TICK;
+      const en = (g as any).enemies[0];
+      const d = Math.hypot(en.x - g.px, en.y - g.py);
+      if (d < minD) minD = d;
+      if (d > maxD) maxD = d;
+      const step = Math.hypot(en.x - px, en.y - py) / TICK;
+      if (step > maxStep) maxStep = step;
+      lateral += Math.abs(en.y - g.py);
+      px = en.x; py = en.y;
+    }
+    return { minD, maxD, maxStep, lateral: lateral / Math.round(seconds / TICK), shots: (g as any).enemyShots.length, speed: e.speed, hp: g.hp, maxHp: g.stats.maxHp };
+  };
+
+  // MENZİLLİ: tercih mesafesinde durmalı, oyuncuya YAPIŞMAMALI, ok atmalı
+  const r = probe('ranged', 520, 8);
+  console.log(`     ranged  : mesafe ${r.minD.toFixed(0)}–${r.maxD.toFixed(0)} px, can ${Math.round(r.hp)}/${Math.round(r.maxHp)}`);
+  check('menzilli oyuncuya yapışmıyor', r.minD > 120, `en yakın ${r.minD.toFixed(0)} px`);
+  check('menzilli tercih mesafesine yaklaşıyor', r.minD < 520, `${r.minD.toFixed(0)} < 520`);
+  check('menzilli oyuncuya HASAR veriyor', r.hp < r.maxHp, `${Math.round(r.hp)}/${Math.round(r.maxHp)}`);
+
+  // HÜCUMCU: normal hızından belirgin daha hızlı bir atılım yapmalı
+  const c = probe('charger', 400, 8);
+  console.log(`     charger : tepe hız ${c.maxStep.toFixed(0)} px/sn (taban ${c.speed})`);
+  check('hücumcu fırlıyor (taban hızın çok üstünde)', c.maxStep > c.speed * 2.5,
+    `${c.maxStep.toFixed(0)} > ${(c.speed * 2.5).toFixed(0)}`);
+  check('hücum sonsuz değil, mesafe tekrar açılıyor', c.maxD > c.minD + 40,
+    `${c.minD.toFixed(0)}–${c.maxD.toFixed(0)}`);
+
+  // WEAVE: düz gelmez, yanal sapma yapar
+  const w = probe('weave', 400, 6);
+  const straight = probe('chase', 400, 6);
+  console.log(`     weave   : ortalama yanal sapma ${w.lateral.toFixed(1)} px (düz kovalayan ${straight.lateral.toFixed(1)})`);
+  check('weave yanal salınım yapıyor', w.lateral > straight.lateral + 5,
+    `${w.lateral.toFixed(1)} > ${straight.lateral.toFixed(1)}`);
+
+  // YAKINSAMA GARANTİSİ: son düşmanlar kaldığında davranış EZİLİR ve kovalar.
+  // Bu olmadan menzilli bir düşman bölümü sonsuza kadar kilitleyebilir.
+  {
+    const g = new Game(seedFromString('converge'), STAGES[0]);
+    g.setViewport(1280, 720);
+    g.setInput(0, 0);
+    const e = ENEMIES.find((x) => x.behavior === 'ranged')!;
+    (g as any).stage.toSpawn = 0;   // havuz bitti → av modu
+    (g as any).enemies.push({
+      x: g.px + 600, y: g.py, hp: 1e9, maxHp: 1e9,
+      speed: e.speed, damage: 0, radius: e.radius, xp: 1,
+      color: e.color, hitFlash: 0, animT: 0, facingRight: true,
+      contactCd: 0, behavior: 'ranged', atkCd: 99, cState: 0, cdx: 0, cdy: 0, phase: 0,
+    });
+    for (let i = 0; i < Math.round(20 / TICK); i++) (g as any).moveEnemies(TICK);
+    const d = Math.hypot((g as any).enemies[0].x - g.px, (g as any).enemies[0].y - g.py);
+    check('son düşman kalınca MENZİLLİ de kovalıyor (bölüm kilitlenmez)', d < 60,
+      `mesafe ${d.toFixed(0)} px`);
+  }
+
+  // Boss davranışı her zaman chase olmalı — mesafe tutan boss finali uzatır
+  const bossDefs = STAGES.filter((s) => s.boss);
+  check('bölüm boss\'ları tanımlı', bossDefs.length > 0, `${bossDefs.length} boss`);
+}
+
 // ── 3) BÖLÜM SİSTEMİ: sabit düşman havuzu, bitirilebilirlik ──
 // Sonsuz koşu değil artık — her bölümde TAM OLARAK enemyCount düşman var.
 console.log('\n[3] Bölüm sistemi');

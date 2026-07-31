@@ -6,7 +6,8 @@
 // KRİTİK: kısma (throttle) olmadan bu modül oyunu kilitler. Saniyede 200 ölüm
 // = 200 oscillator = ses çamuru + CPU patlaması. Her sesin kendi minimum aralığı var.
 
-type Voice = 'hit' | 'kill' | 'gem' | 'levelup' | 'evolve' | 'boss' | 'hurt' | 'chest';
+type Voice = 'hit' | 'kill' | 'gem' | 'levelup' | 'evolve' | 'boss' | 'hurt' | 'chest'
+  | 'coin' | 'depth' | 'eshot' | 'charge';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -18,6 +19,12 @@ const lastPlayed: Record<string, number> = {};
 /** Aynı sesin iki çalınışı arasındaki minimum süre (ms) */
 const THROTTLE: Record<Voice, number> = {
   hit: 45, kill: 55, gem: 70, levelup: 0, evolve: 0, boss: 0, hurt: 180, chest: 0,
+  // Nadir gold düşüşü zaten seyrek ama derinlikte sıklaşıyor — yine de kıs.
+  coin: 90,
+  depth: 0,
+  // Sahnede 40 okçu olabilir; kısmasız her atış duyulursa ses çamuru olur.
+  eshot: 110,
+  charge: 140,
 };
 
 function ensure(): AudioContext | null {
@@ -105,6 +112,13 @@ export function play(v: Voice) {
     case 'chest': [880, 1180, 1560].forEach((f, i) => tone(f, 0.12, 'sine', 0.11, undefined, i * 0.05)); break;
     case 'levelup': [520, 660, 780, 1040].forEach((f, i) => tone(f, 0.14, 'square', 0.10, undefined, i * 0.055)); break;
     case 'boss':  tone(70, 0.9, 'sawtooth', 0.24, 42); noise(0.7, 0.14, 320); break;
+    case 'coin':  tone(1320, 0.07, 'sine', 0.09, 1980); tone(1980, 0.06, 'sine', 0.05, undefined, 0.05); break;
+    // Derinlik geçişi: aşağı inen iki nota — "daha derine" duygusu
+    case 'depth': [330, 262, 196].forEach((f, i) => tone(f, 0.34, 'triangle', 0.13, undefined, i * 0.11)); break;
+    // Düşman atışı KURU ve ALÇAK; oyuncunun 'hit' sesiyle karışmasın
+    case 'eshot': tone(300, 0.07, 'square', 0.055, 200); break;
+    // Hücum telegrafı: yükselen uğultu — duyunca kaçmalısın
+    case 'charge': tone(120, 0.3, 'sawtooth', 0.12, 340); break;
     case 'evolve':
       // yükselen akor + parlama: run'ın en büyük anı, ses de öyle olmalı
       [392, 494, 587, 784, 988].forEach((f, i) => tone(f, 0.6, 'triangle', 0.13, undefined, i * 0.07));
