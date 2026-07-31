@@ -1,10 +1,12 @@
-import { BRAND, C, glass, candleGradientText, ctaButton } from '@/lib/theme';
+import Link from 'next/link';
+import { BRAND, C, FONT, glass, candleGradientText } from '@/lib/theme';
 
-// Faz 0 iskelet sayfası — kimlik/palet doğrulaması için. Faz 1'de yerini oyun girişi alacak.
+// Giriş sayfası. Tek işi oyuncuyu /play'e sokmak — eskiden buradaki CTA
+// hiçbir yere bağlı DEĞİLDİ ve site kör bir çıkmazdı.
 export default function Home() {
   return (
     <main style={{ maxWidth: 860, margin: '0 auto', padding: '72px 20px 56px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 44 }}>
+      <div style={{ textAlign: 'center', marginBottom: 40 }}>
         <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 3, color: C.blood, marginBottom: 10 }}>
           ON SOLANA · ${BRAND.ticker}
         </div>
@@ -12,31 +14,36 @@ export default function Home() {
           {BRAND.name}
         </h1>
         <p style={{ fontSize: 17, color: C.boneDim, margin: '0 0 8px' }}>
-          Survive the endless horde. Die. <span style={{ color: C.bone, fontWeight: 700 }}>Rise again stronger.</span>
+          Survive the horde. Die. <span style={{ color: C.bone, fontWeight: 700 }}>Rise again stronger.</span>
         </p>
-        <p style={{ fontSize: 13, color: C.boneFaint, margin: 0 }}>{BRAND.pitch}</p>
-        <div style={{ marginTop: 28 }}>
-          <button style={ctaButton(true)}>{BRAND.tagline}</button>
+        <p style={{ fontSize: 13, color: C.boneFaint, margin: 0 }}>
+          Clear a stage once for its reward — then descend forever.
+        </p>
+        <div style={{ marginTop: 30 }}>
+          {/* prefetch'li Link: <a href> tam sayfa yeniden yükler, oyun ağır */}
+          <Link href="/play" prefetch style={{
+            display: 'inline-block', padding: '14px 40px', borderRadius: 12,
+            fontWeight: 900, fontSize: 16, letterSpacing: 1.2, textDecoration: 'none',
+            color: '#1a0508', background: `linear-gradient(180deg, ${C.bloodSoft}, ${C.blood})`,
+            fontFamily: FONT.ui,
+          }}>
+            {BRAND.tagline.toUpperCase()}
+          </Link>
         </div>
       </div>
 
-      {/* Palet doğrulaması — mor olmadığını gözle kontrol etmek için */}
-      <div style={{ ...glass(16), padding: 22 }}>
-        <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: 1.4, color: C.boneFaint, marginBottom: 14 }}>
-          PALET
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-          {([
-            ['grave', C.grave], ['soil', C.soil], ['void', C.void],
-            ['bone', C.bone], ['blood', C.blood], ['candle', C.candle], ['ice', C.ice],
-          ] as const).map(([name, hex]) => (
-            <div key={name} style={{ width: 96 }}>
-              <div style={{ height: 52, borderRadius: 9, background: hex, border: `1px solid ${C.border}` }} />
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.bone, marginTop: 6 }}>{name}</div>
-              <div style={{ fontSize: 10, color: C.boneFaint, fontFamily: 'monospace' }}>{hex}</div>
-            </div>
-          ))}
-        </div>
+      <div style={{ ...glass(16), padding: 22, display: 'grid', gap: 16,
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        {([
+          ['THE CAMPAIGN', 'Five stages, each with a fixed horde and a one-time reward. Clear one to unlock the next.'],
+          ['THE DESCENT', 'Endless depth ladder beneath every cleared stage. Health never refills between depths — how deep you get is how well you played.'],
+          ['THE FORGE', 'Spend gold on permanent power. It carries into every run, even the ones you lose.'],
+        ] as const).map(([title, body]) => (
+          <div key={title}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2, color: C.blood, marginBottom: 6 }}>{title}</div>
+            <div style={{ fontSize: 13, color: C.boneDim, lineHeight: 1.6 }}>{body}</div>
+          </div>
+        ))}
       </div>
     </main>
   );

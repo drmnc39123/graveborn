@@ -60,6 +60,10 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
   const [hud, setHud] = useState<Hud | null>(null);
   const [runId, setRunId] = useState(0); // artırınca yeni run başlar
   const [muted, setMuted] = useState(false);
+  /** çıkış onayı açık mı — açıkken simülasyon DURUR (bkz. döngüdeki pausedRef) */
+  const [confirmExit, setConfirmExit] = useState(false);
+  const pausedRef = useRef(false);
+  pausedRef.current = confirmExit;
 
   const choose = useCallback((id: string) => {
     gameRef.current?.choose(id);
@@ -94,6 +98,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
+    setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
     const game = new Game(seedFromString(seedText), stage, permRef.current ?? {}, mode);
     gameRef.current = game;
@@ -129,6 +134,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
         const idx = Number(e.key) - 1;
         const o = game.offers[idx];
         if (o) game.choose(o.id);
+      }
+      // ESC = çıkış onayı (aç/kapa). Koşu sürerken oyuncunun kaçış yolu olmalı.
+      if (e.key === 'Escape' && game.phase === 'running') {
+        e.preventDefault();
+        setConfirmExit((v) => !v);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => keysRef.current.delete(e.key.toLowerCase());
@@ -183,6 +193,15 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
       if (k.has('w') || k.has('arrowup')) iy -= 1;
       if (k.has('s') || k.has('arrowdown')) iy += 1;
       if (stickRef.current.active) { ix = stickRef.current.dx; iy = stickRef.current.dy; }
+
+      // DURAKLAT: çıkış onayı açıkken simülasyon ilerlemez. Yoksa oyuncu
+      // menüyü açtığı anda sürünün ortasında ölür — menü ölüm tuzağı olamaz.
+      if (pausedRef.current) {
+        game.setInput(0, 0);
+        acc = 0;
+        render(ctx, game, cssW, cssH, dpr, 0);
+        return;
+      }
       game.setInput(ix, iy);
 
       acc += dt;
@@ -272,7 +291,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
                   {hud.remaining} <span style={{ fontSize: 11, color: C.boneDim }}>left</span>
                 </span>
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
                 <button
                   onClick={() => { const next = !isSoundEnabled(); setSoundEnabled(next); setMuted(!next); unlockAudio(); }}
@@ -282,6 +301,13 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
                     fontSize: 12, lineHeight: 1, padding: 0 }}>
                   {muted ? '🔇' : '🔊'}
                 </button>
+                {/* Koşudan çıkış — oyuncu bir run'a kilitlenmemeli */}
+                {hud.phase === 'running' && (
+                  <PixelButton variant="02A" scale={2} onClick={() => setConfirmExit(true)}
+                    style={{ pointerEvents: 'auto', minWidth: 76, fontSize: 10.5, fontWeight: 900, letterSpacing: 1 }}>
+                    EXIT
+                  </PixelButton>
+                )}
               </span>
             </div>
           </div>
@@ -369,6 +395,37 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
           <div style={{ fontSize: 40, fontWeight: 900, color: C.bone, textShadow: `0 0 26px ${C.blood}, 0 2px 0 ${C.void}` }}>
             DEPTH {hud.depth}
           </div>
+        </div>
+      )}
+
+      {/* ── ÇIKIŞ ONAYI ── */}
+      {/* Oyun DURUR (pausedRef). Kazanılanın ne olacağı açıkça yazılıyor:
+          "çıkarsam her şeyi kaybeder miyim?" sorusu ekranda cevaplanmalı. */}
+      {confirmExit && hud && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.88)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 3, color: C.boneFaint, marginBottom: 4 }}>PAUSED</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: C.bone, marginBottom: 10, textAlign: 'center' }}>
+            Leave the run?
+          </div>
+          <div style={{ ...glass(12), padding: '12px 16px', maxWidth: 380, marginBottom: 18, fontSize: 12.5, color: C.boneDim, lineHeight: 1.6, textAlign: 'center' }}>
+            {hud.mode === 'descent'
+              ? <>You keep every depth you cleared — <b style={{ color: C.candle }}>{hud.deepestCleared}</b> so far.
+                  Depth {hud.depth} is unfinished and pays nothing.</>
+              : <>The stage is unfinished, so its first-clear reward is <b style={{ color: C.bone }}>not</b> paid.</>}
+            <br />
+            <span style={{ color: C.candle }}>{Math.floor(hud.rareGold)} gold</span> found this run is yours either way.
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <PixelButton variant="01A" scale={2} onClick={() => setConfirmExit(false)}
+              style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
+              KEEP FIGHTING
+            </PixelButton>
+            <PixelButton variant="02A" scale={2} onClick={finish}
+              style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
+              LEAVE
+            </PixelButton>
+          </div>
+          <div style={{ marginTop: 12, fontSize: 11, color: C.boneFaint }}>Esc to resume</div>
         </div>
       )}
 

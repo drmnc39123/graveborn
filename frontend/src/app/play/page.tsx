@@ -24,6 +24,9 @@ type Screen = { kind: 'hub' } | { kind: 'stage'; stageId: number; mode: RunMode 
 /** Koşu sonu bildirimi — ödülün nereden geldiği oyuncuya AÇIKÇA gösterilir */
 type Payout = {
   mode: RunMode;
+  /** bu koşuda temizlenen en derin seviye — "hiç inemedin" ile "buraya zaten
+   *  inmiştin" ayrımı için gerekli; ikisi de 0 öder ama sebepleri farklı */
+  deepestCleared: number;
   progressGold: number;
   dropGold: number;
   paidRange: { from: number; to: number } | null;
@@ -45,7 +48,10 @@ export default function PlayPage() {
       const base = prev ?? loadProgress();
       const r = applyRunResult(base, run);
       saveProgress(r.progress);
-      setPayout({ mode: run.mode, progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange });
+      setPayout({
+        mode: run.mode, deepestCleared: run.deepestCleared,
+        progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
+      });
       return r.progress;
     });
     setScreen({ kind: 'hub' });
@@ -105,12 +111,16 @@ export default function PlayPage() {
               <Row
                 label={payout.paidRange
                   ? `New depths ${payout.paidRange.from + 1}–${payout.paidRange.to}`
-                  : payout.mode === 'descent' ? 'No new depths'
-                  : 'First clear'}
+                  : payout.mode === 'descent'
+                    ? (payout.deepestCleared === 0 ? 'No depth cleared' : 'No new depths')
+                    : 'First clear'}
                 value={payout.progressGold}
                 hint={payout.progressGold > 0 ? undefined
-                  : payout.mode === 'descent' ? 'you have been this deep before — go deeper'
-                  : 'already claimed — replay pays nothing'}
+                  : payout.mode === 'descent'
+                    ? (payout.deepestCleared === 0
+                        ? 'you left before clearing depth 1'
+                        : 'you have been this deep before — go deeper')
+                    : 'already claimed — replay pays nothing'}
               />
               <Row label="Rare finds" value={payout.dropGold} hint={payout.dropGold === 0 ? 'nothing dropped this run' : undefined} />
             </div>

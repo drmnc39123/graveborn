@@ -244,8 +244,14 @@ export function drawActor(
   const anim = art.anims[animName] ?? Object.values(art.anims)[0];
   if (!anim) return false;
 
+  // ⚠️ NEGATİF KARE İNDEKSİ: t ilk karede bir tık negatif gelebiliyor
+  // (dt = now - last, ilk ölçümde eksiye düşebiliyor). JS'te -1 % 8 = -1
+  // olduğu için indeks -1 oluyordu ve dizi animasyonlarında `idle_0.png`
+  // isteniyordu — her sayfa yüklemesinde bir 404 + ilk kare daireye düşüş.
   const raw = Math.floor(t * anim.fps);
-  const idx = anim.loop === false ? Math.min(raw, anim.frames - 1) : raw % anim.frames;
+  const idx = anim.loop === false
+    ? Math.max(0, Math.min(raw, anim.frames - 1))
+    : ((raw % anim.frames) + anim.frames) % anim.frames;
 
   let img: HTMLImageElement | null;
   let sx = 0, sy = 0, sw = 0, sh = 0;
