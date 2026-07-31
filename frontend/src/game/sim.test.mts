@@ -607,6 +607,46 @@ console.log('\n[8E] Karakterler');
   // pencerede kill saymak hasar-öncelikli karakteri yapısal olarak kayırır ve
   // tasarım tercihini denge hatası gibi gösterir. Kampanyanın gerçek sorusu:
   // BÖLÜMÜ BİTİREBİLİYOR MU, ve ne kadar sürede.
+  // ── BAŞLANGIÇ SİLAHI OKUNAKLI MI ──
+  // Oyun testinden gelen gerçek şikâyet: "bu hero ateş etmiyor."
+  // Water Priestess'e Litany (orbit) verilmişti; yörünge silahı ekranda
+  // hiçbir şey ATEŞLEMEZ, sadece halkaya DEĞEN düşmana vurur ve hareket eden
+  // oyuncunun ardında sürüklenen sürü halkaya hiç girmez.
+  //
+  // Bu yüzden başlangıç silahı SÜRÜCÜSÜ farklı: yeni oyuncu durup sürüyü
+  // üstüne almaz, SÜREKLİ HAREKET eder. `engagedInput` burada fazla iyimser
+  // olurdu (Litany orada 77 kill yapıyor ama oyuncu 13,8 sn'de 2 kill aldı).
+  console.log('     — başlangıç silahı okunaklılığı (ilk 30 sn, sürekli hareket) —');
+  {
+    const movingKills = (weaponId: string) => {
+      let total = 0;
+      for (const s of ['a', 'b', 'c', 'd', 'e']) {
+        const g = new Game(seedFromString(`start-${s}`), STAGES[0]);
+        g.setViewport(1280, 720);
+        g.weapons = [{ def: WEAPONS.find((w) => w.id === weaponId)!, level: 1, cd: 0 }];
+        for (let i = 0; i < Math.round(30 / TICK); i++) {
+          if (g.phase === 'levelup') g.choose(g.offers[0].id);
+          if (g.phase !== 'running') break;
+          g.hp = g.stats.maxHp;
+          const t = i * TICK;
+          g.setInput(Math.cos(t * 0.7), Math.sin(t * 0.7));   // hep hareket
+          g.step();
+        }
+        total += g.kills;
+      }
+      return total / 5;
+    };
+    const best = Math.max(...WEAPONS.map((w) => movingKills(w.id)));
+    const starters = HEROES.map((h) => ({ h, k: movingKills(h.weapon) }));
+    for (const s of starters) {
+      console.log(`       ${s.h.name.padEnd(20)} ${s.h.weapon.padEnd(10)} ${s.k.toFixed(1)} kill`);
+    }
+    const weak = starters.filter((s) => s.k < best * 0.4);
+    check('her başlangıç silahı hareket ederken de iş görüyor (en iyinin ≥%40\'ı)',
+      weak.length === 0,
+      weak.map((s) => `${s.h.name} ${s.k.toFixed(1)}`).join(', ') || `eşik ${(best * 0.4).toFixed(1)}`);
+  }
+
   //
   // ⚠️ ÇOK SEED ŞART. Tek seed'le ölçmek karakteri değil KELEBEK ETKİSİNİ
   // ölçüyor: teşhiste Ranger'ın üç istatistiği TEK TEK verildiğinde her

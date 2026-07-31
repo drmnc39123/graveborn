@@ -75,8 +75,14 @@ export const HEROES: readonly HeroDef[] = [
     id: 'priestess',
     name: 'Water Priestess',
     title: 'The Still Vigil',
-    weapon: 'litany',
-    blurb: 'Slow to kill, hard to kill. Pages circle you while your wounds close.',
+    // ⚠️ Önce Litany (orbit) verilmişti — YANLIŞ SEÇİMDİ. Yörünge silahı
+    // ekranda hiçbir şey ATEŞLEMEZ; sadece 78 px'lik halkaya DEĞEN düşmana
+    // vurur. Hareket eden oyuncunun ardında sürüklenen düşmanlar halkaya
+    // hiç girmiyordu: oyun testinde 13,8 saniyede 2 kill, ölçümde hareket
+    // eden oyuncu için 30 sn'de 9 kill (en iyi silah 38).
+    // Başlangıç silahı GÖRÜNÜR ve KENDİ HEDEFLEYEN olmalı.
+    weapon: 'lightning',
+    blurb: 'Slow to kill, hard to kill. Lightning finds the dead for you while your wounds close.',
     stats: { recovery: 0.5, area: 0.15, might: -0.1 },
     pros: ['+0.5 HP/sec regeneration', '+15% attack area'],
     cons: ['−10% damage'],

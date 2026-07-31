@@ -378,8 +378,10 @@ export const WEAPONS: readonly WeaponDef[] = [
     groundRadius: 62, groundLifeSec: 3.4, groundTickSec: 0.5, areaPerLevel: 1.08,
   },
   {
+    // BAŞLANGIÇ SİLAHI ÖLÇÜMÜ: hareket eden oyuncu için 30 sn'de 11,8 kill
+    // (en iyi 38). Leaf Ranger'ın açılışı fazla seyrekti — tempo artırıldı.
     id: 'sickle', name: 'Rusted Sickle', desc: 'Thrown wide — and it comes back',
-    pattern: 'boomerang', maxLevel: 8, damage: 24, cooldownSec: 1.35,
+    pattern: 'boomerang', maxLevel: 8, damage: 24, cooldownSec: 1.0,
     dmgPerLevel: 1.2, cdPerLevel: 0.94, countLevels: [3, 6],
     projectileSpeed: 340, spreadRad: 0.42, pierce: 99, range: 620,
     lifeSec: 2.2, returnAt: 0.5,
