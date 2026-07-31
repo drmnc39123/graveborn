@@ -4,7 +4,8 @@
 // ayrıca örneklenir. Oyun döngüsü React render döngüsünden BAĞIMSIZ.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Game } from '@/game/engine';
+import { Game, type RunMode } from '@/game/engine';
+import type { RunResult } from '@/game/progress';
 import { render, resetEffects } from '@/game/render';
 import { MAX_CATCHUP, TICK, type StageDef, type StatKey } from '@/game/config';
 
@@ -20,8 +21,9 @@ import { C, glass, ctaButton } from '@/lib/theme';
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
-  xp: number; xpNext: number; kills: number; gold: number;
+  xp: number; xpNext: number; kills: number; rareGold: number;
   enemies: number; phase: string; fps: number;
+  mode: RunMode; depth: number; deepestCleared: number;
   offers: { id: string; name: string; desc: string; kind: string }[];
   weapons: { name: string; level: number }[];
   passives: { name: string; level: number }[];
@@ -34,14 +36,18 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
-  onFinish: (goldEarned: number, cleared: boolean) => void;
+  /** campaign = bitirilebilir bölüm · descent = sonsuz derinlik merdiveni */
+  mode?: RunMode;
+  onFinish: (result: RunResult) => void;
 }) {
-  // Seed bölüme + güne bağlı: aynı gün aynı bölüm herkeste aynı akış
-  const seedText = `${stage.id}:${dailySeed()}`;
+  // Seed bölüme + güne bağlı: aynı gün aynı bölüm herkeste aynı akış.
+  // ⚠️ Faz D'de seed SUNUCUDAN gelecek — istemci saatinden türetmek
+  // "en kârlı günü bul, saati ona kur" saldırısına açık.
+  const seedText = `${mode}:${stage.id}:${dailySeed()}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   // Bonusları ref'te tutuyoruz: dep dizisine koyarsak her render'da yeni nesne
@@ -58,6 +64,29 @@ export function GameCanvas({ stage, permanent, onFinish }: {
     gameRef.current?.choose(id);
   }, []);
 
+  /** Koşuyu köye taşı. Ödülü İSTEMCİ hesaplamaz — progress.ts yapar. */
+  const finish = useCallback(() => {
+    const g = gameRef.current;
+    onFinish({
+      mode: g?.stage.mode ?? mode,
+      stageId: g?.baseStageId ?? stage.id,
+      cleared: g?.phase === 'won',
+      deepestCleared: g?.stage.deepestCleared ?? 0,
+      rareGold: Math.floor(g?.rareGold ?? 0),
+    });
+  }, [onFinish, mode, stage.id]);
+
+  // Derinlik değişince banner'ı tetikle (oyun zamanı damgası — duraklamada kaymaz)
+  const [depthFlash, setDepthFlash] = useState(0);
+  const lastDepth = useRef(0);
+  useEffect(() => {
+    if (!hud || hud.mode !== 'descent') return;
+    if (hud.depth !== lastDepth.current) {
+      lastDepth.current = hud.depth;
+      if (hud.depth > 1) setDepthFlash(hud.time);
+    }
+  }, [hud]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -65,7 +94,7 @@ export function GameCanvas({ stage, permanent, onFinish }: {
     if (!ctx) return;
 
     preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(seedFromString(seedText), stage, permRef.current ?? {});
+    const game = new Game(seedFromString(seedText), stage, permRef.current ?? {}, mode);
     gameRef.current = game;
     resetEffects(); // önceki run'ın patlamaları yeni run'a taşmasın
 
@@ -183,8 +212,9 @@ export function GameCanvas({ stage, permanent, onFinish }: {
         hudAcc = 0;
         setHud({
           time: game.time, hp: game.hp, maxHp: game.stats.maxHp, level: game.level,
-          xp: game.xp, xpNext: game.xpNext, kills: game.kills, gold: game.gold,
+          xp: game.xp, xpNext: game.xpNext, kills: game.kills, rareGold: game.rareGold,
           enemies: game.enemies.length, phase: game.phase, fps,
+          mode: game.stage.mode, depth: game.stage.depth, deepestCleared: game.stage.deepestCleared,
           offers: game.offers.map((o) => ({ id: o.id, name: o.name, desc: o.desc, kind: o.kind })),
           weapons: game.weapons.map((w) => ({ name: w.def.name, level: w.level })),
           passives: game.passives.map((p) => ({ name: p.def.name, level: p.level })),
@@ -230,9 +260,13 @@ export function GameCanvas({ stage, permanent, onFinish }: {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: C.candle }}>LV {hud.level}</span>
-              {/* Bölüm ilerlemesi — bitirilebilir oyunda oyuncunun en çok istediği bilgi */}
+              {/* Bölüm ilerlemesi — bitirilebilir oyunda oyuncunun en çok istediği bilgi.
+                  Descent'te bunun yerini DERİNLİK alır: tek anlamlı skor odur. */}
               <span style={{ textAlign: 'center', lineHeight: 1.15 }}>
-                <span style={{ display: 'block', fontSize: 10, color: C.boneFaint, letterSpacing: 1 }}>{hud.stageName.toUpperCase()}</span>
+                <span style={{ display: 'block', fontSize: 10, letterSpacing: 1.6,
+                  color: hud.mode === 'descent' ? C.candle : C.boneFaint, fontWeight: 900 }}>
+                  {hud.mode === 'descent' ? `DEPTH ${hud.depth}` : hud.stageName.toUpperCase()}
+                </span>
                 <span style={{ display: 'block', fontSize: 19, color: C.bone, fontVariantNumeric: 'tabular-nums' }}>
                   {hud.remaining} <span style={{ fontSize: 11, color: C.boneDim }}>left</span>
                 </span>
@@ -268,7 +302,7 @@ export function GameCanvas({ stage, permanent, onFinish }: {
               <div style={{ height: '100%', width: `${hpPct}%`, background: `linear-gradient(90deg, ${C.blood}, ${C.bloodSoft})`, transition: 'width 90ms linear' }} />
             </div>
             <div style={{ marginTop: 6, fontSize: 11, color: C.boneFaint, fontVariantNumeric: 'tabular-nums' }}>
-              {Math.ceil(hud.hp)}/{Math.round(hud.maxHp)} HP · {Math.floor(hud.gold)} gold · {hud.enemies} enemies · {hud.fps} fps
+              {Math.ceil(hud.hp)}/{Math.round(hud.maxHp)} HP · {Math.floor(hud.rareGold)} gold found · {hud.enemies} enemies · {hud.fps} fps
             </div>
 
             {/* Taşınan build — oyuncu neye sahip olduğunu görmeli */}
@@ -316,24 +350,41 @@ export function GameCanvas({ stage, permanent, onFinish }: {
         </div>
       )}
 
+      {/* Derinlik geçişi — merdivende inildiğini oyuncu görmeli */}
+      {hud?.mode === 'descent' && depthFlash > 0 && hud.time - depthFlash < 2.2 && (
+        <div style={{ position: 'absolute', top: '26%', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
+          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 3, color: C.boneFaint, marginBottom: 2 }}>DESCENDING</div>
+          <div style={{ fontSize: 40, fontWeight: 900, color: C.bone, textShadow: `0 0 26px ${C.blood}, 0 2px 0 ${C.void}` }}>
+            DEPTH {hud.depth}
+          </div>
+        </div>
+      )}
+
       {/* ── ÖLÜM / KAZANMA ── */}
       {(hud?.phase === 'dead' || hud?.phase === 'won') && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ fontSize: 34, fontWeight: 900, color: hud.phase === 'won' ? C.candle : C.blood, marginBottom: 6 }}>
-            {hud.phase === 'won' ? 'STAGE CLEARED' : 'YOU DIED'}
+            {hud.mode === 'descent' ? 'THE DESCENT ENDS' : hud.phase === 'won' ? 'STAGE CLEARED' : 'YOU DIED'}
           </div>
+          {hud.mode === 'descent' && (
+            <div style={{ fontSize: 15, fontWeight: 900, color: C.candle, marginBottom: 6 }}>
+              Reached depth {hud.deepestCleared}
+            </div>
+          )}
           <div style={{ fontSize: 13, color: C.boneDim, marginBottom: 20, textAlign: 'center' }}>
-            {hud.stageName} · {fmtTime(hud.time)} · LV {hud.level} · {hud.kills} kill · {Math.floor(hud.gold)} gold
+            {hud.stageName} · {fmtTime(hud.time)} · LV {hud.level} · {hud.kills} kill · {Math.floor(hud.rareGold)} gold found
             <br />
             <span style={{ color: C.boneFaint, fontSize: 12 }}>
-              {hud.phase === 'won'
+              {hud.mode === 'descent'
+                ? 'New depths pay once — the village will settle up'
+                : hud.phase === 'won'
                 ? `All ${hud.stageTotal} enemies destroyed`
-                : `${hud.remaining} enemies left — the gold you earned is yours to keep`}
+                : `${hud.remaining} enemies left — the gold you found is yours to keep`}
             </span>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
             <button onClick={() => setRunId((n) => n + 1)} style={ctaButton(true)}>Try Again</button>
-            <button onClick={() => onFinish(gameRef.current?.gold ?? 0, hud.phase === 'won')}
+            <button onClick={finish}
               style={{ ...ctaButton(true), background: 'rgba(255,255,255,0.08)', color: C.bone }}>
               Return to Village
             </button>

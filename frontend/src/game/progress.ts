@@ -1,50 +1,89 @@
 'use client';
 // Kalıcı ilerleme — bölümler arası taşınan her şey.
 //
-// ŞU AN: localStorage. SONRA: backend (Faz 2).
+// ŞU AN: localStorage. SONRA: backend (Faz D).
 // Bu dosya kasıtlı olarak saf veri + saf fonksiyon; depolama arkası değişince
 // sadece load/save değişecek, çağıran kod aynı kalacak.
 //
 // ⚠️ GÜVENLİK NOTU: localStorage oyuncu tarafından düzenlenebilir. Token
 // ekonomisi devreye girdiğinde bu dosya TEK BAŞINA yetkili olmayacak —
-// sunucu run özetini doğrulayıp gold'u KENDİSİ hesaplayacak. Buradaki yapı
-// (bölüm başına tavan, kazanılmış gold kaydı) sunucuda birebir tekrarlanacak.
+// sunucu run özetini doğrulayıp gold'u KENDİSİ hesaplayacak. Buradaki
+// fonksiyonlar sunucuda BİREBİR çalıştırılabilsin diye saf tutuluyor.
 
-import { STAGES, stageById } from './config';
+import { STAGES, depthGold, stageById } from './config';
+import { permanentBonus } from './forge';
 
-const KEY = 'graveborn:progress:v1';
+const KEY = 'graveborn:progress:v2';
+const KEY_V1 = 'graveborn:progress:v1';
 
 export interface Progress {
   /** harcanabilir toplam gold */
   gold: number;
   /** oynanabilir en yüksek bölüm (1'den başlar) */
   unlockedStage: number;
-  /** bölüm id → o bölümden ŞİMDİYE KADAR alınmış toplam gold (tavan kontrolü) */
-  claimed: Record<number, number>;
   /** bölüm id → tamamlandı mı */
   cleared: Record<number, boolean>;
-  /** kalıcı shop yükseltmeleri: id → seviye */
+  /** kalıcı Forge yükseltmeleri: id → seviye */
   upgrades: Record<string, number>;
+  /** bölüm id → ilk-geçiş ödülü ödendi mi (bir kez ödenir) */
+  firstClear: Record<number, boolean>;
+  /** bölüm id → descent'te ödemesi YAPILMIŞ en derin seviye */
+  depthPaid: Record<number, number>;
 }
 
 export function emptyProgress(): Progress {
-  return { gold: 0, unlockedStage: 1, claimed: {}, cleared: {}, upgrades: {} };
+  return { gold: 0, unlockedStage: 1, cleared: {}, upgrades: {}, firstClear: {}, depthPaid: {} };
+}
+
+/** Eksik/bozuk alanlara karşı savunmacı normalize — kayıt biçimi değişse de oyun açılsın */
+function normalize(p: Partial<Progress>): Progress {
+  return {
+    gold: Math.max(0, Number(p.gold) || 0),
+    unlockedStage: Math.min(STAGES.length, Math.max(1, Number(p.unlockedStage) || 1)),
+    cleared: p.cleared ?? {},
+    upgrades: p.upgrades ?? {},
+    firstClear: p.firstClear ?? {},
+    depthPaid: p.depthPaid ?? {},
+  };
+}
+
+/**
+ * v1 → v2 göçü. v1'de `claimed` (bölümden alınmış toplam gold) vardı;
+ * ömür-boyu tavan modeli terk edildiği için o sayaç anlamını yitirdi.
+ * Kazanılmış gold KAYBOLMAZ — sadece "bu bölümün ilk-geçiş ödülü alınmış"
+ * bilgisine çevrilir, yoksa oyuncu ödülü ikinci kez toplayabilirdi.
+ */
+function migrateV1(raw: string): Progress | null {
+  try {
+    const old = JSON.parse(raw) as { gold?: number; unlockedStage?: number;
+      claimed?: Record<number, number>; cleared?: Record<number, boolean>;
+      upgrades?: Record<string, number> };
+    const firstClear: Record<number, boolean> = {};
+    for (const st of STAGES) {
+      if ((old.claimed?.[st.id] ?? 0) > 0) firstClear[st.id] = true;
+    }
+    return normalize({
+      gold: old.gold, unlockedStage: old.unlockedStage,
+      cleared: old.cleared, upgrades: old.upgrades,
+      firstClear, depthPaid: {},
+    });
+  } catch {
+    return null;
+  }
 }
 
 export function loadProgress(): Progress {
   if (typeof window === 'undefined') return emptyProgress();
   try {
     const raw = window.localStorage.getItem(KEY);
-    if (!raw) return emptyProgress();
-    const p = JSON.parse(raw) as Partial<Progress>;
-    // Eksik alanlara karşı savunmacı: kayıt biçimi değişirse oyun açılmaya devam etsin
-    return {
-      gold: Math.max(0, Number(p.gold) || 0),
-      unlockedStage: Math.min(STAGES.length, Math.max(1, Number(p.unlockedStage) || 1)),
-      claimed: p.claimed ?? {},
-      cleared: p.cleared ?? {},
-      upgrades: p.upgrades ?? {},
-    };
+    if (raw) return normalize(JSON.parse(raw) as Partial<Progress>);
+
+    const legacy = window.localStorage.getItem(KEY_V1);
+    if (legacy) {
+      const migrated = migrateV1(legacy);
+      if (migrated) { saveProgress(migrated); return migrated; }
+    }
+    return emptyProgress();
   } catch {
     return emptyProgress();
   }
@@ -55,46 +94,99 @@ export function saveProgress(p: Progress) {
   try { window.localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* kota dolu — sessiz geç */ }
 }
 
-/** Bölümden daha ne kadar gold alınabilir (tavan eksi alınmış) */
-export function remainingGold(p: Progress, stageId: number): number {
+/**
+ * Forge'un `greed` yükseltmesinden gelen ilerleme-ödülü çarpanı.
+ * Tek doğru kaynak forge.ts — oran burada tekrar yazılmaz.
+ * ⚠️ Sadece İLERLEME ödülünü çarpar; nadir düşüşe dokunmaz (motor tarafında,
+ * rollRareGold içinde açıklandı: aksi hâlde gold→oran→gold sarmalı kurulur).
+ */
+function greedMul(p: Progress): number {
+  return 1 + Math.max(0, permanentBonus(p.upgrades).greed ?? 0);
+}
+
+/** Bölümün ilk-geçiş ödülü hâlâ alınabilir mi */
+export function firstClearAvailable(p: Progress, stageId: number): number {
   const st = stageById(stageId);
-  if (!st) return 0;
-  return Math.max(0, st.goldCap - (p.claimed[stageId] ?? 0));
+  if (!st || p.firstClear[stageId]) return 0;
+  return Math.round(st.firstClearGold * greedMul(p));
+}
+
+/** Descent'te bu bölümde ödeme yapılmış en derin seviye */
+export function paidDepth(p: Progress, stageId: number): number {
+  return Math.max(0, Number(p.depthPaid[stageId]) || 0);
+}
+
+/** `from`(hariç) → `to`(dahil) arası derinliklerin toplam ödülü */
+export function depthRewardBetween(p: Progress, stageId: number, from: number, to: number): number {
+  let sum = 0;
+  for (let d = Math.floor(from) + 1; d <= Math.floor(to); d++) sum += depthGold(stageId, d);
+  return Math.round(sum * greedMul(p));
+}
+
+export interface RunResult {
+  mode: 'campaign' | 'descent';
+  stageId: number;
+  /** kampanyada bölüm bitirildi mi */
+  cleared: boolean;
+  /** descent'te bu koşuda temizlenen en derin seviye */
+  deepestCleared: number;
+  /** koşu içinde nadir düşüşten toplanan gold */
+  rareGold: number;
 }
 
 /**
- * Bir denemenin sonucunu işle. EXPLOIT KAPISI BURASI.
+ * Bir koşunun sonucunu işle. EXPLOIT KAPISI BURASI.
  *
- * Oyuncu denemede ne kadar kazanırsa kazansın, bölümün kalan tavanından
- * fazlası verilmez. 700'lük bölümde 695 alıp ölen, tekrar oynayınca en fazla
- * 5 daha alır — bölümü tekrar tekrar oynayarak gold basamaz.
+ * KURAL — "İlerleme öder, tekrar ödemez":
+ *   • Bölümü/derinliği İLK kez geçmek tam ödül verir.
+ *   • Zaten geçilmiş içeriği tekrar oynamak ilerleme ödülünden 0 verir.
+ *   • Nadir düşüş her koşuda gelir (musluğun sonsuz damlası) — küçüktür ve
+ *     oranı Forge'a bağlı DEĞİLDİR.
  *
- * Saf fonksiyon: yeni Progress döner, girdiyi değiştirmez (test edilebilirlik).
+ * Saf fonksiyon: yeni Progress döner, girdiyi değiştirmez.
  */
-export function applyRunResult(
-  p: Progress,
-  stageId: number,
-  goldEarnedThisAttempt: number,
-  stageCleared: boolean,
-): { progress: Progress; awarded: number; capped: boolean } {
-  const allowed = remainingGold(p, stageId);
-  const awarded = Math.max(0, Math.min(Math.floor(goldEarnedThisAttempt), allowed));
+export function applyRunResult(p: Progress, run: RunResult): {
+  progress: Progress;
+  awarded: number;
+  /** ödülün ilerlemeden gelen kısmı (arayüzde ayrı gösterilir) */
+  progressGold: number;
+  /** nadir düşüşten gelen kısım */
+  dropGold: number;
+  /** descent'te bu koşuda ödenen derinlik aralığı — [from+1, to] */
+  paidRange: { from: number; to: number } | null;
+} {
+  const drop = Math.max(0, Math.floor(run.rareGold));
+  let progressGold = 0;
+  let paidRange: { from: number; to: number } | null = null;
 
   const next: Progress = {
     ...p,
-    gold: p.gold + awarded,
-    claimed: { ...p.claimed, [stageId]: (p.claimed[stageId] ?? 0) + awarded },
     cleared: { ...p.cleared },
     upgrades: { ...p.upgrades },
+    firstClear: { ...p.firstClear },
+    depthPaid: { ...p.depthPaid },
   };
 
-  if (stageCleared) {
-    next.cleared[stageId] = true;
-    // sonraki bölümü aç (varsa)
-    if (stageId + 1 <= STAGES.length) {
-      next.unlockedStage = Math.max(next.unlockedStage, stageId + 1);
+  if (run.mode === 'campaign') {
+    if (run.cleared) {
+      progressGold = firstClearAvailable(p, run.stageId); // ikinci geçişte 0 döner
+      next.firstClear[run.stageId] = true;
+      next.cleared[run.stageId] = true;
+      if (run.stageId + 1 <= STAGES.length) {
+        next.unlockedStage = Math.max(next.unlockedStage, run.stageId + 1);
+      }
+    }
+  } else {
+    const from = paidDepth(p, run.stageId);
+    const to = Math.max(0, Math.floor(run.deepestCleared));
+    if (to > from) {
+      progressGold = depthRewardBetween(p, run.stageId, from, to);
+      next.depthPaid[run.stageId] = to;
+      paidRange = { from, to };
     }
   }
 
-  return { progress: next, awarded, capped: awarded < Math.floor(goldEarnedThisAttempt) };
+  const awarded = progressGold + drop;
+  next.gold = p.gold + awarded;
+  return { progress: next, awarded, progressGold, dropGold: drop, paidRange };
 }

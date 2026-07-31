@@ -16,20 +16,23 @@ export const RUN = {
 // Bu hem oyunu VS klonlarından ayırıyor hem de sonsuz spawn'daki denge
 // uçurumunu ortadan kaldırıyor (sürü duvara dönüşüp DPS'i boğamıyor).
 //
-// EKONOMİ KURALI (exploit kapatma):
-// Her bölümün TOPLAM gold tavanı var ve bu tavan TÜM DENEMELER boyunca geçerli.
-// 700 gold'luk bölümde 695 kazanıp ölen oyuncu, tekrar oynadığında o bölümden
-// en fazla 5 gold daha alabilir. Yoksa oyuncu kolay bölümü sonsuz tekrar edip
-// gold basardı ve shop ekonomisi anlamsızlaşırdı.
+// EKONOMİ KURALI — "İLERLEME ÖDER, TEKRAR ÖDEMEZ":
+// Bir bölümü/derinliği İLK kez geçmek tam ödül verir; zaten geçilmiş içeriği
+// tekrar oynamak ilerleme ödülünden 0 verir. Böylece kolay bölümü sonsuz
+// tekrarlayıp gold basmak imkânsız.
+//
+// Ama bu TEK BAŞINA yetmiyor: beceri tavanına çarpmış oyuncu sıfır kazanır ve
+// oyunun 2. günü kalmaz. O yüzden musluk iki parçalı — ikinci parça NADİR
+// DÜŞÜŞ (bkz. rareDropChance). Kintara modeli: gold kill başına maaş değil,
+// nadir düşüştür (orada en iyi kaynak 100 kill'de 1). Kısıt tavan değil
+// NADİRLİK + BECERİ (derinlikte hpMul üssel büyür).
 export interface StageDef {
   id: number;
   name: string;
   /** Bu bölümde toplam kaç düşman gelecek — hepsi ölünce bölüm biter */
   enemyCount: number;
-  /** Bölümden kazanılabilecek TOPLAM gold (tüm denemeler boyunca) */
-  goldCap: number;
-  /** Öldürme başına gold */
-  goldPerKill: number;
+  /** Bölümü İLK kez temiz geçmenin ödülü. Bir kez ödenir, tekrarında 0. */
+  firstClearGold: number;
   /** Saniyede kaç düşman salınır */
   spawnRate: number;
   /** Aynı anda sahnede en fazla kaç düşman */
@@ -45,28 +48,28 @@ export interface StageDef {
 
 export const STAGES: readonly StageDef[] = [
   {
-    id: 1, name: 'The Hollow Wood', enemyCount: 100, goldCap: 300, goldPerKill: 3,
+    id: 1, name: 'The Hollow Wood', enemyCount: 100, firstClearGold: 300,
     spawnRate: 1.6, maxAlive: 40, enemies: ['imp', 'rogue'], hpMul: 1, speedMul: 1,
   },
   {
-    id: 2, name: 'Ossuary Halls', enemyCount: 200, goldCap: 700, goldPerKill: 3.5,
+    id: 2, name: 'Ossuary Halls', enemyCount: 200, firstClearGold: 700,
     spawnRate: 2.2, maxAlive: 60, enemies: ['imp', 'rogue', 'skeleton', 'wretch'],
     hpMul: 1.35, speedMul: 1.04,
   },
   {
-    id: 3, name: 'The Charnel Works', enemyCount: 350, goldCap: 1400, goldPerKill: 4,
+    id: 3, name: 'The Charnel Works', enemyCount: 350, firstClearGold: 1400,
     spawnRate: 3.0, maxAlive: 90, enemies: ['skeleton', 'wretch', 'horned', 'bird'],
     hpMul: 1.9, speedMul: 1.08,
     boss: { hp: 4200, speed: 44, damage: 24, radius: 38, art: 'boss_mini', label: 'The Gorged' },
   },
   {
-    id: 4, name: 'The Toll Tower', enemyCount: 550, goldCap: 2400, goldPerKill: 4.5,
+    id: 4, name: 'The Toll Tower', enemyCount: 550, firstClearGold: 2400,
     spawnRate: 3.8, maxAlive: 130, enemies: ['horned', 'bird', 'brute', 'fiend'],
     hpMul: 2.7, speedMul: 1.12,
     boss: { hp: 11000, speed: 48, damage: 30, radius: 44, art: 'boss_mega', label: 'Bell Warden' },
   },
   {
-    id: 5, name: 'The Black Chapel', enemyCount: 800, goldCap: 4000, goldPerKill: 5,
+    id: 5, name: 'The Black Chapel', enemyCount: 800, firstClearGold: 4000,
     spawnRate: 4.6, maxAlive: 180, enemies: ['brute', 'fiend', 'crab', 'warrior', 'hulk'],
     hpMul: 3.8, speedMul: 1.16,
     boss: { hp: 30000, speed: 54, damage: 38, radius: 52, art: 'boss_nightmare', label: 'The Unburied' },
@@ -75,6 +78,124 @@ export const STAGES: readonly StageDef[] = [
 
 export function stageById(id: number): StageDef | undefined {
   return STAGES.find((s) => s.id === id);
+}
+
+// ── THE DESCENT ───────────────────────────────────────────────────────
+// Bölüm temizlendikten sonra açılan SONSUZ derinlik merdiveni. Kampanya
+// tek seferlik tüketim; oyunun ömrü burada.
+//
+// Koşuyu bitiren şey zamanlayıcı DEĞİL, CAN: derinlikler arası HP dolmaz.
+// Ne kadar derine inebildiğin tamamen ne kadar hasar yemeden oynadığına bağlı.
+export const DESCENT = {
+  /** derinlik d'de gelen düşman sayısı: base + perDepth·d */
+  enemyBase: 60,
+  enemyPerDepth: 10,
+  /** düşman canı derinlik başına bu kadar katlanır (üssel — beceri kapısı budur) */
+  hpGrowth: 1.16,
+  speedPerDepth: 0.012,
+  speedMax: 1.9,
+  spawnPerDepth: 0.12,
+  spawnMax: 9,
+  alivePerDepth: 6,
+  /** perf tavanı — sahnede bundan fazla düşman olmaz */
+  aliveMax: 420,
+  /** kaç derinlikte bir boss */
+  bossEvery: 5,
+  /** boss gücü her boss basamağında bu kadar katlanır */
+  bossGrowth: 1.35,
+  /** her 3 derinlikte havuza bir düşman tipi daha eklenir */
+  poolEvery: 3,
+} as const;
+
+/**
+ * Derinlik d için bölüm tanımı üretir. SAF FONKSİYON — motor bunu çağırır,
+ * kendi sayısı yoktur. Aynı (stageId, depth) her zaman aynı tanımı verir.
+ */
+export function descentStage(stageId: number, depth: number): StageDef {
+  const base = stageById(stageId) ?? STAGES[0];
+  const d = Math.max(1, Math.floor(depth));
+  const isBoss = d % DESCENT.bossEvery === 0;
+  const poolSize = Math.min(base.enemies.length, 1 + Math.floor(d / DESCENT.poolEvery));
+
+  const def: StageDef = {
+    id: base.id,
+    name: `${base.name} — Depth ${d}`,
+    enemyCount: DESCENT.enemyBase + DESCENT.enemyPerDepth * d,
+    // Descent ödülü kill'den değil DERİNLİKTEN gelir (bkz. depthGold) — bu alan
+    // sadece arayüz metni için taşınıyor, ödeme progress.ts'te hesaplanır.
+    firstClearGold: depthGold(stageId, d),
+    spawnRate: Math.min(DESCENT.spawnMax, base.spawnRate + DESCENT.spawnPerDepth * d),
+    maxAlive: Math.min(DESCENT.aliveMax, base.maxAlive + DESCENT.alivePerDepth * d),
+    enemies: base.enemies.slice(0, poolSize),
+    hpMul: base.hpMul * Math.pow(DESCENT.hpGrowth, d),
+    speedMul: Math.min(DESCENT.speedMax, base.speedMul * (1 + DESCENT.speedPerDepth * d)),
+  };
+
+  if (isBoss) {
+    const tier = d / DESCENT.bossEvery;
+    const src = base.boss ?? STAGES[2].boss!;
+    const mul = Math.pow(DESCENT.bossGrowth, tier);
+    def.boss = {
+      hp: Math.round(src.hp * mul),
+      speed: src.speed,
+      damage: Math.round(src.damage * Math.pow(1.12, tier)),
+      radius: src.radius,
+      art: src.art,
+      label: `${src.label} · Depth ${d}`,
+    };
+  }
+  return def;
+}
+
+// ── GOLD MUSLUĞU ──────────────────────────────────────────────────────
+// İki parça: (1) ilerleme ödülü — bir derinliği İLK kez geçince, bir kez.
+//            (2) nadir düşüş  — her koşuda, düşük ihtimalle, sonsuz damla.
+//
+// Neden ikisi birden: sadece (1) olsaydı beceri tavanına çarpan oyuncu sıfır
+// kazanırdı; sadece (2) olsaydı ilerlemenin temposu kaybolurdu.
+
+export const GOLD = {
+  /** derinlik ödülü: base · d^exp */
+  depthBase: 25,
+  depthExp: 1.35,
+  /** zor bölümlerin derinliği daha çok öder */
+  stageBonus: 0.15,
+  /** nadir düşüş: taban ihtimal (≈1/143) */
+  dropBase: 0.007,
+  /** derinlik başına ihtimal artışı */
+  dropPerDepth: 0.03,
+  /** ihtimal tavanı — 1/20'den sık düşmesin */
+  dropChanceMax: 0.05,
+  /** düşüş miktarı: min..max, derinlikle ölçeklenir */
+  dropMin: 3,
+  dropMax: 11,
+  dropAmountPerDepth: 0.05,
+} as const;
+
+/** Bir derinliği İLK kez geçmenin ödülü. greed çarpanı progress.ts'te uygulanır. */
+export function depthGold(stageId: number, depth: number): number {
+  const d = Math.max(1, Math.floor(depth));
+  const stageMul = 1 + GOLD.stageBonus * (Math.max(1, stageId) - 1);
+  return Math.round(GOLD.depthBase * Math.pow(d, GOLD.depthExp) * stageMul);
+}
+
+/**
+ * Bir kill'in gold düşürme ihtimali. Derinlikle iyileşir → derin oyuncu
+ * üretici, sığ oyuncu/bot cüzi kalır.
+ * ⚠️ Bu ihtimal Forge'a BAĞLANMAZ (greed burayı çarpmaz) — yoksa
+ * "gold al → düşüş oranını artır → daha çok gold" sarmalı kurulur.
+ */
+export function rareDropChance(depth: number): number {
+  const d = Math.max(0, Math.floor(depth));
+  return Math.min(GOLD.dropChanceMax, GOLD.dropBase * (1 + GOLD.dropPerDepth * d));
+}
+
+/** Düşen gold miktarı. roll = [0,1) — ÇAĞIRAN rng.ts'ten vermeli, Math.random() YASAK. */
+export function rareDropAmount(depth: number, roll: number): number {
+  const d = Math.max(0, Math.floor(depth));
+  const span = GOLD.dropMax - GOLD.dropMin;
+  const raw = GOLD.dropMin + roll * span;
+  return Math.max(1, Math.round(raw * (1 + GOLD.dropAmountPerDepth * d)));
 }
 
 export const PLAYER = {

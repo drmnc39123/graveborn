@@ -1,13 +1,18 @@
 // FORGE EKONOMİ DENGESİ — sayılarla doğrulanır, hisle değil.
 //
-// Kritik kısıt: oyundaki gold SONLU (bölüm tavanları toplamı) ve tekrar
-// oynayınca gelmiyor. Ağaç bu bütçeye göre kurulmuş olmalı:
-//   - hepsi alınamamalı (seçim olsun)
-//   - ama anlamlı bir kısmı alınabilmeli (ilerleme hissi olsun)
-//   - ilk bölümün ardından hemen bir şey alınabilmeli
+// ESKİ KISIT (artık geçersiz): oyundaki gold 8.800'de sabitti, ağaç ona göre
+// kısılmıştı. O model oyunu ~30 dakikada bitiriyordu.
+//
+// YENİ KISIT: gold SONSUZ akıyor (derinlik ödülü + nadir düşüş), o yüzden
+//   - ağaç ASLA doymamalı (alacak bir sonraki seviye hep olmalı)
+//   - ama erken oyunda hemen bir şey alınabilmeli (ilk his)
+//   - ve tek para mimarisinde P2W sarmalı için: Forge kalıcı bir TABAN verir,
+//     motorun STAT_CAP'ini DOLDURMAZ — farkın çoğunu koşu içi ilerleme taşır
+//
+// Çalıştır:  npx tsx src/game/forge.test.mts
 
-import { STAGES } from './config.js';
-import { FORGE, costOf, totalCost, treeTotalCost, permanentBonus } from './forge.js';
+import { STAGES, STAT_BASE, STAT_CAP, depthGold, descentStage, type StatKey } from './config.js';
+import { FORGE, costOf, permanentBonus, spentOn, totalCost, treeTotalCost } from './forge.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -15,69 +20,149 @@ const check = (n: string, ok: boolean, d = '') => {
   if (!ok) FAIL.push(n);
 };
 
-const budget = STAGES.reduce((s, st) => s + st.goldCap, 0);
+/** Bir bölümde derinlik D'ye kadar inen oyuncunun toplam ilerleme gold'u */
+function goldByDepth(stageId: number, depth: number): number {
+  let s = STAGES.reduce((n, st) => n + st.firstClearGold, 0); // kampanya bir kez
+  for (let d = 1; d <= depth; d++) s += depthGold(stageId, d);
+  return s;
+}
+
+/** Verilen bütçeyle ağaçtan kaç seviye alınabilir (hep en ucuzu seçerek) */
+function levelsAffordable(budget: number): { levels: number; spent: number } {
+  const lv: Record<string, number> = {};
+  let spent = 0, levels = 0;
+  for (;;) {
+    let best: { id: string; cost: number } | null = null;
+    for (const u of FORGE) {
+      const cur = lv[u.id] ?? 0;
+      if (cur >= u.maxLevel) continue;
+      const c = costOf(u, cur);
+      if (!best || c < best.cost) best = { id: u.id, cost: c };
+    }
+    if (!best || spent + best.cost > budget) break;
+    spent += best.cost;
+    lv[best.id] = (lv[best.id] ?? 0) + 1;
+    levels += 1;
+  }
+  return { levels, spent };
+}
+
 const tree = treeTotalCost();
 
-console.log('\n[1] Bütçe');
-console.log(`     oyundaki TOPLAM gold : ${budget}`);
-console.log(`     ağacın toplam maliyeti: ${tree}`);
-console.log(`     alınabilir oran       : %${Math.round((budget / tree) * 100)}`);
-check('ağaç bütçeden pahalı (hepsi alınamaz)', tree > budget, `${tree} > ${budget}`);
-check('ağaç ulaşılamaz derecede pahalı değil', tree < budget * 2.2, `${tree} < ${Math.round(budget * 2.2)}`);
+console.log('\n[1] Ağaç doymuyor');
+const campaignGold = STAGES.reduce((n, st) => n + st.firstClearGold, 0);
+console.log(`     kampanya toplam gold  : ${campaignGold.toLocaleString('en-US')}`);
+console.log(`     ağacın toplam maliyeti: ${tree.toLocaleString('en-US')}`);
+check('ağaç kampanya gelirinden çok pahalı', tree > campaignGold * 20,
+  `${tree} > ${campaignGold * 20}`);
 
-console.log('\n[2] İlk bölüm sonrası alınabilirlik');
-const firstCap = STAGES[0].goldCap;
-const affordable = FORGE.filter((u) => costOf(u, 0) <= firstCap);
-console.log(`     1. bölüm tavanı: ${firstCap} gold`);
-console.log(`     alınabilen ilk seviyeler: ${affordable.length}/${FORGE.length}`);
+// Sonlu bir ağaç, sonsuz bir muslukla ER YA DA GEÇ doyar. Doğru soru
+// "doyar mı" değil, "doyduğu derinliğe ULAŞILABİLİR Mİ" — çünkü zorluk
+// üssel (hpMul = 1.16^d). Doyma noktasını hesaplayıp oradaki duvarı ölçüyoruz.
+let saturationDepth = 0;
+for (let d = 1; d <= 400; d++) {
+  if (goldByDepth(5, d) >= tree) { saturationDepth = d; break; }
+}
+const wall = descentStage(5, saturationDepth).hpMul;
+console.log(`     ağacın doyduğu derinlik: ${saturationDepth || '>400'}`);
+console.log(`     o derinlikte düşman canı: ${wall.toExponential(1)}× taban`);
+check('ağaç ancak ULAŞILAMAZ derinlikte doyuyor', saturationDepth === 0 || saturationDepth > 80,
+  `derinlik ${saturationDepth}`);
+check('doyma derinliğindeki duvar aşılamaz (>100.000× can)', wall > 1e5,
+  `${wall.toExponential(1)}×`);
+
+// Gerçekçi tavan: çok iyi bir oyuncu için derinlik ~50. Orada ağaç açık kalmalı.
+const reachable = goldByDepth(5, 50);
+console.log(`     derinlik 50'ye inenin geliri: ${Math.round(reachable).toLocaleString('en-US')}` +
+  ` (ağacın %${Math.round((reachable / tree) * 100)}'i)`);
+check('ulaşılabilir derinlikte ağaç hâlâ açık', reachable < tree * 0.6,
+  `%${Math.round((reachable / tree) * 100)} < %60`);
+check('ama anlamlı ilerleme var', reachable > tree * 0.1,
+  `%${Math.round((reachable / tree) * 100)} > %10`);
+
+console.log('\n[2] Erken oyun hissi');
+const firstStage = STAGES[0].firstClearGold;
+const affordable = FORGE.filter((u) => costOf(u, 0) <= firstStage);
+console.log(`     1. bölüm ödülü ${firstStage} gold → ${affordable.length}/${FORGE.length} yükseltme açılabiliyor`);
 check('ilk bölüm parasıyla en az 5 yükseltme alınabiliyor', affordable.length >= 5, `${affordable.length}`);
 const cheapest = Math.min(...FORGE.map((u) => costOf(u, 0)));
-check('en ucuz alım 1. bölümün yarısından ucuz', cheapest <= firstCap / 2, `${cheapest} gold`);
+check('en ucuz alım ilk ödülün yarısından ucuz', cheapest <= firstStage / 2, `${cheapest} gold`);
 
-console.log('\n[3] Maliyet eğrisi artıyor');
+console.log('\n[3] Maliyet eğrisi');
 let monotone = true;
 for (const u of FORGE) {
   for (let lv = 1; lv < u.maxLevel; lv++) {
-    if (costOf(u, lv) < costOf(u, lv - 1)) monotone = false;
+    if (costOf(u, lv) <= costOf(u, lv - 1)) monotone = false;
   }
 }
 check('her seviye bir öncekinden pahalı', monotone);
+check('maxLevel sonrası maliyet Infinity', costOf(FORGE[0], FORGE[0].maxLevel) === Infinity);
 
-console.log('\n[4] Yükseltmeler motorun KULLANDIĞI istatistiklere bağlı');
-// engine.ts'te okunan istatistikler (grep ile doğrulandı)
-const USED = new Set(['might', 'armor', 'maxHp', 'recovery', 'cooldown', 'area',
-  'projSpeed', 'duration', 'amount', 'moveSpeed', 'magnet', 'growth', 'greed', 'curse', 'revival']);
-const dead = FORGE.filter((u) => !USED.has(u.stat));
-check('ölü yükseltme yok (hepsi motorda okunuyor)', dead.length === 0,
-  dead.length ? dead.map((d) => `${d.id}→${d.stat}`).join(', ') : `${FORGE.length} yükseltme`);
+console.log('\n[4] İlerleme eğrisi (derinlik → alınabilen seviye)');
+let prev = -1, curveOk = true;
+for (const d of [0, 5, 10, 20, 40, 70, 100]) {
+  const { levels } = levelsAffordable(goldByDepth(5, d));
+  console.log(`     derinlik ${String(d).padStart(3)} → ${String(levels).padStart(3)} seviye`);
+  if (levels < prev) curveOk = false;
+  prev = levels;
+}
+check('derinleştikçe alınabilen seviye artıyor (hiç düşmüyor)', curveOk);
+check('ilk derinliklerde de ilerleme var', levelsAffordable(goldByDepth(5, 10)).levels
+  > levelsAffordable(goldByDepth(5, 0)).levels);
 
-console.log('\n[5] Bonus hesabı doğru');
+console.log('\n[5] Bonus hesabı');
 const b1 = permanentBonus({ might: 3 });
-check('might 3 seviye = +%18', Math.abs((b1.might ?? 0) - 0.18) < 1e-9, `${b1.might}`);
+check('might 3 seviye = +%15', Math.abs((b1.might ?? 0) - 0.15) < 1e-9, `${b1.might}`);
 const b2 = permanentBonus({ cooldown: 4 });
 check('cooldown AZALTIYOR (negatif)', (b2.cooldown ?? 0) < 0, `${b2.cooldown}`);
+const mightDef = FORGE.find((u) => u.id === 'might')!;
 const b3 = permanentBonus({ might: 999 });
-check('maxLevel aşılamıyor', Math.abs((b3.might ?? 0) - 0.06 * 5) < 1e-9, `${b3.might}`);
-const b4 = permanentBonus({});
-check('boş kayıt bonus vermiyor', Object.keys(b4).length === 0);
+check('maxLevel aşılamıyor', Math.abs((b3.might ?? 0) - mightDef.perLevel * mightDef.maxLevel) < 1e-9,
+  `${b3.might} (max ${mightDef.maxLevel} × ${mightDef.perLevel})`);
+check('boş kayıt bonus vermiyor', Object.keys(permanentBonus({})).length === 0);
+const maxAll = Object.fromEntries(FORGE.map((u) => [u.id, u.maxLevel]));
+check('spentOn tam ağaç = treeTotalCost', spentOn(maxAll) === tree, `${spentOn(maxAll)}`);
+check('spentOn maxLevel üstünü saymıyor',
+  spentOn(Object.fromEntries(FORGE.map((u) => [u.id, u.maxLevel + 50]))) === tree);
 
-console.log('\n[6] Maliyet tablosu');
-for (const u of FORGE) {
-  const each = Array.from({ length: u.maxLevel }, (_, i) => costOf(u, i));
-  console.log(`     ${u.name.padEnd(16)} ${String(totalCost(u)).padStart(5)} toplam   [${each.join(', ')}]`);
+// ── 6) P2W tavanı ──
+// Tek para mimarisinde gold token'la satın alınabilecek. Sarmalı törpüleyen
+// kural bir İDDİA — test edilmeden yazılmaz.
+console.log('\n[6] P2W tavanı: Forge STAT_CAP\'i doldurmuyor');
+{
+  const full = permanentBonus(maxAll);
+  const capped: StatKey[] = ['might', 'armor', 'area', 'amount'];
+  for (const k of capped) {
+    const cap = STAT_CAP[k]!;
+    const value = STAT_BASE[k] + (full[k] ?? 0);
+    console.log(`     ${k.padEnd(7)} taban ${STAT_BASE[k]} → tam Forge ${value.toFixed(2)} / tavan ${cap}` +
+      ` (%${((value / cap) * 100).toFixed(0)})`);
+    check(`${k}: tam Forge tavanın yarısını aşmıyor`, value <= cap * 0.5,
+      `${value.toFixed(2)} ≤ ${cap * 0.5}`);
+  }
+  const cd = STAT_BASE.cooldown + (full.cooldown ?? 0);
+  check('cooldown Forge ile dibe vurmuyor', cd > 0.5, `${cd.toFixed(2)}`);
 }
 
-// ── [7] Kalıcı bonuslar MOTORA gerçekten yansıyor mu ──
+console.log('\n[7] Maliyet tablosu');
+for (const u of FORGE) {
+  const first3 = Array.from({ length: Math.min(3, u.maxLevel) }, (_, i) => costOf(u, i));
+  console.log(`     ${u.name.padEnd(16)} L1-3 [${first3.join(', ')}] … Lmax ${costOf(u, u.maxLevel - 1).toLocaleString('en-US')}` +
+    `   toplam ${totalCost(u).toLocaleString('en-US')}`);
+}
+
+// ── 8) Motora yansıma ──
 // Ağacı kurup motora bağlamamak en sinsi hata olurdu: oyuncu gold harcar,
 // hiçbir şey değişmez. Ölçerek doğruluyoruz.
-console.log('\n[7] Motora yansıma');
+console.log('\n[8] Motora yansıma');
 {
   const { Game } = await import('./engine.js');
+  const { TICK } = await import('./config.js');
   const seed = 12345;
 
   const base = new Game(seed);
   const buffed = new Game(seed, undefined, permanentBonus({
-    might: 5, health: 5, armor: 3, cooldown: 4, mspeed: 4, amount: 1, revival: 2,
+    might: 16, health: 16, armor: 10, cooldown: 12, mspeed: 12, amount: 3, revival: 3,
   }));
 
   check('Might yükseltmesi hasarı artırıyor', buffed.stats.might > base.stats.might,
@@ -97,29 +182,36 @@ console.log('\n[7] Motora yansıma');
   check('Diriliş hakkı geliyor', buffed.stats.revival > base.stats.revival,
     `${base.stats.revival} → ${buffed.stats.revival}`);
 
-  // Aynı seed ile yükseltmeli oyuncu bölümü DAHA HIZLI temizlemeli.
-  // (Önce "kaç kill" diye ölçüyordum: 1. bölümde 100 düşman var, ikisi de
-  //  hepsini öldürüp 100'de eşitleniyordu — tavan ölçümü boğuyordu.)
-  const { TICK } = await import('./config.js');
-  const clearTime = (g: InstanceType<typeof Game>) => {
+  // ÖLÇÜM YERİ ÖNEMLİ: 1. bölüm SPAWN-LİMİTLİ (100 düşman / 1.6 spawn = 62,5 sn
+  // taban). Orada güçlü oyuncu da zayıf oyuncu da aynı sürede bitirir, çünkü
+  // darboğaz DPS değil düşmanın sahaya çıkma hızı — ölçüm gürültüye boğulur.
+  // (Bu tuzağa bir kez düşüldü: yükseltmeli oyuncu "daha yavaş" çıktı.)
+  // Bu yüzden ölçüm EN ZOR bölümde, SABİT pencerede, kill sayısıyla yapılıyor.
+  const heavy = STAGES[STAGES.length - 1];
+  const killsIn = (g: InstanceType<typeof Game>, seconds: number) => {
     g.setViewport(1280, 720);
-    for (let i = 0; i < Math.round(600 / TICK); i++) {
+    let peakAlive = 0;
+    for (let i = 0; i < Math.round(seconds / TICK); i++) {
       if (g.phase === 'levelup') g.choose(g.offers[0].id);
       if (g.phase !== 'running') break;
       g.hp = g.stats.maxHp;                 // ölüm değişkenini dışla, güç ölçüyoruz
       const t = i * TICK;
       g.setInput(Math.cos(t * 0.7), Math.sin(t * 0.7));
       g.step();
-      if (g.remaining === 0) break;
+      if (g.enemies.length > peakAlive) peakAlive = g.enemies.length;
     }
-    return { sec: g.time, kills: g.kills, kalan: g.remaining };
+    return { kills: g.kills, peakAlive };
   };
-  const rBase = clearTime(new Game(seed));
-  const rBuff = clearTime(new Game(seed, undefined, permanentBonus({ might: 5, cooldown: 4, amount: 1, area: 4 })));
-  console.log(`     yükseltmesiz: ${rBase.sec.toFixed(1)} sn (${rBase.kills} kill, kalan ${rBase.kalan})`);
-  console.log(`     yükseltmeli : ${rBuff.sec.toFixed(1)} sn (${rBuff.kills} kill, kalan ${rBuff.kalan})`);
-  check('yükseltmeli oyuncu bölümü daha hızlı temizliyor', rBuff.sec < rBase.sec,
-    `${rBase.sec.toFixed(1)} sn → ${rBuff.sec.toFixed(1)} sn`);
+  const rBase = killsIn(new Game(seed, heavy), 150);
+  const rBuff = killsIn(new Game(seed, heavy, permanentBonus({ might: 20, cooldown: 12, amount: 3, area: 18 })), 150);
+  console.log(`     ${heavy.name}, 150 sn — yükseltmesiz ${rBase.kills} kill · yükseltmeli ${rBuff.kills} kill`);
+  // "Boş sahne ölçmüyoruz" kontrolü kill ile YAPILAMAZ: yükseltmesiz oyuncu bu
+  // bölümde zaten neredeyse hiç öldüremiyor (asıl bulgu bu). Doğru kontrol
+  // sahnede düşman OLUP OLMADIĞI.
+  check('sahne gerçekten dolu (ölçüm boş değil)', rBase.peakAlive > 30,
+    `tepe ${rBase.peakAlive} düşman`);
+  check('yükseltmeli oyuncu belirgin daha çok öldürüyor', rBuff.kills > rBase.kills * 1.1,
+    `${rBase.kills} → ${rBuff.kills} (+%${Math.round(((rBuff.kills - rBase.kills) / rBase.kills) * 100)})`);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ FORGE EKONOMİSİ TUTARLI' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

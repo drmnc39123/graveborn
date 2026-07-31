@@ -5,8 +5,7 @@
 // karşılığı burada: sonraki run'lar kalıcı olarak güçlenir.
 
 import { useMemo } from 'react';
-import { FORGE, costOf, treeTotalCost, type ForgeUpgrade } from '@/game/forge';
-import { STAGES } from '@/game/config';
+import { FORGE, costOf, spentOn, type ForgeUpgrade } from '@/game/forge';
 import { saveProgress, type Progress } from '@/game/progress';
 import { play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
@@ -17,17 +16,12 @@ export function ForgePanel({
   progress: Progress;
   onChange: (p: Progress) => void;
 }) {
-  const spent = useMemo(() => {
-    let s = 0;
-    for (const u of FORGE) {
-      const lv = progress.upgrades[u.id] ?? 0;
-      for (let i = 0; i < lv; i++) s += costOf(u, i);
-    }
-    return s;
-  }, [progress.upgrades]);
-
-  const budget = useMemo(() => STAGES.reduce((s, st) => s + st.goldCap, 0), []);
-  const tree = useMemo(() => treeTotalCost(), []);
+  const spent = useMemo(() => spentOn(progress.upgrades), [progress.upgrades]);
+  const levels = useMemo(
+    () => FORGE.reduce((n, u) => n + Math.min(progress.upgrades[u.id] ?? 0, u.maxLevel), 0),
+    [progress.upgrades],
+  );
+  const maxLevels = useMemo(() => FORGE.reduce((n, u) => n + u.maxLevel, 0), []);
 
   const buy = (u: ForgeUpgrade) => {
     const lv = progress.upgrades[u.id] ?? 0;
@@ -52,12 +46,12 @@ export function ForgePanel({
         Bought once, kept forever. Every run after this starts stronger — even the ones you lose.
       </p>
 
-      {/* Cüzdan + bütçe gerçeği: oyundaki gold sonlu, hepsi alınamaz */}
+      {/* Cüzdan + ilerleme. Artık "bütçe" yok — gold sonsuz akıyor, ağaç doymuyor. */}
       <div style={{ ...glass(10), padding: '9px 12px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>{Math.floor(progress.gold)} GOLD</span>
         <span style={{ fontSize: 10.5, color: C.boneFaint, textAlign: 'right' }}>
-          harcanan {spent} · ağaç {tree}<br />
-          oyundaki toplam gold {budget} — hepsini alamazsın, seç
+          {levels}/{maxLevels} levels forged<br />
+          {spent} gold spent here
         </span>
       </div>
 

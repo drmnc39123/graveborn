@@ -10,7 +10,7 @@ import { SpatialHash } from './spatial';
 import {
   CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
-  WEAPONS, weaponById, xpForLevel,
+  WEAPONS, descentStage, rareDropAmount, rareDropChance, weaponById, xpForLevel,
   type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
 } from './config';
 
@@ -62,6 +62,9 @@ export interface Offer {
 
 export type Phase = 'running' | 'levelup' | 'dead' | 'won';
 
+/** campaign = bitirilebilir bölüm · descent = sonsuz derinlik merdiveni */
+export type RunMode = 'campaign' | 'descent';
+
 /** Bölüm ilerlemesi — HUD "kaç düşman kaldı" göstergesi için */
 export interface StageState {
   def: StageDef;
@@ -71,6 +74,11 @@ export interface StageState {
   killed: number;
   /** boss çağrıldı mı */
   bossSpawned: boolean;
+  mode: RunMode;
+  /** descent'te şu an inilen derinlik (campaign'de 0) */
+  depth: number;
+  /** bu koşuda TEMİZLENEN en derin seviye — ödül bundan hesaplanır */
+  deepestCleared: number;
 }
 
 /** VS istatistik sistemi (CLONE-SPEC §1). Yüzdeler 1.0 = %100. */
@@ -101,7 +109,12 @@ export class Game {
   time = 0;
   phase: Phase = 'running';
   kills = 0;
-  gold = 0;
+  /**
+   * Bu koşuda NADİR DÜŞÜŞTEN toplanan gold. Kill başına maaş DEĞİL —
+   * ilerleme ödülü (derinlik/ilk geçiş) buraya girmez, onu progress.ts hesaplar.
+   * İsim bilerek `gold` değil: eskiden `gold` "kazanılan her şey" sanılıyordu.
+   */
+  rareGold = 0;
   /** kaç kez dirilindi (Second Burial) — run özetinde raporlanır */
   revives = 0;
 
@@ -127,6 +140,8 @@ export class Game {
 
   /** Oynanan bölüm — sabit düşman havuzu, "hepsi öldü" bitiş koşulu */
   stage: StageState;
+  /** merdivenin ait olduğu kampanya bölümü (descent tanımı bundan üretilir) */
+  readonly baseStageId: number;
   /** son evrim (HUD duyurusu için); render/HUD okur, simülasyonu etkilemez */
   lastEvolution: { name: string; at: number } | null = null;
 
@@ -160,11 +175,28 @@ export class Game {
   /** The Forge'dan gelen kalıcı bonuslar — run boyunca sabit, tabana eklenir */
   private permanent: Partial<Record<StatKey, number>>;
 
-  constructor(seed: number, stageDef: StageDef = STAGES[0], permanent: Partial<Record<StatKey, number>> = {}) {
+  constructor(
+    seed: number,
+    stageDef: StageDef = STAGES[0],
+    permanent: Partial<Record<StatKey, number>> = {},
+    mode: RunMode = 'campaign',
+  ) {
     this.seed = seed;
     this.rng = createRng(seed);
     this.permanent = permanent;
-    this.stage = { def: stageDef, toSpawn: stageDef.enemyCount, killed: 0, bossSpawned: false };
+    // descent'te 1. derinlikten başlanır; verilen stageDef sadece "hangi bölümün
+    // merdiveni" bilgisini taşır, asıl tanım descentStage()'ten gelir
+    const startDef = mode === 'descent' ? descentStage(stageDef.id, 1) : stageDef;
+    this.baseStageId = stageDef.id;
+    this.stage = {
+      def: startDef,
+      toSpawn: startDef.enemyCount,
+      killed: 0,
+      bossSpawned: false,
+      mode,
+      depth: mode === 'descent' ? 1 : 0,
+      deepestCleared: 0,
+    };
     this.recomputeStats();          // kalıcı bonuslar daha ilk kareden geçerli
     this.hp = this.stats.maxHp;     // +max can alındıysa dolu başla
     // Başlangıç silahı: Bone Shard (VS'te her karakter bir silahla başlar)
@@ -287,8 +319,32 @@ export class Game {
     // Sandık bekleyen varsa bitirme — oyuncu evrim sandığını kaçırmasın.
     if (this.remaining === 0 && this.chests.length === 0) {
       const needsBoss = !!this.stage.def.boss && !this.stage.bossSpawned;
-      if (!needsBoss) this.phase = 'won';
+      if (!needsBoss) {
+        if (this.stage.mode === 'descent') this.advanceDepth();
+        else this.phase = 'won';
+      }
     }
+  }
+
+  /**
+   * Bir derinlik temizlendi → bir alta in. Koşu BİTMEZ.
+   *
+   * ⚠️ CAN DOLDURULMAZ. Descent'i bitiren şey zamanlayıcı değil canın:
+   * ne kadar hasarsız oynadıysan o kadar derine inersin. Burada HP'yi
+   * doldurmak modu sonsuz ve anlamsız hale getirir.
+   * Silah/pasif/level de korunur — merdiven boyunca build büyür.
+   */
+  private advanceDepth() {
+    this.stage.deepestCleared = this.stage.depth;
+    const next = this.stage.depth + 1;
+    const def = descentStage(this.baseStageId, next);
+    this.stage.def = def;
+    this.stage.depth = next;
+    this.stage.toSpawn = def.enemyCount;
+    this.stage.killed = 0;
+    this.stage.bossSpawned = false;
+    this.spawnAcc = 0;
+    this.events.add('depth');
   }
 
   private movePlayer(dt: number) {
@@ -413,7 +469,7 @@ export class Game {
       const evolved = c.evolution ? this.tryEvolve() : false;
       if (!evolved) {
         // Evrim yoksa sandık boşa gitmesin (VS: sandık altın/XP verir)
-        this.gold += 200 * this.stats.greed;
+        this.rareGold += 200 * this.stats.greed;
         this.addXp(60);
       }
     }
@@ -682,12 +738,32 @@ export class Game {
   private killEnemy(e: Enemy) {
     this.kills += 1;
     this.stage.killed += 1;
-    this.gold += this.stage.def.goldPerKill * this.stats.greed; // Coin Mask
+    this.rollRareGold();
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
     this.events.add('kill');
     if (e.boss) this.chests.push({ x: e.x, y: e.y, evolution: e.boss.evolutionChest });
     // headless koşuda render boşaltmaz → tavan koy, sonsuz büyümesin
     if (this.deaths.length < 256) this.deaths.push({ x: e.x, y: e.y });
+  }
+
+  /**
+   * NADİR GOLD DÜŞÜŞÜ — musluğun ikinci parçası (Kintara modeli).
+   *
+   * Kill başına maaş yok; her kill düşük ihtimalle gold düşürür. İhtimal
+   * derinlikle iyileşir, böylece derin oyuncu üretici / sığ oyuncu cüzi kalır.
+   *
+   * ⚠️ Zar HER kill'de atılır (düşse de düşmese de) — yoksa RNG akışı
+   * ihtimale bağlı olarak kayar ve aynı seed farklı koşu üretir.
+   * ⚠️ greed BURAYA girmez: "gold al → düşüş oranı artır" sarmalı kurulmasın.
+   */
+  private rollRareGold() {
+    const depth = this.stage.depth;
+    const hit = this.rng.next() < rareDropChance(depth);
+    const roll = this.rng.next();
+    if (hit) {
+      this.rareGold += rareDropAmount(depth, roll);
+      this.events.add('coin');
+    }
   }
 
   private collidePlayer(dt: number) {
@@ -850,14 +926,24 @@ export class Game {
     arr.pop();
   }
 
-  /** Run özeti — ileride sunucuya bu gönderilecek (ödülü SUNUCU hesaplar) */
+  /**
+   * Run özeti — Faz D'de sunucuya bu gönderilecek, ödülü SUNUCU hesaplar.
+   *
+   * Sunucu `rareGold`'a körlemesine güvenmeyecek: motor deterministik olduğu
+   * için aynı seed + aynı mod ile koşuyu yeniden türetip sayıyı doğrulayabilir.
+   * `deepestCleared` ise tek tam sayı karşılaştırmasıyla ödüle çevrilir.
+   */
   summary() {
     return {
       seed: this.seed,
+      mode: this.stage.mode,
+      stageId: this.baseStageId,
+      depth: this.stage.depth,
+      deepestCleared: this.stage.deepestCleared,
       durationSec: Math.round(this.time),
       level: this.level,
       kills: this.kills,
-      gold: this.gold,
+      rareGold: Math.floor(this.rareGold),
       outcome: this.phase,
     };
   }

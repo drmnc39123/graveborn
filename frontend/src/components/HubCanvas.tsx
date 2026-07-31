@@ -203,7 +203,7 @@ export function HubCanvas({
       )}
 
       <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 11, color: debug ? C.blood : C.boneFaint }}>
-        WASD / arrows · E to interact · <b>F1</b> {debug ? 'çarpışma AÇIK' : 'çarpışma'}
+        WASD / arrows · E to interact · <b>F1</b> {debug ? 'collision ON' : 'collision'}
       </div>
     </div>
   );

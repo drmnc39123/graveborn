@@ -10,8 +10,8 @@
 import { Game } from './engine.js';
 import {
   COOLDOWN_FLOOR, MAX_PASSIVES, MAX_WEAPONS, PASSIVES, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
+  descentStage, rareDropChance,
 } from './config.js';
-import { applyRunResult, emptyProgress } from './progress.js';
 import { seedFromString } from './rng.js';
 
 const FAIL: string[] = [];
@@ -100,8 +100,10 @@ check('düşman doğuyor', a.enemies.length > 0, `${a.enemies.length} canlı`);
 check('düşman ölüyor', a.kills > 0, `${a.kills} kill`);
 check('mermi uçuyor', a.projectiles.length > 0, `${a.projectiles.length} mermi`);
 check('XP/level ilerliyor', a.level > 1, `LV${a.level}`);
-check('gold bölümün oranıyla birikiyor', Math.abs(a.gold - a.kills * a.stage.def.goldPerKill) < 0.01,
-  `${a.gold} gold = ${a.kills} kill × ${a.stage.def.goldPerKill}`);
+// Gold artık kill başına MAAŞ değil, nadir düşüş (Kintara modeli). Sadece
+// "birikiyor mu" bakılır; oran testi [3C]'de ihtimalle doğrulanıyor.
+check('nadir düşüş gold birikiyor', a.rareGold >= 0 && a.rareGold < a.kills,
+  `${a.rareGold} gold / ${a.kills} kill`);
 
 // ── 3) BÖLÜM SİSTEMİ: sabit düşman havuzu, bitirilebilirlik ──
 // Sonsuz koşu değil artık — her bölümde TAM OLARAK enemyCount düşman var.
@@ -119,7 +121,7 @@ for (const def of STAGES.slice(0, 3)) {
   }
   const bossKills = def.boss ? 1 : 0;
   console.log(`     ${def.name}: ${g.kills}/${def.enemyCount}${bossKills ? '+boss' : ''} kill, ` +
-    `${(g.time / 60).toFixed(1)} dk, LV${g.level}, ${Math.round(g.gold)} gold`);
+    `${(g.time / 60).toFixed(1)} dk, LV${g.level}, ${Math.round(g.rareGold)} nadir gold`);
   check(`${def.name} tamamlanabiliyor`, g.phase === 'won', `faz: ${g.phase}`);
   check(`${def.name} tam ${def.enemyCount}${bossKills ? '+1' : ''} düşman içeriyor`,
     g.kills === def.enemyCount + bossKills, `${g.kills} kill`);
@@ -143,42 +145,78 @@ for (const def of STAGES.slice(0, 3)) {
   check('boss ancak havuz bitince geliyor', !bossWhileHordeAlive);
 }
 
-// ── 4) Ölüm ──
-// ── 3B) EKONOMİ: bölüm gold tavanı (EXPLOIT KAPISI) ──
-// Bu grup ekonominin can damarı. Bozulursa oyuncu kolay bölümü sonsuz tekrar
-// oynayıp gold basar ve shop anlamsızlaşır.
-console.log('\n[3B] Gold tavanı / exploit');
+// ── 3B) THE DESCENT: sonsuz derinlik merdiveni ──
+// Oyunun ömrü bu modda. Kampanya ~30 dakikalık tek seferlik tüketim;
+// tekrar değeri buradan geliyor.
+console.log('\n[3B] The Descent');
 {
-  const st = STAGES[1]; // 700 gold tavanlı bölüm
-  let p = emptyProgress();
+  const g = new Game(seedFromString('descent'), STAGES[0], {}, 'descent');
+  g.setViewport(1280, 720);
+  let hpRefilledOnDescend = false;
+  let lastDepth = g.stage.depth;
+  let hpBeforeDescend = g.hp;
+  const bossDepths: number[] = [];
 
-  // 1. deneme: 695 kazanıp öldü
-  const r1 = applyRunResult(p, st.id, 695, false);
-  p = r1.progress;
-  check('ilk denemede kazanılan gold veriliyor', r1.awarded === 695, `+${r1.awarded}`);
-  check('bölüm tamamlanmadıysa sonraki bölüm açılmıyor', p.unlockedStage === 1, `unlocked ${p.unlockedStage}`);
+  for (let i = 0; i < Math.round(40 * 60 / TICK); i++) {
+    if (g.phase === 'levelup') g.choose(g.offers[0].id);
+    if (g.phase !== 'running') break;
+    // Gücü değil MERDİVENİ ölçüyoruz: ölmesin diye canı tazeliyoruz ama
+    // "derinlik geçişinde motor kendiliğinden doldurdu mu" ayrı bakılıyor.
+    if (g.stage.depth !== lastDepth) {
+      if (g.hp > hpBeforeDescend + 0.001) hpRefilledOnDescend = true;
+      lastDepth = g.stage.depth;
+      if (g.stage.def.boss) bossDepths.push(g.stage.depth);
+    }
+    hpBeforeDescend = g.hp;
+    g.hp = g.stats.maxHp;
+    g.setInput(...fleeInput(g));
+    g.step();
+    if (g.stage.depth >= 22) break;
+  }
 
-  // 2. deneme: baştan oynadı, yine 700 kazandı — SADECE kalan 5 verilmeli
-  const r2 = applyRunResult(p, st.id, 700, true);
-  p = r2.progress;
-  check('tekrar oynayınca sadece TAVAN FARKI veriliyor', r2.awarded === 5, `+${r2.awarded} (700 kazandı)`);
-  check('tavan aşımı işaretleniyor', r2.capped);
-  check('toplam gold tavanı geçmiyor', p.claimed[st.id] === st.goldCap, `${p.claimed[st.id]}/${st.goldCap}`);
-  check('bölüm bitince sonraki açılıyor', p.unlockedStage === st.id + 1, `unlocked ${p.unlockedStage}`);
+  console.log(`     derinlik ${g.stage.depth}, temizlenen ${g.stage.deepestCleared}, ` +
+    `${g.kills} kill, ${(g.time / 60).toFixed(1)} dk, ${Math.round(g.rareGold)} nadir gold`);
+  check('descent bitmiyor, derinlik ilerliyor', g.stage.depth >= 10, `derinlik ${g.stage.depth}`);
+  check('descent asla "won" olmuyor', g.phase !== 'won', `faz: ${g.phase}`);
+  check('temizlenen derinlik takip ediliyor', g.stage.deepestCleared === g.stage.depth - 1,
+    `${g.stage.deepestCleared} vs ${g.stage.depth}`);
+  check('derinlik geçişinde CAN DOLDURULMUYOR', !hpRefilledOnDescend);
+  check('her 5 derinlikte boss var',
+    bossDepths.length > 0 && bossDepths.every((d) => d % 5 === 0), `boss derinlikleri: ${bossDepths.join(',')}`);
+  check('derinlik zorlaşıyor', descentStage(1, 20).hpMul > descentStage(1, 5).hpMul * 3,
+    `d5 ${descentStage(1, 5).hpMul.toFixed(1)} → d20 ${descentStage(1, 20).hpMul.toFixed(1)}`);
+  check('sahne tavanı aşılmıyor (perf)', descentStage(1, 200).maxAlive <= 420,
+    `${descentStage(1, 200).maxAlive}`);
+}
 
-  // 3. deneme: tavan dolu, hiç gold verilmemeli
-  const r3 = applyRunResult(p, st.id, 700, true);
-  check('tavan dolduktan sonra gold VERİLMİYOR', r3.awarded === 0, `+${r3.awarded}`);
-  check('cüzdan da artmıyor', r3.progress.gold === p.gold, `${r3.progress.gold} vs ${p.gold}`);
-
-  // farklı bölümün tavanı bağımsız olmalı
-  const other = applyRunResult(r3.progress, STAGES[0].id, 1000, true);
-  check('başka bölümün tavanı bağımsız', other.awarded === STAGES[0].goldCap,
-    `+${other.awarded} (tavan ${STAGES[0].goldCap})`);
-
-  // negatif / hileli girdi
-  const neg = applyRunResult(emptyProgress(), st.id, -500, false);
-  check('negatif kazanç gold eksiltmiyor', neg.awarded === 0 && neg.progress.gold === 0);
+// ── 3C) Nadir düşüş determinizmi ──
+// Sunucu doğrulaması buna dayanacak: aynı seed → aynı gold, replay gerekmeden.
+console.log('\n[3C] Nadir düşüş');
+{
+  const runRare = (seed: number) => {
+    const g = new Game(seed, STAGES[0]);
+    g.setViewport(1280, 720);
+    for (let i = 0; i < Math.round(180 / TICK); i++) {
+      if (g.phase === 'levelup') g.choose(g.offers[0].id);
+      if (g.phase !== 'running') break;
+      g.hp = g.stats.maxHp;
+      g.setInput(...fleeInput(g));
+      g.step();
+    }
+    return { gold: g.rareGold, kills: g.kills };
+  };
+  const x = runRare(4242);
+  const y = runRare(4242);
+  const z = runRare(9999);
+  check('aynı seed aynı nadir gold', x.gold === y.gold, `${x.gold} = ${y.gold}`);
+  check('farklı seed farklı nadir gold', x.gold !== z.gold, `${x.gold} vs ${z.gold}`);
+  check('düşüş NADİR (kill başına maaş değil)', x.gold < x.kills,
+    `${x.gold} gold / ${x.kills} kill`);
+  check('ama hiç düşmüyor da değil', x.gold > 0, `${x.gold} gold`);
+  // ihtimal derinlikle iyileşmeli — derin oyuncu üretici olmalı
+  check('düşüş ihtimali derinlikle artıyor', rareDropChance(30) > rareDropChance(0),
+    `${rareDropChance(0).toFixed(4)} → ${rareDropChance(30).toFixed(4)}`);
+  check('düşüş ihtimali tavanlı', rareDropChance(100000) <= 0.05);
 }
 
 console.log('\n[4] Ölüm');
@@ -418,11 +456,12 @@ check('ikisi de MAX ise evrim OLUYOR', evolveScenario(true, true));
   w.level = w.def.maxLevel;
   (g as any).givePassive('hands');
   g.passives[0].level = g.passives[0].def.maxLevel;
-  const goldBefore = g.gold;
+  const goldBefore = g.rareGold;
   g.chests.push({ x: g.px, y: g.py, evolution: false });
   g.step();
   check('normal sandık evrim VERMİYOR', g.weapons.every((x) => x.def.id !== 'reliquary'));
-  check('normal sandık ödül veriyor', g.gold > goldBefore + 100, `+${Math.round(g.gold - goldBefore)} gold`);
+  check('normal sandık ödül veriyor', g.rareGold > goldBefore + 100,
+    `+${Math.round(g.rareGold - goldBefore)} gold`);
 }
 
 // Evrimleşmiş silah level-up havuzunda ÇIKMAMALI
