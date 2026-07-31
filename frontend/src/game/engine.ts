@@ -157,10 +157,16 @@ export class Game {
   private viewW = 800;
   private viewH = 600;
 
-  constructor(seed: number, stageDef: StageDef = STAGES[0]) {
+  /** The Forge'dan gelen kalıcı bonuslar — run boyunca sabit, tabana eklenir */
+  private permanent: Partial<Record<StatKey, number>>;
+
+  constructor(seed: number, stageDef: StageDef = STAGES[0], permanent: Partial<Record<StatKey, number>> = {}) {
     this.seed = seed;
     this.rng = createRng(seed);
+    this.permanent = permanent;
     this.stage = { def: stageDef, toSpawn: stageDef.enemyCount, killed: 0, bossSpawned: false };
+    this.recomputeStats();          // kalıcı bonuslar daha ilk kareden geçerli
+    this.hp = this.stats.maxHp;     // +max can alındıysa dolu başla
     // Başlangıç silahı: Bone Shard (VS'te her karakter bir silahla başlar)
     this.giveWeapon('shard');
   }
@@ -192,12 +198,27 @@ export class Game {
    */
   private recomputeStats() {
     const s: Stats = { ...STAT_BASE };
+
+    // KALICI yükseltmeler (The Forge) tabana eklenir — run boyunca sabit.
+    // maxHp yüzde olarak geldiği için ayrı ele alınır; diğerleri toplamsal.
+    let permHpPct = 0;
+    for (const k of Object.keys(this.permanent) as StatKey[]) {
+      const v = this.permanent[k] ?? 0;
+      if (!v) continue;
+      if (k === 'maxHp') permHpPct += v;
+      else s[k] += v;
+    }
+    if (permHpPct) s.maxHp = PLAYER.maxHp * (1 + permHpPct);
+
+    // Run içi pasifler bunun ÜSTÜNE biner
+    let runHpPct = 0;
     for (const p of this.passives) {
       const add = p.def.perLevel * p.level;
       if (p.def.stat === 'cooldown') s.cooldown -= add;      // bekleme AZALIR
-      else if (p.def.stat === 'maxHp') s.maxHp = PLAYER.maxHp * (1 + add);
+      else if (p.def.stat === 'maxHp') runHpPct += add;
       else s[p.def.stat] += add;
     }
+    if (runHpPct) s.maxHp = PLAYER.maxHp * (1 + permHpPct + runHpPct);
     // VS tavanları
     for (const k of Object.keys(STAT_CAP) as StatKey[]) {
       const cap = STAT_CAP[k]!;

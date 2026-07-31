@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Game } from '@/game/engine';
 import { render, resetEffects } from '@/game/render';
-import { MAX_CATCHUP, TICK, type StageDef } from '@/game/config';
+import { MAX_CATCHUP, TICK, type StageDef, type StatKey } from '@/game/config';
 
 // Günlük seed — aynı gün aynı bölüm herkeste aynı akışı verir (adil kıyas)
 function dailySeed() {
@@ -34,11 +34,20 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, onFinish }: { stage: StageDef; onFinish: (goldEarned: number, cleared: boolean) => void }) {
+export function GameCanvas({ stage, permanent, onFinish }: {
+  stage: StageDef;
+  /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
+  permanent?: Partial<Record<StatKey, number>>;
+  onFinish: (goldEarned: number, cleared: boolean) => void;
+}) {
   // Seed bölüme + güne bağlı: aynı gün aynı bölüm herkeste aynı akış
   const seedText = `${stage.id}:${dailySeed()}`;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
+  // Bonusları ref'te tutuyoruz: dep dizisine koyarsak her render'da yeni nesne
+  // kimliği gelir ve oyun kendini yeniden başlatır. Run başında okunması yeterli.
+  const permRef = useRef(permanent);
+  permRef.current = permanent;
   const keysRef = useRef(new Set<string>());
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
   const [hud, setHud] = useState<Hud | null>(null);
@@ -56,7 +65,7 @@ export function GameCanvas({ stage, onFinish }: { stage: StageDef; onFinish: (go
     if (!ctx) return;
 
     preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(seedFromString(seedText), stage);
+    const game = new Game(seedFromString(seedText), stage, permRef.current ?? {});
     gameRef.current = game;
     resetEffects(); // önceki run'ın patlamaları yeni run'a taşmasın
 

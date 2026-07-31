@@ -6,6 +6,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
+import { ForgePanel } from '@/components/ForgePanel';
+import { permanentBonus } from '@/game/forge';
 import { STAGES, stageById } from '@/game/config';
 import { applyRunResult, loadProgress, remainingGold, saveProgress, type Progress } from '@/game/progress';
 import type { BuildingId } from '@/game/hub';
@@ -39,6 +41,7 @@ export default function PlayPage() {
       <div style={{ position: 'fixed', inset: 0 }}>
         <GameCanvas
           stage={def}
+          permanent={permanentBonus((progress ?? loadProgress()).upgrades)}
           onFinish={(goldEarned, cleared) => finishStage(def.id, goldEarned, cleared)}
         />
       </div>
@@ -62,6 +65,8 @@ export default function PlayPage() {
                 progress={progress}
                 onPick={(id) => { setPanel(null); setScreen({ kind: 'stage', stageId: id }); }}
               />
+            ) : panel === 'upgrade' ? (
+              <ForgePanel progress={progress ?? loadProgress()} onChange={setProgress} />
             ) : (
               <ComingSoon id={panel} />
             )}
