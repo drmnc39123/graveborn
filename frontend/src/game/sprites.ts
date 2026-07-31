@@ -61,6 +61,30 @@ const monster = (file: string, contentRatio: number, anchorY: number, drawHeight
   },
 });
 
+/**
+ * MutterPixel `_stripN` şeridi → ActorArt. Dosya deseni:
+ * `<taban>_<anim>_strip<N>.png`, kareler yatayda dizili.
+ *
+ * ⚠️ SADECE MOTORUN KULLANDIĞI animasyonlar bildirilir. render.ts düşman için
+ * yalnızca `walk` (ve varsa `hit`) istiyor; idle/attack/death bildirmek
+ * preload'ın her birini indirmeye çalışması demek — vermin paketinde `hit`
+ * yok, `attack` da `bite` adında, hepsi 404 olurdu.
+ */
+const strip = (
+  base: string, n: number,
+  contentRatio: number, anchorY: number, drawHeight: number,
+  opts: { hit?: boolean } = {},
+): ActorArt => ({
+  drawHeight,
+  contentRatio,
+  anchorY,
+  flipByVelocity: true,
+  anims: {
+    walk: SHEET(`/art/enemies/${base}_walk_strip${n}.png`, n, 10),
+    ...(opts.hit ? { hit: SHEET(`/art/enemies/${base}_hit_strip${n}.png`, n, 16) } : {}),
+  },
+});
+
 /** Düşman görselleri — config.ts'teki EnemyType.art anahtarıyla eşleşir.
  *  contentRatio/anchorY değerleri her canavar için ALFA SINIR KUTUSU ÖLÇÜLEREK bulundu. */
 export const ENEMY_ART: Record<string, ActorArt> = {
@@ -82,6 +106,15 @@ export const ENEMY_ART: Record<string, ActorArt> = {
   boss_mini: monster('01', 0.675, 0.838, 110),
   boss_mega: monster('09', 0.662, 0.812, 140),
   boss_nightmare: monster('10', 0.562, 0.75, 175),
+
+  // MutterPixel undead + vermin (32×32 şerit). Derin bölümlerin sürüsü
+  // topdown canavarlardan görsel olarak AYRIŞSIN diye eklendi.
+  // contentRatio/anchorY tarayıcıda alfa sınır kutusu ÖLÇÜLEREK bulundu.
+  skel_armored: strip('undead/spr_Armored_Skeleton', 9, 0.938, 0.969, 34, { hit: true }),
+  skel_basic: strip('undead/spr_Basic_Skeleton', 9, 0.875, 0.938, 30, { hit: true }),
+  bone_archer: strip('undead/spr_Bone_Archer', 7, 0.875, 0.938, 32, { hit: true }),
+  rat_small: strip('vermin/spr_rat_1', 13, 0.344, 0.688, 20),   // hit şeridi yok
+  rat_large: strip('vermin/spr_rat_2', 13, 0.344, 0.688, 24),   // hit şeridi yok
 
   // LuizMelo (CC0) yandan görünüm — çeşitlilik için karışımda kalıyor
   skeleton: {

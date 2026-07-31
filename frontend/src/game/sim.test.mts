@@ -9,9 +9,10 @@
 
 import { Game } from './engine.js';
 import {
-  COOLDOWN_FLOOR, MAX_PASSIVES, MAX_WEAPONS, PASSIVES, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
+  COOLDOWN_FLOOR, ENEMIES, MAX_PASSIVES, MAX_WEAPONS, PASSIVES, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
   descentStage, rareDropChance,
 } from './config.js';
+import { ENEMY_ART } from './sprites.js';
 import { seedFromString } from './rng.js';
 
 const FAIL: string[] = [];
@@ -104,6 +105,39 @@ check('XP/level ilerliyor', a.level > 1, `LV${a.level}`);
 // "birikiyor mu" bakılır; oran testi [3C]'de ihtimalle doğrulanıyor.
 check('nadir düşüş gold birikiyor', a.rareGold >= 0 && a.rareGold < a.kills,
   `${a.rareGold} gold / ${a.kills} kill`);
+
+// ── 2B) VERİ BÜTÜNLÜĞÜ ──
+// Bu grup SESSİZ kırılmaları yakalar: bölümün havuzuna yanlış bir düşman id'si
+// ya da olmayan bir görsel anahtarı yazmak hiçbir hata üretmez — düşman
+// sessizce renkli daireye düşer ve fark edilmesi haftalar alır.
+console.log('\n[2B] Veri bütünlüğü');
+{
+  const ids = new Set(ENEMIES.map((e) => e.id));
+  const badPool: string[] = [];
+  for (const s of STAGES) for (const id of s.enemies) if (!ids.has(id)) badPool.push(`${s.name}→${id}`);
+  check('her bölümün havuzu geçerli düşman id kullanıyor', badPool.length === 0, badPool.join(', ') || `${STAGES.length} bölüm`);
+
+  const artKeys = new Set(Object.keys(ENEMY_ART));
+  const badArt = ENEMIES.filter((e) => e.art && !artKeys.has(e.art)).map((e) => `${e.id}→${e.art}`);
+  check('her düşmanın görsel anahtarı ENEMY_ART\'ta var', badArt.length === 0, badArt.join(', ') || `${ENEMIES.length} tip`);
+
+  const badBoss = STAGES.filter((s) => s.boss && !artKeys.has(s.boss.art)).map((s) => s.name);
+  check('boss görselleri de tanımlı', badBoss.length === 0, badBoss.join(', '));
+
+  // Kullanılmayan düşman tipi = ölü içerik. Uyarı, hata değil.
+  const used = new Set(STAGES.flatMap((s) => s.enemies));
+  const unused = ENEMIES.filter((e) => !used.has(e.id)).map((e) => e.id);
+  console.log(`     hiçbir bölümde kullanılmayan tip: ${unused.length ? unused.join(', ') : 'yok'}`);
+
+  // Ödül eğrisi monoton artmalı — sonraki bölüm daha az ödemesin
+  let mono = true;
+  for (let i = 1; i < STAGES.length; i++) {
+    if (STAGES[i].firstClearGold <= STAGES[i - 1].firstClearGold) mono = false;
+    if (STAGES[i].enemyCount <= STAGES[i - 1].enemyCount) mono = false;
+  }
+  check('bölümler zorlaştıkça daha çok ödüyor', mono);
+  check('sahne tavanı perf sınırında', STAGES.every((s) => s.maxAlive <= 420));
+}
 
 // ── 3) BÖLÜM SİSTEMİ: sabit düşman havuzu, bitirilebilirlik ──
 // Sonsuz koşu değil artık — her bölümde TAM OLARAK enemyCount düşman var.

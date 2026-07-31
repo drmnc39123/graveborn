@@ -74,6 +74,40 @@ export const STAGES: readonly StageDef[] = [
     hpMul: 3.8, speedMul: 1.16,
     boss: { hp: 30000, speed: 54, damage: 38, radius: 52, art: 'boss_nightmare', label: 'The Unburied' },
   },
+  // ── GEÇ KAMPANYA ──
+  // Buradan itibaren HER bölümde boss var: kampanyanın ikinci yarısı artık
+  // "daha çok düşman" değil, her seferinde bir final. Düşman havuzu da
+  // undead/vermin'e kayıyor — sürü görsel olarak da değişiyor.
+  {
+    id: 6, name: 'The Sunken Ossuary', enemyCount: 1100, firstClearGold: 6200,
+    spawnRate: 5.4, maxAlive: 220, enemies: ['fiend', 'crab', 'rat', 'dire_rat', 'warrior'],
+    hpMul: 5.2, speedMul: 1.2,
+    boss: { hp: 62000, speed: 50, damage: 44, radius: 54, art: 'boss_mega', label: 'The Drowned Choir' },
+  },
+  {
+    id: 7, name: 'Gallows Reach', enemyCount: 1500, firstClearGold: 9000,
+    spawnRate: 6.0, maxAlive: 260, enemies: ['dire_rat', 'warrior', 'hulk', 'bone_thrall'],
+    hpMul: 7.0, speedMul: 1.24,
+    boss: { hp: 105000, speed: 52, damage: 50, radius: 56, art: 'boss_nightmare', label: 'The Hanged Warden' },
+  },
+  {
+    id: 8, name: 'The Bone Choir', enemyCount: 2000, firstClearGold: 13000,
+    spawnRate: 6.7, maxAlive: 300, enemies: ['bone_thrall', 'bone_archer', 'hulk', 'crab'],
+    hpMul: 9.2, speedMul: 1.28,
+    boss: { hp: 170000, speed: 54, damage: 58, radius: 58, art: 'boss_mega', label: 'The Choirmaster' },
+  },
+  {
+    id: 9, name: 'The Iron Vigil', enemyCount: 2600, firstClearGold: 18500,
+    spawnRate: 7.4, maxAlive: 350, enemies: ['grave_knight', 'bone_archer', 'warrior', 'hulk'],
+    hpMul: 11.5, speedMul: 1.32,
+    boss: { hp: 270000, speed: 56, damage: 66, radius: 60, art: 'boss_nightmare', label: 'The Iron Vigil' },
+  },
+  {
+    id: 10, name: 'The Last Barrow', enemyCount: 3400, firstClearGold: 26000,
+    spawnRate: 8.0, maxAlive: 420, enemies: ['grave_knight', 'bone_archer', 'bone_thrall', 'hulk', 'fiend'],
+    hpMul: 14, speedMul: 1.36,
+    boss: { hp: 440000, speed: 58, damage: 76, radius: 66, art: 'boss_nightmare', label: 'The First Graveborn' },
+  },
 ] as const;
 
 export function stageById(id: number): StageDef | undefined {
@@ -411,6 +445,15 @@ export const ENEMIES: readonly EnemyType[] = [
   { id: 'crab', hp: 90, speed: 33, damage: 16, radius: 17, xp: 7, color: '#efa72e', fromMinute: 8, art: 'mon_crab' },
   { id: 'warrior', hp: 110, speed: 45, damage: 18, radius: 15, xp: 9, color: '#a01226', fromMinute: 10, art: 'mon_warrior' },
   { id: 'hulk', hp: 210, speed: 26, damage: 22, radius: 22, xp: 14, color: '#5f9e4a', fromMinute: 12, art: 'mon_hulk' },
+
+  // ── GEÇ KAMPANYA / DERİN İNİŞ SÜRÜSÜ ──
+  // MutterPixel undead + vermin. Topdown canavarlar önden bakan çizimler;
+  // bunlar yandan. Silüet farkı, geç bölümlerin "aynı sürü" hissini kırıyor.
+  { id: 'rat', hp: 34, speed: 74, damage: 8, radius: 9, xp: 3, color: '#b8ae98', fromMinute: 3, art: 'rat_small' },
+  { id: 'dire_rat', hp: 70, speed: 62, damage: 13, radius: 12, xp: 6, color: '#8a97a3', fromMinute: 6, art: 'rat_large' },
+  { id: 'bone_thrall', hp: 130, speed: 43, damage: 16, radius: 13, xp: 10, color: '#ddd3bb', fromMinute: 9, art: 'skel_basic' },
+  { id: 'bone_archer', hp: 150, speed: 40, damage: 19, radius: 13, xp: 12, color: '#e3d8c0', fromMinute: 11, art: 'bone_archer' },
+  { id: 'grave_knight', hp: 320, speed: 34, damage: 26, radius: 16, xp: 20, color: '#8a97a3', fromMinute: 14, art: 'skel_armored' },
 ] as const;
 
 /** DENGE NOTU: ilk değerler (base 2.4 / perMinute 1.7 / cap 620 / hp +%34) ile
