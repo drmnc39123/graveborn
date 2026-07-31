@@ -13,6 +13,7 @@ import {
   WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, weaponById, xpForLevel,
   type Behavior, type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
 } from './config';
+import { DEFAULT_HERO, heroById, mergeStats } from './heroes';
 
 export interface Enemy {
   x: number; y: number; hp: number; maxHp: number;
@@ -53,8 +54,12 @@ export interface Chest { x: number; y: number; evolution: boolean }
 export interface Projectile {
   x: number; y: number; vx: number; vy: number;
   damage: number; radius: number; life: number; pierce: number;
-  /** boomerang: ömür bu değerin ALTINA inince oyuncuya dönmeye başlar */
+  /** boomerang: ömür bu değerin ALTINA inince oyuncuya dönmeye başlar (emniyet) */
   returnAt?: number;
+  /** boomerang: oyuncudan bu mesafeyi geçince döner — ASIL koşul bu */
+  maxDist?: number;
+  /** boomerang: dönüşe geçti mi (bir kez döndü mü geri gitmez) */
+  returning?: boolean;
   /** boomerang: dönüş hızı (ilk atış hızı) */
   speed?: number;
 }
@@ -178,6 +183,9 @@ export class Game {
   stage: StageState;
   /** merdivenin ait olduğu kampanya bölümü (descent tanımı bundan üretilir) */
   readonly baseStageId: number;
+  /** oynanan karakter — SADECE VERİ. Render bununla doğru sprite'ı seçer;
+   *  motor görsel bilmez, DOM'suz kalır. */
+  readonly heroId: string;
   /** son evrim (HUD duyurusu için); render/HUD okur, simülasyonu etkilemez */
   lastEvolution: { name: string; at: number } | null = null;
 
@@ -216,10 +224,15 @@ export class Game {
     stageDef: StageDef = STAGES[0],
     permanent: Partial<Record<StatKey, number>> = {},
     mode: RunMode = 'campaign',
+    heroId: string = DEFAULT_HERO,
   ) {
     this.seed = seed;
     this.rng = createRng(seed);
-    this.permanent = permanent;
+    const hero = heroById(heroId);
+    this.heroId = hero.id;
+    // Karakter eğilimi Forge bonuslarıyla AYNI kanaldan geçer — ayrı bir kod
+    // yolu yok, ikisi toplanır. Sunucu da aynı fonksiyonu çalıştırabilir.
+    this.permanent = mergeStats(hero.stats, permanent);
     // descent'te 1. derinlikten başlanır; verilen stageDef sadece "hangi bölümün
     // merdiveni" bilgisini taşır, asıl tanım descentStage()'ten gelir
     const startDef = mode === 'descent' ? descentStage(stageDef.id, 1) : stageDef;
@@ -235,8 +248,8 @@ export class Game {
     };
     this.recomputeStats();          // kalıcı bonuslar daha ilk kareden geçerli
     this.hp = this.stats.maxHp;     // +max can alındıysa dolu başla
-    // Başlangıç silahı: Bone Shard (VS'te her karakter bir silahla başlar)
-    this.giveWeapon('shard');
+    // Başlangıç silahı KARAKTERDEN gelir (VS'te her karakterin imza silahı var)
+    this.giveWeapon(hero.weapon);
   }
 
   /** Bölümde kalan düşman (salınmamış + sahnedeki). 0 = bölüm bitti. */
@@ -827,6 +840,9 @@ export class Game {
         vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
         damage: this.wDamage(w), radius: 8,
         life, pierce: def.pierce ?? 99,
+        // Dönüş mesafesi alan istatistiğiyle büyür (yay genişler); ömür
+        // sadece emniyet freni — ekranda sonsuza kadar takılı kalmasın.
+        maxDist: (def.range ?? 620) * 0.5 * this.wArea(w),
         returnAt: life * (def.returnAt ?? 0.5),
         speed: spd,
       });
@@ -1003,17 +1019,29 @@ export class Game {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
 
-      // BOOMERANG: ömrün ikinci yarısında oyuncuya doğru yönelir. Oyuncu
-      // hareket ettiği için sabit bir dönüş vektörü yetmez — her kare
-      // yeniden hedeflenir, yoksa oyuncu yürüyünce silah geri gelmez.
-      if (p.returnAt !== undefined && p.life < p.returnAt) {
+      // BOOMERANG: MESAFEYE göre döner, ömre göre değil.
+      //
+      // ⚠️ Önce "ömrün yarısında dön" yazılıydı ve bu bir TUZAK yaratıyordu:
+      // projSpeed arttıkça silah aynı sürede DAHA UZAĞA gidiyor, yani sürünün
+      // dışında kalıyordu. Leaf Ranger'ın +%15 projSpeed'i kendi imza silahını
+      // KÖTÜLEŞTİRİYORDU (ölçüm: knight+sickle 100 kill, ranger+sickle 26).
+      // Mesafeye bağlayınca projSpeed saf bir iyileştirmeye dönüşüyor:
+      // aynı yayı daha hızlı çizer.
+      if (p.maxDist !== undefined || p.returnAt !== undefined) {
         const dx = this.px - p.x, dy = this.py - p.y;
         const d = Math.hypot(dx, dy) || 1;
-        const sp = p.speed ?? Math.hypot(p.vx, p.vy);
-        p.vx = (dx / d) * sp;
-        p.vy = (dy / d) * sp;
-        // elinde tekrar toplandıysa erken sönsün (ekranda takılı kalmasın)
-        if (d < PLAYER.radius + p.radius) { this.swapRemove(this.projectiles, i); continue; }
+        if (!p.returning) {
+          const farEnough = p.maxDist !== undefined && d > p.maxDist;
+          const outOfTime = p.returnAt !== undefined && p.life < p.returnAt;
+          if (farEnough || outOfTime) p.returning = true;
+        }
+        if (p.returning) {
+          const sp = p.speed ?? Math.hypot(p.vx, p.vy);
+          p.vx = (dx / d) * sp;
+          p.vy = (dy / d) * sp;
+          // elinde tekrar toplandıysa erken sönsün (ekranda takılı kalmasın)
+          if (d < PLAYER.radius + p.radius) { this.swapRemove(this.projectiles, i); continue; }
+        }
       }
 
       p.x += p.vx * dt;

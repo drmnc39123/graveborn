@@ -14,6 +14,7 @@ import {
   descentStage, rareDropChance,
 } from './config.js';
 import { ENEMY_ART } from './sprites.js';
+import { HEROES } from './heroes.js';
 import { seedFromString } from './rng.js';
 
 const FAIL: string[] = [];
@@ -23,6 +24,23 @@ const check = (name: string, cond: boolean, detail = '') => {
 };
 
 type Driver = 'circle' | 'flee';
+
+/**
+ * "DÖVÜŞEN OYUNCU" sürücüsü — denge ölçümlerinin ortak zemini.
+ *
+ * NEDEN GEREKLİ: `setInput` girdiyi HER ZAMAN birim vektöre normalize eder,
+ * yani oyuncu ya tam hızda ya duruyor. Sürekli daire çizdirmek (cos/sin)
+ * oyuncuyu düşmanlardan hızlı tutar — bu da bir tür KAÇIŞ'tır ve kısa menzilli
+ * silahlar hiçbir zaman değmez. Ölçümde Litany 6 dakikada 15 kill yaptı.
+ *
+ * Gerçek oyuncu kaçar ve DÖNÜP DÖVÜŞÜR. Sürücü de öyle: bir süre hareket,
+ * bir süre durup sürüyü üstüne alma.
+ */
+function engagedInput(t: number): [number, number] {
+  const cycle = t % 3;
+  if (cycle < 1.5) return [Math.cos(t * 0.7), Math.sin(t * 0.7)];
+  return [0, 0];   // dur ve sürüyü üstüne al
+}
 
 /**
  * İnsan davranışı proxy'si: yakın tehditten kaç, tehdit yoksa MÜCEVHER TOPLA.
@@ -517,8 +535,7 @@ console.log('\n[8D] Silah güç dengesi (1. bölüm, 60 sn, tek silah, dairesel 
       if (g.phase === 'levelup') g.choose(g.offers[0].id);
       if (g.phase !== 'running') break;
       g.hp = g.stats.maxHp;              // hayatta kalmayı değil GÜCÜ ölçüyoruz
-      const t = i * TICK;
-      g.setInput(Math.cos(t * 0.7), Math.sin(t * 0.7));
+      g.setInput(...engagedInput(i * TICK));
       g.step();
     }
     return g.kills;
@@ -552,6 +569,102 @@ console.log('\n[8D] Silah güç dengesi (1. bölüm, 60 sn, tek silah, dairesel 
     check(`${cls} sınıfı kendi içinde dengeli (≤1.8x)`, hi <= lo * 1.8,
       `${g2[0].name} ${hi} vs ${g2[g2.length - 1].name} ${lo}`);
   }
+}
+
+// ── 8E) KARAKTERLER ──
+// Karakter seçimi SÜS OLMAMALI: farklı silahla başlamalı, istatistikleri
+// gerçekten değişmeli ve hiçbiri diğerinin açıkça altında kalmamalı.
+console.log('\n[8E] Karakterler');
+{
+  const ids = new Set(WEAPONS.map((w) => w.id));
+  const badW = HEROES.filter((h) => !ids.has(h.weapon)).map((h) => `${h.id}→${h.weapon}`);
+  check('her karakterin başlangıç silahı geçerli', badW.length === 0, badW.join(', '));
+
+  const weapons = HEROES.map((h) => h.weapon);
+  check('karakterler FARKLI silahla başlıyor', new Set(weapons).size === weapons.length,
+    weapons.join(', '));
+
+  const READ = new Set(['might', 'armor', 'maxHp', 'recovery', 'cooldown', 'area',
+    'projSpeed', 'duration', 'amount', 'moveSpeed', 'magnet', 'growth', 'greed', 'curse', 'revival']);
+  const deadStat = HEROES.flatMap((h) => Object.keys(h.stats).filter((s) => !READ.has(s)).map((s) => `${h.id}→${s}`));
+  check('karakter istatistikleri motorda okunuyor', deadStat.length === 0, deadStat.join(', '));
+
+  // İstatistikler MOTORA yansıyor mu — sadece config'de durup işe yaramasın
+  for (const h of HEROES) {
+    const g = new Game(1, STAGES[0], {}, 'campaign', h.id);
+    const base = new Game(1, STAGES[0], {}, 'campaign', '__none__'); // bilinmeyen → varsayılan
+    const changed = (Object.keys(h.stats) as (keyof typeof g.stats)[])
+      .some((k) => Math.abs(g.stats[k] - base.stats[k]) > 1e-9);
+    check(`${h.name}: başlangıç silahı ${h.weapon}`, g.weapons[0]?.def.id === h.weapon,
+      `${g.weapons[0]?.def.id}`);
+    if (h.id !== HEROES[0].id) {
+      check(`${h.name}: istatistikleri motora yansıyor`, changed);
+    }
+  }
+
+  // GÜÇ DENGESİ — doğru soru "60 sn'de kaç kill" DEĞİL.
+  // Water Priestess açıkça "yavaş öldürür, zor ölür" diye tasarlandı; sabit
+  // pencerede kill saymak hasar-öncelikli karakteri yapısal olarak kayırır ve
+  // tasarım tercihini denge hatası gibi gösterir. Kampanyanın gerçek sorusu:
+  // BÖLÜMÜ BİTİREBİLİYOR MU, ve ne kadar sürede.
+  //
+  // ⚠️ ÇOK SEED ŞART. Tek seed'le ölçmek karakteri değil KELEBEK ETKİSİNİ
+  // ölçüyor: teşhiste Ranger'ın üç istatistiği TEK TEK verildiğinde her
+  // seferinde 100 kill/kazandı, ÜÇÜ BİRDEN verildiğinde 27'de takıldı.
+  // Sebep güç değil — kill zamanlaması kayınca level-up anı kayıyor, teklif
+  // havuzu değişiyor ve ikinci silah hiç gelmiyor. Beş seed'in ortancası
+  // bu gürültüyü siler.
+  const SEEDS = ['hero-a', 'hero-b', 'hero-c', 'hero-d', 'hero-e'];
+  const oneRun = (heroId: string, seed: string) => {
+    const g = new Game(seedFromString(seed), STAGES[0], {}, 'campaign', heroId);
+    g.setViewport(1280, 720);
+    const limit = Math.round(240 / TICK);
+    for (let i = 0; i < limit; i++) {
+      if (g.phase === 'levelup') {
+        // ⚠️ ÖNCE YENİ SİLAH, sonra yükseltme. Körlemesine offers[0] almak
+        // karakteri değil TEKLİF KARIŞTIRMASININ ŞANSINI ölçüyordu; sadece
+        // "silah" demek de yetmedi çünkü MEVCUT silahın yükseltmesi de silah
+        // sayılıyor: teşhiste knight yeni silahlar alıp 100 kill yaptı,
+        // ranger sickle'ı 2. seviyeye çıkarıp 26'da takıldı — aynı silahla.
+        // Gerçek oyuncu erken oyunda kapsama alanı için YENİ silah alır.
+        const pick = g.offers.find((o) => o.kind === 'weapon-new')
+          ?? g.offers.find((o) => o.kind.startsWith('weapon'))
+          ?? g.offers[0];
+        g.choose(pick.id);
+      }
+      if (g.phase !== 'running') break;
+      g.hp = g.stats.maxHp;              // hayatta kalmayı değil TEMİZLEMEYİ ölçüyoruz
+      g.setInput(...engagedInput(i * TICK));
+      g.step();
+    }
+    return { won: g.phase === 'won', sec: g.time };
+  };
+
+  const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b);
+    return s[Math.floor(s.length / 2)];
+  };
+
+  const rows = HEROES.map((h) => {
+    const runs = SEEDS.map((s) => oneRun(h.id, s));
+    const wins = runs.filter((r) => r.won);
+    return {
+      name: h.name,
+      wins: wins.length,
+      med: wins.length ? median(wins.map((r) => r.sec)) : Infinity,
+    };
+  }).sort((a, b) => a.med - b.med);
+
+  for (const r of rows) {
+    console.log(`     ${r.name.padEnd(20)} ${r.wins}/${SEEDS.length} bitirdi` +
+      `${r.wins ? `, ortanca ${r.med.toFixed(0)} sn` : ''}`);
+  }
+  check('her karakter bölümü çoğu seed\'de bitirebiliyor (≥3/5)',
+    rows.every((r) => r.wins >= 3),
+    rows.filter((r) => r.wins < 3).map((r) => `${r.name} ${r.wins}/5`).join(', ') || 'hepsi');
+  const fast = rows[0].med, slow = rows[rows.length - 1].med;
+  check('en yavaş karakter en hızlının 2.5 katından fazla sürmüyor', slow <= fast * 2.5,
+    `${rows[0].name} ${fast.toFixed(0)} sn vs ${rows[rows.length - 1].name} ${slow.toFixed(0)} sn`);
 }
 
 // ── 8C) SİLAH/EVRİM VERİ BÜTÜNLÜĞÜ ──
@@ -611,9 +724,19 @@ console.log('\n[9] Pasifler ve istatistikler');
   const g = new Game(1);
   g.setViewport(1280, 720);
   const base = { ...g.stats };
+
+  // KALİBRASYON sabitin kendisinde ölçülür. `new Game(1)` artık varsayılan
+  // KARAKTERİ de yüklüyor (Fire Knight +1 armor, +%8 can) — onun bonusunu
+  // "taban istatistik" sanmak kalibrasyonu sessizce kaydırırdı.
   check('taban istatistikler VS ile aynı',
-    base.might === 1 && base.armor === 0 && base.cooldown === 1 && base.amount === 0 && base.maxHp === 100,
-    `might ${base.might}, armor ${base.armor}, cd ${base.cooldown}, amount ${base.amount}, hp ${base.maxHp}`);
+    STAT_BASE.might === 1 && STAT_BASE.armor === 0 && STAT_BASE.cooldown === 1
+    && STAT_BASE.amount === 0 && STAT_BASE.maxHp === 100,
+    `might ${STAT_BASE.might}, armor ${STAT_BASE.armor}, cd ${STAT_BASE.cooldown}, ` +
+    `amount ${STAT_BASE.amount}, hp ${STAT_BASE.maxHp}`);
+  // Varsayılan karakterin bonusu gerçekten TABANIN ÜSTÜNE biniyor mu
+  check('varsayılan karakter bonusu tabana ekleniyor',
+    base.armor > STAT_BASE.armor && base.maxHp > STAT_BASE.maxHp,
+    `armor ${base.armor}, hp ${base.maxHp}`);
 
   // her pasifi max seviyeye çıkar ve istatistiğe yansıyor mu bak
   for (const def of PASSIVES.slice(0, 4)) {

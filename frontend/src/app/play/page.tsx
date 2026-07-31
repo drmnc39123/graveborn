@@ -8,6 +8,7 @@ import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
+import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { permanentBonus } from '@/game/forge';
@@ -42,6 +43,15 @@ export default function PlayPage() {
   useEffect(() => { setProgress(loadProgress()); }, []);
 
   const onEnter = useCallback((id: BuildingId) => setPanel(id), []);
+
+  /** Karakter seçimi kalıcı — her koşuda yeniden seçtirmek gereksiz sürtünme */
+  const pickHero = useCallback((hero: string) => {
+    setProgress((prev) => {
+      const next = { ...(prev ?? loadProgress()), hero };
+      saveProgress(next);
+      return next;
+    });
+  }, []);
 
   /** Koşu bitti — ödülü progress.ts hesaplar (exploit kapısı orada), hub'a dön */
   const finishRun = useCallback((run: RunResult) => {
@@ -78,6 +88,7 @@ export default function PlayPage() {
         <GameCanvas
           stage={def}
           mode={screen.mode}
+          hero={(progress ?? loadProgress()).hero}
           permanent={permanentBonus((progress ?? loadProgress()).upgrades)}
           onFinish={finishRun}
         />
@@ -142,6 +153,7 @@ export default function PlayPage() {
             {panel === 'quests' ? (
               <StageSelect
                 progress={progress}
+                onHero={pickHero}
                 onPick={(id, mode) => { setPanel(null); setScreen({ kind: 'stage', stageId: id, mode }); }}
               />
             ) : panel === 'upgrade' ? (
@@ -179,9 +191,10 @@ function Row({ label, value, hint }: { label: string; value: number; hint?: stri
   );
 }
 
-function StageSelect({ progress, onPick }: {
+function StageSelect({ progress, onPick, onHero }: {
   progress: Progress | null;
   onPick: (id: number, mode: RunMode) => void;
+  onHero: (id: string) => void;
 }) {
   const p = progress ?? loadProgress();
   return (
@@ -192,6 +205,8 @@ function StageSelect({ progress, onPick }: {
         Clear a stage once for its reward. Then the Descent opens beneath it — an endless
         ladder where every new depth pays, and no depth pays twice.
       </p>
+
+      <HeroPicker selected={p.hero} onSelect={onHero} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         {STAGES.map((s) => {

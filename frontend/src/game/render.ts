@@ -5,7 +5,7 @@
 import { C } from '@/lib/theme';
 import { PLAYER, RUN, WEAPON } from './config';
 import type { Game } from './engine';
-import { BULLET, drawActor, drawCell, ENEMY_ART, FX, PLAYER_ART } from './sprites';
+import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
 
 // ── Kozmetik efektler ──
 // Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
@@ -457,11 +457,11 @@ function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {
 
   // sprite varsa onu çiz; dokunulmazlık penceresinde yarı saydam yanıp söner
   if (!blink) {
-    if (drawActor(ctx, PLAYER_ART, g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight)) return;
+    if (drawActor(ctx, playerArt(g.heroId), g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight)) return;
   } else {
     ctx.save();
     ctx.globalAlpha = 0.45;
-    const drawn = drawActor(ctx, PLAYER_ART, g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight);
+    const drawn = drawActor(ctx, playerArt(g.heroId), g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight);
     ctx.restore();
     if (drawn) return;
   }

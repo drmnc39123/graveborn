@@ -6,6 +6,8 @@
 //   'sheet'    → tek PNG, yatay N frame (CC0 düşman paketi: 150×150)
 //   'sequence' → frame başına ayrı PNG (LuizMelo kahraman paketleri: 288×128)
 
+import { DEFAULT_HERO, heroById } from './heroes';
+
 export type AnimKind = 'sheet' | 'sequence' | 'grid';
 
 export interface AnimDef {
@@ -132,16 +134,34 @@ export const ENEMY_ART: Record<string, ActorArt> = {
   },
 };
 
-export const PLAYER_ART: ActorArt = {
-  drawHeight: 44, // ölçülen içerik 60×44 px / 288×128 frame
-  contentRatio: 0.344,
-  anchorY: 0.992,
-  flipByVelocity: true,
-  anims: {
-    idle: SEQ('/art/heroes/fire-knight/idle_{i}.png', 8, 8),
-    run: SEQ('/art/heroes/fire-knight/run_{i}.png', 8, 12),
-  },
-};
+/**
+ * Oyuncu görselleri karakterden türetilir. `heroes.ts` saf veri (DOM'suz),
+ * görsel kurulumu BURADA yapılır — motor hiçbir zaman görsel bilmez.
+ * Sonuç önbelleklenir: her frame yeni nesne üretmek GC baskısı yaratır.
+ */
+const heroArtCache = new Map<string, ActorArt>();
+
+export function playerArt(heroId?: string): ActorArt {
+  const h = heroById(heroId);
+  let art = heroArtCache.get(h.id);
+  if (!art) {
+    art = {
+      drawHeight: h.drawHeight,
+      contentRatio: h.contentRatio,
+      anchorY: h.anchorY,
+      flipByVelocity: true,
+      anims: {
+        idle: SEQ(`/art/heroes/${h.dir}/${h.idle}`, h.idleFrames, 8),
+        run: SEQ(`/art/heroes/${h.dir}/${h.run}`, h.runFrames, 12),
+      },
+    };
+    heroArtCache.set(h.id, art);
+  }
+  return art;
+}
+
+/** Varsayılan karakter görseli — geriye dönük uyumluluk için */
+export const PLAYER_ART: ActorArt = playerArt(DEFAULT_HERO);
 
 // ── mermi ve efektler ──
 // Mermi: BDragon "All Fire Bullet" atlası, 16×16 hücre. Satır 4 = yöne dönebilen
@@ -252,8 +272,8 @@ export function preload(art: ActorArt) {
   }
 }
 
-export function preloadAll() {
-  preload(PLAYER_ART);
+export function preloadAll(heroId?: string) {
+  preload(playerArt(heroId));
   for (const art of Object.values(ENEMY_ART)) preload(art);
   get(BULLET.src);
   get(FX.hit.src);

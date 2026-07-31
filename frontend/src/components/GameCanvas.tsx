@@ -37,12 +37,14 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
   /** campaign = bitirilebilir bölüm · descent = sonsuz derinlik merdiveni */
   mode?: RunMode;
+  /** seçili karakter — başlangıç silahını ve istatistik eğilimini belirler */
+  hero?: string;
   onFinish: (result: RunResult) => void;
 }) {
   // Seed bölüme + güne bağlı: aynı gün aynı bölüm herkeste aynı akış.
@@ -99,8 +101,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
     if (!ctx) return;
 
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
-    preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(seedFromString(seedText), stage, permRef.current ?? {}, mode);
+    preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
+    const game = new Game(seedFromString(seedText), stage, permRef.current ?? {}, mode, hero);
     gameRef.current = game;
     // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
     // üretimini kıstığı için oyunu gerçek zamanda oynayıp level-up/ölüm gibi
@@ -267,7 +269,9 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
       canvas.removeEventListener('touchend', onTouchEnd);
       canvas.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [seedText, runId]);
+    // `hero` dep listesinde: karakter değişince oyun yeniden kurulmalı,
+    // yoksa yeni karakterin başlangıç silahı/istatistiği devreye girmez.
+  }, [seedText, runId, hero]);
 
   const xpPct = hud ? Math.min(100, (hud.xp / hud.xpNext) * 100) : 0;
   const hpPct = hud ? Math.max(0, (hud.hp / hud.maxHp) * 100) : 100;

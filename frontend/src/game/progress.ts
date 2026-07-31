@@ -12,6 +12,7 @@
 
 import { STAGES, depthGold, stageById } from './config';
 import { permanentBonus } from './forge';
+import { DEFAULT_HERO, heroById } from './heroes';
 
 const KEY = 'graveborn:progress:v2';
 const KEY_V1 = 'graveborn:progress:v1';
@@ -29,10 +30,15 @@ export interface Progress {
   firstClear: Record<number, boolean>;
   /** bölüm id → descent'te ödemesi YAPILMIŞ en derin seviye */
   depthPaid: Record<number, number>;
+  /** seçili karakter (heroes.ts id) */
+  hero: string;
 }
 
 export function emptyProgress(): Progress {
-  return { gold: 0, unlockedStage: 1, cleared: {}, upgrades: {}, firstClear: {}, depthPaid: {} };
+  return {
+    gold: 0, unlockedStage: 1, cleared: {}, upgrades: {},
+    firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO,
+  };
 }
 
 /** Eksik/bozuk alanlara karşı savunmacı normalize — kayıt biçimi değişse de oyun açılsın */
@@ -44,6 +50,8 @@ function normalize(p: Partial<Progress>): Progress {
     upgrades: p.upgrades ?? {},
     firstClear: p.firstClear ?? {},
     depthPaid: p.depthPaid ?? {},
+    // Bilinmeyen/eski kayıtta varsayılana düş — heroById zaten savunmacı
+    hero: heroById(p.hero).id,
   };
 }
 
