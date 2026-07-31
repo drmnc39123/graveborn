@@ -257,7 +257,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
           {/* üst şerit: XP + süre */}
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none' }}>
             <div style={{ padding: '4px 8px 0' }}>
-              <Bar pct={xpPct / 100} variant="01" scale={1.5} />
+              <Bar pct={xpPct / 100} variant="01" scale={2} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: C.candle }}>LV {hud.level}</span>
@@ -301,7 +301,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
           <div style={{ position: 'absolute', bottom: 18, left: 12, right: 12, pointerEvents: 'none',
             display: 'flex', alignItems: 'flex-end', gap: 10 }}>
             <div style={{ position: 'relative' }}>
-              <Orb pct={hpPct / 100} kind="HP" size={84} />
+              <Orb pct={hpPct / 100} kind="HP" scale={2} />
               {/* Sayı kürenin üstünde: "az kaldı mı" bilgisi bir bakışta okunmalı */}
               <div style={{
                 position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
@@ -316,12 +316,12 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
               {/* Silahlar ve pasifler slot çerçevesinde — envanter hissi */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
                 {hud.weapons.map((w) => (
-                  <Slot key={w.name} type="Weapon" variant="02" size={38} title={`${w.name} L${w.level}`}>
+                  <Slot key={w.name} type="Weapon" variant="02" scale={2} title={`${w.name} L${w.level}`}>
                     <span style={{ color: C.candle, fontSize: 10 }}>{w.level}</span>
                   </Slot>
                 ))}
                 {hud.passives.map((p) => (
-                  <Slot key={p.name} type="Ring" variant="02" size={38} title={`${p.name} L${p.level}`}>
+                  <Slot key={p.name} type="Ring" variant="02" scale={2} title={`${p.name} L${p.level}`}>
                     <span style={{ color: C.ice, fontSize: 10 }}>{p.level}</span>
                   </Slot>
                 ))}
@@ -395,11 +395,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
             </span>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <PixelButton variant="02A" scale={2.4} onClick={() => setRunId((n) => n + 1)}
+            <PixelButton variant="02A" scale={2} onClick={() => setRunId((n) => n + 1)}
               style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
               TRY AGAIN
             </PixelButton>
-            <PixelButton variant="01A" scale={2.4} onClick={finish}
+            <PixelButton variant="01A" scale={2} onClick={finish}
               style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
               RETURN TO VILLAGE
             </PixelButton>

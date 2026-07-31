@@ -21,13 +21,27 @@ const KIT = '/art/ui/kit';
 export const pixel: CSSProperties = { imageRendering: 'pixelated' };
 
 /**
+ * ÖLÇEK TAM SAYI OLMAK ZORUNDA.
+ *
+ * Piksel sanat 1.5× büyütülünce her kaynak piksel 1.5 ekran pikseline düşer;
+ * yarım piksel diye bir şey olmadığı için kenarlar bir aşağı bir yukarı
+ * yuvarlanır ve varlık "kaymış / titrek" görünür. Kullanıcı bunu ilk bakışta
+ * yakaladı: panel içi bina butonları 1.5 ölçekteydi.
+ *
+ * Bu yüzden ölçek burada TEK NOKTADAN yuvarlanıyor — çağıran taraf yanlışlıkla
+ * kesirli verse bile görsel bozulmaz.
+ */
+const int = (scale: number) => Math.max(1, Math.round(scale));
+
+/**
  * Dört yandan 9-slice. SADECE kare varlıklar için (48×48 paneller):
  * 16+16 kenar + 16 orta = 48, yani gerçekten bir orta karo var.
  */
 export function nineSlice(src: string, slice = 16, scale = 3): CSSProperties {
+  const s = int(scale);
   return {
     borderStyle: 'solid',
-    borderWidth: slice * scale,
+    borderWidth: slice * s,
     borderImageSource: `url("${src}")`,
     borderImageSlice: `${slice} fill`,
     borderImageRepeat: 'repeat',
@@ -47,9 +61,10 @@ export function nineSlice(src: string, slice = 16, scale = 3): CSSProperties {
  * tekrarlar. Böylece piksel oranı hiç bozulmaz.
  */
 export function sliceH(src: string, slice = 16, scale = 3): CSSProperties {
+  const s = int(scale);
   return {
     borderStyle: 'solid',
-    borderWidth: `0 ${slice * scale}px`,
+    borderWidth: `0 ${slice * s}px`,
     borderImageSource: `url("${src}")`,
     borderImageSlice: `0 ${slice} fill`,
     borderImageRepeat: 'repeat',
@@ -113,7 +128,8 @@ export function PixelButton({
   const state = disabled ? 'Normal' : down ? 'Pressed' : (active || hover) ? 'Selected' : 'Normal';
   const src = `${KIT}/Buttons/Button_${variant}_${state}.png`;
   // 48×16 → YÜKSEKLİK SABİT (16·scale), yatayda orta karo tekrarlar.
-  const h = 16 * scale;
+  const s = int(scale);
+  const h = 16 * s;
   return (
     <button
       title={title}
@@ -124,9 +140,9 @@ export function PixelButton({
       onPointerLeave={() => { setDown(false); setHover(false); }}
       onPointerEnter={() => setHover(true)}
       style={{
-        ...sliceH(src, 16, scale),
+        ...sliceH(src, 16, s),
         height: h,
-        minWidth: 48 * scale,
+        minWidth: 48 * s,
         padding: 0,
         background: 'transparent',
         cursor: disabled ? 'default' : 'pointer',
@@ -162,7 +178,7 @@ export function Banner({ children, variant = '01A', scale = 2.5, style }: {
   return (
     <div style={{
       ...sliceH(`${KIT}/Title-banners/BannerMedium_${variant}.png`, 16, scale),
-      height: 32 * scale,
+      height: 32 * int(scale),
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
       ...style,
     }}>
@@ -195,13 +211,15 @@ export function Divider({ variant = '03', scale = 2 }: { variant?: string; scale
 // ── CAN KÜRESİ ────────────────────────────────────────────────────────
 // Diablo tarzı: dolgu alttan yukarı kırpılır, üstüne çerçeve biner.
 
-export function Orb({ pct, kind = 'HP', size = 96 }: {
+export function Orb({ pct, kind = 'HP', scale = 2 }: {
   /** 0..1 */
   pct: number;
   kind?: 'HP' | 'MP' | 'Energy';
-  size?: number;
+  /** varlık 48×48 — boyut TAM KAT olmalı, yoksa küre bulanıklaşır */
+  scale?: number;
 }) {
   const p = Math.max(0, Math.min(1, pct));
+  const size = 48 * int(scale);
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       {/* dolgu — alttan yukarı doluyor */}
@@ -236,18 +254,19 @@ export function Bar({ pct, variant = '01', height = 16, scale = 2 }: {
   scale?: number;
 }) {
   const p = Math.max(0, Math.min(1, pct));
-  const h = height * scale;
+  const s = Math.max(1, Math.round(scale));
+  const h = height * s;
   return (
     <div style={{ position: 'relative', width: '100%', height: h }}>
       {/* boş oluk — altta */}
       <div style={{
         position: 'absolute', inset: 0,
-        ...sliceH(`${KIT}/Sliders---Bars/Slider${variant}_Box.png`, 16, scale),
+        ...sliceH(`${KIT}/Sliders---Bars/Slider${variant}_Box.png`, 16, s),
       }} />
       {/* dolgu — oluğun İÇİNE oturur. Box `fill` ile ortasını da boyadığı için
           dolguyu üstte ve biraz içeride çiziyoruz, yoksa oluk dolguyu örter. */}
       <div style={{
-        position: 'absolute', top: scale, bottom: scale, left: scale * 2, right: scale * 2,
+        position: 'absolute', top: s, bottom: s, left: s * 2, right: s * 2,
         overflow: 'hidden',
       }}>
         <div style={{
@@ -271,13 +290,15 @@ export function Bar({ pct, variant = '01', height = 16, scale = 2 }: {
 export type SlotType = 'Empty' | 'Weapon' | 'Shield' | 'Armor' | 'Headgear'
   | 'Gloves' | 'Footwear' | 'Necklace' | 'Ring' | 'Potion' | 'Consumable';
 
-export function Slot({ type = 'Empty', variant = '02', size = 48, children, title }: {
+export function Slot({ type = 'Empty', variant = '02', scale = 2, children, title }: {
   type?: SlotType;
   variant?: '01' | '02' | '03';
-  size?: number;
+  /** varlık 16×16 — boyut TAM KAT olmalı */
+  scale?: number;
   children?: ReactNode;
   title?: string;
 }) {
+  const size = 16 * int(scale);
   return (
     <div title={title} style={{
       position: 'relative', width: size, height: size, flexShrink: 0,

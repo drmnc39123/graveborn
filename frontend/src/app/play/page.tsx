@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
-import { BuildingDock, BUILDINGS } from '@/components/BuildingDock';
+import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { permanentBonus } from '@/game/forge';
 import { STAGES, depthGold, stageById } from '@/game/config';
@@ -95,7 +95,7 @@ export default function PlayPage() {
           yoksa "tekrar oynadım ama gold gelmedi" haklı şikâyeti doğar */}
       {payout && (
         <div onClick={() => setPayout(null)}
-          style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 6 }}>THE VILLAGE SETTLES UP</div>
             <div style={{ fontSize: 38, fontWeight: 900, color: C.candle, marginBottom: 14 }}>
@@ -122,20 +122,12 @@ export default function PlayPage() {
 
       {panel && (
         <div onClick={() => setPanel(null)}
-          style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <Panel variant="07A" scale={2.5} pad={6} onClick={(e) => e.stopPropagation()}
+          style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
+          <Panel variant="07A" scale={3} pad={6} onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', maxWidth: 560, maxHeight: '84vh', overflowY: 'auto' }}>
-            {/* Panel içi bina geçişi — kapatıp yeniden açmaya gerek yok */}
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 14 }}>
-              {BUILDINGS.map((b) => (
-                <PixelButton key={b.id} variant="01A" scale={1.5}
-                  active={panel === b.id} onClick={() => setPanel(b.id)} title={b.sub}
-                  style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.3 }}>
-                  {b.label}
-                </PixelButton>
-              ))}
-            </div>
-
+            {/* Panel içinde ikinci bir bina sırası YOK — navbar panelin üstünde
+                (zIndex 6) ve açıkken de tıklanabilir kalıyor. İki sıra hem
+                gereksizdi hem panelin içinde sarıp dağınık duruyordu. */}
             {panel === 'quests' ? (
               <StageSelect
                 progress={progress}
@@ -148,7 +140,7 @@ export default function PlayPage() {
             )}
 
             <div style={{ marginTop: 16, textAlign: 'center' }}>
-              <PixelButton variant="02A" scale={2.2} onClick={() => setPanel(null)}
+              <PixelButton variant="02A" scale={2} onClick={() => setPanel(null)}
                 style={{ width: '100%', fontSize: 12, fontWeight: 900, letterSpacing: 1.5 }}>
                 CLOSE
               </PixelButton>

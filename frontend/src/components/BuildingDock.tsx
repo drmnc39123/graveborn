@@ -1,12 +1,13 @@
 'use client';
-// BİNA RIHTIMI — köyün her binasına tek tıkla erişim.
+// BİNA NAVBAR'I — köyün her binasına tek tıkla erişim, üstte ortada.
 //
 // KULLANICI KURALI: "tüm binaların erişiminin butonunu koyacağız, oyuncunun
-// gitmesine gerek yok." Haritada yürümek bir SEÇENEK olarak kalıyor (atmosfer),
-// ama zorunlu değil. Gerçek oyunlarda da böyle: harita gezilir, menü tıklanır.
+// gitmesine gerek yok" + "sol menü olmasın, üstte ortada yan yana olsun,
+// navbar gibi." Haritada yürümek bir SEÇENEK olarak kalıyor (atmosfer),
+// zorunluluk değil.
 //
 // Ayrıca haritada 'quests' kapısı HİÇ YOK — Warden's Post'a tek giriş dövüş
-// portalıydı. Bu rıhtım o boşluğu da kapatıyor.
+// portalıydı. Bu navbar o boşluğu da kapatıyor.
 
 import type { CSSProperties } from 'react';
 import { PixelButton } from '@/components/ui/kit';
@@ -14,19 +15,20 @@ import { C, FONT, glass } from '@/lib/theme';
 
 export interface DockEntry {
   id: string;
+  /** navbar'da görünen kısa ad — uzun isimler yan yana sığmıyor */
   label: string;
-  /** kısa açıklama — geniş ekranda gösterilir */
+  /** tam ad + ne işe yaradığı (tooltip) */
   sub: string;
 }
 
-/** Sıralama kasıtlı: oyuncunun döngüsü yukarıdan aşağı okunuyor. */
+/** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */
 export const BUILDINGS: readonly DockEntry[] = [
-  { id: 'quests', label: "WARDEN'S POST", sub: 'Stages & the Descent' },
-  { id: 'upgrade', label: 'THE FORGE', sub: 'Permanent power' },
-  { id: 'shop', label: "PEDLAR'S STALL", sub: 'Consumables' },
-  { id: 'market', label: 'MARKETPLACE', sub: 'Sell gold for $GRAVE' },
-  { id: 'exchange', label: 'THE EXCHANGE', sub: 'Player order book' },
-  { id: 'tavern', label: 'TAVERN', sub: 'Profile & records' },
+  { id: 'quests', label: 'STAGES', sub: "The Warden's Post — stages & the Descent" },
+  { id: 'upgrade', label: 'FORGE', sub: 'The Forge — permanent power' },
+  { id: 'shop', label: 'STALL', sub: "Pedlar's Stall — consumables" },
+  { id: 'market', label: 'MARKET', sub: 'Marketplace — sell gold for $GRAVE' },
+  { id: 'exchange', label: 'EXCHANGE', sub: 'The Exchange — player order book' },
+  { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
 ] as const;
 
 export function BuildingDock({ open, onOpen, gold, grave = 0, style }: {
@@ -38,49 +40,48 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, style }: {
   style?: CSSProperties;
 }) {
   return (
-    // Koyu zemin şart: butonların altındaki açıklama parlak çimenin üstünde
-    // okunmuyordu. Cüzdan da aynı blokta — iki ayrı çerçeve tutarsız duruyordu.
     <div style={{
-      position: 'absolute', top: 12, left: 12, display: 'flex', flexDirection: 'column', gap: 7,
-      zIndex: 3, padding: '10px 10px 12px', ...glass(12), ...style,
+      // zIndex panel katmanının (5) ÜSTÜNDE: navbar her zaman tıklanabilir
+      // kalmalı, panel açıkken de doğrudan başka binaya geçilebilsin.
+      position: 'absolute', top: 10, left: 0, right: 0, zIndex: 6,
+      display: 'flex', justifyContent: 'center', pointerEvents: 'none', ...style,
     }}>
+      {/* Koyu zemin şart: parlak çimenin üstünde metin okunmuyordu.
+          Dar ekranda sarar — mobilde tek satıra sığmıyor. */}
       <div style={{
-        display: 'flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap',
-        fontFamily: FONT.ui, padding: '0 2px 8px', marginBottom: 1,
-        borderBottom: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        justifyContent: 'center', padding: '8px 12px', maxWidth: 'calc(100vw - 24px)',
+        pointerEvents: 'auto', ...glass(12),
       }}>
-        <span style={{ fontSize: 15, fontWeight: 900, color: C.candle, whiteSpace: 'nowrap' }}>
-          {Math.floor(gold).toLocaleString('en-US')}
-          <span style={{ fontSize: 9, marginLeft: 3, color: C.candleSoft }}>GOLD</span>
-        </span>
-        <span style={{ fontSize: 13, fontWeight: 900, color: C.boneFaint, whiteSpace: 'nowrap' }}>
-          {grave.toLocaleString('en-US')}
-          <span style={{ fontSize: 9, marginLeft: 3 }}>$GRAVE</span>
-        </span>
-      </div>
-
-      {/* Buton yüksekliği SABİT (varlık 48×16). Alt açıklama butonun dışında,
-          altında duruyor — içine sığdırmaya çalışmak dokuyu esnetirdi. */}
-      {BUILDINGS.map((b) => (
-        <div key={b.id}>
+        {BUILDINGS.map((b) => (
           <PixelButton
+            key={b.id}
             variant="01A"
             scale={2}
             active={open === b.id}
             onClick={() => onOpen(b.id)}
             title={b.sub}
-            style={{ width: 200, fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
+            style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
           >
             {b.label}
           </PixelButton>
-          <div style={{
-            fontFamily: FONT.ui, fontSize: 9.5, color: C.boneDim,
-            marginTop: 2, marginLeft: 6, letterSpacing: 0.2,
-          }}>
-            {b.sub}
-          </div>
-        </div>
-      ))}
+        ))}
+
+        {/* Cüzdan navbar'ın sağ ucunda — ayrı çerçeve tutarsız duruyordu */}
+        <span style={{
+          display: 'flex', gap: 10, alignItems: 'baseline', fontFamily: FONT.ui,
+          paddingLeft: 12, marginLeft: 4, borderLeft: `1px solid ${C.border}`,
+        }}>
+          <span style={{ fontSize: 14, fontWeight: 900, color: C.candle, whiteSpace: 'nowrap' }}>
+            {Math.floor(gold).toLocaleString('en-US')}
+            <span style={{ fontSize: 9, marginLeft: 3, color: C.candleSoft }}>GOLD</span>
+          </span>
+          <span style={{ fontSize: 12, fontWeight: 900, color: C.boneFaint, whiteSpace: 'nowrap' }}>
+            {grave.toLocaleString('en-US')}
+            <span style={{ fontSize: 9, marginLeft: 3 }}>$GRAVE</span>
+          </span>
+        </span>
+      </div>
     </div>
   );
 }
