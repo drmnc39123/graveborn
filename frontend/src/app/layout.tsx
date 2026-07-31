@@ -14,9 +14,31 @@ export const viewport: Viewport = {
   themeColor: C.void,
 };
 
+/**
+ * Franuka bitmap fontları. Dosyalar `public/fonts/` altına konunca
+ * KENDİLİĞİNDEN devreye girer; yoksa tarayıcı sessizce yedeğe düşer.
+ * `font-display: block` yerine `swap`: font gelmezse arayüz görünmez kalmaz.
+ */
+const FONT_FACE = `
+@font-face {
+  font-family: 'FantasyRPGtext';
+  src: url('/fonts/FantasyRPGtext.ttf') format('truetype');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'FantasyRPGtitle';
+  src: url('/fonts/FantasyRPGtitle.ttf') format('truetype');
+  font-display: swap;
+}
+/* Piksel sanat her yerde net kalsın */
+img { image-rendering: pixelated; }
+button { font: inherit; }
+`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head><style dangerouslySetInnerHTML={{ __html: FONT_FACE }} /></head>
       <body
         style={{
           margin: 0,

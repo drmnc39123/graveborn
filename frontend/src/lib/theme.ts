@@ -36,6 +36,19 @@ export const C = {
   border: 'rgba(227,216,192,0.14)', // kemik bazlı ince kenar
 } as const;
 
+/**
+ * Yazı tipi yığını.
+ * `FantasyRPGtext` / `FantasyRPGtitle` Franuka paketinden gelir ve
+ * `public/fonts/` altına konunca KENDİLİĞİNDEN devreye girer (layout.tsx'teki
+ * @font-face). Dosya yoksa tarayıcı sessizce yedeğe düşer — kırılmaz.
+ * ⚠️ Bu fontlar bitmap türevi: metin 8'in katı, başlık 11'in katı boyutta
+ * kullanılmalı, yoksa piksel ızgarası bozulur.
+ */
+export const FONT = {
+  ui: '"FantasyRPGtext", ui-monospace, "Cascadia Mono", "Courier New", monospace',
+  title: '"FantasyRPGtitle", "FantasyRPGtext", ui-monospace, "Courier New", monospace',
+} as const;
+
 /** Cam panel — BOMB Miner'daki glass() deseni, GRAVEBORN paletiyle */
 export function glass(radius = 14) {
   return {

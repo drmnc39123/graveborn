@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
+import { BuildingDock, BUILDINGS } from '@/components/BuildingDock';
+import { Panel, PixelButton } from '@/components/ui/kit';
 import { permanentBonus } from '@/game/forge';
 import { STAGES, depthGold, stageById } from '@/game/config';
 import {
@@ -79,14 +81,15 @@ export default function PlayPage() {
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <HubCanvas
-        progress={progress}
         onEnterBuilding={onEnter}
         // Dövüş portalı doğrudan bölüm BAŞLATMAZ, seçim panelini açar.
         // (HubCanvas burada os(0) çağırıyordu; stageById(0) undefined olduğu
-        //  için portala basmak sayfayı çökertiyordu. Haritada ayrı bir 'quests'
-        //  kapısı da yok — panelin TEK girişi bu portal.)
+        //  için portala basmak sayfayı çökertiyordu.)
         onEnterStage={() => setPanel('quests')}
       />
+
+      {/* Cüzdan + bina rıhtımı — yürümek seçenek, zorunluluk değil */}
+      <BuildingDock open={panel} onOpen={setPanel} gold={progress?.gold ?? 0} />
 
       {/* Koşu sonu ödül dökümü — ödülün NEREDEN geldiği görünür olmalı,
           yoksa "tekrar oynadım ama gold gelmedi" haklı şikâyeti doğar */}
@@ -119,8 +122,20 @@ export default function PlayPage() {
 
       {panel && (
         <div onClick={() => setPanel(null)}
-          style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 520, maxHeight: '80vh', overflowY: 'auto' }}>
+          style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <Panel variant="07A" scale={2.5} pad={6} onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: 560, maxHeight: '84vh', overflowY: 'auto' }}>
+            {/* Panel içi bina geçişi — kapatıp yeniden açmaya gerek yok */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 14 }}>
+              {BUILDINGS.map((b) => (
+                <PixelButton key={b.id} variant="01A" scale={1.5}
+                  active={panel === b.id} onClick={() => setPanel(b.id)} title={b.sub}
+                  style={{ fontSize: 9, fontWeight: 900, letterSpacing: 0.3 }}>
+                  {b.label}
+                </PixelButton>
+              ))}
+            </div>
+
             {panel === 'quests' ? (
               <StageSelect
                 progress={progress}
@@ -131,12 +146,14 @@ export default function PlayPage() {
             ) : (
               <ComingSoon id={panel} />
             )}
-            <button onClick={() => setPanel(null)}
-              style={{ marginTop: 18, width: '100%', padding: '10px 0', borderRadius: 10, border: `1px solid ${C.border}`,
-                background: 'rgba(255,255,255,0.05)', color: C.boneDim, fontWeight: 800, fontSize: 13, cursor: 'pointer' }}>
-              Close
-            </button>
-          </div>
+
+            <div style={{ marginTop: 16, textAlign: 'center' }}>
+              <PixelButton variant="02A" scale={2.2} onClick={() => setPanel(null)}
+                style={{ width: '100%', fontSize: 12, fontWeight: 900, letterSpacing: 1.5 }}>
+                CLOSE
+              </PixelButton>
+            </div>
+          </Panel>
         </div>
       )}
     </div>
@@ -166,7 +183,7 @@ function StageSelect({ progress, onPick }: {
     <>
       <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>THE WARDEN&apos;S POST</div>
       <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>Choose your road</h2>
-      <p style={{ margin: '0 0 16px', fontSize: 12, color: C.boneFaint, lineHeight: 1.5 }}>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
         Clear a stage once for its reward. Then the Descent opens beneath it — an endless
         ladder where every new depth pays, and no depth pays twice.
       </p>

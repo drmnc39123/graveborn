@@ -9,16 +9,16 @@ import { loadMapWorld } from '@/game/mapWorld';
 import { preloadAll } from '@/game/sprites';
 import { unlockAudio, play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
-import type { Progress } from '@/game/progress';
 
 type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
 
+// Cüzdan ve bina rıhtımı artık play/page.tsx'te (BuildingDock) — bu bileşen
+// sadece sahneyi ve sahneye ait istemleri yönetir.
 export function HubCanvas({
-  onEnterBuilding, onEnterStage, progress,
+  onEnterBuilding, onEnterStage,
 }: {
   onEnterBuilding: (id: string) => void;
   onEnterStage: (stageId: number) => void;
-  progress: Progress | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef(new Set<string>());
@@ -173,12 +173,6 @@ export function HubCanvas({
         </div>
       )}
 
-      {/* Cüzdan */}
-      <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 8 }}>
-        <Pill color={C.candle}>{Math.floor(progress?.gold ?? 0)} GOLD</Pill>
-        <Pill color={C.boneFaint}>0 $GRAVE</Pill>
-      </div>
-
       {hint && (
         <div style={{ position: 'absolute', bottom: 26, left: '50%', transform: 'translateX(-50%)', width: 'min(92vw, 330px)' }}>
           <div style={{ ...glass(13), padding: '13px 18px', textAlign: 'center' }}>
@@ -207,8 +201,4 @@ export function HubCanvas({
       </div>
     </div>
   );
-}
-
-function Pill({ children, color }: { children: React.ReactNode; color: string }) {
-  return <span style={{ ...glass(9), padding: '6px 12px', fontSize: 13, fontWeight: 800, color }}>{children}</span>;
 }

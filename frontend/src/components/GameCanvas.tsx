@@ -17,7 +17,8 @@ function dailySeed() {
 import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
 import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
-import { C, glass, ctaButton } from '@/lib/theme';
+import { C, FONT, glass, ctaButton } from '@/lib/theme';
+import { Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
@@ -255,8 +256,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
         <>
           {/* üst şerit: XP + süre */}
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none' }}>
-            <div style={{ height: 7, background: 'rgba(0,0,0,0.55)' }}>
-              <div style={{ height: '100%', width: `${xpPct}%`, background: `linear-gradient(90deg, ${C.candleSoft}, ${C.candle})`, transition: 'width 90ms linear' }} />
+            <div style={{ padding: '4px 8px 0' }}>
+              <Bar pct={xpPct / 100} variant="01" scale={1.5} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: C.candle }}>LV {hud.level}</span>
@@ -296,27 +297,38 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
             </div>
           )}
 
-          {/* alt sol: can + istatistik */}
-          <div style={{ position: 'absolute', bottom: 12, left: 12, pointerEvents: 'none' }}>
-            <div style={{ width: 168, height: 12, borderRadius: 7, background: 'rgba(0,0,0,0.6)', border: `1px solid ${C.border}`, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${hpPct}%`, background: `linear-gradient(90deg, ${C.blood}, ${C.bloodSoft})`, transition: 'width 90ms linear' }} />
-            </div>
-            <div style={{ marginTop: 6, fontSize: 11, color: C.boneFaint, fontVariantNumeric: 'tabular-nums' }}>
-              {Math.ceil(hud.hp)}/{Math.round(hud.maxHp)} HP · {Math.floor(hud.rareGold)} gold found · {hud.enemies} enemies · {hud.fps} fps
+          {/* alt sol: can küresi + taşınan build */}
+          <div style={{ position: 'absolute', bottom: 18, left: 12, right: 12, pointerEvents: 'none',
+            display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            <div style={{ position: 'relative' }}>
+              <Orb pct={hpPct / 100} kind="HP" size={84} />
+              {/* Sayı kürenin üstünde: "az kaldı mı" bilgisi bir bakışta okunmalı */}
+              <div style={{
+                position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+                fontFamily: FONT.ui, fontSize: 13, fontWeight: 900, color: C.bone,
+                textShadow: '0 1px 0 #000, 0 0 6px #000', fontVariantNumeric: 'tabular-nums',
+              }}>
+                {Math.ceil(hud.hp)}
+              </div>
             </div>
 
-            {/* Taşınan build — oyuncu neye sahip olduğunu görmeli */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8, maxWidth: 300 }}>
-              {hud.weapons.map((w) => (
-                <span key={w.name} style={{ fontSize: 10, fontWeight: 800, color: C.candle, background: 'rgba(239,167,46,0.13)', border: `1px solid ${C.candle}44`, padding: '2px 6px', borderRadius: 6 }}>
-                  {w.name} <span style={{ opacity: 0.75 }}>L{w.level}</span>
-                </span>
-              ))}
-              {hud.passives.map((p) => (
-                <span key={p.name} style={{ fontSize: 10, fontWeight: 700, color: C.ice, background: 'rgba(138,151,163,0.12)', border: `1px solid ${C.ice}44`, padding: '2px 6px', borderRadius: 6 }}>
-                  {p.name} <span style={{ opacity: 0.75 }}>L{p.level}</span>
-                </span>
-              ))}
+            <div style={{ maxWidth: 330 }}>
+              {/* Silahlar ve pasifler slot çerçevesinde — envanter hissi */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                {hud.weapons.map((w) => (
+                  <Slot key={w.name} type="Weapon" variant="02" size={38} title={`${w.name} L${w.level}`}>
+                    <span style={{ color: C.candle, fontSize: 10 }}>{w.level}</span>
+                  </Slot>
+                ))}
+                {hud.passives.map((p) => (
+                  <Slot key={p.name} type="Ring" variant="02" size={38} title={`${p.name} L${p.level}`}>
+                    <span style={{ color: C.ice, fontSize: 10 }}>{p.level}</span>
+                  </Slot>
+                ))}
+              </div>
+              <div style={{ fontFamily: FONT.ui, fontSize: 10.5, color: C.boneFaint, fontVariantNumeric: 'tabular-nums' }}>
+                {Math.floor(hud.rareGold)} gold found · {hud.enemies} enemies · {hud.fps} fps
+              </div>
             </div>
           </div>
         </>
@@ -383,11 +395,14 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
             </span>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <button onClick={() => setRunId((n) => n + 1)} style={ctaButton(true)}>Try Again</button>
-            <button onClick={finish}
-              style={{ ...ctaButton(true), background: 'rgba(255,255,255,0.08)', color: C.bone }}>
-              Return to Village
-            </button>
+            <PixelButton variant="02A" scale={2.4} onClick={() => setRunId((n) => n + 1)}
+              style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
+              TRY AGAIN
+            </PixelButton>
+            <PixelButton variant="01A" scale={2.4} onClick={finish}
+              style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
+              RETURN TO VILLAGE
+            </PixelButton>
           </div>
         </div>
       )}
