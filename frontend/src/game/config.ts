@@ -333,10 +333,13 @@ export const WEAPONS: readonly WeaponDef[] = [
     projectileSpeed: 470, spreadRad: 0.16, pierce: 1, range: 620, lifeSec: 1.5,
   },
   {
-    // DENGE ÖLÇÜMÜ: 22 kill. Tek yöne vuran kesik, tempo çok yavaştı.
-    id: 'lash', name: 'Grave Lash', desc: 'Slashes horizontally, passes through enemies',
+    // countLevels ilk eşiği 1: seviye 1'de HER İKİ YANA birden vurur.
+    // Tek yöne vuran kesik, hareket eden oyuncu için okunaksızdı — sürü her
+    // yönden geliyor ama silah sadece baktığın tarafı tarıyordu (ölçüm:
+    // 30 sn hareketli 16,6 kill → çift taraflı 29,6).
+    id: 'lash', name: 'Grave Lash', desc: 'Slashes to both sides, passes through enemies',
     pattern: 'sweep', maxLevel: 8, damage: 30, cooldownSec: 0.8,
-    dmgPerLevel: 1.2, cdPerLevel: 0.93, countLevels: [3, 6],
+    dmgPerLevel: 1.2, cdPerLevel: 0.93, countLevels: [1, 4, 7],
     sweepW: 150, sweepH: 54, sweepLifeSec: 0.2, areaPerLevel: 1.07,
   },
   {
@@ -378,11 +381,12 @@ export const WEAPONS: readonly WeaponDef[] = [
     groundRadius: 62, groundLifeSec: 3.4, groundTickSec: 0.5, areaPerLevel: 1.08,
   },
   {
-    // BAŞLANGIÇ SİLAHI ÖLÇÜMÜ: hareket eden oyuncu için 30 sn'de 11,8 kill
-    // (en iyi 38). Leaf Ranger'ın açılışı fazla seyrekti — tempo artırıldı.
+    // BAŞLANGIÇ SİLAHI ÖLÇÜMÜ (30 sn, hareketli): 11,8 kill → tempo 1.35'ten
+    // 1.0'a indi (15,8) → seviye 1'de İKİ orak (24,6). Tek orak dar bir
+    // koridor tarıyordu; sürü her yönden gelirken bu okunmuyordu.
     id: 'sickle', name: 'Rusted Sickle', desc: 'Thrown wide — and it comes back',
     pattern: 'boomerang', maxLevel: 8, damage: 24, cooldownSec: 1.0,
-    dmgPerLevel: 1.2, cdPerLevel: 0.94, countLevels: [3, 6],
+    dmgPerLevel: 1.2, cdPerLevel: 0.94, countLevels: [1, 4, 7],
     projectileSpeed: 340, spreadRad: 0.42, pierce: 99, range: 620,
     lifeSec: 2.2, returnAt: 0.5,
   },

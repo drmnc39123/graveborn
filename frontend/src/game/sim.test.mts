@@ -618,10 +618,15 @@ console.log('\n[8E] Karakterler');
   // olurdu (Litany orada 77 kill yapıyor ama oyuncu 13,8 sn'de 2 kill aldı).
   console.log('     — başlangıç silahı okunaklılığı (ilk 30 sn, sürekli hareket) —');
   {
-    const movingKills = (weaponId: string) => {
+    // ⚠️ SİLAHI KARAKTERİN KENDİ GÖVDESİNDE ölç. İlk sürüm varsayılan gövdeye
+    // (Fire Knight) silahı takıp ölçüyordu ve Leaf Ranger'ı 15,8 kill ile
+    // sağlıklı gösteriyordu; canlı oyunda 15 saniyede 3 kill aldı. Sebep
+    // Ranger'ın +%12 hareket hızı: sürüyü geride bırakıyor ve yön bağımlı
+    // silahı hedef bulamıyor. Karakterin istatistiği silahını değiştirir.
+    const movingKills = (heroId: string, weaponId: string) => {
       let total = 0;
       for (const s of ['a', 'b', 'c', 'd', 'e']) {
-        const g = new Game(seedFromString(`start-${s}`), STAGES[0]);
+        const g = new Game(seedFromString(`start-${s}`), STAGES[0], {}, 'campaign', heroId);
         g.setViewport(1280, 720);
         g.weapons = [{ def: WEAPONS.find((w) => w.id === weaponId)!, level: 1, cd: 0 }];
         for (let i = 0; i < Math.round(30 / TICK); i++) {
@@ -636,8 +641,10 @@ console.log('\n[8E] Karakterler');
       }
       return total / 5;
     };
-    const best = Math.max(...WEAPONS.map((w) => movingKills(w.id)));
-    const starters = HEROES.map((h) => ({ h, k: movingKills(h.weapon) }));
+    // Referans: varsayılan gövdede EN İYİ açılış silahı ne yapıyor
+    const best = Math.max(...WEAPONS.map((w) => movingKills(HEROES[0].id, w.id)));
+    // Ölçüm: her karakter KENDİ gövdesinde, KENDİ silahıyla
+    const starters = HEROES.map((h) => ({ h, k: movingKills(h.id, h.weapon) }));
     for (const s of starters) {
       console.log(`       ${s.h.name.padEnd(20)} ${s.h.weapon.padEnd(10)} ${s.k.toFixed(1)} kill`);
     }

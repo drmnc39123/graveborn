@@ -62,9 +62,14 @@ export const HEROES: readonly HeroDef[] = [
     name: 'Leaf Ranger',
     title: 'The Long Wake',
     weapon: 'sickle',
-    blurb: 'Fast and fragile. Your sickle flies where you face — aim with your feet.',
-    stats: { moveSpeed: 0.12, projSpeed: 0.15, maxHp: -0.12 },
-    pros: ['+12% move speed', '+15% projectile speed'],
+    blurb: 'Fragile, relentless. Your sickle flies where you face — aim with your feet.',
+    // ⚠️ Önce moveSpeed +%12 verilmişti ve KENDİ SİLAHINA ÇALIŞIYORDU:
+    // sürüyü geride bırakıyor, yön bağımlı sickle boşluğa atıyordu. Canlı
+    // oyunda 15 saniyede 3 kill. Ölçüm (30 sn, hareketli, 5 seed):
+    //   temiz gövde 15,8 · mv+12 varyantı 14,0 · bu varyant 19,2
+    // Karakterin istatistiği silahını DESTEKLEMELİ, onunla dövüşmemeli.
+    stats: { moveSpeed: 0.05, cooldown: -0.15, projSpeed: 0.15, maxHp: -0.12 },
+    pros: ['−15% attack cooldown', '+15% projectile speed', '+5% move speed'],
     cons: ['−12% max health'],
     dir: 'leaf-ranger', idle: 'idle_{i}.png', run: 'run_{i}.png',
     idleFrames: 12, runFrames: 10,
