@@ -264,10 +264,14 @@ export const WEAPON = {
 // CLONE-SPEC.md'deki 15 saldırı arketipinden ilk 4'ü. Motor tek, desen veri.
 // Yeni silah eklemek = buraya bir kayıt. Motor kodu değişmez.
 export type WeaponPattern =
-  | 'aimed'  // #1 en yakın düşmana mermi (Bone Shard)
-  | 'sweep'  // #2 yatay kesik, düşmandan geçer (Grave Lash)
-  | 'orbit'  // #6 karakterin etrafında yörünge (Litany)
-  | 'aura';  // #8 yakın alan aurası (Wardsalt)
+  | 'aimed'      // #1 en yakın düşmana mermi (Bone Shard)
+  | 'sweep'      // #2 yatay kesik, düşmandan geçer (Grave Lash)
+  | 'orbit'      // #6 karakterin etrafında yörünge (Litany)
+  | 'aura'       // #8 yakın alan aurası (Wardsalt)
+  | 'nova'       // her yöne halka patlaması (Toll of Bells)
+  | 'ground'     // yere bırakılan kalıcı alan (Consecrated Ash)
+  | 'boomerang'  // gidip dönen mermi (Rusted Sickle)
+  | 'chain';     // düşmandan düşmana sıçrayan (Pale Lightning)
 
 export interface WeaponDef {
   id: string;
@@ -304,6 +308,21 @@ export interface WeaponDef {
   orbRadius?: number;
   // aura
   auraRadius?: number;
+  // nova — oyuncudan her yöne halka
+  novaCount?: number;
+  // ground — yere bırakılan, oyuncuyla HAREKET ETMEYEN kalıcı alan
+  groundRadius?: number;
+  groundLifeSec?: number;
+  /** alan bu aralıkla tekrar vurur (saniye) */
+  groundTickSec?: number;
+  // boomerang — gidip dönen mermi
+  /** ömrün bu oranı geçince oyuncuya dönmeye başlar */
+  returnAt?: number;
+  // chain — en yakından başlayıp sıçrayan zincir
+  chainJumps?: number;
+  chainRange?: number;
+  /** her sıçramada hasar bu oranla azalır */
+  chainFalloff?: number;
 }
 
 export const WEAPONS: readonly WeaponDef[] = [
@@ -314,22 +333,64 @@ export const WEAPONS: readonly WeaponDef[] = [
     projectileSpeed: 470, spreadRad: 0.16, pierce: 1, range: 620, lifeSec: 1.5,
   },
   {
+    // DENGE ÖLÇÜMÜ: 22 kill. Tek yöne vuran kesik, tempo çok yavaştı.
     id: 'lash', name: 'Grave Lash', desc: 'Slashes horizontally, passes through enemies',
-    pattern: 'sweep', maxLevel: 8, damage: 26, cooldownSec: 1.05,
-    dmgPerLevel: 1.2, cdPerLevel: 0.93, countLevels: [4, 7],
-    sweepW: 132, sweepH: 46, sweepLifeSec: 0.18, areaPerLevel: 1.07,
+    pattern: 'sweep', maxLevel: 8, damage: 30, cooldownSec: 0.8,
+    dmgPerLevel: 1.2, cdPerLevel: 0.93, countLevels: [3, 6],
+    sweepW: 150, sweepH: 54, sweepLifeSec: 0.2, areaPerLevel: 1.07,
   },
   {
+    // DENGE ÖLÇÜMÜ ([8D]): 60 sn'de 5 kill ile açık ara en zayıftı. Orb'lar
+    // sadece halkaya DEĞENİ vuruyor; başlangıçta iki orb bile yokken silah
+    // pratikte boştu. Hasar/tempo yükseltildi ve 2. orb 2. seviyeye çekildi.
     id: 'litany', name: 'Litany', desc: 'Pages orbit you, striking what they touch',
-    pattern: 'orbit', maxLevel: 8, damage: 14, cooldownSec: 0.5,
-    dmgPerLevel: 1.16, cdPerLevel: 0.97, countLevels: [2, 4, 6, 8],
-    orbitRadius: 78, orbitSpeed: 2.3, orbRadius: 13, areaPerLevel: 1.05,
+    // countLevels'ın ilk eşiği 1: seviye 1'de bile İKİ orb döner. Tek orb
+    // halkanın %6'sını tarıyordu, silah pratikte boştu.
+    pattern: 'orbit', maxLevel: 8, damage: 22, cooldownSec: 0.4,
+    dmgPerLevel: 1.16, cdPerLevel: 0.97, countLevels: [1, 3, 5, 7],
+    orbitRadius: 78, orbitSpeed: 2.6, orbRadius: 17, areaPerLevel: 1.06,
   },
   {
+    // DENGE ÖLÇÜMÜ: 14 kill. Yakın alan silahı, oyuncunun sürüye girmesini
+    // istiyor — riski yüksek, ödülü düşüktü.
     id: 'ward', name: 'Wardsalt', desc: 'Burns everything near you',
-    pattern: 'aura', maxLevel: 8, damage: 9, cooldownSec: 0.62,
+    pattern: 'aura', maxLevel: 8, damage: 14, cooldownSec: 0.52,
     dmgPerLevel: 1.22, cdPerLevel: 0.95,
-    auraRadius: 74, areaPerLevel: 1.09,
+    auraRadius: 84, areaPerLevel: 1.09,
+  },
+
+  // ── İKİNCİ DÖRTLÜ ──
+  // MAX_WEAPONS 6 olduğu için 8 silahtan 6'sı taşınabiliyor: her run bir
+  // TERCİH. Dördü de mevcut dördünden farklı bir SORU soruyor —
+  // "nereye bakıyorsun", "nerede duruyorsun", "ne zaman atıyorsun".
+  {
+    // DENGE ÖLÇÜMÜ: 87 kill ile en tepedeydi — her yöne birden vurduğu için
+    // nişan almayı hiç gerektirmiyor. Tempo yavaşlatıldı, delme düşürüldü.
+    id: 'toll', name: 'Toll of Bells', desc: 'A shockwave bursts outward from you',
+    pattern: 'nova', maxLevel: 8, damage: 15, cooldownSec: 2.3,
+    dmgPerLevel: 1.19, cdPerLevel: 0.94, countLevels: [3, 5, 7],
+    novaCount: 8, projectileSpeed: 300, pierce: 1, lifeSec: 1.0,
+  },
+  {
+    id: 'ash', name: 'Consecrated Ash', desc: 'Leaves burning ash where you stood',
+    pattern: 'ground', maxLevel: 8, damage: 11, cooldownSec: 1.6,
+    dmgPerLevel: 1.21, cdPerLevel: 0.95, countLevels: [4, 7],
+    groundRadius: 62, groundLifeSec: 3.4, groundTickSec: 0.5, areaPerLevel: 1.08,
+  },
+  {
+    id: 'sickle', name: 'Rusted Sickle', desc: 'Thrown wide — and it comes back',
+    pattern: 'boomerang', maxLevel: 8, damage: 24, cooldownSec: 1.35,
+    dmgPerLevel: 1.2, cdPerLevel: 0.94, countLevels: [3, 6],
+    projectileSpeed: 340, spreadRad: 0.42, pierce: 99, range: 620,
+    lifeSec: 2.2, returnAt: 0.5,
+  },
+  {
+    // DENGE ÖLÇÜMÜ: 87 kill. Sıçrama sayısı ve tempo düşürüldü — kalabalıkta
+    // hâlâ güçlü, ama tek başına bölüm temizleyen silah olmamalı.
+    id: 'lightning', name: 'Pale Lightning', desc: 'Leaps from one corpse to the next',
+    pattern: 'chain', maxLevel: 8, damage: 26, cooldownSec: 1.85,
+    dmgPerLevel: 1.22, cdPerLevel: 0.94,
+    chainJumps: 2, chainRange: 190, chainFalloff: 0.72, range: 460,
   },
 ] as const;
 
@@ -360,6 +421,30 @@ export const EVOLVED: readonly WeaponDef[] = [
     pattern: 'aura', maxLevel: 1, damage: 30, cooldownSec: 0.34,
     dmgPerLevel: 1, cdPerLevel: 1, auraRadius: 132, areaPerLevel: 1,
   },
+  {
+    id: 'requiem', name: 'Requiem Mass', desc: 'Evolved Toll of Bells', evolved: true,
+    pattern: 'nova', maxLevel: 1, damage: 44, cooldownSec: 1.05,
+    dmgPerLevel: 1, cdPerLevel: 1, novaCount: 18, projectileSpeed: 340,
+    pierce: 5, lifeSec: 1.5, countLevels: [],
+  },
+  {
+    id: 'pyre', name: 'Pyre Unending', desc: 'Evolved Consecrated Ash', evolved: true,
+    pattern: 'ground', maxLevel: 1, damage: 30, cooldownSec: 0.85,
+    dmgPerLevel: 1, cdPerLevel: 1, groundRadius: 108, groundLifeSec: 5.5,
+    groundTickSec: 0.34, areaPerLevel: 1, countLevels: [1],
+  },
+  {
+    id: 'reaper', name: "Reaper's Arc", desc: 'Evolved Rusted Sickle', evolved: true,
+    pattern: 'boomerang', maxLevel: 1, damage: 64, cooldownSec: 0.8,
+    dmgPerLevel: 1, cdPerLevel: 1, projectileSpeed: 420, spreadRad: 0.5,
+    pierce: 99, range: 720, lifeSec: 2.6, returnAt: 0.5, countLevels: [1, 1],
+  },
+  {
+    id: 'sainthood', name: 'Storm of Saints', desc: 'Evolved Pale Lightning', evolved: true,
+    pattern: 'chain', maxLevel: 1, damage: 72, cooldownSec: 0.7,
+    dmgPerLevel: 1, cdPerLevel: 1, chainJumps: 8, chainRange: 290,
+    chainFalloff: 0.92, range: 560,
+  },
 ] as const;
 
 export interface EvolutionDef {
@@ -376,6 +461,12 @@ export const EVOLUTIONS: readonly EvolutionDef[] = [
   { weapon: 'lash', passive: 'flesh', to: 'weeping' },      // Grave Lash + Stubborn Flesh
   { weapon: 'litany', passive: 'sigil', to: 'vespers' },    // Litany + Binding Sigil
   { weapon: 'ward', passive: 'slowknit', to: 'glutton' },   // Wardsalt + Slow Knit
+  // Her evrim FARKLI bir pasif ister — aynı pasifi iki evrimin şartı yapmak
+  // build çeşitliliğini öldürür, tek "doğru" pasif ortaya çıkar.
+  { weapon: 'toll', passive: 'tallow', to: 'requiem' },     // Toll of Bells + Tallow Candle
+  { weapon: 'ash', passive: 'bloodmeal', to: 'pyre' },      // Consecrated Ash + Bloodmeal
+  { weapon: 'sickle', passive: 'sinew', to: 'reaper' },     // Rusted Sickle + Sinew Wrap
+  { weapon: 'lightning', passive: 'skull', to: 'sainthood' }, // Pale Lightning + Cursed Skull
 ] as const;
 
 /** id → tanım (taban + evrimleşmiş hepsi) */
@@ -593,7 +684,11 @@ export const PASSIVES: readonly PassiveDef[] = [
   { id: 'echo', name: 'Echo Charm', vs: 'Duplicator', stat: 'amount', perLevel: 1, maxLevel: 2, desc: '+1 projectile' },
   { id: 'step', name: 'Unquiet Step', vs: 'Wings', stat: 'moveSpeed', perLevel: 0.10, maxLevel: 5, desc: '+10% move speed' },
   { id: 'soulpull', name: 'Soul Pull', vs: 'Attractorb', stat: 'magnet', perLevel: 0.25, maxLevel: 5, desc: '+25% pickup radius' },
-  { id: 'luck', name: "Dead Man's Luck", vs: 'Clover', stat: 'luck', perLevel: 0.10, maxLevel: 5, desc: '+10% luck' },
+  // ⚠️ "Dead Man's Luck" (luck) KALDIRILDI. Motor `stats.luck`'ı hiçbir yerde
+  // okumuyordu; oyuncu bir run'ın en önemli kararı olan level-up seçimini
+  // 5 kez TAM ANLAMIYLA hiçbir şeye harcayabiliyordu. The Forge'da aynı
+  // gerekçeyle dışarıda bırakılmıştı — havuzda tutmak tutarsızlıktı.
+  // Gerçek bir şans sistemi (sandık/nadirlik) gelirse geri eklenir.
   { id: 'crown', name: 'Grave Crown', vs: 'Crown', stat: 'growth', perLevel: 0.08, maxLevel: 5, desc: '+8% experience' },
   { id: 'coinmask', name: 'Coin Mask', vs: 'Stone Mask', stat: 'greed', perLevel: 0.10, maxLevel: 5, desc: '+10% gold' },
   { id: 'skull', name: 'Cursed Skull', vs: "Skull O'Maniac", stat: 'curse', perLevel: 0.10, maxLevel: 5, desc: '+10% curse — deadlier, richer' },

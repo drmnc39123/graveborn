@@ -76,6 +76,7 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawOrbits(ctx, g);
   drawAuras(ctx, g);
   drawProjectiles(ctx, g);
+  drawArcs(ctx, g);         // zincir yayları mermilerin üstünde parlar
   drawEnemyShots(ctx, g);   // oyuncunun ÜSTÜNDE değil altında: karakteri örtmesin
   drawPlayer(ctx, g);
 
@@ -277,6 +278,30 @@ function drawHitZones(ctx: CanvasRenderingContext2D, g: Game) {
     const z = g.hitZones[i];
     const k = z.life / z.maxLife;      // 1 → 0
     const grow = 1 + (1 - k) * 0.18;
+
+    // YERE BIRAKILAN ALAN (Consecrated Ash) — kesikten tamamen farklı okunmalı:
+    // oyuncu "burası hâlâ yanıyor mu" sorusuna bir bakışta cevap verebilmeli.
+    if (z.round) {
+      const r = z.w / 2;
+      ctx.globalAlpha = Math.min(0.85, 0.25 + k * 0.5);
+      const rg = ctx.createRadialGradient(z.x, z.y, r * 0.15, z.x, z.y, r);
+      rg.addColorStop(0, 'rgba(239,167,46,0.55)');
+      rg.addColorStop(0.6, 'rgba(200,50,74,0.30)');
+      rg.addColorStop(1, 'rgba(160,18,38,0.0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.arc(z.x, z.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      // dış hat: alanın SINIRI belirsiz kalmasın, oyuncu kenarını görsün
+      ctx.globalAlpha = Math.min(0.7, k);
+      ctx.strokeStyle = 'rgba(239,167,46,0.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(z.x, z.y, r * 0.96, 0, Math.PI * 2);
+      ctx.stroke();
+      continue;
+    }
+
     ctx.globalAlpha = Math.min(1, k * 1.6);
     const grad = ctx.createLinearGradient(z.x - z.w / 2, z.y, z.x + z.w / 2, z.y);
     const inner = z.facingRight ? 0 : 1;
@@ -299,7 +324,10 @@ function drawOrbits(ctx: CanvasRenderingContext2D, g: Game) {
     const area = Math.pow(w.def.areaPerLevel ?? 1, w.level - 1);
     const rad = (w.def.orbitRadius ?? 78) * area;
     const orbR = (w.def.orbRadius ?? 13) * area;
-    const n = 1 + (w.def.countLevels?.filter((l) => w.level >= l).length ?? 0);
+    // ⚠️ `stats.amount` DAHİL olmalı. Yoksa Echo of War / Amount alan oyuncuda
+    // motor 5 orb ile vururken ekranda 3 orb görünür — hasar görünmeyen
+    // noktalardan gelir ve oyuncu sebebini asla anlayamaz.
+    const n = 1 + (w.def.countLevels?.filter((l) => w.level >= l).length ?? 0) + g.stats.amount;
     for (let k = 0; k < n; k++) {
       const a = g.orbitAngle + (k * Math.PI * 2) / n;
       const ox = g.px + Math.cos(a) * rad;
@@ -362,6 +390,32 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
   }
   ctx.fill();
+}
+
+/**
+ * Pale Lightning yayları. Motor `arcs` kuyruğuna yazar, BURADA boşaltılır —
+ * zincir anlık hasar verir, görsel olmadan oyuncu neye vurduğunu göremez.
+ * Kuyruk her frame temizleniyor: yaylar tek kare parlar (şimşek gibi).
+ */
+function drawArcs(ctx: CanvasRenderingContext2D, g: Game) {
+  if (!g.arcs.length) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  // iki geçiş: geniş soluk hale + ince parlak çekirdek
+  for (const [width, color, alpha] of [[7, C.ice, 0.28], [2.4, C.bone, 0.95]] as const) {
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    for (let i = 0; i < g.arcs.length; i++) {
+      const a = g.arcs[i];
+      ctx.moveTo(a.x1, a.y1);
+      ctx.lineTo(a.x2, a.y2);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+  g.arcs.length = 0;   // kuyruğu boşalt — birikirse ekran ağ gibi olur
 }
 
 /**

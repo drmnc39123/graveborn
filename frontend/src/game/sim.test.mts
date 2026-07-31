@@ -9,7 +9,8 @@
 
 import { Game } from './engine.js';
 import {
-  COOLDOWN_FLOOR, ENEMIES, MAX_PASSIVES, MAX_WEAPONS, PASSIVES, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
+  COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES, MAX_WEAPONS, PASSIVES,
+  STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
   descentStage, rareDropChance,
 } from './config.js';
 import { ENEMY_ART } from './sprites.js';
@@ -278,22 +279,17 @@ console.log('\n[3B] The Descent');
 {
   const g = new Game(seedFromString('descent'), STAGES[0], {}, 'descent');
   g.setViewport(1280, 720);
-  let hpRefilledOnDescend = false;
   let lastDepth = g.stage.depth;
-  let hpBeforeDescend = g.hp;
   const bossDepths: number[] = [];
 
   for (let i = 0; i < Math.round(40 * 60 / TICK); i++) {
     if (g.phase === 'levelup') g.choose(g.offers[0].id);
     if (g.phase !== 'running') break;
-    // Gücü değil MERDİVENİ ölçüyoruz: ölmesin diye canı tazeliyoruz ama
-    // "derinlik geçişinde motor kendiliğinden doldurdu mu" ayrı bakılıyor.
+    // Merdiveni ölçüyoruz, hayatta kalmayı değil → can tazeleniyor.
     if (g.stage.depth !== lastDepth) {
-      if (g.hp > hpBeforeDescend + 0.001) hpRefilledOnDescend = true;
       lastDepth = g.stage.depth;
       if (g.stage.def.boss) bossDepths.push(g.stage.depth);
     }
-    hpBeforeDescend = g.hp;
     g.hp = g.stats.maxHp;
     g.setInput(...fleeInput(g));
     g.step();
@@ -306,7 +302,21 @@ console.log('\n[3B] The Descent');
   check('descent asla "won" olmuyor', g.phase !== 'won', `faz: ${g.phase}`);
   check('temizlenen derinlik takip ediliyor', g.stage.deepestCleared === g.stage.depth - 1,
     `${g.stage.deepestCleared} vs ${g.stage.depth}`);
-  check('derinlik geçişinde CAN DOLDURULMUYOR', !hpRefilledOnDescend);
+
+  // CAN DOLMAZ — descent'in TEK bitiş koşulu bu, doğrudan ölç.
+  // (Önce canlı koşu içinde ölçülüyordu ama test her tick canı maxHp'ye
+  //  dolduruyor; level-up maxHp'yi büyütünce can "arttı" görünüp yanlış
+  //  alarm veriyordu. İddiayı invaryantın kendisinde ölçmek doğrusu.)
+  {
+    const h = new Game(seedFromString('nohp'), STAGES[0], {}, 'descent');
+    h.setViewport(1280, 720);
+    h.hp = 37;
+    const before = h.hp;
+    (h as any).advanceDepth();
+    check('derinlik geçişinde CAN DOLDURULMUYOR', h.hp === before, `${before} → ${h.hp}`);
+    check('derinlik geçişinde silah/level KORUNUYOR',
+      h.weapons.length > 0 && h.level === 1, `${h.weapons.length} silah, LV${h.level}`);
+  }
   check('her 5 derinlikte boss var',
     bossDepths.length > 0 && bossDepths.every((d) => d % 5 === 0), `boss derinlikleri: ${bossDepths.join(',')}`);
   check('derinlik zorlaşıyor', descentStage(1, 20).hpMul > descentStage(1, 5).hpMul * 3,
@@ -428,11 +438,14 @@ function patternDamages(id: string): { dealt: boolean; hp: number } {
   const dist =
     def.pattern === 'orbit' ? (def.orbitRadius ?? 78) :
     def.pattern === 'aura' ? (def.auraRadius ?? 70) * 0.6 :
+    // ground alanı ayağının DİBİNE bırakılır; kukla yarıçapın içinde olmalı
+    def.pattern === 'ground' ? (def.groundRadius ?? 62) * 0.5 :
     40;
 
   const dummy = {
     x: dist, y: 0, hp: 1e6, maxHp: 1e6, speed: 0, damage: 0, radius: 12, xp: 0,
     color: '#fff', hitFlash: 0, animT: 0, facingRight: true, contactCd: 0,
+    behavior: 'chase' as const, atkCd: 99, cState: 0 as const, cdx: 0, cdy: 0, phase: 0,
   };
   g.enemies.push(dummy as any);
   g.setInput(0, 0);
@@ -444,10 +457,132 @@ function patternDamages(id: string): { dealt: boolean; hp: number } {
   }
   return { dealt: dummy.hp < 1e6, hp: dummy.hp };
 }
-for (const id of ['shard', 'lash', 'litany', 'ward']) {
-  const r = patternDamages(id);
-  const def = WEAPONS.find((w) => w.id === id)!;
-  check(`${def.name} (${def.pattern}) hasar veriyor`, r.dealt, `3 sn'de ${Math.round(1e6 - r.hp)} hasar`);
+// SEKİZ desen de test edilir. Biri sessizce çalışmazsa 20 dk oynayana kadar
+// fark edilmez — silah eklemenin en sinsi hatası "hiç ateş etmiyor"dur.
+for (const w of WEAPONS) {
+  const r = patternDamages(w.id);
+  check(`${w.name} (${w.pattern}) hasar veriyor`, r.dealt, `3 sn'de ${Math.round(1e6 - r.hp)} hasar`);
+}
+
+// Evrimleşmiş silahların desenleri de çalışmalı — bunlar level-up havuzunda
+// çıkmadığı için normal oynayışta 20 dakika sonra fark edilirdi.
+console.log('\n[8B] Evrimleşmiş desenler');
+{
+  const bad: string[] = [];
+  for (const ev of EVOLVED) {
+    const g = new Game(seedFromString(`ev-${ev.id}`));
+    g.setViewport(1280, 720);
+    g.weapons = [{ def: ev, level: 1, cd: 0 }];
+    const dist =
+      ev.pattern === 'orbit' ? (ev.orbitRadius ?? 78) :
+      ev.pattern === 'aura' ? (ev.auraRadius ?? 70) * 0.6 :
+      ev.pattern === 'ground' ? (ev.groundRadius ?? 62) * 0.5 : 40;
+    const dummy: any = {
+      x: dist, y: 0, hp: 1e7, maxHp: 1e7, speed: 0, damage: 0, radius: 12, xp: 0,
+      color: '#fff', hitFlash: 0, animT: 0, facingRight: true, contactCd: 0,
+      behavior: 'chase', atkCd: 99, cState: 0, cdx: 0, cdy: 0, phase: 0,
+    };
+    g.enemies.push(dummy);
+    g.setInput(0, 0);
+    for (let i = 0; i < Math.round(3 / TICK); i++) {
+      if (g.phase === 'levelup') g.choose(g.offers[0].id);
+      g.hp = g.stats.maxHp;
+      dummy.x = g.px + dist; dummy.y = g.py;
+      g.step();
+    }
+    if (dummy.hp >= 1e7) bad.push(ev.name);
+  }
+  check('8 evrimleşmiş silahın hepsi hasar veriyor', bad.length === 0,
+    bad.length ? bad.join(', ') : `${EVOLVED.length} silah`);
+}
+
+// ── 8D) SİLAH GÜÇ DENGESİ ──
+// İzole hasar testi bir silahın ÇALIŞTIĞINI kanıtlar, DENGELİ olduğunu değil.
+// Kukla testinde boomerang 672 hasar yaptı (Bone Shard 280) — ama kukla sabit
+// ve tam yolun üstünde, yani boomerang için en iyi hâl. Gerçek koşulda ölçmek
+// lazım: aynı seed, aynı bölüm, TEK silah, sabit süre, kaç kill.
+//
+// ⚠️ SÜRÜCÜ SEÇİMİ ÖLÇÜMÜ BELİRLER. İlk sürümde `fleeInput` kullanıldı ve
+// Grave Lash / Litany / Wardsalt / Consecrated Ash 0 KILL aldı — çünkü kaçan
+// oyuncu kısa menzilli silahı hiçbir şeye değdiremez. Bu oyunun değil TESTİN
+// hatasıydı. Nötr zemin: dairesel hareket — oyuncu hareket eder ama kaçmaz,
+// sürü yetişir. Hem menzilli hem yakın dövüş silahı iş görebilir.
+console.log('\n[8D] Silah güç dengesi (1. bölüm, 60 sn, tek silah, dairesel hareket)');
+{
+  const killsWith = (def: typeof WEAPONS[number]) => {
+    const g = new Game(seedFromString('balance'), STAGES[0]);
+    g.setViewport(1280, 720);
+    g.weapons = [{ def, level: 1, cd: 0 }];
+    for (let i = 0; i < Math.round(60 / TICK); i++) {
+      if (g.phase === 'levelup') g.choose(g.offers[0].id);
+      if (g.phase !== 'running') break;
+      g.hp = g.stats.maxHp;              // hayatta kalmayı değil GÜCÜ ölçüyoruz
+      const t = i * TICK;
+      g.setInput(Math.cos(t * 0.7), Math.sin(t * 0.7));
+      g.step();
+    }
+    return g.kills;
+  };
+  // Silahları KIYASLANABİLİR sınıflara ayır. Hepsini tek eşiğe vurmak yanlış
+  // olurdu: otomatik nişan alan bir silahla, oyuncunun yönüne bağlı bir silahı
+  // "yönü umursamayan" bir sürücüyle aynı kefeye koymak sınıf farkını denge
+  // sorunu sanmak demek.
+  const CLASS: Record<string, 'auto' | 'directional' | 'orbit'> = {
+    aimed: 'auto', nova: 'auto', chain: 'auto', aura: 'auto', ground: 'auto',
+    sweep: 'directional', boomerang: 'directional',
+    orbit: 'orbit',
+  };
+  const rows = WEAPONS.map((w) => ({ name: w.name, kills: killsWith(w), cls: CLASS[w.pattern] }))
+    .sort((a, b) => b.kills - a.kills);
+  for (const r of rows) console.log(`     ${r.name.padEnd(18)} ${String(r.kills).padStart(3)} kill  (${r.cls})`);
+
+  const best = rows[0].kills;
+  const worst = rows[rows.length - 1];
+  // 1) TUZAK SEÇİM YOK: hiçbir silah en iyinin %15'inin altında olmamalı.
+  //    Asıl korunmak istenen şey bu — oyuncu bir seçimini çöpe atmasın.
+  check('tuzak silah yok (en iyinin %15\'i altında kalan yok)', worst.kills >= best * 0.15,
+    `en zayıf ${worst.name} ${worst.kills}, eşik ${(best * 0.15).toFixed(0)}`);
+
+  // 2) SINIF İÇİ TUTARLILIK: aynı sınıftaki silahlar birbirine yakın olmalı,
+  //    yoksa o sınıfta "tek doğru" silah oluşur ve seçim ortadan kalkar.
+  for (const cls of ['auto', 'directional'] as const) {
+    const g2 = rows.filter((r) => r.cls === cls);
+    if (g2.length < 2) continue;
+    const hi = g2[0].kills, lo = g2[g2.length - 1].kills;
+    check(`${cls} sınıfı kendi içinde dengeli (≤1.8x)`, hi <= lo * 1.8,
+      `${g2[0].name} ${hi} vs ${g2[g2.length - 1].name} ${lo}`);
+  }
+}
+
+// ── 8C) SİLAH/EVRİM VERİ BÜTÜNLÜĞÜ ──
+// Yanlış id yazmak sessiz: evrim asla tetiklenmez, oyuncu sebebini asla anlamaz.
+console.log('\n[8C] Evrim tablosu tutarlı');
+{
+  const wIds = new Set(WEAPONS.map((w) => w.id));
+  const eIds = new Set(EVOLVED.map((w) => w.id));
+  const pIds = new Set(PASSIVES.map((p) => p.id));
+  const badW = EVOLUTIONS.filter((e) => !wIds.has(e.weapon)).map((e) => e.weapon);
+  const badP = EVOLUTIONS.filter((e) => !pIds.has(e.passive)).map((e) => e.passive);
+  const badT = EVOLUTIONS.filter((e) => !eIds.has(e.to)).map((e) => e.to);
+  check('evrim taban silahları geçerli', badW.length === 0, badW.join(', '));
+  check('evrim pasifleri geçerli', badP.length === 0, badP.join(', '));
+  check('evrim sonuçları geçerli', badT.length === 0, badT.join(', '));
+
+  // Her taban silahın bir evrimi olmalı — yoksa MAX'a çıkarmanın ödülü yok
+  const covered = new Set(EVOLUTIONS.map((e) => e.weapon));
+  const uncovered = WEAPONS.filter((w) => !covered.has(w.id)).map((w) => w.name);
+  check('her taban silahın evrimi var', uncovered.length === 0, uncovered.join(', '));
+
+  // İki evrim AYNI pasifi istememeli — yoksa tek "doğru" pasif oluşur
+  const passives = EVOLUTIONS.map((e) => e.passive);
+  check('her evrim farklı pasif istiyor', new Set(passives).size === passives.length,
+    passives.join(', '));
+
+  // Pasif havuzunda motorun OKUMADIĞI istatistik olmamalı (ölü seçim)
+  const READ = new Set(['might', 'armor', 'maxHp', 'recovery', 'cooldown', 'area',
+    'projSpeed', 'duration', 'amount', 'moveSpeed', 'magnet', 'growth', 'greed', 'curse', 'revival']);
+  const dead = PASSIVES.filter((p) => !READ.has(p.stat)).map((p) => `${p.id}→${p.stat}`);
+  check('ölü pasif yok (hepsi motorda okunuyor)', dead.length === 0, dead.join(', '));
 }
 
 // Silahlar level-up'ta toplanabiliyor mu — SİLAH TERCİH EDEN seçiciyle.

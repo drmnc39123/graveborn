@@ -53,7 +53,14 @@ export interface Chest { x: number; y: number; evolution: boolean }
 export interface Projectile {
   x: number; y: number; vx: number; vy: number;
   damage: number; radius: number; life: number; pierce: number;
+  /** boomerang: ömür bu değerin ALTINA inince oyuncuya dönmeye başlar */
+  returnAt?: number;
+  /** boomerang: dönüş hızı (ilk atış hızı) */
+  speed?: number;
 }
+
+/** Zincir silahının kozmetik yayı — render her frame boşaltır, simülasyona girmez */
+export interface Arc { x1: number; y1: number; x2: number; y2: number }
 export interface Gem { x: number; y: number; xp: number; life: number }
 
 /** Sweep saldırısının geçici hitbox'ı — render de bunu çizer */
@@ -63,6 +70,13 @@ export interface HitZone {
   facingRight: boolean;
   /** aynı kesikte aynı düşmana iki kez vurmasın */
   hit: Set<Enemy>;
+  /** true ise oyuncuyu TAKİP ETMEZ, bırakıldığı yerde kalır (ground) */
+  anchored?: boolean;
+  /** >0 ise bu aralıkla `hit` temizlenir → alan tekrar tekrar vurur */
+  retick?: number;
+  retickCd?: number;
+  /** true ise dikdörtgen değil DAİRE olarak çarpışır ve çizilir */
+  round?: boolean;
 }
 
 /** Sahip olunan silah — seviyesi ve kendi bekleme sayacı */
@@ -154,6 +168,8 @@ export class Game {
   projectiles: Projectile[] = [];
   /** düşman mermileri — render bunları da çizer */
   enemyShots: EnemyShot[] = [];
+  /** zincir yayları — KOZMETİK kuyruk, render her frame boşaltır */
+  arcs: Arc[] = [];
   gems: Gem[] = [];
   hitZones: HitZone[] = [];
   chests: Chest[] = [];
@@ -695,8 +711,17 @@ export class Game {
 
   /** Tüm silahları ilerlet. Motor tek, desen veri — yeni silah = config kaydı. */
   private fire(dt: number) {
-    // Yörünge açısı sürekli döner (silah olmasa da; kayıt tutmak ucuz)
-    this.orbitAngle = (this.orbitAngle + 2.3 * dt) % (Math.PI * 2);
+    // Yörünge açısı sürekli döner (silah olmasa da; kayıt tutmak ucuz).
+    // ⚠️ Hız SİLAHTAN gelir. Önce sabit 2.3 yazılıydı ve `def.orbitSpeed`
+    // hiçbir yerde okunmuyordu — Black Vespers'ın 3.1'i ölü veriydi, evrim
+    // tasarlandığından yavaş dönüyordu. Açı ortak olduğu için en hızlı
+    // yörünge silahı belirler (pratikte oyuncu tek yörünge silahı taşır).
+    let os = 2.3;
+    for (let i = 0; i < this.weapons.length; i++) {
+      const d = this.weapons[i].def;
+      if (d.pattern === 'orbit') os = Math.max(os, d.orbitSpeed ?? 2.3);
+    }
+    this.orbitAngle = (this.orbitAngle + os * dt) % (Math.PI * 2);
 
     for (let i = 0; i < this.weapons.length; i++) {
       const w = this.weapons[i];
@@ -723,8 +748,128 @@ export class Game {
       } else if (def.pattern === 'aura') {
         w.cd = this.wCooldown(w);
         this.fireAura(w);
+      } else if (def.pattern === 'nova') {
+        w.cd = this.wCooldown(w);
+        this.fireNova(w);
+      } else if (def.pattern === 'ground') {
+        w.cd = this.wCooldown(w);
+        this.fireGround(w);
+      } else if (def.pattern === 'boomerang') {
+        // Hedef ARAMAZ: baktığın yöne savrulur ve döner. "Nereye bakıyorsun"
+        // sorusunu soran tek silah — aimed'ın otomatik nişanından farkı bu.
+        w.cd = this.wCooldown(w);
+        this.fireBoomerang(w);
+      } else if (def.pattern === 'chain') {
+        const target = this.nearestEnemy(def.range ?? 460);
+        if (!target) continue;
+        w.cd = this.wCooldown(w);
+        this.fireChain(w, target);
       }
     }
+  }
+
+  /** #3 nova — oyuncudan her yöne eşit aralıklı halka */
+  private fireNova(w: OwnedWeapon) {
+    const def = w.def;
+    const n = (def.novaCount ?? 8) + this.wCount(w) - 1;
+    const spd = (def.projectileSpeed ?? 300) * this.stats.projSpeed;
+    const dmg = this.wDamage(w);
+    const life = (def.lifeSec ?? 1.1) * this.stats.duration;
+    // Başlangıç açısı her atışta kayar — üst üste atışlar aynı koridorları
+    // taramasın, yoksa halkalar arası kalıcı ölü açılar oluşur.
+    const base = (this.time * 0.9) % (Math.PI * 2);
+    for (let i = 0; i < n; i++) {
+      const a = base + (i * Math.PI * 2) / n;
+      this.projectiles.push({
+        x: this.px, y: this.py,
+        vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+        damage: dmg, radius: 6, life, pierce: def.pierce ?? 2,
+      });
+    }
+  }
+
+  /** #4 ground — ayağının altına kalıcı alan bırakır (oyuncuyla HAREKET ETMEZ) */
+  private fireGround(w: OwnedWeapon) {
+    const def = w.def;
+    const r = (def.groundRadius ?? 62) * this.wArea(w);
+    const life = (def.groundLifeSec ?? 3.4) * this.stats.duration;
+    const n = this.wCount(w) >= 2 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      // ikinci alan hafif ofsetli — üst üste binip tek alan gibi görünmesin
+      const off = n === 1 ? 0 : (i === 0 ? -r * 0.7 : r * 0.7);
+      this.hitZones.push({
+        x: this.px + off, y: this.py,
+        w: r * 2, h: r * 2,
+        life, maxLife: life,
+        damage: this.wDamage(w),
+        facingRight: true,
+        hit: new Set<Enemy>(),
+        anchored: true,
+        retick: def.groundTickSec ?? 0.5,
+        retickCd: 0,
+        round: true,
+      });
+    }
+  }
+
+  /** #5 boomerang — baktığın yöne savrulur, ömrünün yarısında geri döner */
+  private fireBoomerang(w: OwnedWeapon) {
+    const def = w.def;
+    const n = this.wCount(w);
+    const spd = (def.projectileSpeed ?? 340) * this.stats.projSpeed;
+    const life = (def.lifeSec ?? 2.2) * this.stats.duration;
+    const baseAng = this.facingRight ? 0 : Math.PI;
+    for (let i = 0; i < n; i++) {
+      const off = n === 1 ? 0 : (i - (n - 1) / 2) * (def.spreadRad ?? 0.42);
+      const a = baseAng + off;
+      this.projectiles.push({
+        x: this.px, y: this.py,
+        vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+        damage: this.wDamage(w), radius: 8,
+        life, pierce: def.pierce ?? 99,
+        returnAt: life * (def.returnAt ?? 0.5),
+        speed: spd,
+      });
+    }
+  }
+
+  /**
+   * #7 chain — en yakından başlar, düşmandan düşmana sıçrar.
+   * Anlık hasar; görsel için `arcs` kuyruğuna yazar (render boşaltır).
+   * Aynı düşmana iki kez sıçramaz, yoksa iki düşman arasında hapsolur.
+   */
+  private fireChain(w: OwnedWeapon, first: Enemy) {
+    const def = w.def;
+    const jumps = def.chainJumps ?? 3;
+    const range = def.chainRange ?? 210;
+    const falloff = def.chainFalloff ?? 0.8;
+    let dmg = this.wDamage(w);
+    let cur = first;
+    const seen = new Set<Enemy>([cur]);
+    let fx = this.px, fy = this.py;
+
+    for (let j = 0; j <= jumps; j++) {
+      this.damageEnemy(cur, dmg);
+      if (this.arcs.length < 64) this.arcs.push({ x1: fx, y1: fy, x2: cur.x, y2: cur.y });
+      fx = cur.x; fy = cur.y;
+
+      // bir sonraki en yakın, HENÜZ VURULMAMIŞ düşman
+      let next: Enemy | null = null;
+      let bestD = range * range;
+      const cand = this.grid.query(cur.x, cur.y, range + 30, this.scratch);
+      for (let i = 0; i < cand.length; i++) {
+        const e = cand[i];
+        if (e.hp <= 0 || seen.has(e)) continue;
+        const dx = e.x - cur.x, dy = e.y - cur.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD) { bestD = d2; next = e; }
+      }
+      if (!next) break;
+      seen.add(next);
+      cur = next;
+      dmg *= falloff;
+    }
+    this.events.add('chain');
   }
 
   /** #1 aimed — en yakın düşmana mermi(ler) */
@@ -819,17 +964,32 @@ export class Game {
   private updateHitZones(dt: number) {
     for (let i = this.hitZones.length - 1; i >= 0; i--) {
       const z = this.hitZones[i];
-      // kesik oyuncuyla birlikte hareket etsin (yerinde asılı kalmasın)
-      z.x = this.px + (z.facingRight ? z.w / 2 : -z.w / 2);
-      z.y = this.py;
+      // Kesik oyuncuyla hareket eder; YERE BIRAKILAN alan (anchored) etmez —
+      // "nerede durduğun" sorusunu soran tek silah bu, takip ederse anlamı kalmaz.
+      if (!z.anchored) {
+        z.x = this.px + (z.facingRight ? z.w / 2 : -z.w / 2);
+        z.y = this.py;
+      }
 
-      const cand = this.grid.query(z.x, z.y, Math.max(z.w, z.h) / 2 + 30, this.scratch);
+      // Tekrar vuran alan: sayaç dolunca vurulanlar listesi temizlenir
+      if (z.retick && z.retick > 0) {
+        z.retickCd = (z.retickCd ?? 0) - dt;
+        if (z.retickCd <= 0) { z.retickCd = z.retick; z.hit.clear(); }
+      }
+
       const hw = z.w / 2, hh = z.h / 2;
+      const cand = this.grid.query(z.x, z.y, Math.max(z.w, z.h) / 2 + 30, this.scratch);
       for (let j = 0; j < cand.length; j++) {
         const e = cand[j];
         if (e.hp <= 0 || z.hit.has(e)) continue;
-        if (Math.abs(e.x - z.x) > hw + e.radius) continue;
-        if (Math.abs(e.y - z.y) > hh + e.radius) continue;
+        if (z.round) {
+          const dx = e.x - z.x, dy = e.y - z.y;
+          const rr = hw + e.radius;
+          if (dx * dx + dy * dy > rr * rr) continue;
+        } else {
+          if (Math.abs(e.x - z.x) > hw + e.radius) continue;
+          if (Math.abs(e.y - z.y) > hh + e.radius) continue;
+        }
         z.hit.add(e);
         this.damageEnemy(e, z.damage);
       }
@@ -842,6 +1002,20 @@ export class Game {
   private moveProjectiles(dt: number) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+
+      // BOOMERANG: ömrün ikinci yarısında oyuncuya doğru yönelir. Oyuncu
+      // hareket ettiği için sabit bir dönüş vektörü yetmez — her kare
+      // yeniden hedeflenir, yoksa oyuncu yürüyünce silah geri gelmez.
+      if (p.returnAt !== undefined && p.life < p.returnAt) {
+        const dx = this.px - p.x, dy = this.py - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const sp = p.speed ?? Math.hypot(p.vx, p.vy);
+        p.vx = (dx / d) * sp;
+        p.vy = (dy / d) * sp;
+        // elinde tekrar toplandıysa erken sönsün (ekranda takılı kalmasın)
+        if (d < PLAYER.radius + p.radius) { this.swapRemove(this.projectiles, i); continue; }
+      }
+
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.life -= dt;

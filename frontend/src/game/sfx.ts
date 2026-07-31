@@ -7,7 +7,7 @@
 // = 200 oscillator = ses çamuru + CPU patlaması. Her sesin kendi minimum aralığı var.
 
 type Voice = 'hit' | 'kill' | 'gem' | 'levelup' | 'evolve' | 'boss' | 'hurt' | 'chest'
-  | 'coin' | 'depth' | 'eshot' | 'charge';
+  | 'coin' | 'depth' | 'eshot' | 'charge' | 'chain';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -25,6 +25,7 @@ const THROTTLE: Record<Voice, number> = {
   // Sahnede 40 okçu olabilir; kısmasız her atış duyulursa ses çamuru olur.
   eshot: 110,
   charge: 140,
+  chain: 90,
 };
 
 function ensure(): AudioContext | null {
@@ -119,6 +120,8 @@ export function play(v: Voice) {
     case 'eshot': tone(300, 0.07, 'square', 0.055, 200); break;
     // Hücum telegrafı: yükselen uğultu — duyunca kaçmalısın
     case 'charge': tone(120, 0.3, 'sawtooth', 0.12, 340); break;
+    // Zincir: kısa çıtırtı + yükselen cızırtı — elektrik hissi
+    case 'chain': noise(0.06, 0.09, 6000); tone(880, 0.09, 'square', 0.05, 1760); break;
     case 'evolve':
       // yükselen akor + parlama: run'ın en büyük anı, ses de öyle olmalı
       [392, 494, 587, 784, 988].forEach((f, i) => tone(f, 0.6, 'triangle', 0.13, undefined, i * 0.07));
