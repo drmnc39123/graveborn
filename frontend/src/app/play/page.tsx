@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
+import { RecordsPanel } from '@/components/RecordsPanel';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { permanentBonus } from '@/game/forge';
@@ -145,6 +146,8 @@ export default function PlayPage() {
               />
             ) : panel === 'upgrade' ? (
               <ForgePanel progress={progress ?? loadProgress()} onChange={setProgress} />
+            ) : panel === 'tavern' ? (
+              <RecordsPanel progress={progress ?? loadProgress()} />
             ) : (
               <ComingSoon id={panel} />
             )}
@@ -239,21 +242,64 @@ function StageSelect({ progress, onPick }: {
   );
 }
 
-const LABELS: Record<string, { title: string; body: string }> = {
-  shop: { title: "Pedlar's Stall", body: 'Consumables and gear. Coming soon.' },
-  // ⚠️ "Swap gold for $GRAVE" DEMİYORUZ: hazine sabit kurdan alım yaparsa oyun
-  // token basmış olur ve sıfır-emisyon sözü çöker. Her iki bina da P2P olacak.
-  market: { title: 'Marketplace', body: 'Sell your gold to other players for $GRAVE. Coming soon.' },
-  exchange: { title: 'The Exchange', body: 'Player-to-player order book for $GRAVE. Coming soon.' },
-  tavern: { title: 'Tavern', body: 'Your profile, records and guild. Coming soon.' },
+// Kapalı binalar. "Coming soon" tek başına oyuncuya hiçbir şey söylemiyordu;
+// burada NE olacağı ve NİYE kapalı olduğu yazıyor.
+// ⚠️ Hiçbir yerde "swap gold for $GRAVE" DEMİYORUZ: hazine sabit kurdan alım
+// yaparsa oyun token BASMIŞ olur ve sıfır-emisyon sözü çöker. İkisi de P2P.
+const LOCKED: Record<string, { kicker: string; title: string; body: string; bullets: string[]; gate: string }> = {
+  shop: {
+    kicker: "THE PEDLAR'S STALL", title: 'Shuttered',
+    body: 'The pedlar deals in things you carry into a run — not permanent power. That is the Forge’s business.',
+    bullets: [
+      'Charms consumed on a single descent',
+      'Bought with gold, spent whether you win or lose',
+      'Deliberately weaker than Forge levels — convenience, not a shortcut',
+    ],
+    gate: 'Opens when run-consumables land.',
+  },
+  market: {
+    kicker: 'THE MARKETPLACE', title: 'Not yet trading',
+    body: 'Where players sell gold to each other for $GRAVE. The game never mints the token — every coin comes from another player’s wallet.',
+    bullets: [
+      'You list gold at your own price',
+      'A buyer pays from their wallet, on-chain',
+      'Listings sit in escrow until sold or cancelled',
+    ],
+    gate: 'Opens with $GRAVE.',
+  },
+  exchange: {
+    kicker: 'THE EXCHANGE', title: 'Not yet trading',
+    body: 'The order book behind the Marketplace — standing bids and asks instead of fixed listings.',
+    bullets: [
+      'Player-to-player only, no house counterparty',
+      'A fee on token trades; half of it burned',
+      'Gold-priced trades stay fee-free',
+    ],
+    gate: 'Opens with $GRAVE.',
+  },
 };
 
 function ComingSoon({ id }: { id: BuildingId }) {
-  const l = LABELS[id] ?? { title: id, body: 'Coming soon.' };
+  const l = LOCKED[id];
+  if (!l) {
+    return <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: C.bone }}>{id}</h2>;
+  }
   return (
     <>
-      <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 900, color: C.bone }}>{l.title}</h2>
-      <p style={{ margin: 0, fontSize: 13, color: C.boneDim }}>{l.body}</p>
+      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>{l.kicker}</div>
+      <h2 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 900, color: C.bone }}>{l.title}</h2>
+      <p style={{ margin: '0 0 14px', fontSize: 12.5, color: C.boneDim, lineHeight: 1.6 }}>{l.body}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {l.bullets.map((b) => (
+          <div key={b} style={{ ...glass(9), padding: '9px 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.45 }}>
+            <span style={{ color: C.candle, marginRight: 8 }}>•</span>{b}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 14, textAlign: 'center', fontSize: 11, fontWeight: 900,
+        letterSpacing: 1.6, color: C.boneDim }}>
+        {l.gate.toUpperCase()}
+      </div>
     </>
   );
 }

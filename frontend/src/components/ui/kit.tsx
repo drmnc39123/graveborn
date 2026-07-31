@@ -41,6 +41,12 @@ export function nineSlice(src: string, slice = 16, scale = 3): CSSProperties {
   const s = int(scale);
   return {
     borderStyle: 'solid',
+    // ⚠️ ŞEFFAF KENAR RENGİ ŞART: görsel 404 verirse tarayıcı border-image'i
+    // atlar ve DÜZ KENARLIK çizer — ekranda iki renkli slab olarak görünür.
+    // (BannerMedium_03A.png yoktu, sadece _Normal/_Pressed vardı; ekranda
+    //  "LEVEL 2" yazısının iki yanında soluk bloklar çıktı.) Şeffafla eksik
+    //  varlık sessizce yok olur, sahte bir çerçeve uydurmaz.
+    borderColor: 'transparent',
     borderWidth: slice * s,
     borderImageSource: `url("${src}")`,
     borderImageSlice: `${slice} fill`,
@@ -64,6 +70,7 @@ export function sliceH(src: string, slice = 16, scale = 3): CSSProperties {
   const s = int(scale);
   return {
     borderStyle: 'solid',
+    borderColor: 'transparent',   // bkz. nineSlice'taki not — eksik varlık sessiz kalsın
     borderWidth: `0 ${slice * s}px`,
     borderImageSource: `url("${src}")`,
     borderImageSlice: `0 ${slice} fill`,
@@ -168,9 +175,18 @@ export function PixelButton({
 
 // ── BANNER (başlık şeridi) ────────────────────────────────────────────
 
-export function Banner({ children, variant = '01A', scale = 2.5, style }: {
+/**
+ * DİKKAT: sadece DURAĞAN flamalar burada listeli. 03A/03B/03C dosyaları
+ * `_Normal/_Pressed/_Selected` ekiyle geliyor, düz adları YOK — birlik
+ * yazınca 404 alınıyordu. Tip bunu derleme anında engelliyor.
+ */
+export type BannerStyle = '01A' | '01B' | '01C' | '02A' | '02B' | '02C' | '04A' | '05A' | '06A';
+
+// Varsayılan 01C: koyu şarap merkez + altın kenar. 02A/02B/04A/05A açık renkli
+// bez flamalar — koyu sahnede metin okunmuyor, kullanma.
+export function Banner({ children, variant = '01C', scale = 2, style }: {
   children: ReactNode;
-  variant?: string;
+  variant?: BannerStyle;
   scale?: number;
   style?: CSSProperties;
 }) {

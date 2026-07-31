@@ -18,7 +18,7 @@ import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
 import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
-import { Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
+import { Banner, Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
@@ -102,6 +102,12 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
     preloadAll(); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
     const game = new Game(seedFromString(seedText), stage, permRef.current ?? {}, mode);
     gameRef.current = game;
+    // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
+    // üretimini kıstığı için oyunu gerçek zamanda oynayıp level-up/ölüm gibi
+    // ekranlara ulaşmak pratik değil; bu kanca onları doğrudan tetikletir.
+    if (process.env.NODE_ENV !== 'production') {
+      (window as unknown as { __gbGame?: Game }).__gbGame = game;
+    }
     resetEffects(); // önceki run'ın patlamaları yeni run'a taşmasın
 
     let dpr = 1;
@@ -363,12 +369,20 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', onFinish }: {
       {/* ── LEVEL UP ── */}
       {hud?.phase === 'levelup' && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.86)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2.5, color: C.candle, marginBottom: 18 }}>LEVEL {hud.level}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 380 }}>
+          <Banner variant="01C" scale={2} style={{ marginBottom: 18, minWidth: 210 }}>
+            <span style={{ fontSize: 13, color: C.candle }}>LEVEL {hud.level}</span>
+          </Banner>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 400 }}>
             {hud.offers.map((o, i) => (
               <button key={o.id} onClick={() => choose(o.id)}
-                style={{ ...glass(12), padding: '14px 16px', textAlign: 'left', cursor: 'pointer', color: C.bone, display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ width: 24, height: 24, flexShrink: 0, borderRadius: 6, background: 'rgba(239,167,46,0.16)', border: `1px solid ${C.candle}55`, color: C.candle, fontSize: 12, fontWeight: 900, display: 'grid', placeItems: 'center' }}>{i + 1}</span>
+                style={{ ...glass(12), padding: '12px 14px', textAlign: 'left', cursor: 'pointer', color: C.bone,
+                  display: 'flex', alignItems: 'center', gap: 12, fontFamily: FONT.ui,
+                  border: `1px solid ${o.kind.startsWith('weapon') ? `${C.candle}44` : `${C.ice}33`}` }}>
+                {/* Slot çerçevesi + tuş numarası: hem ikon hem kısayol ipucu */}
+                <Slot type={o.kind.startsWith('weapon') ? 'Weapon' : 'Ring'} variant="02" scale={2}
+                  title={o.kind.startsWith('weapon') ? 'Weapon' : 'Passive'}>
+                  <span style={{ color: C.candle, fontSize: 11 }}>{i + 1}</span>
+                </Slot>
                 <span style={{ minWidth: 0 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 800, fontSize: 14.5 }}>{o.name}</span>
