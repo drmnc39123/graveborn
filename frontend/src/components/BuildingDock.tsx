@@ -31,12 +31,14 @@ export const BUILDINGS: readonly DockEntry[] = [
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
 ] as const;
 
-export function BuildingDock({ open, onOpen, gold, grave = 0, style }: {
+export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style }: {
   /** açık olan panel — buton "Selected" görünür */
   open: string | null;
   onOpen: (id: string) => void;
   gold: number;
   grave?: number;
+  /** bağlı cüzdan; yoksa DEMO modundayız */
+  wallet?: string | null;
   style?: CSSProperties;
 }) {
   return (
@@ -79,6 +81,16 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, style }: {
           <span style={{ fontSize: 12, fontWeight: 900, color: C.boneFaint, whiteSpace: 'nowrap' }}>
             {grave.toLocaleString('en-US')}
             <span style={{ fontSize: 9, marginLeft: 3 }}>$GRAVE</span>
+          </span>
+          {/* Hangi kayda oynadığın HER ZAMAN görünsün. Demo ilerlemesi bu
+              cihazda kalır; oyuncunun bunu sonradan öğrenmesi kötü olurdu. */}
+          <span style={{
+            fontSize: 9, fontWeight: 900, letterSpacing: 0.8, padding: '2px 6px',
+            borderRadius: 4, whiteSpace: 'nowrap',
+            color: wallet ? C.ok : C.candle,
+            background: wallet ? 'rgba(95,158,74,0.16)' : 'rgba(239,167,46,0.14)',
+          }}>
+            {wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'DEMO'}
           </span>
         </span>
       </div>

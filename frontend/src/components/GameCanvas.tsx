@@ -37,7 +37,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -45,12 +45,19 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, onFinish
   mode?: RunMode;
   /** seçili karakter — başlangıç silahını ve istatistik eğilimini belirler */
   hero?: string;
+  /**
+   * Koşunun seed'i. Cüzdan modunda SUNUCUDAN gelir (`/run/start`).
+   * Verilmezse demo davranışı: günlük seed istemcide türetilir.
+   */
+  seed?: number;
   onFinish: (result: RunResult) => void;
 }) {
-  // Seed bölüme + güne bağlı: aynı gün aynı bölüm herkeste aynı akış.
-  // ⚠️ Faz D'de seed SUNUCUDAN gelecek — istemci saatinden türetmek
-  // "en kârlı günü bul, saati ona kur" saldırısına açık.
+  // ⚠️ Seed'i istemcide türetmek "en kârlı günü bul, sistem saatini ona kur"
+  // saldırısına açıktır — motor DOM'suz olduğu için offline aranabilir.
+  // Bu yüzden cüzdan modunda seed sunucudan gelir; aşağıdaki türetme SADECE
+  // kayıtsız demo içindir (orada kazanılan gold ekonomiye girmiyor).
   const seedText = `${mode}:${stage.id}:${dailySeed()}`;
+  const runSeed = seed ?? seedFromString(seedText);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameRef = useRef<Game | null>(null);
   // Bonusları ref'te tutuyoruz: dep dizisine koyarsak her render'da yeni nesne
@@ -102,7 +109,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, onFinish
 
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(seedFromString(seedText), stage, permRef.current ?? {}, mode, hero);
+    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero);
     gameRef.current = game;
     // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
     // üretimini kıstığı için oyunu gerçek zamanda oynayıp level-up/ölüm gibi
@@ -271,7 +278,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, onFinish
     };
     // `hero` dep listesinde: karakter değişince oyun yeniden kurulmalı,
     // yoksa yeni karakterin başlangıç silahı/istatistiği devreye girmez.
-  }, [seedText, runId, hero]);
+  }, [runSeed, runId, hero]);
 
   const xpPct = hud ? Math.min(100, (hud.xp / hud.xpNext) * 100) : 0;
   const hpPct = hud ? Math.max(0, (hud.hp / hud.maxHp) * 100) : 100;

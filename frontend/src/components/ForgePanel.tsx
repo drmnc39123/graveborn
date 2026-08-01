@@ -6,15 +6,17 @@
 
 import { useMemo } from 'react';
 import { FORGE, costOf, spentOn, type ForgeUpgrade } from '@/game/forge';
-import { saveProgress, type Progress } from '@/game/progress';
+import type { Progress } from '@/game/progress';
+import { buyUpgrade } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
 
 export function ForgePanel({
-  progress, onChange,
+  progress, onChange, onError,
 }: {
   progress: Progress;
   onChange: (p: Progress) => void;
+  onError?: (msg: string) => void;
 }) {
   const spent = useMemo(() => spentOn(progress.upgrades), [progress.upgrades]);
   const levels = useMemo(
@@ -28,14 +30,12 @@ export function ForgePanel({
     if (lv >= u.maxLevel) return;
     const cost = costOf(u, lv);
     if (progress.gold < cost) return;
-    const next: Progress = {
-      ...progress,
-      gold: progress.gold - cost,
-      upgrades: { ...progress.upgrades, [u.id]: lv + 1 },
-    };
-    saveProgress(next);
-    onChange(next);
     play('chest');
+    // Cüzdan modunda fiyatı ve bakiyeyi SUNUCU doğrular; demo modunda
+    // yerel kayda yazılır. Ayrımı gameSession yapar, panel bilmez.
+    buyUpgrade(u.id, progress, cost)
+      .then(onChange)
+      .catch(() => onError?.('Yükseltme alınamadı.'));
   };
 
   return (

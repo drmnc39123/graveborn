@@ -51,6 +51,63 @@ function drawCollisionDebug(
   ctx.restore();
 }
 
+/**
+ * MENÜ ARKA PLANI — ana sayfada yavaşça süzülen köy.
+ *
+ * Oyunun kendi haritasını kullanır: ana sayfada başka bir görsel göstermek
+ * hem yalan olurdu hem de ikinci bir varlık takımı bakımı demekti. Aynı
+ * çizim fonksiyonları (drawTerrain/drawObject/drawLights) tekrar kullanılıyor.
+ *
+ * Oyuncu, mini harita ve etkileşim parıltısı YOK — burası oynanmıyor.
+ */
+export function renderMenuBackground(
+  ctx: CanvasRenderingContext2D, world: MapWorld,
+  w: number, h: number, dpr: number, time: number,
+  camX: number, camY: number,
+) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = C.void;
+  ctx.fillRect(0, 0, w, h);
+
+  const cx = Math.max(w / 2, Math.min(world.w - w / 2, camX));
+  const cy = Math.max(h / 2, Math.min(world.h - h / 2, camY));
+  ctx.save();
+  ctx.translate(Math.round(w / 2 - cx), Math.round(h / 2 - cy));
+
+  const viewL = cx - w / 2 - 160, viewR = cx + w / 2 + 160;
+  const viewT = cy - h / 2 - 200, viewB = cy + h / 2 + 200;
+
+  drawTerrain(ctx, world, viewL, viewR, viewT, viewB, time);
+  for (const o of world.objects) drawObject(ctx, o, viewL, viewR, viewT, viewB, time);
+  drawMenuLights(ctx, world, time, viewL, viewR, viewT, viewB);
+  ctx.restore();
+
+  drawVignette(ctx, w, h);
+}
+
+/** Menüde ışıklar oyuncuya değil sadece zamana bağlı titrer */
+function drawMenuLights(
+  ctx: CanvasRenderingContext2D, world: MapWorld, time: number,
+  vl: number, vr: number, vt: number, vb: number,
+) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const l of world.lights) {
+    if (l.x < vl || l.x > vr || l.y < vt || l.y > vb) continue;
+    const flick = 0.86 + Math.sin(time * 3.1 + l.x * 0.03) * 0.14;
+    const r = l.r * flick;
+    const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
+    g.addColorStop(0, `rgba(239,167,46,${0.30 * flick})`);
+    g.addColorStop(1, 'rgba(239,167,46,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(l.x, l.y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 export function renderHub(
   ctx: CanvasRenderingContext2D, s: HubState,
   w: number, h: number, dpr: number, time: number,

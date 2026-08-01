@@ -4,6 +4,7 @@
 // gold TAVANA GÖRE cüzdana yazılır ve hub'a dönersin.
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
@@ -13,15 +14,17 @@ import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { permanentBonus } from '@/game/forge';
 import { STAGES, depthGold, stageById } from '@/game/config';
-import {
-  applyRunResult, loadProgress, paidDepth, saveProgress,
-  type Progress, type RunResult,
-} from '@/game/progress';
+import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, glass, ctaButton } from '@/lib/theme';
+import { getMode, getWallet } from '@/lib/session';
+import {
+  buyUpgrade, finishRun as settleRun, loadSessionProgress, setHero as saveHero,
+  startRun, type RunTicket,
+} from '@/lib/gameSession';
 
-type Screen = { kind: 'hub' } | { kind: 'stage'; stageId: number; mode: RunMode };
+type Screen = { kind: 'hub' } | { kind: 'stage'; stageId: number; mode: RunMode; ticket: RunTicket };
 
 /** Koşu sonu bildirimi — ödülün nereden geldiği oyuncuya AÇIKÇA gösterilir */
 type Payout = {
@@ -35,37 +38,60 @@ type Payout = {
 };
 
 export default function PlayPage() {
+  const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: 'hub' });
   const [panel, setPanel] = useState<BuildingId | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const wallet = getWallet();
 
-  useEffect(() => { setProgress(loadProgress()); }, []);
+  // Mod seçilmemişse kapıya geri gönder — hangi kayda oynadığını bilmeden
+  // oyuna girmek, sonradan "ilerlemem nerede?" demek olurdu.
+  useEffect(() => {
+    if (getMode() === null) { router.replace('/'); return; }
+    loadSessionProgress()
+      .then(setProgress)
+      .catch(() => {
+        // Cüzdan modunda sunucuya ulaşılamıyorsa YEREL kayda DÜŞMEYİZ:
+        // iki kayıt birbirine karışır ve hangisinin doğru olduğu belirsizleşir.
+        setNote('Sunucuya ulaşılamadı — ilerlemen yüklenemedi.');
+      });
+  }, [router]);
 
   const onEnter = useCallback((id: BuildingId) => setPanel(id), []);
 
   /** Karakter seçimi kalıcı — her koşuda yeniden seçtirmek gereksiz sürtünme */
   const pickHero = useCallback((hero: string) => {
     setProgress((prev) => {
-      const next = { ...(prev ?? loadProgress()), hero };
-      saveProgress(next);
-      return next;
+      if (!prev) return prev;
+      saveHero(hero, prev).then(setProgress).catch(() => setNote('Karakter kaydedilemedi.'));
+      return { ...prev, hero };            // arayüz beklemesin, iyimser güncelle
     });
   }, []);
 
-  /** Koşu bitti — ödülü progress.ts hesaplar (exploit kapısı orada), hub'a dön */
+  /** Koşu bitti — ödülü demo'da progress.ts, cüzdanda SUNUCU hesaplar */
   const finishRun = useCallback((run: RunResult) => {
-    setProgress((prev) => {
-      const base = prev ?? loadProgress();
-      const r = applyRunResult(base, run);
-      saveProgress(r.progress);
-      setPayout({
-        mode: run.mode, deepestCleared: run.deepestCleared,
-        progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
-      });
-      return r.progress;
-    });
+    const ticket = screen.kind === 'stage' ? screen.ticket : null;
     setScreen({ kind: 'hub' });
+    const base = progress ?? loadProgress();
+    settleRun(ticket, run, base)
+      .then((r) => {
+        setProgress(r.progress);
+        setPayout({
+          mode: run.mode, deepestCleared: run.deepestCleared,
+          progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
+        });
+      })
+      .catch(() => setNote('Koşu kaydedilemedi — ödül işlenmedi.'));
+  }, [screen, progress]);
+
+  /** Bölüm başlat: cüzdan modunda seed'i ve koşu kimliğini SUNUCU verir */
+  const beginStage = useCallback((stageId: number, mode: RunMode) => {
+    setPanel(null);
+    startRun(mode, stageId)
+      .then((ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }))
+      .catch(() => setNote('Koşu başlatılamadı.'));
   }, []);
 
   // GELİŞTİRME KANCASI — üretimde YOK.
@@ -83,13 +109,15 @@ export default function PlayPage() {
 
   if (screen.kind === 'stage') {
     const def = stageById(screen.stageId)!;
+    const p = progress ?? loadProgress();
     return (
       <div style={{ position: 'fixed', inset: 0 }}>
         <GameCanvas
           stage={def}
           mode={screen.mode}
-          hero={(progress ?? loadProgress()).hero}
-          permanent={permanentBonus((progress ?? loadProgress()).upgrades)}
+          hero={p.hero}
+          seed={screen.ticket.seed}
+          permanent={permanentBonus(p.upgrades)}
           onFinish={finishRun}
         />
       </div>
@@ -107,7 +135,18 @@ export default function PlayPage() {
       />
 
       {/* Cüzdan + bina rıhtımı — yürümek seçenek, zorunluluk değil */}
-      <BuildingDock open={panel} onOpen={setPanel} gold={progress?.gold ?? 0} />
+      <BuildingDock open={panel} onOpen={setPanel} gold={progress?.gold ?? 0} wallet={wallet} />
+
+      {/* Sunucu hatası oyuncudan GİZLENMEZ: cüzdan modunda ilerleme sunucuda,
+          sessizce yerel kayda düşmek iki gerçeklik yaratırdı. */}
+      {note && (
+        <div onClick={() => setNote(null)}
+          style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 7, ...glass(10), padding: '10px 16px', cursor: 'pointer',
+            fontSize: 12, color: C.bad, maxWidth: 'min(92vw, 420px)', textAlign: 'center' }}>
+          {note}
+        </div>
+      )}
 
       {/* Koşu sonu ödül dökümü — ödülün NEREDEN geldiği görünür olmalı,
           yoksa "tekrar oynadım ama gold gelmedi" haklı şikâyeti doğar */}
@@ -154,10 +193,14 @@ export default function PlayPage() {
               <StageSelect
                 progress={progress}
                 onHero={pickHero}
-                onPick={(id, mode) => { setPanel(null); setScreen({ kind: 'stage', stageId: id, mode }); }}
+                onPick={beginStage}
               />
             ) : panel === 'upgrade' ? (
-              <ForgePanel progress={progress ?? loadProgress()} onChange={setProgress} />
+              <ForgePanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
+              />
             ) : panel === 'tavern' ? (
               <RecordsPanel progress={progress ?? loadProgress()} />
             ) : (

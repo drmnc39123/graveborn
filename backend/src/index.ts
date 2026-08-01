@@ -10,7 +10,7 @@ import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer } from './db.js';
-import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature } from './auth.js';
+import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { canStart, settleRun } from './reward.js';
 import { seedFromString } from '@game/rng';
 
@@ -40,6 +40,15 @@ const wrap = (fn: (req: express.Request, res: express.Response) => Promise<void>
 
 app.get('/health', (_req, res) => { res.json({ ok: true }); });
 
+/** Ana sayfa göstergesi — kimlik gerektirmez, kişisel veri döndürmez */
+app.get('/stats', wrap(async (_req, res) => {
+  const [players, runs] = await Promise.all([
+    prisma.player.count(),
+    prisma.run.count({ where: { claimedAt: { not: null } } }),
+  ]);
+  res.json({ players, runs });
+}));
+
 // ── KİMLİK ──
 app.post('/auth/nonce', wrap(async (req, res) => {
   const wallet = req.body?.wallet;
@@ -49,9 +58,13 @@ app.post('/auth/nonce', wrap(async (req, res) => {
 }));
 
 app.post('/auth/verify', wrap(async (req, res) => {
-  const { wallet, signature } = req.body ?? {};
+  const { wallet, signature, turnstileToken } = req.body ?? {};
   if (!isValidWallet(wallet) || typeof signature !== 'string') {
     res.status(400).json({ error: 'gecersiz_istek' }); return;
+  }
+  // Bot kontrolü İMZADAN ÖNCE: geçemeyene imza doğrulama maliyeti ödetmeyiz
+  if (!(await verifyTurnstile(turnstileToken, req.ip))) {
+    res.status(403).json({ error: 'bot_kontrolu_basarisiz' }); return;
   }
   if (!(await verifySignature(wallet, signature))) {
     res.status(401).json({ error: 'imza_dogrulanamadi' }); return;
