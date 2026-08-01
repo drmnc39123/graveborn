@@ -1,0 +1,186 @@
+// ÖDÜL HESABI — sunucunun tek yetkili olduğu yer.
+//
+// KURAL: istemci "şu kadar gold kazandım" DEMEZ. Sadece NE YAPTIĞINI bildirir
+// (hangi derinliğe indim, kaç nadir düşüş topladım). Sunucu ödülü KENDİ
+// hesaplar ve iddiayı yapısal tavanla kırpar.
+//
+// Oyun mantığı frontend'den İÇE AKTARILIR, kopyalanmaz. Ekonomi kuralını iki
+// yerde yazmak, er ya da geç iki yerde ayrışmak demektir — ve ayrışan taraf
+// para basar. `progress.ts` en baştan bu yüzden saf fonksiyon yazıldı.
+
+import { applyRunResult, type Progress, type RunResult } from '@game/progress';
+import { GOLD, STAGES, descentStage, rareDropChance, stageById } from '@game/config';
+
+/** İstemcinin koşu sonunda gönderdiği iddia — HİÇBİRİ doğrudan kabul edilmez */
+export interface RunClaim {
+  deepestCleared: number;
+  rareGold: number;
+  cleared: boolean;
+}
+
+/**
+ * NADİR DÜŞÜŞ TAVANI — O(1) yapısal sınır.
+ *
+ * Koşuyu sunucuda birebir yeniden simüle etmek MÜMKÜN (motor DOM'suz) ama
+ * derin bir inişte 20.000+ tick demek; istek başına saniyeler sürer ve
+ * kolayca DoS yüzeyi olur. Onun yerine "bu koşuda EN FAZLA kaç gold düşebilirdi"
+ * sorusunu kapalı formda cevaplıyoruz.
+ *
+ * Hesap: geçilen her derinliğin düşman sayısı × o derinliğin düşüş ihtimali
+ * × mümkün olan en yüksek düşüş miktarı. Gerçekte bunun çok altı düşer;
+ * amaç adaleti değil TAVANI garanti etmek.
+ */
+export function maxRareGold(mode: string, stageId: number, deepestCleared: number): number {
+  const st = stageById(stageId);
+  if (!st) return 0;
+
+  const dropMax = (depth: number) =>
+    Math.max(1, Math.round(GOLD.dropMax * (1 + GOLD.dropAmountPerDepth * depth)));
+
+  if (mode === 'campaign') {
+    // Kampanyada oyuncu bölümü tekrar tekrar oynayabilir; tek bir koşuda
+    // öldürebileceği en fazla düşman = havuz + boss.
+    const kills = st.enemyCount + (st.boss ? 1 : 0);
+    const expected = kills * rareDropChance(0);
+    return Math.ceil(headroom(expected) * dropMax(0)) + (st.boss ? CHEST_ALLOWANCE : 0);
+  }
+
+  // Descent: 1..deepestCleared derinliklerinin TAMAMI + içinde bulunduğu
+  // (bitmemiş) derinliğin tamamı sayılır — kapalı bir üst sınır.
+  let expected = 0;
+  let bosses = 0;
+  const top = Math.max(0, Math.floor(deepestCleared)) + 1;
+  for (let d = 1; d <= top; d++) {
+    const def = descentStage(stageId, d);
+    const kills = def.enemyCount + (def.boss ? 1 : 0);
+    expected += kills * rareDropChance(d);
+    if (def.boss) bosses += 1;
+  }
+  // En derin seviyenin miktar tavanı — hepsi oradan düşmüş gibi say
+  return Math.ceil(headroom(expected) * dropMax(top)) + bosses * CHEST_ALLOWANCE;
+}
+
+/**
+ * DÜŞÜŞ SAYISI ÜST SINIRI — beklenen değer + varyans payı.
+ *
+ * ⚠️ Sabit bir çarpan (ör. beklenenin 2,5 katı) AZ SAYIDA olayda yetmez.
+ * 1. bölümde beklenen düşüş 0,7 adet; şanslı bir oyuncunun 3 düşüş alması
+ * %3,4 ihtimalle olur ve sabit çarpanla tavan 20 gold'a düşüyordu — yani
+ * DÜRÜST oyuncu kırpılıyordu. Bu sessiz bir hatadır: kimse "az gold aldım"
+ * diye şikâyet etmez, oyun sadece cimri hissettirir.
+ *
+ * Binom dağılımının kuyruğu için: n + 4√n + sabit taban.
+ */
+function headroom(expectedCount: number): number {
+  const n = Math.max(0, expectedCount);
+  return n + 4 * Math.sqrt(n) + MIN_DROP_HEADROOM;
+}
+
+/** Beklenen sayı sıfıra yakınken bile bu kadar düşüşe izin ver */
+const MIN_DROP_HEADROOM = 5;
+
+/**
+ * Sandıklar da `rareGold`'a yazıyor: evrim vermeyen sandık 200 × greed.
+ * Greed en fazla +%72 (Forge tam dolu) → 344. 400 rahat bir pay.
+ *
+ * ⚠️ Sandık SADECE BOSS'tan düşer, her derinlikten değil. İlk sürümde
+ * derinlik BAŞINA 900 pay bırakılmıştı ve tavan absürtleşiyordu: derinlik
+ * 5'te dürüst oyuncu ~40 gold toplarken tavan 5.459 çıkıyordu, yani yalan
+ * söyleyen 10 kat fazlasını alabiliyordu. Tavanın işe yaraması için
+ * GERÇEĞE YAKIN olması şart.
+ */
+const CHEST_ALLOWANCE = 400;
+
+
+/**
+ * DERİNLİK TAVANI — "derinlik 9999'a indim" iddiasını keser.
+ *
+ * Koşunun süresi bile bu derinliğe yetmezdi: her derinlik en az
+ * enemyCount / spawnRate saniye sürer. Süre bilgisine güvenmek yerine
+ * (o da istemciden gelir) mutlak bir tavan koyuyoruz.
+ */
+export const MAX_DEPTH_CLAIM = 500;
+
+export interface Settlement {
+  progress: Progress;
+  awarded: number;
+  progressGold: number;
+  dropGold: number;
+  /** iddia kırpıldı mı — admin panelinde şüpheli işareti */
+  capped: boolean;
+  reason: string[];
+}
+
+/**
+ * Koşuyu kapat. `before` = koşu BAŞLARKENKİ ilerleme (Run kaydından değil,
+ * oyuncunun güncel kaydından okunur; ikisi de sunucuda).
+ */
+export function settleRun(
+  before: Progress,
+  mode: 'campaign' | 'descent',
+  stageId: number,
+  claim: RunClaim,
+): Settlement {
+  const reason: string[] = [];
+  let capped = false;
+
+  // 1) Derinlik iddiası
+  let depth = Math.max(0, Math.floor(Number(claim.deepestCleared) || 0));
+  if (depth > MAX_DEPTH_CLAIM) {
+    depth = MAX_DEPTH_CLAIM;
+    capped = true;
+    reason.push(`derinlik iddiası ${claim.deepestCleared} → ${MAX_DEPTH_CLAIM}`);
+  }
+  if (mode === 'campaign' && depth !== 0) {
+    depth = 0;
+    reason.push('kampanyada derinlik iddiası yok sayıldı');
+  }
+
+  // 2) Nadir düşüş iddiası — yapısal tavana kırp
+  const rawGold = Math.max(0, Math.floor(Number(claim.rareGold) || 0));
+  const goldCap = maxRareGold(mode, stageId, depth);
+  let rareGold = rawGold;
+  if (rareGold > goldCap) {
+    rareGold = goldCap;
+    capped = true;
+    reason.push(`nadir gold ${rawGold} → tavan ${goldCap}`);
+  }
+
+  // 3) Bölüm gerçekten açık mı — kilitli bölümden ödül alınamaz
+  if (stageId > before.unlockedStage) {
+    reason.push(`kilitli bölüm ${stageId} (açık: ${before.unlockedStage})`);
+    return {
+      progress: before, awarded: 0, progressGold: 0, dropGold: 0,
+      capped: true, reason,
+    };
+  }
+
+  // 4) Ödülü OYUNUN KENDİ fonksiyonu hesaplasın — exploit kapısı orada
+  const run: RunResult = {
+    mode, stageId,
+    cleared: mode === 'campaign' && !!claim.cleared,
+    deepestCleared: depth,
+    rareGold,
+  };
+  const r = applyRunResult(before, run);
+
+  return {
+    progress: r.progress,
+    awarded: r.awarded,
+    progressGold: r.progressGold,
+    dropGold: r.dropGold,
+    capped,
+    reason,
+  };
+}
+
+/** Koşu başlatılabilir mi (bölüm açık mı, descent için bölüm geçilmiş mi) */
+export function canStart(p: Progress, mode: string, stageId: number): string | null {
+  if (!stageById(stageId)) return 'bilinmeyen bölüm';
+  if (stageId > p.unlockedStage) return 'bölüm kilitli';
+  if (mode === 'descent' && !p.cleared[stageId]) return 'önce bölümü temizle';
+  if (mode !== 'campaign' && mode !== 'descent') return 'bilinmeyen mod';
+  return null;
+}
+
+export { STAGES };

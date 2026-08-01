@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      // OYUN MANTIĞI TEK KAYNAK. Backend, frontend'in SAF modüllerini
+      // doğrudan içe aktarır — ekonomi kuralını iki yerde yazmak, iki yerde
+      // ayrışmak demektir. progress.ts/config.ts/forge.ts/heroes.ts hepsi
+      // DOM'suz ve saf; `typeof window` kontrolleri sunucuda güvenle geçer.
+      "@game/*": ["../frontend/src/game/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.mts"]
+}

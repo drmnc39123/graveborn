@@ -1,0 +1,82 @@
+// GRAVEBORN — sunucu-otoriteli ilerleme.
+//
+// TASARIM: istemci hiçbir zaman "şu kadar gold kazandım" DEMEZ. Sadece ne
+// yaptığını bildirir (hangi derinliğe indim); ödülü sunucu KENDİ hesaplar,
+// frontend'le AYNI saf fonksiyonu (progress.ts) çalıştırarak.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  /// Solana cüzdan adresi — kimlik budur
+  wallet    String   @id
+  createdAt DateTime @default(now())
+  lastSeen  DateTime @updatedAt
+
+  // ── Progress (frontend'deki Progress arayüzünün birebir karşılığı) ──
+  gold          Int    @default(0)
+  unlockedStage Int    @default(1)
+  hero          String @default("knight")
+
+  /// bölüm id → tamamlandı mı
+  cleared Json @default("{}")
+  /// bölüm id → ilk-geçiş ödülü ödendi mi
+  firstClear Json @default("{}")
+  /// bölüm id → ödemesi yapılmış en derin seviye
+  depthPaid Json @default("{}")
+  /// Forge yükseltmeleri: id → seviye
+  upgrades Json @default("{}")
+
+  /// admin kararı — banlı oyuncu koşu başlatamaz
+  banned Boolean @default(false)
+
+  runs Run[]
+}
+
+// Bir koşu. POST /run/start ile AÇILIR, /run/finish ile KAPANIR.
+//
+// Neden kayıt tutuluyor:
+//  1. SEED SUNUCUDAN gelir → "en kârlı seed'i bul" saldırısı biter
+//  2. runId tek kullanımlık → aynı koşu iki kez ödül alamaz
+//  3. koşunun modu/bölümü sunucuda saklanır → istemci kapanışta
+//     "aslında 10. bölümdeydim" diyemez
+model Run {
+  id     String @id
+  wallet String
+  player Player @relation(fields: [wallet], references: [wallet], onDelete: Cascade)
+
+  /// ⚠️ BigInt ŞART. seedFromString uint32 döndürüyor (0 … 4.294.967.295) ama
+  /// Postgres Int (INT4) 2.147.483.647'de taşıyor — seed'lerin YARISI koşuyu
+  /// 500 ile düşürüyordu. Aralıklı olduğu için üretimde teşhisi çok zor olurdu.
+  seed    BigInt
+  /// 'campaign' | 'descent'
+  mode    String
+  stageId Int
+  hero    String
+
+  startedAt DateTime  @default(now())
+  claimedAt DateTime?
+
+  /// kapanışta: istemcinin iddiası
+  claimedDepth Int?
+  claimedGold  Int?
+  /// sunucunun verdiği
+  awarded Int?
+  /// sunucu iddiayı kırptıysa işaretlenir — admin panelinde şüpheli listesi
+  capped Boolean @default(false)
+
+  @@index([wallet, startedAt])
+}
+
+// Cüzdan doğrulama için tek kullanımlık metin. İmzalanır, sonra silinir.
+model AuthNonce {
+  wallet    String   @id
+  nonce     String
+  expiresAt DateTime
+}

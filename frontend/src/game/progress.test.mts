@@ -157,12 +157,13 @@ console.log('\n[4] greed sınırı');
 // Göç bir kez yanlış yazılırsa oyuncunun emeği silinir; geri dönüşü yok.
 console.log('\n[5] v1 → v2 göçü');
 {
+  // ⚠️ Depo `globalThis.localStorage`'a kurulur, `window.localStorage`'a DEĞİL.
+  // progress.ts DOM tipinden ayrıldı (backend'de de derleniyor, orada `window`
+  // yok); artık globalThis üzerinden okuyor.
   const store = new Map<string, string>();
-  (globalThis as { window?: unknown }).window = {
-    localStorage: {
-      getItem: (k: string) => store.get(k) ?? null,
-      setItem: (k: string, v: string) => { store.set(k, v); },
-    },
+  (globalThis as { localStorage?: unknown }).localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => { store.set(k, v); },
   };
   store.set('graveborn:progress:v1', JSON.stringify({
     gold: 1234, unlockedStage: 3,

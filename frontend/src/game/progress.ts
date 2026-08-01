@@ -80,13 +80,32 @@ function migrateV1(raw: string): Progress | null {
   }
 }
 
+/**
+ * Tarayıcı deposu — sunucuda YOKTUR.
+ *
+ * ⚠️ DOM tipine (`window`, `Storage`) BAĞLANMA. Bu dosya backend'de de
+ * derleniyor ve orada `lib: ["ES2022"]` var, DOM yok; `window.localStorage`
+ * yazmak backend derlemesini kırıyordu. Dosyanın en baştaki sözü
+ * ("sunucuda birebir çalışacak") tiplerde de tutulmalı.
+ */
+interface KeyValueStore {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+}
+
+function store(): KeyValueStore | null {
+  const g = globalThis as unknown as { localStorage?: KeyValueStore };
+  return g.localStorage ?? null;
+}
+
 export function loadProgress(): Progress {
-  if (typeof window === 'undefined') return emptyProgress();
+  const s = store();
+  if (!s) return emptyProgress();
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = s.getItem(KEY);
     if (raw) return normalize(JSON.parse(raw) as Partial<Progress>);
 
-    const legacy = window.localStorage.getItem(KEY_V1);
+    const legacy = s.getItem(KEY_V1);
     if (legacy) {
       const migrated = migrateV1(legacy);
       if (migrated) { saveProgress(migrated); return migrated; }
@@ -98,8 +117,9 @@ export function loadProgress(): Progress {
 }
 
 export function saveProgress(p: Progress) {
-  if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(KEY, JSON.stringify(p)); } catch { /* kota dolu — sessiz geç */ }
+  const s = store();
+  if (!s) return;
+  try { s.setItem(KEY, JSON.stringify(p)); } catch { /* kota dolu — sessiz geç */ }
 }
 
 /**
