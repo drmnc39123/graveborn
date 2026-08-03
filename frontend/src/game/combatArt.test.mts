@@ -15,7 +15,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PASSIVE_ART, WEAPON_ART, weaponArt, type CellAnim } from './combatArt.js';
-import { EVOLVED, PASSIVES, WEAPONS } from './config.js';
+import { EVOLVED, PASSIVES, WEAPONS,
+  weaponCooldownAt, weaponCountAt, weaponDamageAt } from './config.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -175,6 +176,49 @@ console.log('\n[7] Makullük');
     if (a.bullet && (a.bullet.size < 10 || a.bullet.size > 40)) kotu.push(`${id}: mermi ${a.bullet.size}`);
   }
   check('boyut/hız değerleri makul aralıkta', kotu.length === 0, kotu.join(' | ') || 'hepsi normal');
+}
+
+console.log('\n[8] Seviye önizleme formülleri (level-up kartı bunları gösteriyor)');
+{
+  // ⚠️ Kart "Lv 3 → 4 · DAMAGE +18%" yazıyor. Bu sayılar motorun kullandığı
+  // formülün AYNISINDAN gelmeli — iki yerde yazılsaydı er ya da geç ayrışır
+  // ve kart oyuncuya yalan söylerdi. Formül `config.ts`'e saf fonksiyon
+  // olarak çıkarıldı; motor da artık onu çağırıyor. `SIM_SEAL` mührü
+  // formülün değişmediğini ayrıca kanıtlıyor.
+  const shard = WEAPONS.find((w) => w.id === 'shard')!;
+
+  check('hasar seviyeyle ARTIYOR',
+    weaponDamageAt(shard, 2) > weaponDamageAt(shard, 1),
+    `${weaponDamageAt(shard, 1).toFixed(1)} → ${weaponDamageAt(shard, 2).toFixed(1)}`);
+  check('bekleme seviyeyle AZALIYOR',
+    weaponCooldownAt(shard, 2) < weaponCooldownAt(shard, 1),
+    `${weaponCooldownAt(shard, 1).toFixed(3)} → ${weaponCooldownAt(shard, 2).toFixed(3)}`);
+  check('seviye 1 taban değeri veriyor',
+    weaponDamageAt(shard, 1) === shard.damage && weaponCooldownAt(shard, 1) === shard.cooldownSec);
+  check('seviye 0 seviye 1 gibi davranıyor (kart kırılmasın)',
+    weaponDamageAt(shard, 0) === weaponDamageAt(shard, 1));
+
+  const countArtan = [...WEAPONS, ...EVOLVED].filter((w) => w.countLevels?.length);
+  const bozuk = countArtan.filter((w) => {
+    const esik = w.countLevels![0];
+    return weaponCountAt(w, esik) <= weaponCountAt(w, esik - 1);
+  }).map((w) => w.id);
+  check('countLevels eşiğinde mermi sayısı artıyor', bozuk.length === 0,
+    bozuk.join(', ') || `${countArtan.length} silah`);
+
+  // ⚠️ TESTİN KENDİ HATASIYDI: ilk sürüm evrimleri de kapsıyordu ve 8'i
+  // birden düşüyordu. Evrimler `maxLevel: 1` — SON FORM oldukları için
+  // seviye atlamazlar (VS'in kendi kuralı). Ölçülecek olan taban silahların
+  // seviye eğrisi; eşiği gevşetmek yerine kapsam düzeltildi.
+  const zayif = WEAPONS.filter(
+    (w) => weaponDamageAt(w, w.maxLevel) < weaponDamageAt(w, 1) * 1.5,
+  ).map((w) => w.id);
+  check('her TABAN silah MAX seviyede en az %50 güçleniyor', zayif.length === 0,
+    zayif.join(', ') || `${WEAPONS.length} taban silah`);
+
+  const seviyelenenEvrim = EVOLVED.filter((w) => w.maxLevel > 1).map((w) => w.id);
+  check('evrimler son form (seviye atlamıyor)', seviyelenenEvrim.length === 0,
+    seviyelenenEvrim.join(', ') || `${EVOLVED.length} evrim`);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ SAVAŞ GÖRSELLERİ TUTARLI' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

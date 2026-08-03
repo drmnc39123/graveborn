@@ -10,7 +10,8 @@ import { SpatialHash } from './spatial';
 import {
   CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
-  WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, weaponById, xpForLevel,
+  WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, weaponById,
+  weaponCooldownAt, weaponCountAt, weaponDamageAt, xpForLevel,
   type Behavior, type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
 } from './config';
 import { DEFAULT_HERO, heroById, mergeStats } from './heroes';
@@ -333,11 +334,11 @@ export class Game {
 
   /** Silahın o seviyedeki hasarı — Might çarpanı uygulanır */
   private wDamage(w: OwnedWeapon) {
-    return w.def.damage * Math.pow(w.def.dmgPerLevel, w.level - 1) * this.stats.might;
+    return weaponDamageAt(w.def, w.level) * this.stats.might;
   }
   /** Silahın o seviyedeki bekleme süresi — Cooldown istatistiği uygulanır */
   private wCooldown(w: OwnedWeapon) {
-    return w.def.cooldownSec * Math.pow(w.def.cdPerLevel, w.level - 1) * this.stats.cooldown;
+    return weaponCooldownAt(w.def, w.level) * this.stats.cooldown;
   }
   /** Alan çarpanı (sweep/orbit/aura) — Area istatistiği uygulanır */
   private wArea(w: OwnedWeapon) {
@@ -345,8 +346,7 @@ export class Game {
   }
   /** Adet (mermi/orb) — countLevels eşikleri + Amount istatistiği */
   private wCount(w: OwnedWeapon) {
-    const base = 1 + (w.def.countLevels?.filter((l) => w.level >= l).length ?? 0);
-    return base + this.stats.amount;
+    return weaponCountAt(w.def, w.level) + this.stats.amount;
   }
 
   setInput(x: number, y: number) {

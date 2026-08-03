@@ -20,15 +20,17 @@ import { preloadAll } from '@/game/sprites';
 import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
+import { LevelUpCard } from '@/components/LevelUpCard';
+import { passiveIcon, weaponArt } from '@/game/combatArt';
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
   xp: number; xpNext: number; kills: number; rareGold: number;
   enemies: number; phase: string; fps: number;
   mode: RunMode; depth: number; deepestCleared: number;
-  offers: { id: string; name: string; desc: string; kind: string }[];
-  weapons: { name: string; level: number }[];
-  passives: { name: string; level: number }[];
+  offers: { id: string; name: string; desc: string; kind: string; level?: number }[];
+  weapons: { id: string; name: string; level: number; cd: number; cdMax: number }[];
+  passives: { id: string; name: string; level: number }[];
   revives: number;
   evolution: { name: string; at: number } | null;
   stageName: string;
@@ -264,9 +266,14 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
           xp: game.xp, xpNext: game.xpNext, kills: game.kills, rareGold: game.rareGold,
           enemies: game.enemies.length, phase: game.phase, fps,
           mode: game.stage.mode, depth: game.stage.depth, deepestCleared: game.stage.deepestCleared,
-          offers: game.offers.map((o) => ({ id: o.id, name: o.name, desc: o.desc, kind: o.kind })),
-          weapons: game.weapons.map((w) => ({ name: w.def.name, level: w.level })),
-          passives: game.passives.map((p) => ({ name: p.def.name, level: p.level })),
+          offers: game.offers.map((o) => ({ id: o.id, name: o.name, desc: o.desc, kind: o.kind, level: o.level })),
+          // ⚠️ `id` ŞART: ikon ve "Lv 3 → 4" önizlemesi bununla bulunuyor.
+          // Eskiden sadece `name` taşınıyordu ve arayüz silahı tanıyamıyordu.
+          weapons: game.weapons.map((w) => ({
+            id: w.def.id, name: w.def.name, level: w.level,
+            cd: w.cd, cdMax: Math.max(0.001, w.def.cooldownSec),
+          })),
+          passives: game.passives.map((p) => ({ id: p.def.id, name: p.def.name, level: p.level })),
           revives: game.revives,
           evolution: game.lastEvolution,
           stageName: game.stage.def.name,
@@ -323,6 +330,10 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
                 </span>
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* ⚠️ Süre HUD'da HİÇ görünmüyordu — `fmtTime` tanımlıydı ama
+                    sadece ölüm ekranında kullanılıyordu. Survivors türünde
+                    "kaç dakikadayım" en temel bilgi. */}
+                <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(hud.time)}</span>
                 <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
                 <button
                   onClick={() => { const next = !isSoundEnabled(); setSoundEnabled(next); setMuted(!next); unlockAudio(); }}
@@ -372,15 +383,31 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
             <div style={{ maxWidth: 330 }}>
               {/* Silahlar ve pasifler slot çerçevesinde — envanter hissi */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                {/* ⚠️ Slotlarda silah RESMİ yoktu, sadece seviye rakamı vardı —
+                    oyuncu neyi taşıdığını simgeden tanıyamıyordu. */}
                 {hud.weapons.map((w) => (
-                  <Slot key={w.name} type="Weapon" variant="02" scale={2} title={`${w.name} L${w.level}`}>
-                    <span style={{ color: C.candle, fontSize: 10 }}>{w.level}</span>
-                  </Slot>
+                  <div key={w.id} style={{ position: 'relative' }}>
+                    <Slot type="Weapon" variant="02" scale={2} title={`${w.name} L${w.level}`}>
+                      <img src={weaponArt(w.id).icon} alt="" width={22} height={22}
+                        style={{ imageRendering: 'pixelated', display: 'block' }} />
+                    </Slot>
+                    <span style={{
+                      position: 'absolute', right: -2, bottom: -2, fontSize: 9, fontWeight: 900,
+                      color: C.candle, textShadow: '0 1px 0 #000, 0 0 4px #000',
+                    }}>{w.level}</span>
+                  </div>
                 ))}
                 {hud.passives.map((p) => (
-                  <Slot key={p.name} type="Ring" variant="02" scale={2} title={`${p.name} L${p.level}`}>
-                    <span style={{ color: C.ice, fontSize: 10 }}>{p.level}</span>
-                  </Slot>
+                  <div key={p.id} style={{ position: 'relative' }}>
+                    <Slot type="Ring" variant="02" scale={2} title={`${p.name} L${p.level}`}>
+                      <img src={passiveIcon(p.id)} alt="" width={20} height={20}
+                        style={{ imageRendering: 'pixelated', display: 'block' }} />
+                    </Slot>
+                    <span style={{
+                      position: 'absolute', right: -2, bottom: -2, fontSize: 9, fontWeight: 900,
+                      color: C.ice, textShadow: '0 1px 0 #000, 0 0 4px #000',
+                    }}>{p.level}</span>
+                  </div>
                 ))}
               </div>
               <div style={{ fontFamily: FONT.ui, fontSize: 10.5, color: C.boneFaint, fontVariantNumeric: 'tabular-nums' }}>
@@ -397,33 +424,16 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
           <Banner variant="01C" scale={2} style={{ marginBottom: 18, minWidth: 210 }}>
             <span style={{ fontSize: 13, color: C.candle }}>LEVEL {hud.level}</span>
           </Banner>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 400 }}>
+          {/* ⚠️ Dikey yığın KORUNUYOR — telefonda 3'lü yatay kart sıkışır. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%', maxWidth: 420 }}>
             {hud.offers.map((o, i) => (
-              <button key={o.id} onClick={() => choose(o.id)}
-                style={{ ...glass(12), padding: '12px 14px', textAlign: 'left', cursor: 'pointer', color: C.bone,
-                  display: 'flex', alignItems: 'center', gap: 12, fontFamily: FONT.ui,
-                  border: `1px solid ${o.kind.startsWith('weapon') ? `${C.candle}44` : `${C.ice}33`}` }}>
-                {/* Slot çerçevesi + tuş numarası: hem ikon hem kısayol ipucu */}
-                <Slot type={o.kind.startsWith('weapon') ? 'Weapon' : 'Ring'} variant="02" scale={2}
-                  title={o.kind.startsWith('weapon') ? 'Weapon' : 'Passive'}>
-                  <span style={{ color: C.candle, fontSize: 11 }}>{i + 1}</span>
-                </Slot>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                    <span style={{ fontWeight: 800, fontSize: 14.5 }}>{o.name}</span>
-                    {/* Silah mı pasif mi, yeni mi yükseltme mi — kararı hızlandırır */}
-                    <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.6, padding: '1px 5px', borderRadius: 4,
-                      color: o.kind.startsWith('weapon') ? C.candle : C.ice,
-                      background: o.kind.startsWith('weapon') ? 'rgba(239,167,46,0.14)' : 'rgba(138,151,163,0.14)' }}>
-                      {o.kind.endsWith('new') ? 'NEW' : 'UPGRADE'}
-                    </span>
-                  </span>
-                  <span style={{ display: 'block', fontSize: 12, color: C.boneDim, marginTop: 2 }}>{o.desc}</span>
-                </span>
-              </button>
+              <LevelUpCard key={o.id} offer={o} index={i} onPick={choose}
+                weapons={hud.weapons} passives={hud.passives} />
             ))}
           </div>
-          <div style={{ marginTop: 14, fontSize: 11, color: C.boneFaint }}>Press 1 · 2 · 3 to choose</div>
+          <div style={{ marginTop: 14, fontSize: 11, color: C.boneFaint, fontFamily: FONT.ui }}>
+            Press 1 · 2 · 3 to choose
+          </div>
         </div>
       )}
 

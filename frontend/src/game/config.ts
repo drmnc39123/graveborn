@@ -511,6 +511,30 @@ export const EVOLUTIONS: readonly EvolutionDef[] = [
 ] as const;
 
 /** id → tanım (taban + evrimleşmiş hepsi) */
+/**
+ * Silahın BELİRLİ bir seviyedeki değerleri — saf, istatistiksiz.
+ *
+ * ⚠️ TEK DOĞRU KAYNAK. Formül bugüne kadar motorun içine gömülüydü ve arayüz
+ * ona erişemiyordu; level-up kartında "Lv 3 → 4 ne kazandırır" gösterilemiyor,
+ * oyuncu körlemesine seçiyordu. Motor da artık bunları çağırıyor — iki yerde
+ * yazılsaydı er ya da geç ayrışırlardı.
+ *
+ * ⚠️ `stats` çarpanı BURAYA GİRMEZ (might/cooldown/amount motorun işi);
+ * bunlar silahın kendi eğrisi.
+ */
+export function weaponDamageAt(def: WeaponDef, level: number): number {
+  return def.damage * Math.pow(def.dmgPerLevel, Math.max(1, level) - 1);
+}
+
+export function weaponCooldownAt(def: WeaponDef, level: number): number {
+  return def.cooldownSec * Math.pow(def.cdPerLevel, Math.max(1, level) - 1);
+}
+
+/** Kaç mermi/orb — `stats.amount` HARİÇ (onu motor ekler) */
+export function weaponCountAt(def: WeaponDef, level: number): number {
+  return 1 + (def.countLevels?.filter((l) => level >= l).length ?? 0);
+}
+
 export function weaponById(id: string): WeaponDef | undefined {
   return WEAPONS.find((w) => w.id === id) ?? EVOLVED.find((w) => w.id === id);
 }
