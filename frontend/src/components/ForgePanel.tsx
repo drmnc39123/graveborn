@@ -5,7 +5,8 @@
 // karşılığı burada: sonraki run'lar kalıcı olarak güçlenir.
 
 import { useMemo } from 'react';
-import { FORGE, costOf, spentOn, type ForgeUpgrade } from '@/game/forge';
+import { FORGE, costOf, effectText, spentOn, spentOnOne, type ForgeUpgrade } from '@/game/forge';
+import { Card, Tag } from '@/components/ui/cards';
 import type { Progress } from '@/game/progress';
 import { buyUpgrade } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
@@ -61,46 +62,74 @@ export function ForgePanel({
           const maxed = lv >= u.maxLevel;
           const cost = costOf(u, lv);
           const can = !maxed && progress.gold >= cost;
+          // ⚠️ Eskiden kartta sadece "+5% damage" (bir SEVİYENİN etkisi) vardı.
+          // Oyuncunun bilmek istediği şey o değil: şu an ne kadar güçlü ve
+          // bir seviye daha alırsa ne olacak. İkisi de burada.
+          const yatirim = spentOnOne(u, lv);
+          const eksik = cost - Math.floor(progress.gold);
+
           return (
-            <div key={u.id} style={{
-              ...glass(10), padding: '10px 12px',
-              border: `1px solid ${maxed ? `${C.candle}55` : C.border}`,
-              opacity: maxed ? 0.75 : 1,
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, fontSize: 14, color: C.bone }}>
-                    {u.name}
-                    <span style={{ marginLeft: 7, fontSize: 11, color: maxed ? C.candle : C.boneFaint }}>
-                      {maxed ? 'MAX' : `Lv ${lv}/${u.maxLevel}`}
-                    </span>
+            <Card key={u.id} accent={maxed}>
+              <div style={{ padding: '11px 12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 900, fontSize: 14.5, color: C.bone }}>{u.name}</span>
+                      {maxed ? <Tag tone="gold">MAX</Tag> : <Tag>LV {lv}/{u.maxLevel}</Tag>}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: C.boneDim, marginTop: 3 }}>{u.desc} per level</div>
                   </div>
-                  <div style={{ fontSize: 11.5, color: C.boneDim, marginTop: 2 }}>{u.desc}</div>
+
+                  <button onClick={() => buy(u)} disabled={!can}
+                    style={{
+                      flexShrink: 0, minWidth: 96, padding: '9px 12px', borderRadius: 9, border: 'none',
+                      cursor: can ? 'pointer' : 'default', fontWeight: 900, fontSize: 12.5,
+                      color: maxed ? C.boneFaint : can ? '#1a0508' : C.boneFaint,
+                      background: maxed ? 'rgba(255,255,255,0.06)'
+                        : can ? `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`
+                        : 'rgba(255,255,255,0.06)',
+                      boxShadow: can ? `0 3px 12px ${C.candle}44` : 'none',
+                    }}>
+                    {maxed ? '✓ MAX' : `${cost.toLocaleString('en-US')} G`}
+                  </button>
                 </div>
 
-                <button onClick={() => buy(u)} disabled={!can}
-                  style={{
-                    flexShrink: 0, minWidth: 92, padding: '8px 12px', borderRadius: 9, border: 'none',
-                    cursor: can ? 'pointer' : 'default', fontWeight: 900, fontSize: 12.5,
-                    color: maxed ? C.boneFaint : can ? '#1a0508' : C.boneFaint,
-                    background: maxed ? 'rgba(255,255,255,0.06)'
-                      : can ? `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`
-                      : 'rgba(255,255,255,0.06)',
-                  }}>
-                  {maxed ? '✓ MAX' : `${cost} G`}
-                </button>
-              </div>
+                {/* Şu an → sonra. Alımın ne kazandırdığı açıkça görünsün. */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 9 }}>
+                  <Tag tone={lv > 0 ? 'ok' : 'dim'}>NOW {effectText(u, lv)}</Tag>
+                  {!maxed && (
+                    <>
+                      <span style={{ color: C.boneFaint, fontSize: 11 }}>→</span>
+                      <Tag tone="gold">NEXT {effectText(u, lv + 1)}</Tag>
+                    </>
+                  )}
+                  {lv > 0 && (
+                    <span style={{ marginLeft: 'auto', fontSize: 10, color: C.boneFaint }}>
+                      {yatirim.toLocaleString('en-US')} gold invested
+                    </span>
+                  )}
+                </div>
 
-              {/* seviye çubuğu — kaç kaldığı bir bakışta görünsün */}
-              <div style={{ display: 'flex', gap: 3, marginTop: 8 }}>
-                {Array.from({ length: u.maxLevel }, (_, i) => (
-                  <span key={i} style={{
-                    flex: 1, height: 4, borderRadius: 2,
-                    background: i < lv ? C.candle : 'rgba(255,255,255,0.1)',
-                  }} />
-                ))}
+                {/* seviye çubuğu — kaç kaldığı bir bakışta görünsün */}
+                <div style={{ display: 'flex', gap: 3, marginTop: 9 }}>
+                  {Array.from({ length: u.maxLevel }, (_, i) => (
+                    <span key={i} style={{
+                      flex: 1, height: 4, borderRadius: 2,
+                      background: i < lv ? C.candle : 'rgba(255,255,255,0.1)',
+                      boxShadow: i < lv ? `0 0 5px ${C.candle}66` : 'none',
+                    }} />
+                  ))}
+                </div>
+
+                {/* Parası yetmiyorsa NE KADAR eksik olduğu yazsın — "alamıyorum"
+                    tek başına bilgi değil, hedef değil. */}
+                {!maxed && !can && (
+                  <div style={{ fontSize: 10.5, color: C.bad, marginTop: 7 }}>
+                    {eksik.toLocaleString('en-US')} more gold needed
+                  </div>
+                )}
               </div>
-            </div>
+            </Card>
           );
         })}
       </div>

@@ -102,8 +102,21 @@ export function Panel({
   onClick?: (e: React.MouseEvent) => void;
 }) {
   return (
-    <div onClick={onClick} style={{ ...nineSlice(`${KIT}/Background-boxes/BGbox_${variant}.png`, 16, scale), ...style }}>
-      <div style={{ padding: pad, fontFamily: FONT.ui }}>{children}</div>
+    <div onClick={onClick} style={{
+      ...nineSlice(`${KIT}/Background-boxes/BGbox_${variant}.png`, 16, scale),
+      position: 'relative',
+      ...style,
+    }}>
+      {/* ⚠️ PEMBEYİ KIRAN KATMAN. 07A "koyu şarap kırmızısı" diye seçilmişti
+          ama ekranda düpedüz PEMBE duruyor — oyunun geri kalanı geceyken
+          panel parlıyordu. CSS `filter` çözüm DEĞİL: panelin çocuklarını da
+          (metin, buton, sprite) soldururdu. Onun yerine yalnızca zemine
+          oturan, tıklamaları geçiren ayrı bir katman. */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: 'rgba(16,12,18,0.44)',
+      }} />
+      <div style={{ position: 'relative', padding: pad, fontFamily: FONT.ui }}>{children}</div>
     </div>
   );
 }

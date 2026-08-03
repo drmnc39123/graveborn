@@ -13,8 +13,9 @@ import { MarketPanel } from '@/components/MarketPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
+import { Card, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
-import { STAGES, depthGold, stageById } from '@/game/config';
+import { STAGES, challengeRating, depthGold, stageById } from '@/game/config';
 import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
@@ -268,46 +269,128 @@ function StageSelect({ progress, onPick, onHero }: {
           const cleared = !!p.cleared[s.id];
           const claimed = !!p.firstClear[s.id];
           const best = paidDepth(p, s.id);
-          const nextDepthPays = depthGold(s.id, best + 1);
           return (
-            <div key={s.id} style={{ ...glass(11), padding: '13px 15px',
-              opacity: locked ? 0.4 : 1, border: `1px solid ${cleared ? `${C.candle}55` : C.border}` }}>
-              <button disabled={locked} onClick={() => onPick(s.id, 'campaign')}
-                style={{ all: 'unset', display: 'block', width: '100%', cursor: locked ? 'default' : 'pointer' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontWeight: 900, fontSize: 15, color: C.bone }}>
-                    {s.id}. {s.name} {cleared && <span style={{ color: C.candle, fontSize: 12 }}>✓</span>}
-                  </span>
-                  <span style={{ fontSize: 11, color: C.boneFaint }}>{locked ? 'LOCKED' : `${s.enemyCount} enemies`}</span>
-                </div>
-                <div style={{ fontSize: 11.5, color: !claimed ? C.candle : C.boneFaint, marginTop: 3 }}>
-                  {locked ? `Clear stage ${s.id - 1} to unlock`
-                    : !claimed ? `First clear pays ${s.firstClearGold} gold`
-                    : 'Reward claimed — replay for practice'}
-                </div>
-              </button>
-
-              {/* Descent — bölüm bir kez temizlenince açılır. Oyunun ömrü burada. */}
-              {cleared && (
-                <button onClick={() => onPick(s.id, 'descent')}
-                  style={{ all: 'unset', display: 'block', width: '100%', marginTop: 9, paddingTop: 9,
-                    borderTop: `1px solid ${C.border}`, cursor: 'pointer' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontWeight: 900, fontSize: 13.5, color: C.blood }}>⛏ THE DESCENT</span>
-                    <span style={{ fontSize: 11, color: C.boneFaint }}>
-                      {best > 0 ? `best depth ${best}` : 'never entered'}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 11.5, color: C.candle, marginTop: 3 }}>
-                    Depth {best + 1} pays {nextDepthPays} gold
-                  </div>
-                </button>
-              )}
-            </div>
+            <StageCard
+              key={s.id} stage={s} locked={locked} cleared={cleared} claimed={claimed}
+              bestDepth={best} onPick={onPick}
+            />
           );
         })}
       </div>
     </>
+  );
+}
+
+/**
+ * BÖLÜM KARTI.
+ *
+ * ⚠️ Eskiden burada iki satır vardı: "1. The Hollow Wood / First clear pays
+ * 300 gold" ve sağda "100 enemies". Oyuncu neye girdiğini bilmeden seçim
+ * yapıyordu — hangi yaratıklar var, boss var mı, ne kadar sürer, bir sonraki
+ * derinlik ne öder, hiçbiri yazmıyordu. Veri zaten `StageDef`'te duruyordu.
+ */
+function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
+  stage: (typeof STAGES)[number];
+  locked: boolean;
+  cleared: boolean;
+  claimed: boolean;
+  bestDepth: number;
+  onPick: (id: number, mode: RunMode) => void;
+}) {
+  // Taban süre: düşmanlar spawn hızından çabuk sahneye çıkamaz, hepsi ölmeden
+  // bölüm bitmez. Gerçek koşu bundan uzun sürer — "en az" diyoruz.
+  const tabanSn = Math.round(s.enemyCount / s.spawnRate);
+  // hpMul 1 → 14 aralığında; beş kademeye indiriyoruz
+  const zorluk = Math.max(1, Math.min(5, Math.ceil(Math.log(s.hpMul) / Math.log(1.72) + 1)));
+  const derinlikOdemesi = depthGold(s.id, bestDepth + 1);
+  const derinlikZorlugu = challengeRating(s.id, bestDepth + 1) / Math.max(1, challengeRating(s.id, 1));
+
+  return (
+    <Card accent={cleared} dim={locked}>
+      {/* ── Kampanya bacağı ── */}
+      <button disabled={locked} onClick={() => onPick(s.id, 'campaign')}
+        style={{ all: 'unset', display: 'block', width: '100%', boxSizing: 'border-box',
+          padding: '12px 13px', cursor: locked ? 'default' : 'pointer' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          {/* Bölüm numarası — sıralamayı bir bakışta okunur yapan çapa */}
+          <span style={{
+            flexShrink: 0, width: 26, height: 26, borderRadius: 6,
+            display: 'grid', placeItems: 'center',
+            fontSize: 12, fontWeight: 900,
+            color: cleared ? C.candle : C.boneDim,
+            background: cleared ? 'rgba(239,167,46,0.14)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${cleared ? `${C.candle}55` : 'rgba(255,255,255,0.10)'}`,
+          }}>{s.id}</span>
+
+          <span style={{ flex: 1, minWidth: 0, fontWeight: 900, fontSize: 15, color: C.bone }}>{s.name}</span>
+
+          {locked ? <Tag>LOCKED</Tag>
+            : cleared ? <Tag tone="gold">✓ CLEARED</Tag>
+            : <Tag tone="blood">NEW</Tag>}
+        </div>
+
+        {locked ? (
+          <div style={{ fontSize: 11.5, color: C.boneFaint, marginTop: 7 }}>
+            Clear stage {s.id - 1} to unlock
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+              <Tag>{s.enemyCount} ENEMIES</Tag>
+              {/* ⚠️ "≥" işareti bu punto'da rakam gibi okunuyordu ("≥1m 3s" ekranda
+                  "21m 3s"). Kelimeyle yazmak tek çare. */}
+              <Tag title="Enemies cannot spawn faster than this, so no run is shorter">
+                MIN {tabanSn >= 60 ? `${Math.floor(tabanSn / 60)}m ${tabanSn % 60}s` : `${tabanSn}s`}
+              </Tag>
+              {s.boss && <Tag tone="blood">BOSS · {s.boss.label}</Tag>}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginLeft: 'auto' }}>
+                <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1, color: C.boneFaint }}>THREAT</span>
+                <Pips value={zorluk} title={`Enemy health ×${s.hpMul.toFixed(1)}, speed ×${s.speedMul.toFixed(2)}`} />
+              </span>
+            </div>
+
+            {/* Neyle karşılaşacağı — sürünün bileşimi seçimi etkiler */}
+            <div style={{ fontSize: 11, color: C.boneDim, marginTop: 7, lineHeight: 1.45 }}>
+              {s.enemies.map(prettyId).join(' · ')}
+            </div>
+
+            <div style={{ fontSize: 12, fontWeight: 800, color: !claimed ? C.candle : C.boneFaint, marginTop: 7 }}>
+              {!claimed
+                ? `First clear pays ${s.firstClearGold.toLocaleString('en-US')} gold`
+                : 'Reward claimed — replay pays nothing'}
+            </div>
+          </>
+        )}
+      </button>
+
+      {/* ── Descent bacağı — bölüm bir kez temizlenince açılır ── */}
+      {cleared && (
+        <button onClick={() => onPick(s.id, 'descent')}
+          style={{ all: 'unset', display: 'block', width: '100%', boxSizing: 'border-box',
+            padding: '10px 13px 12px',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            background: 'linear-gradient(180deg, rgba(160,18,38,0.10), rgba(0,0,0,0.20))',
+            cursor: 'pointer' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 900, fontSize: 13, color: '#e4657a', letterSpacing: 0.5 }}>⛏ THE DESCENT</span>
+            {bestDepth > 0
+              ? <Tag tone="gold">BEST · DEPTH {bestDepth}</Tag>
+              : <Tag>NEVER ENTERED</Tag>}
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: C.boneFaint }}>
+              endless · no depth pays twice
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: C.candle }}>
+              Depth {bestDepth + 1} pays {derinlikOdemesi.toLocaleString('en-US')} gold
+            </span>
+            <Tag tone="blood" title="How much harder than depth 1">
+              ×{derinlikZorlugu.toFixed(1)} HARDER
+            </Tag>
+          </div>
+        </button>
+      )}
+    </Card>
   );
 }
 

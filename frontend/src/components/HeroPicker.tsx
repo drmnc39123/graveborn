@@ -6,7 +6,8 @@
 
 import { HEROES, heroById, type HeroDef } from '@/game/heroes';
 import { weaponById } from '@/game/config';
-import { C, FONT, glass } from '@/lib/theme';
+import { Card, CardSection, DeltaBar, PATTERN_TEXT, Tag } from '@/components/ui/cards';
+import { C } from '@/lib/theme';
 
 /**
  * Portre: kaynak kare 288×128 ve karakter ortada küçük duruyor. Kutuyu
@@ -64,24 +65,77 @@ export function HeroPicker({ selected, onSelect }: {
         })}
       </div>
 
-      {/* Seçilenin ne vaat ettiği AÇIK yazsın — portreye bakıp tahmin
-          ettirmek seçim ekranını süse çevirir. */}
-      <div style={{ ...glass(10), padding: '10px 12px', fontFamily: FONT.ui }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 15, fontWeight: 900, color: C.bone }}>{cur.name}</span>
-          <span style={{ fontSize: 10.5, color: C.blood, fontWeight: 900, letterSpacing: 1.2 }}>
-            {cur.title.toUpperCase()}
-          </span>
-        </div>
-        <div style={{ fontSize: 11.5, color: C.boneDim, marginTop: 3, lineHeight: 1.5 }}>{cur.blurb}</div>
-        <div style={{ fontSize: 11, color: C.candle, marginTop: 6 }}>
-          Starts with <b>{weaponById(cur.weapon)?.name ?? cur.weapon}</b>
-        </div>
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6, fontSize: 10.5 }}>
-          <span style={{ color: C.ok }}>{cur.pros.join(' · ')}</span>
-          {cur.cons.length > 0 && <span style={{ color: C.bad }}>{cur.cons.join(' · ')}</span>}
+      <HeroCard hero={cur} />
+    </div>
+  );
+}
+
+/**
+ * Seçilen karakterin tam künyesi.
+ *
+ * ⚠️ Eskiden burada "Starts with Rusted Sickle" yazıyordu ve bitiyordu.
+ * Silahın ADI ne yaptığını söylemiyor: oyun testinde Water Priestess için
+ * "bu hero ateş etmiyor" şikâyeti geldi — silahı yörüngeydi, gerçekten
+ * hiçbir şey fırlatmıyordu. Artık deseni de, nasıl çalıştığı da yazıyor.
+ */
+function HeroCard({ hero }: { hero: HeroDef }) {
+  const w = weaponById(hero.weapon);
+  const pat = w ? PATTERN_TEXT[w.pattern] : undefined;
+  // İstatistikleri çubuğa dökmek için — motorun okuduğu alanlarla aynı isimler
+  const bars: { label: string; key: keyof HeroDef['stats'] }[] = [
+    { label: 'Damage', key: 'might' },
+    { label: 'Attack speed', key: 'cooldown' },
+    { label: 'Move speed', key: 'moveSpeed' },
+    { label: 'Max health', key: 'maxHp' },
+    { label: 'Area', key: 'area' },
+    { label: 'Recovery', key: 'recovery' },
+    { label: 'Proj. speed', key: 'projSpeed' },
+  ];
+
+  return (
+    <Card accent>
+      <div style={{ display: 'flex', gap: 11, padding: '11px 12px' }}>
+        <Portrait hero={hero} size={72} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 16, fontWeight: 900, color: C.bone }}>{hero.name}</span>
+            <span style={{ fontSize: 9.5, color: C.blood, fontWeight: 900, letterSpacing: 1.3 }}>
+              {hero.title.toUpperCase()}
+            </span>
+          </div>
+          <div style={{ fontSize: 11.5, color: C.boneDim, marginTop: 3, lineHeight: 1.5 }}>{hero.blurb}</div>
         </div>
       </div>
-    </div>
+
+      <div style={{ padding: '0 12px 12px' }}>
+        {w && (
+          <CardSection label="Starting weapon" tone={C.candle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 900, color: C.candle }}>{w.name}</span>
+              {pat && <Tag tone="blood">{pat.label}</Tag>}
+              <Tag>{w.damage} DMG</Tag>
+              <Tag>{w.cooldownSec.toFixed(2)}s</Tag>
+            </div>
+            {/* ⚠️ ASIL BİLGİ BU SATIR — silahın nasıl çalıştığı */}
+            {pat && (
+              <div style={{ fontSize: 11, color: C.boneDim, marginTop: 5, lineHeight: 1.5 }}>{pat.how}</div>
+            )}
+          </CardSection>
+        )}
+
+        <CardSection label="Against the baseline">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {bars.map((b) => {
+              const v = hero.stats[b.key];
+              if (v === undefined || v === 0) return null;
+              // ⚠️ `cooldown` TERS ÇALIŞIR: negatif değer daha HIZLI saldırı
+              // demek. Ham sayıyı göstermek oyuncuya "eksi = kötü" dedirtirdi.
+              const gosterilen = b.key === 'cooldown' ? -v : v;
+              return <DeltaBar key={b.key} label={b.label} pct={gosterilen} />;
+            })}
+          </div>
+        </CardSection>
+      </div>
+    </Card>
   );
 }

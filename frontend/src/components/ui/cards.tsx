@@ -1,0 +1,175 @@
+'use client';
+// KART DİLİ — panellerdeki bütün kartlar bu parçalardan kurulur.
+//
+// NİYE VAR: her panel kendi kartını sıfırdan yazıyordu ve hepsi "başlık +
+// bir satır gri metin"de kalıyordu. Oyuncu bir bölümü seçerken kaç düşman
+// olduğunu bile göremiyordu; karakter seçerken silahının NASIL ateş ettiğini
+// hiç göremiyordu — "bu hero ateş etmiyor" şikâyeti tam buradan çıkmıştı
+// (Litany yörünge silahı: ekranda hiçbir şey fırlatmaz, sadece halkaya
+// değeni vurur).
+//
+// ⚠️ Tüm stiller INLINE (Phantom in-app browser Tailwind arbitrary değerleri
+// desteklemiyor). ⚠️ MOR YOK.
+
+import type { CSSProperties, ReactNode } from 'react';
+import { C, FONT } from '@/lib/theme';
+
+/** Kartın gövdesi — koyu zemin, ince kenar, hover'da canlanır */
+export function Card({
+  children, accent = false, dim = false, onClick, disabled = false, style,
+}: {
+  children: ReactNode;
+  /** tamamlanmış / seçili durum — altın kenar */
+  accent?: boolean;
+  /** kilitli görünüm */
+  dim?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+  style?: CSSProperties;
+}) {
+  const clickable = !!onClick && !disabled;
+  return (
+    <div
+      onClick={clickable ? onClick : undefined}
+      style={{
+        position: 'relative',
+        borderRadius: 10,
+        border: `1px solid ${accent ? `${C.candle}66` : 'rgba(255,255,255,0.09)'}`,
+        // Dikey degrade: kartlar düz kutu değil, üstten ışık alan bir yüzey
+        background: accent
+          ? 'linear-gradient(180deg, rgba(239,167,46,0.10), rgba(0,0,0,0.34))'
+          : 'linear-gradient(180deg, rgba(255,255,255,0.045), rgba(0,0,0,0.30))',
+        boxShadow: accent ? `0 0 0 1px ${C.candle}22, 0 6px 18px rgba(0,0,0,0.35)` : '0 4px 14px rgba(0,0,0,0.3)',
+        opacity: dim ? 0.58 : 1,
+        cursor: clickable ? 'pointer' : 'default',
+        overflow: 'hidden',
+        fontFamily: FONT.ui,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Küçük rozet — sayı/etiket. Kartın "bir bakışta" okunan kısmı. */
+export function Tag({ children, tone = 'dim', title }: {
+  children: ReactNode;
+  tone?: 'dim' | 'gold' | 'blood' | 'ok' | 'bad';
+  title?: string;
+}) {
+  const map = {
+    dim: { fg: C.boneDim, bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.10)' },
+    gold: { fg: C.candle, bg: 'rgba(239,167,46,0.13)', bd: `${C.candle}44` },
+    blood: { fg: '#e4657a', bg: 'rgba(160,18,38,0.18)', bd: 'rgba(160,18,38,0.5)' },
+    ok: { fg: C.ok, bg: 'rgba(95,158,74,0.15)', bd: 'rgba(95,158,74,0.42)' },
+    bad: { fg: C.bad, bg: 'rgba(200,50,74,0.15)', bd: 'rgba(200,50,74,0.42)' },
+  }[tone];
+  return (
+    <span title={title} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 7px', borderRadius: 5, whiteSpace: 'nowrap',
+      fontSize: 10, fontWeight: 900, letterSpacing: 0.6,
+      color: map.fg, background: map.bg, border: `1px solid ${map.bd}`,
+    }}>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * Zorluk göstergesi — beş kademe.
+ * ⚠️ Ham `hpMul` sayısı ("×5.2 HP") oyuncuya hiçbir şey söylemiyor; kaç nokta
+ * yandığı söylüyor. Sayıyı yine de `title` olarak taşıyoruz.
+ */
+export function Pips({ value, max = 5, title }: { value: number; max?: number; title?: string }) {
+  return (
+    <span title={title} style={{ display: 'inline-flex', gap: 2.5, alignItems: 'center' }}>
+      {Array.from({ length: max }, (_, i) => (
+        <span key={i} style={{
+          width: 6, height: 6, borderRadius: 1,
+          background: i < value ? C.blood : 'rgba(255,255,255,0.13)',
+          boxShadow: i < value ? `0 0 4px ${C.blood}88` : 'none',
+        }} />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Artı/eksi istatistik çubuğu — sıfır ORTADA.
+ * ⚠️ Düz metin ("+15% projectile speed · −12% max health") bir liste, bir
+ * karşılaştırma değil. Karakterler ancak yan yana ölçülebildiklerinde seçim
+ * sunar; çubuk bunu bir bakışta veriyor.
+ */
+export function DeltaBar({ label, pct }: { label: string; pct: number }) {
+  const clamped = Math.max(-1, Math.min(1, pct / 0.35)); // ±%35 = tam çubuk
+  const iyi = pct >= 0;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ flex: '0 0 108px', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, color: C.boneFaint }}>
+        {label.toUpperCase()}
+      </span>
+      <span style={{ position: 'relative', flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.07)' }}>
+        {/* orta çizgi — sıfır noktası görünür olmalı */}
+        <span style={{ position: 'absolute', left: '50%', top: -2, width: 1, height: 10, background: 'rgba(255,255,255,0.22)' }} />
+        <span style={{
+          position: 'absolute', top: 0, height: 6, borderRadius: 3,
+          left: iyi ? '50%' : `${50 + clamped * 50}%`,
+          width: `${Math.abs(clamped) * 50}%`,
+          background: iyi ? C.ok : C.bad,
+          boxShadow: `0 0 6px ${iyi ? C.ok : C.bad}66`,
+        }} />
+      </span>
+      <span style={{
+        flex: '0 0 44px', textAlign: 'right', fontSize: 10.5, fontWeight: 900,
+        color: iyi ? C.ok : C.bad,
+      }}>
+        {iyi ? '+' : '−'}{Math.abs(Math.round(pct * 100))}%
+      </span>
+    </div>
+  );
+}
+
+/** Kart içinde ayrılmış alt bölüm — "başlık + içerik" */
+export function CardSection({ label, children, tone = C.boneFaint }: {
+  label: string;
+  children: ReactNode;
+  tone?: string;
+}) {
+  return (
+    <div style={{
+      margin: '9px 0 0', padding: '8px 10px', borderRadius: 7,
+      background: 'rgba(0,0,0,0.26)', border: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1.4, color: tone, marginBottom: 5 }}>
+        {label.toUpperCase()}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * SİLAH DESENİ AÇIKLAMALARI — oyuncunun en çok ihtiyaç duyduğu bilgi.
+ *
+ * ⚠️ Silahın adı ve hasarı ne yaptığını SÖYLEMİYOR. Water Priestess'e yörünge
+ * silahı verildiğinde oyun testinde "bu hero ateş etmiyor" şikâyeti geldi:
+ * silah gerçekten hiçbir şey fırlatmıyor, sadece etrafındaki halkaya değeni
+ * vuruyor. Bu bir hata değil tasarımdı — ama hiçbir yerde yazmıyordu.
+ */
+export const PATTERN_TEXT: Record<string, { label: string; how: string }> = {
+  aimed: { label: 'SEEKING', how: 'Fires at whatever stands nearest.' },
+  sweep: { label: 'SWEEP', how: 'Cuts an arc in the direction you face — aim with your feet.' },
+  orbit: { label: 'ORBIT', how: 'Circles you. Fires nothing — it only hurts what touches the ring.' },
+  aura: { label: 'AURA', how: 'Constant damage to everything close enough to touch you.' },
+  nova: { label: 'NOVA', how: 'Bursts outward in every direction at once.' },
+  ground: { label: 'GROUND', how: 'Leaves a burning patch where it lands. It does not follow you.' },
+  boomerang: { label: 'RETURNING', how: 'Thrown ahead, then comes back — it hurts on both trips.' },
+  chain: { label: 'CHAIN', how: 'Leaps from one enemy to the next. Never the same one twice.' },
+};
+
+/** `bone_archer` → `Bone Archer` — düşman id'lerinin okunabilir hâli */
+export function prettyId(id: string): string {
+  return id.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}

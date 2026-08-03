@@ -13,6 +13,13 @@ import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldObject } from './mapWorld';
 
 /**
+ * Köyün gece rengi. ⚠️ MOR YOK (kullanıcının kuralı) — soğuk mavi-gri.
+ * Bu tek sabit sahnenin havasını belirliyor: altındaki parlak çim
+ * (rgb 105,135,56) soğuyup gotik palete oturuyor.
+ */
+const NIGHT = 'rgba(13,18,28,0.62)';
+
+/**
  * HATA AYIKLAMA — F1 ile açılır. Çarpışma kutularını, oyuncu yarıçapını ve
  * etkileşim mesafelerini çizer.
  * Neden var: "görünmez engel" şikayetlerini tahminle kovalamak yerine
@@ -149,6 +156,15 @@ export function renderHub(
     drawObject(ctx, objs[i], viewL, viewR, viewT, viewB, time, occludes(objs[i], s.x, s.y));
   }
 
+  // ── GECE ──
+  // ⚠️ SIRA KRİTİK: karartma nesnelerden SONRA, ışıklardan ÖNCE. Köyde bir
+  // ışık sistemi zaten vardı (meşaleler, ocak, pencereler) ama hiçbir işe
+  // yaramıyordu — ortalık gündüz gibi aydınlıktı, `lighter` ile eklenen
+  // parıltı beyaz üstüne beyazdı. Karartılacak bir gece olmadan ışığın
+  // anlamı yok. Parlak çim de bu katmanın altında soğuyor.
+  ctx.fillStyle = NIGHT;
+  ctx.fillRect(camX - w / 2 - 2, camY - h / 2 - 2, w + 4, h + 4);
+
   drawLights(ctx, s, time, viewL, viewR, viewT, viewB);
   drawInteractGlow(ctx, s, time);
   if (DEBUG.collision) drawCollisionDebug(ctx, s, viewL, viewR, viewT, viewB);
@@ -191,9 +207,11 @@ function drawLights(
     if (l.x + l.r < vl || l.x - l.r > vr || l.y + l.r < vt || l.y - l.r > vb) continue;
     const flicker = 0.86 + Math.sin(time * 3.3 + i * 1.9) * 0.14;
     const r = l.r * flicker;
+    // Gece katmanı geldikten sonra güçlendirildi: eskisi (0.34) aydınlık
+    // sahnede zaten görünmüyordu, karanlıkta ise cılız kalıyordu.
     const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
-    g.addColorStop(0, 'rgba(255,196,110,0.34)');
-    g.addColorStop(0.45, 'rgba(220,140,50,0.14)');
+    g.addColorStop(0, 'rgba(255,198,116,0.62)');
+    g.addColorStop(0.4, 'rgba(226,146,54,0.26)');
     g.addColorStop(1, 'rgba(239,167,46,0)');
     ctx.fillStyle = g;
     ctx.beginPath();

@@ -34,6 +34,23 @@ export interface ForgeUpgrade {
   baseCost: number;
   /** her seviyede maliyet bu katsayıyla artar */
   growth: number;
+  /**
+   * Arayüzün sayıyı NASIL yazacağı.
+   * ⚠️ Hepsi yüzde DEĞİL: `recovery` saniyede HP, `armor`/`amount`/`revival`
+   * düz adet. Kart bunları yüzdeymiş gibi gösterince "Slow Mend +12%" gibi
+   * anlamsız bir satır çıkıyordu — oysa açıklaması "+0.12 HP/sec" diyordu.
+   */
+  unit?: 'pct' | 'hpsec' | 'flat';
+  /** true ise küçülmek İYİdir (cooldown): "−%2" bir kazanç */
+  inverse?: boolean;
+}
+
+/** Bir yükseltmenin toplam etkisini oyuncuya gösterilecek metne çevirir */
+export function effectText(u: ForgeUpgrade, level: number): string {
+  const v = u.perLevel * level;
+  if (u.unit === 'hpsec') return `+${v.toFixed(2)} HP/s`;
+  if (u.unit === 'flat') return `+${Math.round(v)}`;
+  return `${u.inverse ? '−' : '+'}${Math.round(v * 100)}%`;
 }
 
 export const FORGE: readonly ForgeUpgrade[] = [
@@ -45,29 +62,40 @@ export const FORGE: readonly ForgeUpgrade[] = [
 
   // ── orta kademe ──
   { id: 'area', name: 'Wide Swing', desc: '+4% attack area', stat: 'area', perLevel: 0.04, maxLevel: 18, baseCost: 70, growth: 1.55 },
-  { id: 'recovery', name: 'Slow Mend', desc: '+0.12 HP/sec', stat: 'recovery', perLevel: 0.12, maxLevel: 12, baseCost: 70, growth: 1.55 },
+  { id: 'recovery', name: 'Slow Mend', desc: '+0.12 HP/sec', stat: 'recovery', perLevel: 0.12, maxLevel: 12, baseCost: 70, growth: 1.55, unit: 'hpsec' },
   { id: 'pspeed', name: 'Swift Shot', desc: '+5% projectile speed', stat: 'projSpeed', perLevel: 0.05, maxLevel: 10, baseCost: 80, growth: 1.55 },
   { id: 'duration', name: 'Lasting Mark', desc: '+5% effect duration', stat: 'duration', perLevel: 0.05, maxLevel: 10, baseCost: 80, growth: 1.55 },
   // Hareket hızı survivors-like'ta en güçlü istatistik — bilerek küçük adımlı
   { id: 'mspeed', name: 'Restless Boots', desc: '+3% move speed', stat: 'moveSpeed', perLevel: 0.03, maxLevel: 12, baseCost: 90, growth: 1.58 },
 
   // ── pahalı, güçlü ──
-  { id: 'armor', name: 'Bone Plating', desc: '+1 armor (flat damage cut)', stat: 'armor', perLevel: 1, maxLevel: 10, baseCost: 120, growth: 1.62 },
-  { id: 'cooldown', name: 'Quick Hands', desc: '-2% cooldown', stat: 'cooldown', perLevel: 0.02, maxLevel: 12, baseCost: 130, growth: 1.58 },
+  { id: 'armor', name: 'Bone Plating', desc: '+1 armor (flat damage cut)', stat: 'armor', perLevel: 1, maxLevel: 10, baseCost: 120, growth: 1.62, unit: 'flat' },
+  { id: 'cooldown', name: 'Quick Hands', desc: '-2% cooldown', stat: 'cooldown', perLevel: 0.02, maxLevel: 12, baseCost: 130, growth: 1.58, inverse: true },
   { id: 'growth', name: 'Soul Harvest', desc: '+5% experience', stat: 'growth', perLevel: 0.05, maxLevel: 10, baseCost: 150, growth: 1.6 },
 
   // ── risk/ödül: düşman güçlenir ama sürü de kalabalıklaşır ──
   { id: 'curse', name: 'Cursed Blood', desc: '+8% curse — deadlier enemies, more of them', stat: 'curse', perLevel: 0.08, maxLevel: 8, baseCost: 90, growth: 1.5 },
 
   // ── nadir, oyunu değiştiren alımlar ──
-  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 900, growth: 3.0 },
-  { id: 'revival', name: 'Second Burial', desc: '+1 revival per run', stat: 'revival', perLevel: 1, maxLevel: 3, baseCost: 700, growth: 2.6 },
+  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 900, growth: 3.0, unit: 'flat' },
+  { id: 'revival', name: 'Second Burial', desc: '+1 revival per run', stat: 'revival', perLevel: 1, maxLevel: 3, baseCost: 700, growth: 2.6, unit: 'flat' },
 ] as const;
 
 /** Bir sonraki seviyenin maliyeti (level = şu anki seviye, 0 = hiç alınmamış) */
 export function costOf(u: ForgeUpgrade, level: number): number {
   if (level >= u.maxLevel) return Infinity;
   return Math.round(u.baseCost * Math.pow(u.growth, level));
+}
+
+/**
+ * TEK bir yükseltmeye şimdiye kadar gömülen gold.
+ * Kartta "bu satıra ne kadar yatırdım" sorusunu cevaplıyor — `spentOn` ağacın
+ * TAMAMINI topluyor, satır bazında bilgi vermiyordu.
+ */
+export function spentOnOne(u: ForgeUpgrade, level: number): number {
+  let s = 0;
+  for (let i = 0; i < Math.min(level, u.maxLevel); i++) s += costOf(u, i);
+  return s;
 }
 
 /** Bir yükseltmeyi max'a çıkarmanın toplam maliyeti */

@@ -6,6 +6,7 @@ import { C } from '@/lib/theme';
 import { PLAYER, RUN, WEAPON } from './config';
 import type { Game } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
+import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 
 // ── Kozmetik efektler ──
 // Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
@@ -17,7 +18,8 @@ const MAX_FX = 90; // ekranda aynı anda en fazla; sürü ölümünde çizim pat
 /** Yeni run başlarken çağrılır — modül seviyesindeki efektler önceki run'dan taşmasın. */
 export function resetEffects() {
   deathFx.length = 0;
-  groundPattern = null; // yeni canvas bağlamı gelirse pattern yeniden üretilsin
+  artTime = 0;
+  resetStageGround(); // yeni bölüm gelirse chunk önbelleği geçersiz
 }
 
 function pumpEffects(g: Game, dt: number) {
@@ -49,9 +51,13 @@ function drawEffects(ctx: CanvasRenderingContext2D) {
   ctx.restore();
 }
 
+/** Atmosfer animasyonu için biriken süre — simülasyona GİRMEZ, kozmetik */
+let artTime = 0;
+
 export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number, dpr: number, dt = 1 / 60) {
   const cx = w / 2;
   const cy = h / 2;
+  artTime += dt;
 
   // zemin
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -65,7 +71,8 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
 
   pumpEffects(g, dt);
 
-  drawGround(ctx, g, w, h);
+  drawStageGround(ctx, g.stage.def.id, g.px, g.py, w, h);
+  drawStageDecor(ctx, g.stage.def.id, g.px, g.py, w, h);
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
   drawChests(ctx, g);
@@ -81,68 +88,10 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawPlayer(ctx, g);
 
   ctx.restore();
-}
 
-// Zemin karosu tileset'ten KESİLİR: mainlevbuild.png içinde (736,416) konumunda
-// 64×64'lük temiz taş zemin var (alfa taramasıyla bulundu, tahmin değil).
-// Bir kez offscreen canvas'a çizip createPattern ile tekrarlıyoruz — her frame
-// yüzlerce drawImage yerine tek fillRect.
-let groundPattern: CanvasPattern | null = null;
-let groundImg: HTMLImageElement | null = null;
-const TILE = 64;
-
-function ensureGroundPattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
-  if (groundPattern) return groundPattern;
-  if (!groundImg) {
-    if (typeof window === 'undefined') return null;
-    groundImg = new Image();
-    groundImg.src = '/art/tiles/mainlevbuild.png';
-    return null;
-  }
-  if (!groundImg.complete || groundImg.naturalWidth === 0) return null;
-
-  const off = document.createElement('canvas');
-  off.width = TILE;
-  off.height = TILE;
-  const octx = off.getContext('2d');
-  if (!octx) return null;
-  octx.imageSmoothingEnabled = false;
-  octx.drawImage(groundImg, 736, 416, TILE, TILE, 0, 0, TILE, TILE);
-  groundPattern = ctx.createPattern(off, 'repeat');
-  return groundPattern;
-}
-
-/** Zemin — karo deseni. Yüklenene kadar ızgara çizgisine düşer. */
-function drawGround(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number) {
-  const x0 = Math.floor((g.px - w / 2) / TILE) * TILE - TILE;
-  const y0 = Math.floor((g.py - h / 2) / TILE) * TILE - TILE;
-  const ww = w + TILE * 3;
-  const hh = h + TILE * 3;
-
-  const pat = ensureGroundPattern(ctx);
-  if (pat) {
-    ctx.save();
-    ctx.fillStyle = pat;
-    // Pattern world uzayına sabitlensin (kamerayla kaymasın, zeminle birlikte kaysın)
-    ctx.translate(x0, y0);
-    ctx.fillRect(0, 0, ww, hh);
-    ctx.restore();
-    // Çok hafif sıcak yıkama — karo zaten koyu, karartma eklersek siyaha gidiyor.
-    // (0.28 karartma denendi: zemin okunmaz oldu.)
-    ctx.fillStyle = 'rgba(43,31,22,0.10)';
-    ctx.fillRect(x0, y0, ww, hh);
-    return;
-  }
-
-  const S = 80;
-  const gx1 = g.px + w / 2 + S;
-  const gy1 = g.py + h / 2 + S;
-  ctx.strokeStyle = 'rgba(227,216,192,0.045)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let x = Math.floor((g.px - w / 2) / S) * S; x < gx1; x += S) { ctx.moveTo(x, y0); ctx.lineTo(x, gy1); }
-  for (let y = Math.floor((g.py - h / 2) / S) * S; y < gy1; y += S) { ctx.moveTo(x0, y); ctx.lineTo(gx1, y); }
-  ctx.stroke();
+  // ⚠️ ATMOSFER EN SONDA, ekran uzayında. Kameradan önce çizilseydi dünyayla
+  // birlikte kayardı; oyuncunun taşıdığı ışık halesi ekranda SABİT durmalı.
+  drawAtmosphere(ctx, g.stage.def.id, w, h, artTime);
 }
 
 function drawArenaEdge(ctx: CanvasRenderingContext2D, g: Game) {
