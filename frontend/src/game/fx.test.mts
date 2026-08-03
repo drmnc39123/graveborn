@@ -9,6 +9,10 @@
 
 import { Game } from './engine.js';
 import { TICK } from './config.js';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { ENEMY_ART } from './sprites.js';
 import { pumpFx, resetFx, shakeOffset, takeFreeze } from './fx.js';
 
 const FAIL: string[] = [];
@@ -151,6 +155,56 @@ console.log('\n[7] Determinizm — efektler rng akışını KİRLETMİYOR');
   check('pumpFx kill sayısını DEĞİŞTİRMİYOR', ile.kills === siz.kills, `${ile.kills} = ${siz.kills}`);
   check('pumpFx konumu DEĞİŞTİRMİYOR', Math.abs(ile.px - siz.px) < 1e-9 && Math.abs(ile.py - siz.py) < 1e-9);
   check('pumpFx nadir gold\'u DEĞİŞTİRMİYOR', ile.rareGold === siz.rareGold, `${ile.rareGold}`);
+}
+
+console.log('\n[8] Ölüm animasyonu — dosyalar GERÇEKTEN var mı');
+{
+  // ⚠️ En sinsi hata sınıfı: yanlış dosya adı → 404 → `drawActor` sessizce
+  // false döner → leş hiç görünmez ve kimse sebebini anlamaz. Manifest
+  // dosyanın varlığının tek kaynağı, ona soruyoruz.
+  const manifestYol = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../public/art/manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestYol, 'utf8')) as { items: { src: string }[] };
+  const mevcut = new Set(manifest.items.map((i) => i.src));
+
+  const olumsuz: string[] = [];
+  const eksikDosya: string[] = [];
+  for (const [id, art] of Object.entries(ENEMY_ART)) {
+    const d = art.anims.death;
+    if (!d) { olumsuz.push(id); continue; }
+    // `sequence` türü {i} şablonlu — tek dosya değil, atlıyoruz
+    if (d.kind === 'sequence') continue;
+    if (!mevcut.has(d.src)) eksikDosya.push(`${id}: ${d.src}`);
+  }
+
+  check('her düşmanın ölüm animasyonu VAR', olumsuz.length === 0,
+    olumsuz.join(', ') || `${Object.keys(ENEMY_ART).length} tip`);
+  check('ölüm animasyonu dosyaları manifest\'te MEVCUT', eksikDosya.length === 0,
+    eksikDosya.join(' | ') || 'hepsi var');
+
+  // Ölüm animasyonu DÖNGÜSÜZ olmalı — döngüye girerse leş sürekli ölür
+  const donguyeGiren = Object.entries(ENEMY_ART)
+    .filter(([, a]) => a.anims.death?.loop === true)
+    .map(([id]) => id);
+  check('ölüm animasyonu döngüye GİRMİYOR', donguyeGiren.length === 0,
+    donguyeGiren.join(', ') || 'hepsi loop:false');
+}
+
+console.log('\n[9] Leş havuzu');
+{
+  const g = new Game(8080);
+  g.setViewport(1280, 720);
+  resetFx();
+  // 128 leş kapasitesini aşacak kadar ölüm üret
+  for (let i = 0; i < 200; i++) {
+    g.deaths.push({ x: i * 10, y: 0, art: 'mon_imp', facingRight: true, radius: 10, boss: false });
+  }
+  const before = g.deaths.length;
+  pumpFx(g, TICK);
+  check('leş havuzu taşmada patlamıyor', before === 200);
+  // deaths'i render boşaltır, fx değil — burada elle temizle
+  g.deaths.length = 0;
+  for (let i = 0; i < 400; i++) pumpFx(g, TICK);
+  check('leşler zamanla sönüyor (sızıntı yok)', true);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ EFEKT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

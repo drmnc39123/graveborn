@@ -49,7 +49,7 @@ const SEQ = (src: string, frames: number, fps = 10): AnimDef => ({ kind: 'sequen
 // Satır düzeni (paketin "Animation name.png" belgesinden):
 //   0 idle · 1 walk · 2 victory · 3 jump · 4 crouched · 5 attack1 · 6 hit
 //   7 blast1 · 8 blast2 · 9 levelup · 10 appear · 11 active · 12 death1 · 13 death2 · 14 teleport
-const MON_ROW = { idle: 0, walk: 1, attack: 5, hit: 6, death: 12 } as const;
+const MON_ROW = { idle: 0, walk: 1, attack: 5, hit: 6, appear: 10, death: 12 } as const;
 const monster = (file: string, contentRatio: number, anchorY: number, drawHeight: number): ActorArt => ({
   drawHeight,
   contentRatio,
@@ -60,6 +60,10 @@ const monster = (file: string, contentRatio: number, anchorY: number, drawHeight
     idle: { kind: 'grid', src: `/art/enemies/topdown/${file}.png`, frames: 8, fps: 7, loop: true, frameW: 80, frameH: 80, row: MON_ROW.idle },
     hit: { kind: 'grid', src: `/art/enemies/topdown/${file}.png`, frames: 8, fps: 16, loop: true, frameW: 80, frameH: 80, row: MON_ROW.hit },
     attack: { kind: 'grid', src: `/art/enemies/topdown/${file}.png`, frames: 8, fps: 12, loop: true, frameW: 80, frameH: 80, row: MON_ROW.attack },
+    // ⚠️ SIFIR EK İNDİRME: aynı PNG'nin 12. satırı. Motor zaten bu dosyayı
+    // yüklüyor; ölüm animasyonu bugüne kadar sadece kullanılmıyordu.
+    // `loop: false` → son karede donar, leş öyle kalır.
+    death: { kind: 'grid', src: `/art/enemies/topdown/${file}.png`, frames: 8, fps: 14, loop: false, frameW: 80, frameH: 80, row: MON_ROW.death },
   },
 });
 
@@ -67,15 +71,15 @@ const monster = (file: string, contentRatio: number, anchorY: number, drawHeight
  * MutterPixel `_stripN` şeridi → ActorArt. Dosya deseni:
  * `<taban>_<anim>_strip<N>.png`, kareler yatayda dizili.
  *
- * ⚠️ SADECE MOTORUN KULLANDIĞI animasyonlar bildirilir. render.ts düşman için
- * yalnızca `walk` (ve varsa `hit`) istiyor; idle/attack/death bildirmek
- * preload'ın her birini indirmeye çalışması demek — vermin paketinde `hit`
- * yok, `attack` da `bite` adında, hepsi 404 olurdu.
+ * ⚠️ SADECE DOSYASI GERÇEKTEN VAR OLAN animasyonlar bildirilir — preload
+ * bildirilen her animasyonu indirmeye çalışır. Vermin paketinde `hit` yok,
+ * `attack` da `bite` adında; bildirseydik 404 yağardı. `death` şeritleri
+ * ise diskte DOĞRULANDI (undead 3 dosya, vermin 2 dosya).
  */
 const strip = (
   base: string, n: number,
   contentRatio: number, anchorY: number, drawHeight: number,
-  opts: { hit?: boolean } = {},
+  opts: { hit?: boolean; death?: boolean; deathFrames?: number } = {},
 ): ActorArt => ({
   drawHeight,
   contentRatio,
@@ -84,6 +88,9 @@ const strip = (
   anims: {
     walk: SHEET(`/art/enemies/${base}_walk_strip${n}.png`, n, 10),
     ...(opts.hit ? { hit: SHEET(`/art/enemies/${base}_hit_strip${n}.png`, n, 16) } : {}),
+    ...(opts.death ? {
+      death: { ...SHEET(`/art/enemies/${base}_death_strip${opts.deathFrames ?? n}.png`, opts.deathFrames ?? n, 12), loop: false },
+    } : {}),
   },
 });
 
@@ -112,11 +119,11 @@ export const ENEMY_ART: Record<string, ActorArt> = {
   // MutterPixel undead + vermin (32×32 şerit). Derin bölümlerin sürüsü
   // topdown canavarlardan görsel olarak AYRIŞSIN diye eklendi.
   // contentRatio/anchorY tarayıcıda alfa sınır kutusu ÖLÇÜLEREK bulundu.
-  skel_armored: strip('undead/spr_Armored_Skeleton', 9, 0.938, 0.969, 34, { hit: true }),
-  skel_basic: strip('undead/spr_Basic_Skeleton', 9, 0.875, 0.938, 30, { hit: true }),
-  bone_archer: strip('undead/spr_Bone_Archer', 7, 0.875, 0.938, 32, { hit: true }),
-  rat_small: strip('vermin/spr_rat_1', 13, 0.344, 0.688, 20),   // hit şeridi yok
-  rat_large: strip('vermin/spr_rat_2', 13, 0.344, 0.688, 24),   // hit şeridi yok
+  skel_armored: strip('undead/spr_Armored_Skeleton', 9, 0.938, 0.969, 34, { hit: true, death: true }),
+  skel_basic: strip('undead/spr_Basic_Skeleton', 9, 0.875, 0.938, 30, { hit: true, death: true }),
+  bone_archer: strip('undead/spr_Bone_Archer', 7, 0.875, 0.938, 32, { hit: true, death: true }),
+  rat_small: strip('vermin/spr_rat_1', 13, 0.344, 0.688, 20, { death: true }),   // hit şeridi yok
+  rat_large: strip('vermin/spr_rat_2', 13, 0.344, 0.688, 24, { death: true }),   // hit şeridi yok
 
   // LuizMelo (CC0) yandan görünüm — çeşitlilik için karışımda kalıyor
   skeleton: {

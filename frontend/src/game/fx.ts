@@ -18,7 +18,7 @@
 
 import type { Game } from './engine';
 import { C } from '@/lib/theme';
-import { drawCell, FX } from './sprites';
+import { drawActor, drawCell, ENEMY_ART, FX } from './sprites';
 import { tileHash } from './stageArt';
 
 // ── SUNUM SABİTLERİ ───────────────────────────────────────────────────
@@ -41,6 +41,9 @@ const FEEL = {
   sparkFps: 26,
   /** oyuncu hasar vinyeti ömrü */
   hurtLife: 0.42,
+  /** leş ne kadar yerde kalır — son 1 sn'de solar */
+  corpseLife: 4.0,
+  corpseFade: 1.0,
   /**
    * HIT-STOP (vuruş donması) süreleri — sn.
    * ⚠️ Motorda tick atlanarak YAPILMAZ; motor sabit 60 Hz, tick atlamak
@@ -55,10 +58,19 @@ const FEEL = {
 } as const;
 
 // Havuz kapasiteleri — tavanlar ölçüldü, bkz. dosya sonundaki perf notu
-const CAP = { spark: 96, num: 24 } as const;
+const CAP = { spark: 96, num: 24, corpse: 128 } as const;
 
 interface Spark { x: number; y: number; t: number; life: number; size: number; on: boolean }
 interface Num { x: number; y: number; t: number; dmg: number; crit: boolean; vx: number; on: boolean }
+/**
+ * Leş — ölüm animasyonu oynayan ve sonra yerde kalan düşman.
+ *
+ * ⚠️ MOTORA "ÖLMEKTE OLAN DÜŞMAN" DURUMU EKLENMEZ. Öyle yapsaydık
+ * `remaining`, `reapDead`, çarpışma ve bölüm bitiş koşulunun dördü birden
+ * etkilenirdi — yani dengeyi değiştirirdi. Düşman motorda anında ölür;
+ * burada sadece görüntüsü bir süre daha yaşar.
+ */
+interface Corpse { x: number; y: number; t: number; art: string; facing: boolean; on: boolean }
 
 // ⚠️ Diziler MODÜL YÜKLENİRKEN doldurulur ve bir daha büyümez/küçülmez.
 // `length` sabit kalır — testte tahsis olmadığının kanıtı budur.
@@ -66,6 +78,8 @@ const sparks: Spark[] = Array.from({ length: CAP.spark },
   () => ({ x: 0, y: 0, t: 0, life: 0, size: 0, on: false }));
 const nums: Num[] = Array.from({ length: CAP.num },
   () => ({ x: 0, y: 0, t: 0, dmg: 0, crit: false, vx: 0, on: false }));
+const corpses: Corpse[] = Array.from({ length: CAP.corpse },
+  () => ({ x: 0, y: 0, t: 0, art: '', facing: true, on: false }));
 
 let shakeMag = 0;
 let hurtFlash = 0;
@@ -77,6 +91,7 @@ let freezeReq = 0;
 export function resetFx() {
   for (const s of sparks) s.on = false;
   for (const n of nums) n.on = false;
+  for (const c of corpses) c.on = false;
   shakeMag = 0;
   hurtFlash = 0;
   frameSeq = 0;
@@ -145,11 +160,15 @@ export function pumpFx(g: Game, dt: number) {
   }
   g.hits.length = 0;
 
-  // ── ölümler → sarsıntı (leş animasyonu P2'de) ──
+  // ── ölümler → leş + sarsıntı ──
   for (let i = 0; i < g.deaths.length; i++) {
     const d = g.deaths[i];
     shakeMag = Math.min(FEEL.maxShake, shakeMag + (d.boss ? FEEL.bossDeathShake : FEEL.deathShake));
     if (d.boss) freezeReq = Math.min(FEEL.freezeMax, freezeReq + FEEL.freezeBossDeath);
+    if (d.art) {
+      const c = slot(corpses);
+      c.x = d.x; c.y = d.y; c.t = 0; c.art = d.art; c.facing = d.facingRight; c.on = true;
+    }
   }
   // ⚠️ `deaths` BURADA boşaltılmaz — render.ts'teki ölüm patlaması onu
   // kullanıyor. Tek boşaltma noktası olmalı, yoksa efektlerden biri aç kalır.
@@ -174,6 +193,12 @@ export function pumpFx(g: Game, dt: number) {
     if (!n.on) continue;
     n.t += dt;
     if (n.t >= FEEL.numLife) n.on = false;
+  }
+  for (let i = 0; i < corpses.length; i++) {
+    const c = corpses[i];
+    if (!c.on) continue;
+    c.t += dt;
+    if (c.t >= FEEL.corpseLife) c.on = false;
   }
   if (hurtFlash > 0) hurtFlash = Math.max(0, hurtFlash - dt);
   // frame bağımsız üstel sönüm
@@ -204,6 +229,29 @@ export function shakeOffset(): { x: number; y: number } {
     x: (tileHash(frameSeq, 0, 1) - 0.5) * 2 * shakeMag,
     y: (tileHash(0, frameSeq, 2) - 0.5) * 2 * shakeMag,
   };
+}
+
+/**
+ * Leşler — düşmanların ALTINDA çizilir (canlıyı örtmesinler).
+ * Kamera dönüşümü uygulanmış hâlde, `drawEnemies`'ten ÖNCE çağrılır.
+ */
+export function drawCorpses(ctx: CanvasRenderingContext2D) {
+  let any = false;
+  for (let i = 0; i < corpses.length; i++) if (corpses[i].on) { any = true; break; }
+  if (!any) return;
+
+  ctx.save();
+  for (let i = 0; i < corpses.length; i++) {
+    const c = corpses[i];
+    if (!c.on) continue;
+    const art = ENEMY_ART[c.art];
+    if (!art?.anims.death) continue;
+    // Son saniyede solar — birden yok olmak "silindi" gibi görünür
+    const kalan = FEEL.corpseLife - c.t;
+    ctx.globalAlpha = kalan < FEEL.corpseFade ? Math.max(0, kalan / FEEL.corpseFade) * 0.85 : 0.85;
+    drawActor(ctx, art, 'death', c.t, c.x, c.y, c.facing);
+  }
+  ctx.restore();
 }
 
 /** Dünya uzayında çizilen efektler — kamera dönüşümü UYGULANMIŞ hâlde çağrılır */

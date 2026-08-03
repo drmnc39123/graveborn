@@ -7,7 +7,7 @@ import { PLAYER, RUN, WEAPON } from './config';
 import type { Game } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
-import { drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
+import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
 
 // ── Kozmetik efektler ──
 // Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
@@ -83,6 +83,8 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
   drawChests(ctx, g);
+  // ⚠️ Leşler düşmanlardan ÖNCE — canlı düşmanı örtmemeliler
+  drawCorpses(ctx);
   drawEnemies(ctx, g);
   drawBossBars(ctx, g);
   drawEffects(ctx); // ölüm patlamaları düşmanların üstünde, oyuncunun altında
