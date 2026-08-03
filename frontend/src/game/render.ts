@@ -8,6 +8,7 @@ import type { Game } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
+import { weaponArt } from './combatArt';
 
 // ── Kozmetik efektler ──
 // Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
@@ -298,10 +299,13 @@ function drawOrbits(ctx: CanvasRenderingContext2D, g: Game) {
       const oy = g.py + Math.sin(a) * rad;
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
+      // Silahın KENDİ tonu — Litany altın, evrimi Black Vespers buz mavisi.
+      // Eskiden ikisi de aynı altın gradyandı, evrim görsel olarak yok sayılıyordu.
+      const [tr, tg, tb] = weaponArt(w.def.id).tint;
       const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, orbR);
-      grad.addColorStop(0, 'rgba(247,196,106,0.95)');
-      grad.addColorStop(0.6, 'rgba(239,167,46,0.5)');
-      grad.addColorStop(1, 'rgba(239,167,46,0)');
+      grad.addColorStop(0, `rgba(${Math.min(255, tr + 30)},${Math.min(255, tg + 30)},${Math.min(255, tb + 30)},0.95)`);
+      grad.addColorStop(0.6, `rgba(${tr},${tg},${tb},0.5)`);
+      grad.addColorStop(1, `rgba(${tr},${tg},${tb},0)`);
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(ox, oy, orbR, 0, Math.PI * 2);
@@ -340,10 +344,18 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, g: Game) {
   const fallback: typeof g.projectiles = [];
   for (let i = 0; i < g.projectiles.length; i++) {
     const p = g.projectiles[i];
+    // ⚠️ Her silahın KENDİ mermisi. Eskiden 16 silah tek sprite'ı paylaşıyordu
+    // ve oyuncu neyi kuşandığını ekrandan anlayamıyordu.
+    const art = p.wid ? weaponArt(p.wid).bullet : undefined;
+    const cell = art ?? BULLET;
     // uçuş süresinden frame türet — her mermi kendi fazında, sürü senkron olmasın
-    const frame = Math.floor((WEAPON.projectileLifeSec - p.life) * BULLET.fps) % BULLET.frames;
-    const angle = Math.atan2(p.vy, p.vx);
-    if (!drawCell(ctx, BULLET, frame, p.x, p.y, angle)) fallback.push(p);
+    const frame = Math.floor((WEAPON.projectileLifeSec - p.life) * cell.fps) % cell.frames;
+    // ⚠️ BUMERANG KENDİ EKSENİNDE DÖNER, burnu ileri gitmez. `atan2(vy,vx)`
+    // ok gibi çizerdi — bumerang takla atar. `spin` verilmişse zamanla döner.
+    const angle = cell.spin
+      ? (WEAPON.projectileLifeSec - p.life) * cell.spin
+      : Math.atan2(p.vy, p.vx);
+    if (!drawCell(ctx, cell, frame, p.x, p.y, angle)) fallback.push(p);
   }
   if (!fallback.length) return;
   ctx.fillStyle = C.bone;

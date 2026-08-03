@@ -173,7 +173,12 @@ export const PLAYER_ART: ActorArt = playerArt(DEFAULT_HERO);
 // ── mermi ve efektler ──
 // Mermi: BDragon "All Fire Bullet" atlası, 16×16 hücre. Satır 4 = yöne dönebilen
 // dart formu (5 frame). Turuncu/altın zaten paletimizde (C.candle).
-export const BULLET = { src: '/art/fx/bullets/All_Fire_Bullet_Pixel_16x16_00.png', cell: 16, row: 4, frames: 5, fps: 14, size: 18 } as const;
+// ⚠️ Tipi açıkça `CellAnim` — `as const` verilirse `cols`/`spin` alanları
+// tipte görünmez ve silaha özel mermilerle aynı yolda kullanılamaz.
+export const BULLET: CellAnim = {
+  src: '/art/fx/bullets/All_Fire_Bullet_Pixel_16x16_00.png',
+  cell: 16, cols: 40, row: 4, frames: 5, fps: 14, size: 18,
+};
 
 // Efekt: BDragon RPG Effect, 64×64 frame, SATIR = RENK, SÜTUN = frame (12).
 // Palet kuralı: MOR SATIRLAR (1, 6, 8) KULLANILMAZ.
@@ -183,13 +188,26 @@ export const FX = {
   death: { src: '/art/fx/rpg/1010.png', cell: 64, row: 7, frames: 12, fps: 22, size: 58 },
 } as const;
 
-export interface CellAnim { src: string; cell: number; row: number; frames: number; fps: number; size: number }
+export interface CellAnim {
+  src: string; cell: number; row: number; frames: number; fps: number; size: number;
+  /**
+   * Atlasın SÜTUN sayısı (genişlik / cell).
+   * ⚠️ `fx/rpg` atlaslarının genişliği 448-1152 px arasında DEĞİŞİYOR
+   * (7-18 sütun) — ölçüldü. Sabit varsaymak 252 atlasın 188'inde yanlış
+   * kare çizer ya da atlas dışına taşar; taşma SESSİZCE boş kare çizer.
+   */
+  cols?: number;
+  /** rad/sn — kendi ekseninde dönen mermiler (bumerang) */
+  spin?: number;
+}
 
 /** Atlas hücresini çizer. Hazır değilse false döner → çağıran basit şekle düşer. */
 export function drawCell(ctx: CanvasRenderingContext2D, a: CellAnim, frame: number, x: number, y: number, angle = 0): boolean {
   const img = get(a.src);
   if (!img) return false;
-  const idx = Math.min(Math.max(frame, 0), a.frames - 1);
+  // Kare indeksi hem `frames` hem `cols` ile sınırlanır
+  const son = Math.min(a.frames, a.cols ?? a.frames) - 1;
+  const idx = Math.min(Math.max(frame, 0), son);
   const s = a.size;
   ctx.save();
   ctx.translate(x, y);

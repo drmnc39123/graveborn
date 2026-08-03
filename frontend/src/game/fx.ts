@@ -20,6 +20,7 @@ import type { Game } from './engine';
 import { C } from '@/lib/theme';
 import { drawActor, drawCell, ENEMY_ART, FX } from './sprites';
 import { tileHash } from './stageArt';
+import { weaponArt } from './combatArt';
 
 // ── SUNUM SABİTLERİ ───────────────────────────────────────────────────
 // ⚠️ Bunlar DENGE DEĞİL, his. O yüzden `config.ts`'te değil burada.
@@ -60,7 +61,11 @@ const FEEL = {
 // Havuz kapasiteleri — tavanlar ölçüldü, bkz. dosya sonundaki perf notu
 const CAP = { spark: 96, num: 24, corpse: 128 } as const;
 
-interface Spark { x: number; y: number; t: number; life: number; size: number; on: boolean }
+interface Spark {
+  x: number; y: number; t: number; life: number; size: number; on: boolean;
+  /** hangi silahın çarpma efekti — 16 silah artık ayrı görünüyor */
+  wid: string;
+}
 interface Num { x: number; y: number; t: number; dmg: number; crit: boolean; vx: number; on: boolean }
 /**
  * Leş — ölüm animasyonu oynayan ve sonra yerde kalan düşman.
@@ -75,7 +80,7 @@ interface Corpse { x: number; y: number; t: number; art: string; facing: boolean
 // ⚠️ Diziler MODÜL YÜKLENİRKEN doldurulur ve bir daha büyümez/küçülmez.
 // `length` sabit kalır — testte tahsis olmadığının kanıtı budur.
 const sparks: Spark[] = Array.from({ length: CAP.spark },
-  () => ({ x: 0, y: 0, t: 0, life: 0, size: 0, on: false }));
+  () => ({ x: 0, y: 0, t: 0, life: 0, size: 0, on: false, wid: '' }));
 const nums: Num[] = Array.from({ length: CAP.num },
   () => ({ x: 0, y: 0, t: 0, dmg: 0, crit: false, vx: 0, on: false }));
 const corpses: Corpse[] = Array.from({ length: CAP.corpse },
@@ -126,9 +131,11 @@ export function pumpFx(g: Game, dt: number) {
     const onemli = h.killed || h.crit;
     if (onemli || sparks.some((s) => !s.on)) {
       const s = slot(sparks);
+      const art = weaponArt(h.wid).impact;
       s.x = h.x; s.y = h.y; s.t = 0;
-      s.life = FX.hit.frames / FEEL.sparkFps;
-      s.size = h.crit ? FX.hit.size * 1.45 : FX.hit.size;
+      s.wid = h.wid;
+      s.life = art.frames / art.fps;
+      s.size = h.crit ? art.size * 1.45 : art.size;
       s.on = true;
     }
 
@@ -266,7 +273,8 @@ export function drawFxWorld(ctx: CanvasRenderingContext2D) {
     for (let i = 0; i < sparks.length; i++) {
       const s = sparks[i];
       if (!s.on) continue;
-      drawCell(ctx, { ...FX.hit, size: s.size }, Math.floor(s.t * FEEL.sparkFps), s.x, s.y);
+      const art = weaponArt(s.wid).impact;
+      drawCell(ctx, { ...art, size: s.size }, Math.floor(s.t * art.fps), s.x, s.y);
     }
     ctx.restore();
   }
