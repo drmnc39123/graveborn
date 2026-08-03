@@ -77,6 +77,46 @@ export async function buyUpgrade(id: string, current: Progress, cost: number): P
   return progress;
 }
 
+// ── MARKETPLACE ───────────────────────────────────────────────────────
+// ⚠️ DEMO MODUNDA MARKET KAPALI. Demo gold'u localStorage'da üretiliyor ve
+// ekonomiye girmiyor; listelenebilseydi sahte gold gerçek $GRAVE karşılığı
+// satılırdı. Kapı burada, tek yerde.
+
+export interface Listing {
+  id: string;
+  seller: string;
+  goldAmount: number;
+  /** ⚠️ METİN — token en küçük birimi 2^53'ü aşabilir, number'a çevirme */
+  priceGrave: string;
+  status: string;
+  createdAt: string;
+  buyer: string | null;
+}
+
+export const marketAvailable = () => isWallet();
+
+export async function fetchListings(): Promise<{ listings: Listing[]; tokenEnabled: boolean }> {
+  // Emir defteri herkese açık — demo oyuncusu da bakabilir, sadece satamaz.
+  return api<{ listings: Listing[]; tokenEnabled: boolean }>('/market/listings');
+}
+
+export async function fetchMyListings(): Promise<{ listings: Listing[]; escrowedGold: number }> {
+  if (!isWallet()) return { listings: [], escrowedGold: 0 };
+  return api<{ listings: Listing[]; escrowedGold: number }>('/market/mine');
+}
+
+export async function listGold(goldAmount: number, priceGrave: string) {
+  return api<{ listing: Listing; progress: Progress; escrowedGold: number }>('/market/list', {
+    method: 'POST', body: { goldAmount, priceGrave },
+  });
+}
+
+export async function cancelGoldListing(id: string) {
+  return api<{ progress: Progress; escrowedGold: number }>('/market/cancel', {
+    method: 'POST', body: { id },
+  });
+}
+
 export async function startRun(mode: 'campaign' | 'descent', stageId: number): Promise<RunTicket> {
   if (!isWallet()) return { runId: null, seed: demoSeed(mode, stageId) };
   const out = await api<{ runId: string; seed: number }>('/run/start', {

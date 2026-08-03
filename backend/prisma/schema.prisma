@@ -36,7 +36,8 @@ model Player {
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
 
-  runs Run[]
+  runs     Run[]
+  listings Listing[]
 }
 
 // Bir koşu. POST /run/start ile AÇILIR, /run/finish ile KAPANIR.
@@ -72,6 +73,40 @@ model Run {
   capped Boolean @default(false)
 
   @@index([wallet, startedAt])
+}
+
+// ── MARKETPLACE ───────────────────────────────────────────────────────
+// Oyuncu GOLD'unu başka bir oyuncuya $GRAVE karşılığı satar.
+//
+// ⚠️ EV TAKASI DEĞİL. Hazine sabit kurdan gold almaz; token DAİMA başka bir
+// oyuncunun cüzdanından gelir. Aksi hâlde oyun token BASMIŞ olur ve
+// sıfır-emisyon sözü çöker.
+//
+// ⚠️ ESCROW ŞART. İlan açılırken gold oyuncunun bakiyesinden DÜŞÜLÜR ve
+// burada tutulur. Düşülmezse oyuncu aynı gold'u hem satışa koyar hem
+// Forge'da harcar — yoktan gold üretmenin en kolay yolu budur.
+model Listing {
+  id     String @id
+  seller String
+  player Player @relation(fields: [seller], references: [wallet], onDelete: Cascade)
+
+  /// escrow'da tutulan gold (satıcının bakiyesinden düşülmüş)
+  goldAmount Int
+  /// istenen $GRAVE — en küçük birimde (tam sayı), kayan nokta ASLA kullanılmaz
+  priceGrave BigInt
+
+  /// 'active' | 'sold' | 'cancelled'
+  status String @default("active")
+
+  createdAt DateTime  @default(now())
+  closedAt  DateTime?
+  /// satıldıysa alıcının cüzdanı
+  buyer     String?
+  /// ödemenin zincir üstü imzası — tek kullanımlık, tekrar kullanılamaz
+  paymentSig String? @unique
+
+  @@index([status, createdAt])
+  @@index([seller, status])
 }
 
 // Cüzdan doğrulama için tek kullanımlık metin. İmzalanır, sonra silinir.

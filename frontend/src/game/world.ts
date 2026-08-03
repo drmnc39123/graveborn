@@ -73,9 +73,11 @@ const b128 = (id: BuildingId, name: string, hint: string, file: string, tx: numb
 export const BUILDINGS: readonly Building[] = [
   b128('upgrade', 'The Forge', 'Spend GOLD on permanent power', 'Blacksmith', 22, 21),
   b128('tavern', 'The Rest', 'Your profile and records', 'Inn', 38, 21),
-  b128('market', 'Market Hall', 'Trade with other players', 'Market_Hall', 54, 21),
+  b128('market', 'Market Hall', 'Sell GOLD to other players', 'Market_Hall', 54, 21),
   b128('shop', 'General Store', 'Buy items and consumables', 'General_Store', 22, 40),
-  b128('exchange', 'The Exchange', 'Swap GOLD for $GRAVE', 'Spr_Alchemy_Laboratory', 54, 40),
+  // ⚠️ "Swap GOLD for $GRAVE" DEMİYORUZ: hazine karşı taraf olursa oyun token
+  // BASMIŞ olur. Her iki bina da oyuncudan oyuncuya.
+  b128('exchange', 'The Exchange', 'Standing bids from other players', 'Spr_Alchemy_Laboratory', 54, 40),
   b128('quests', 'The Old Church', 'The Fight Portal stands before it', 'Church', 42, 6),
 ] as const;
 

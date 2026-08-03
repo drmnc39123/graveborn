@@ -9,6 +9,7 @@ import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
+import { MarketPanel } from '@/components/MarketPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
@@ -44,12 +45,17 @@ export default function PlayPage() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const wallet = getWallet();
+  // ⚠️ Doğrudan `getWallet()` ÇAĞIRMA. localStorage okur; sunucuda null döner,
+  // istemcide adres döner ve navbar rozeti "DEMO" ↔ adres arasında uyuşmazlığa
+  // düşerek hidrasyonu bozar (React tüm ağacı istemci içeriğiyle değiştirir).
+  // Mount'tan SONRA okunmalı.
+  const [wallet, setWallet] = useState<string | null>(null);
 
   // Mod seçilmemişse kapıya geri gönder — hangi kayda oynadığını bilmeden
   // oyuna girmek, sonradan "ilerlemem nerede?" demek olurdu.
   useEffect(() => {
     if (getMode() === null) { router.replace('/'); return; }
+    setWallet(getWallet());
     loadSessionProgress()
       .then(setProgress)
       .catch(() => {
@@ -203,6 +209,11 @@ export default function PlayPage() {
               />
             ) : panel === 'tavern' ? (
               <RecordsPanel progress={progress ?? loadProgress()} />
+            ) : panel === 'market' ? (
+              <MarketPanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+              />
             ) : (
               <ComingSoon id={panel} />
             )}
@@ -315,19 +326,11 @@ const LOCKED: Record<string, { kicker: string; title: string; body: string; bull
     ],
     gate: 'Opens when run-consumables land.',
   },
-  market: {
-    kicker: 'THE MARKETPLACE', title: 'Not yet trading',
-    body: 'Where players sell gold to each other for $GRAVE. The game never mints the token — every coin comes from another player’s wallet.',
-    bullets: [
-      'You list gold at your own price',
-      'A buyer pays from their wallet, on-chain',
-      'Listings sit in escrow until sold or cancelled',
-    ],
-    gate: 'Opens with $GRAVE.',
-  },
+  // ⚠️ `market` ARTIK BURADA DEĞİL — MarketPanel canlı (listeleme + escrow +
+  // iptal çalışıyor, sadece satın alma tarafı token bekliyor).
   exchange: {
     kicker: 'THE EXCHANGE', title: 'Not yet trading',
-    body: 'The order book behind the Marketplace — standing bids and asks instead of fixed listings.',
+    body: 'Standing bids: post what you would pay for gold and let sellers come to you. The Marketplace next door already takes listings.',
     bullets: [
       'Player-to-player only, no house counterparty',
       'A fee on token trades; half of it burned',

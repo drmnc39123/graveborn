@@ -13,6 +13,9 @@ import { prisma, toProgress, fromProgress, getOrCreatePlayer } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { canStart, settleRun } from './reward.js';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
+import {
+  MarketError, cancelListing, createListing, escrowedGold, listActive, listMine, tokenEnabled,
+} from './market.js';
 import { seedFromString } from '@game/rng';
 
 const app = express();
@@ -208,6 +211,70 @@ app.post('/run/finish', wrap(async (req, res) => {
     progressGold: s.progressGold,
     dropGold: s.dropGold,
   });
+}));
+
+// ── MARKETPLACE ──
+// Oyuncudan oyuncuya: gold ↔ $GRAVE. Hazine taraf DEĞİL (bkz. market.ts).
+const listSchema = z.object({
+  goldAmount: z.number().int().positive(),
+  // Fiyat METİN olarak alınır: JSON number 2^53'ten sonra sessizce bozulur,
+  // token en küçük birimi kolayca o aralığa çıkar.
+  priceGrave: z.string().regex(/^\d{1,30}$/),
+});
+
+app.get('/market/listings', wrap(async (req, res) => {
+  const limit = Number(req.query.limit ?? 50);
+  const offset = Number(req.query.offset ?? 0);
+  res.json({
+    listings: await listActive(Number.isFinite(limit) ? limit : 50, Number.isFinite(offset) ? offset : 0),
+    tokenEnabled: tokenEnabled(),
+  });
+}));
+
+app.get('/market/mine', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json({ listings: await listMine(wallet), escrowedGold: await escrowedGold(wallet) });
+}));
+
+app.post('/market/list', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const body = listSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: 'gecersiz_istek' }); return; }
+  try {
+    const listing = await createListing(wallet, body.data.goldAmount, BigInt(body.data.priceGrave));
+    const player = await prisma.player.findUniqueOrThrow({ where: { wallet } });
+    res.json({
+      listing: { ...listing, priceGrave: listing.priceGrave.toString() },
+      progress: toProgress(player),
+      escrowedGold: await escrowedGold(wallet),
+    });
+  } catch (e) {
+    if (e instanceof MarketError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/market/cancel', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const id = req.body?.id;
+  if (typeof id !== 'string') { res.status(400).json({ error: 'gecersiz_istek' }); return; }
+  try {
+    await cancelListing(wallet, id);
+    const player = await prisma.player.findUniqueOrThrow({ where: { wallet } });
+    res.json({ progress: toProgress(player), escrowedGold: await escrowedGold(wallet) });
+  } catch (e) {
+    if (e instanceof MarketError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+// Satın alma token çıkana kadar KAPALI — sahte bir "satın al" düğmesi
+// göstermek, oyuncuyu olmayan bir işleme sokmak olurdu.
+app.post('/market/buy', wrap(async (_req, res) => {
+  res.status(503).json({ error: 'token_yok' });
 }));
 
 // ── ADMIN ──

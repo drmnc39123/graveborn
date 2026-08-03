@@ -131,5 +131,63 @@ check('gold sunucuda tam olarak düşüldü',
 check('yükseltme seviyesi arttı', (buyOk.json?.progress?.upgrades?.might ?? 0) >= 1,
   `might ${buyOk.json?.progress?.upgrades?.might}`);
 
+console.log('\n[8] Marketplace — HTTP katmanı');
+{
+  check('jetonsuz kendi ilanlarım okunamıyor', (await api('/market/mine')).status === 401);
+
+  const book = await api('/market/listings');
+  check('emir defteri herkese açık', book.status === 200 && Array.isArray(book.json?.listings), `${book.status}`);
+  check('token henüz KAPALI olarak bildiriliyor', book.json?.tokenEnabled === false, `${book.json?.tokenEnabled}`);
+
+  // Listeleyecek kadar gold yoksa dürüst yoldan kazan — testi atlamak yerine.
+  let bakiye = (await api('/progress', { token })).json.progress.gold as number;
+  if (bakiye < 50) {
+    const r = await api('/run/start', { method: 'POST', token, body: { mode: 'campaign', stageId: 2 } });
+    await api('/run/finish', { method: 'POST', token, body: { runId: r.json.runId, deepestCleared: 0, rareGold: 120, cleared: true } });
+    bakiye = (await api('/progress', { token })).json.progress.gold as number;
+  }
+  check('listeleyecek gold var', bakiye >= 50, `${bakiye} gold`);
+
+  // ⚠️ ASIL RİSK: 2^53'ü aşan fiyat. JSON number olsaydı sessizce yuvarlanırdı.
+  const BUYUK = '9007199254740993'; // 2^53 + 1 — number'a çevrilirse ...992 olur
+  const listed = await api('/market/list', {
+    method: 'POST', token, body: { goldAmount: 50, priceGrave: BUYUK },
+  });
+  check('ilan açılıyor', listed.status === 200, `${listed.status} ${listed.json?.error ?? ''}`);
+  check('2^53 ÜSTÜ fiyat bozulmadan döndü', listed.json?.listing?.priceGrave === BUYUK,
+    `${listed.json?.listing?.priceGrave}`);
+  check('gold HTTP üzerinden de escrow\'a alındı',
+    listed.json?.progress?.gold === bakiye - 50, `${bakiye} → ${listed.json?.progress?.gold}`);
+  check('escrow bakiyesi bildiriliyor', listed.json?.escrowedGold === 50, `${listed.json?.escrowedGold}`);
+
+  const listingId = listed.json?.listing?.id as string;
+
+  // Fiyat JSON number olarak gelirse reddedilmeli — bozulma riski kapıda dursun.
+  const sayiFiyat = await api('/market/list', { method: 'POST', token, body: { goldAmount: 50, priceGrave: 1000 } });
+  check('SAYI fiyat reddediliyor (sadece metin)', sayiFiyat.status === 400, `${sayiFiyat.status}`);
+
+  const negatif = await api('/market/list', { method: 'POST', token, body: { goldAmount: -50, priceGrave: '10' } });
+  check('negatif miktar reddediliyor', negatif.status === 400, `${negatif.status}`);
+
+  const yok = await api('/market/list', { method: 'POST', token, body: { goldAmount: 99_999_999, priceGrave: '10' } });
+  check('sahip olmadığı gold reddediliyor', yok.status === 409, `${yok.status} ${yok.json?.error}`);
+
+  // Başkasının ilanı — [6]'daki ikinci cüzdan
+  const calma = await api('/market/cancel', { method: 'POST', token: v2.json.token, body: { id: listingId } });
+  check('başka cüzdan ilanı iptal EDEMİYOR', calma.status === 404, `${calma.status} ${calma.json?.error}`);
+
+  const buy = await api('/market/buy', { method: 'POST', token, body: { id: listingId } });
+  check('satın alma token gelene kadar 503', buy.status === 503 && buy.json?.error === 'token_yok',
+    `${buy.status} ${buy.json?.error}`);
+
+  const mine = await api('/market/mine', { token });
+  check('kendi ilanım listeleniyor', mine.json?.listings?.some((l: any) => l.id === listingId));
+
+  const iptal = await api('/market/cancel', { method: 'POST', token, body: { id: listingId } });
+  check('kendi ilanımı iptal edebiliyorum', iptal.status === 200, `${iptal.status}`);
+  check('gold HTTP üzerinden geri geldi', iptal.json?.progress?.gold === bakiye, `${iptal.json?.progress?.gold}`);
+  check('escrow sıfırlandı', iptal.json?.escrowedGold === 0, `${iptal.json?.escrowedGold}`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ UÇTAN UCA SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

@@ -107,12 +107,12 @@ export const BUILDINGS: readonly HubBuilding[] = [
     foot: { dx: 40, dy: 170, w: 180, h: 80 }, doorX: 1376, doorY: 452,
   },
   {
-    id: 'market', name: 'Marketplace', hint: 'Trade with other players',
+    id: 'market', name: 'Marketplace', hint: 'Sell GOLD to other players',
     src: `${R}/spr_Abandoned_Town_Hall.png`, x: 224, y: 800, w: 256, h: 256,
     foot: { dx: 40, dy: 170, w: 180, h: 80 }, doorX: 352, doorY: 1028,
   },
   {
-    id: 'exchange', name: 'The Exchange', hint: 'Swap GOLD for $GRAVE',
+    id: 'exchange', name: 'The Exchange', hint: 'Standing bids from other players',
     src: `${R}/spr_manor.png`, x: 1216, y: 800, w: 256, h: 256,
     foot: { dx: 40, dy: 170, w: 180, h: 80 }, doorX: 1344, doorY: 1028,
   },

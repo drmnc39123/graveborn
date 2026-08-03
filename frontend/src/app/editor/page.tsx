@@ -25,7 +25,7 @@ const DOOR_ROLES = [
   { id: 'upgrade', name: 'The Forge — kalıcı yükseltme' },
   { id: 'shop', name: 'General Store — item satın alma' },
   { id: 'market', name: 'Market Hall — oyuncu ticareti' },
-  { id: 'exchange', name: 'The Exchange — GOLD ↔ $GRAVE' },
+  { id: 'exchange', name: 'The Exchange — alış emirleri' },
   { id: 'tavern', name: 'The Rest — profil / kayıtlar' },
 ] as const;
 
