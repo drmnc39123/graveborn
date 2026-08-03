@@ -144,6 +144,13 @@ export class Game {
   animT = 0;
   moving = false;
   facingRight = true;
+  /**
+   * Saldırı / hasar animasyonu sayaçları.
+   * ⚠️ SADECE SUNUM — hiçbir mantığı beslemezler, RNG tüketmezler, denge
+   * etkileri yoktur. `sim.test.mts` mührü bunları hash'e ALMAZ.
+   */
+  atkT = 0;
+  hurtT = 0;
   level = 1;
   xp = 0;
   xpNext: number = xpForLevel(1);
@@ -423,6 +430,8 @@ export class Game {
     this.px += this.inx * sp * dt;
     this.py += this.iny * sp * dt;
     this.animT += dt;
+    if (this.atkT > 0) this.atkT = Math.max(0, this.atkT - dt);
+    if (this.hurtT > 0) this.hurtT = Math.max(0, this.hurtT - dt);
     this.moving = this.inx !== 0 || this.iny !== 0;
     if (this.inx > 0.01) this.facingRight = true;
     else if (this.inx < -0.01) this.facingRight = false;
@@ -723,6 +732,7 @@ export class Game {
           this.hp -= taken;
           this.iframe = PLAYER.iframeSec;
           this.events.add('hurt');
+          this.hurtT = 0.32;
           if (this.hurts.length < 4) this.hurts.push({ amount: taken });
           this.swapRemove(this.enemyShots, i);
           continue;
@@ -776,28 +786,34 @@ export class Game {
         const target = this.nearestEnemy(def.range ?? 600);
         if (!target) continue; // menzilde hedef yoksa bekle, cooldown harcanmaz
         w.cd = this.wCooldown(w);
+        this.atkT = 0.30;      // sunum: karakter saldırı animasyonu oynatsın
         this.fireAimed(w, target);
       } else if (def.pattern === 'sweep') {
         w.cd = this.wCooldown(w);
+        this.atkT = 0.30;
         this.fireSweep(w);
       } else if (def.pattern === 'aura') {
         w.cd = this.wCooldown(w);
         this.fireAura(w);
       } else if (def.pattern === 'nova') {
         w.cd = this.wCooldown(w);
+        this.atkT = 0.30;
         this.fireNova(w);
       } else if (def.pattern === 'ground') {
         w.cd = this.wCooldown(w);
+        this.atkT = 0.30;
         this.fireGround(w);
       } else if (def.pattern === 'boomerang') {
         // Hedef ARAMAZ: baktığın yöne savrulur ve döner. "Nereye bakıyorsun"
         // sorusunu soran tek silah — aimed'ın otomatik nişanından farkı bu.
         w.cd = this.wCooldown(w);
+        this.atkT = 0.30;
         this.fireBoomerang(w);
       } else if (def.pattern === 'chain') {
         const target = this.nearestEnemy(def.range ?? 460);
         if (!target) continue;
         w.cd = this.wCooldown(w);
+        this.atkT = 0.30;
         this.fireChain(w, target);
       }
     }
@@ -1177,6 +1193,7 @@ export class Game {
       this.hp -= taken;
       this.iframe = PLAYER.iframeSec;
       this.events.add('hurt');
+      this.hurtT = 0.32;
       if (this.hurts.length < 4) this.hurts.push({ amount: taken });
       if (this.hp <= 0) {
         if (this.stats.revival > 0) {

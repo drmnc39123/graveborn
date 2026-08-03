@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PASSIVE_ART, WEAPON_ART, weaponArt, type CellAnim } from './combatArt.js';
+import { HEROES } from './heroes.js';
 import { EVOLVED, PASSIVES, WEAPONS,
   weaponCooldownAt, weaponCountAt, weaponDamageAt } from './config.js';
 
@@ -219,6 +220,44 @@ console.log('\n[8] Seviye önizleme formülleri (level-up kartı bunları göste
   const seviyelenenEvrim = EVOLVED.filter((w) => w.maxLevel > 1).map((w) => w.id);
   check('evrimler son form (seviye atlamıyor)', seviyelenenEvrim.length === 0,
     seviyelenenEvrim.join(', ') || `${EVOLVED.length} evrim`);
+}
+
+console.log('\n[9] Kahraman animasyonları — dosyalar GERÇEKTEN var mı');
+{
+  // ⚠️ Kare sayısı yanlış girilirse SON kare 404 olur ve animasyon sonunda
+  // karakter kaybolur — teşhisi çok zor, çünkü ilk kareler çalışıyor.
+  // Manifest'ten her animasyonun İLK ve SON karesini doğruluyoruz.
+  const eksik: string[] = [];
+  for (const h of HEROES) {
+    const kontrol = (ad: string, sablon: string, frames: number) => {
+      if (!sablon || !frames) { eksik.push(`${h.id}.${ad}: tanımsız`); return; }
+      for (const i of [1, frames]) {
+        const src = `/art/heroes/${h.dir}/${sablon.replace('{i}', String(i))}`;
+        if (!bySrc.has(src)) eksik.push(`${h.id}.${ad}[${i}]: ${src.split('/').pop()}`);
+      }
+    };
+    kontrol('idle', h.idle, h.idleFrames);
+    kontrol('run', h.run, h.runFrames);
+    kontrol('atk', h.atk, h.atkFrames);
+    kontrol('hurt', h.hurt, h.hurtFrames);
+    kontrol('death', h.death, h.deathFrames);
+  }
+  check('her kahramanın 5 animasyonu da MEVCUT', eksik.length === 0,
+    eksik.slice(0, 4).join(' | ') || `${HEROES.length} kahraman × 5 animasyon`);
+
+  // Kare sayısı ölçülenden FAZLA girilirse son kareler 404 olur — bir sonraki
+  // kareyi de sorup sınırın doğru olduğunu doğrula
+  const fazla: string[] = [];
+  for (const h of HEROES) {
+    const test = (ad: string, sablon: string, frames: number) => {
+      const src = `/art/heroes/${h.dir}/${sablon.replace('{i}', String(frames + 1))}`;
+      if (bySrc.has(src)) fazla.push(`${h.id}.${ad}: ${frames + 1}. kare de var`);
+    };
+    test('atk', h.atk, h.atkFrames);
+    test('death', h.death, h.deathFrames);
+  }
+  check('kare sayıları eksik bildirilmemiş', fazla.length === 0,
+    fazla.join(' | ') || 'tam');
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ SAVAŞ GÖRSELLERİ TUTARLI' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

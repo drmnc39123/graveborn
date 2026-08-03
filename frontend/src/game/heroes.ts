@@ -34,6 +34,15 @@ export interface HeroDef {
   run: string;
   idleFrames: number;
   runFrames: number;
+  /**
+   * Saldırı / hasar alma / ölüm animasyonları.
+   * ⚠️ Motor bugüne kadar SADECE idle+run çiziyordu — karakter saldırırken
+   * duruyordu. Dosyalar diskte hazırdı (kare sayıları ölçüldü), sadece
+   * bildirilmiyorlardı. Hepsi `loop: false` oynar.
+   */
+  atk: string; atkFrames: number;
+  hurt: string; hurtFrames: number;
+  death: string; deathFrames: number;
   /** oyun içi çizim ölçüleri (ölçülmüş) */
   contentRatio: number;
   anchorY: number;
@@ -54,6 +63,9 @@ export const HEROES: readonly HeroDef[] = [
     cons: [],
     dir: 'fire-knight', idle: 'idle_{i}.png', run: 'run_{i}.png',
     idleFrames: 8, runFrames: 8,
+    atk: '1_atk_{i}.png', atkFrames: 11,
+    hurt: 'take_hit_{i}.png', hurtFrames: 6,
+    death: 'death_{i}.png', deathFrames: 13,
     contentRatio: 0.344, anchorY: 0.992, drawHeight: 44,
     crop: { x: 100, y: 83, w: 60, h: 44 },
   },
@@ -73,6 +85,9 @@ export const HEROES: readonly HeroDef[] = [
     cons: ['−12% max health'],
     dir: 'leaf-ranger', idle: 'idle_{i}.png', run: 'run_{i}.png',
     idleFrames: 12, runFrames: 10,
+    atk: '1_atk_{i}.png', atkFrames: 10,
+    hurt: 'take_hit_{i}.png', hurtFrames: 6,
+    death: 'death_{i}.png', deathFrames: 19,
     contentRatio: 0.344, anchorY: 0.992, drawHeight: 44,
     crop: { x: 118, y: 83, w: 49, h: 44 },
   },
@@ -93,6 +108,9 @@ export const HEROES: readonly HeroDef[] = [
     cons: ['−10% damage'],
     dir: 'water-priestess', idle: 'idle_{i}.png', run: 'walk_{i}.png',
     idleFrames: 8, runFrames: 10,
+    atk: '1_atk_{i}.png', atkFrames: 7,
+    hurt: 'take_hit_{i}.png', hurtFrames: 7,
+    death: 'death_{i}.png', deathFrames: 16,
     contentRatio: 0.289, anchorY: 0.992, drawHeight: 40,
     crop: { x: 132, y: 90, w: 28, h: 37 },
   },
@@ -107,6 +125,9 @@ export const HEROES: readonly HeroDef[] = [
     cons: ['−10% move speed'],
     dir: 'metal-bladekeeper', idle: '01_idle_{i}.png', run: '02_run_{i}.png',
     idleFrames: 8, runFrames: 8,
+    atk: '07_1_atk_{i}.png', atkFrames: 6,
+    hurt: '12_take_hit_{i}.png', hurtFrames: 6,
+    death: '13_death_{i}.png', deathFrames: 12,
     contentRatio: 0.328, anchorY: 0.992, drawHeight: 42,
     crop: { x: 124, y: 85, w: 45, h: 42 },
   },

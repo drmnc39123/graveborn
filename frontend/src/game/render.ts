@@ -431,13 +431,35 @@ function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {
   ctx.arc(g.px, g.py, PLAYER.pickupRadius * g.stats.magnet, 0, Math.PI * 2);
   ctx.stroke();
 
+  // ⚠️ ANİMASYON ÖNCELİĞİ: ölüm > hasar > saldırı > koşu > durma.
+  // Motor bugüne kadar sadece run/idle çiziyordu — karakter saldırırken
+  // duruyordu, hasar alınca sadece yanıp sönüyordu. Diskteki 741 kare
+  // (3 saldırı, ölüm, hasar) hiç kullanılmıyordu.
+  //
+  // `atkT`/`hurtT` motorun SUNUM sayaçları; mantığı beslemezler.
+  // Animasyon zamanı 0'dan başlamalı (loop:false, son karede donar), o yüzden
+  // geçen süre = tetiklenme süresi − kalan.
+  const art = playerArt(g.heroId);
+  let anim = g.moving ? 'run' : 'idle';
+  let animT = g.animT;
+  if (g.phase === 'dead' && art.anims.death) {
+    anim = 'death';
+    animT = g.animT;                    // ölümde donar, son kare kalır
+  } else if (g.hurtT > 0 && art.anims.hurt) {
+    anim = 'hurt';
+    animT = 0.32 - g.hurtT;
+  } else if (g.atkT > 0 && art.anims.atk) {
+    anim = 'atk';
+    animT = 0.30 - g.atkT;
+  }
+
   // sprite varsa onu çiz; dokunulmazlık penceresinde yarı saydam yanıp söner
   if (!blink) {
-    if (drawActor(ctx, playerArt(g.heroId), g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight)) return;
+    if (drawActor(ctx, art, anim, animT, g.px, g.py, g.facingRight)) return;
   } else {
     ctx.save();
     ctx.globalAlpha = 0.45;
-    const drawn = drawActor(ctx, playerArt(g.heroId), g.moving ? 'run' : 'idle', g.animT, g.px, g.py, g.facingRight);
+    const drawn = drawActor(ctx, art, anim, animT, g.px, g.py, g.facingRight);
     ctx.restore();
     if (drawn) return;
   }

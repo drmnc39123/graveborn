@@ -160,6 +160,11 @@ export function playerArt(heroId?: string): ActorArt {
       anims: {
         idle: SEQ(`/art/heroes/${h.dir}/${h.idle}`, h.idleFrames, 8),
         run: SEQ(`/art/heroes/${h.dir}/${h.run}`, h.runFrames, 12),
+        // ⚠️ `loop: false` — bunlar bir kez oynar. Döngüye girerlerse
+        // karakter sonsuza kadar saldırır / ölür gibi görünür.
+        atk: { ...SEQ(`/art/heroes/${h.dir}/${h.atk}`, h.atkFrames, 20), loop: false },
+        hurt: { ...SEQ(`/art/heroes/${h.dir}/${h.hurt}`, h.hurtFrames, 16), loop: false },
+        death: { ...SEQ(`/art/heroes/${h.dir}/${h.death}`, h.deathFrames, 12), loop: false },
       },
     };
     heroArtCache.set(h.id, art);
@@ -289,20 +294,38 @@ function get(src: string): HTMLImageElement | null {
   return null;
 }
 
-/** Bir aktörün tüm frame'lerini önceden istemeye başla (run başında çağrılır) */
-export function preload(art: ActorArt) {
-  for (const a of Object.values(art.anims)) {
+/**
+ * Bir aktörün frame'lerini önceden istemeye başla.
+ * `only` verilirse sadece o animasyonlar yüklenir — kademeli yükleme için.
+ */
+export function preload(art: ActorArt, only?: string[]) {
+  for (const [ad, a] of Object.entries(art.anims)) {
+    if (only && !only.includes(ad)) continue;
     if (a.kind === 'sheet') get(a.src);
     else for (let i = 1; i <= a.frames; i++) get(a.src.replace('{i}', String(i)));
   }
 }
 
 export function preloadAll(heroId?: string) {
-  preload(playerArt(heroId));
-  for (const art of Object.values(ENEMY_ART)) preload(art);
+  const hero = playerArt(heroId);
+  // ⚠️ KADEMELİ YÜKLEME. Saldırı/hasar/ölüm animasyonları eklenince kahraman
+  // başına dosya sayısı 16'dan 46'ya (Leaf Ranger'da 57) çıktı. Hepsini run
+  // başında istemek ilk kareyi geciktirir. Önce YÜRÜMEK için gerekenler;
+  // gerisi tarayıcı boştayken. `drawActor` görsel hazır değilse zaten
+  // `false` döner ve o kare idle/run'a düşer — kırılmaz.
+  preload(hero, ['idle', 'run']);
+  for (const art of Object.values(ENEMY_ART)) preload(art, ['walk', 'hit']);
   get(BULLET.src);
   get(FX.hit.src);
   get(FX.death.src);
+
+  const gerisi = () => {
+    preload(hero);
+    for (const art of Object.values(ENEMY_ART)) preload(art);
+  };
+  const w = globalThis as unknown as { requestIdleCallback?: (cb: () => void) => void };
+  if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(gerisi);
+  else setTimeout(gerisi, 600);
 }
 
 /**
