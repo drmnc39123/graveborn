@@ -14,6 +14,7 @@ import {
   marketAvailable, type Listing,
 } from '@/lib/gameSession';
 import type { Progress } from '@/game/progress';
+import { Card, Tag } from '@/components/ui/cards';
 import { play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
 
@@ -22,6 +23,56 @@ const MAX_LISTINGS = 10;
 
 /** Cüzdan adresini kısalt — tam adres panelde yer kaplıyor, kimlik için 8 hane yeter */
 const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+
+/**
+ * BİRİM FİYAT — emir defterinin en önemli sayısı, ve eksikti.
+ *
+ * ⚠️ "2.500 gold / 12.000 $GRAVE" ile "800 gold / 3.900 $GRAVE" yan yana
+ * durunca hangisinin ucuz olduğu görünmüyor; oyuncunun kafadan bölmesi
+ * gerekiyordu. Bir emir defterinin tek işi karşılaştırma sunmaktır.
+ *
+ * ⚠️ Burada `Number()` kullanmak GÜVENLİ, çünkü sonuç yalnızca EKRANA
+ * yazılıyor. Fiyatın kendisi her katmanda metin/BigInt kalır (2^53 tuzağı);
+ * bu değerle asla işlem yapılmaz.
+ */
+function unitPrice(goldAmount: number, priceGrave: string): string {
+  const p = Number(priceGrave);
+  if (!Number.isFinite(p) || goldAmount <= 0) return '—';
+  const per = p / goldAmount;
+  if (per >= 100) return `${Math.round(per).toLocaleString('en-US')} per gold`;
+  if (per >= 1) return `${per.toFixed(2)} per gold`;
+  return `${per.toFixed(4)} per gold`;
+}
+
+/** Emir defteri satırı — hem kendi ilanlarım hem açık ilanlar aynı kartı kullanır */
+function ListingRow({ listing: l, mine = false, action }: {
+  listing: Listing;
+  mine?: boolean;
+  action: React.ReactNode;
+}) {
+  return (
+    <Card accent={mine}>
+      <div style={{ padding: '9px 11px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 900, fontSize: 14, color: mine ? C.candle : C.bone }}>
+              {l.goldAmount.toLocaleString('en-US')} GOLD
+            </span>
+            <span style={{ fontSize: 11.5, color: C.boneDim }}>
+              for {Number(l.priceGrave).toLocaleString('en-US')} $GRAVE
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 5 }}>
+            <Tag tone="gold">{unitPrice(l.goldAmount, l.priceGrave)}</Tag>
+            {!mine && <span style={{ fontSize: 10, color: C.boneFaint }}>{short(l.seller)}</span>}
+            {mine && <Tag>IN ESCROW</Tag>}
+          </div>
+        </div>
+        {action}
+      </div>
+    </Card>
+  );
+}
 
 /** Sunucu hata kodları oyuncuya İngilizce anlatılır */
 const ERR: Record<string, string> = {
@@ -203,24 +254,18 @@ export function MarketPanel({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {mine.map((l) => (
-              <div key={l.id} style={{
-                ...glass(9), padding: '9px 11px', display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between', gap: 10, border: `1px solid ${C.candle}44`,
-              }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, fontSize: 13.5, color: C.candle }}>{l.goldAmount} GOLD</div>
-                  <div style={{ fontSize: 11, color: C.boneDim, marginTop: 1 }}>asking {l.priceGrave} $GRAVE</div>
-                </div>
-                <button onClick={() => cancel(l.id)} disabled={busy}
-                  style={{
-                    flexShrink: 0, padding: '7px 11px', borderRadius: 8,
-                    border: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.06)',
-                    color: C.boneDim, fontWeight: 900, fontSize: 11.5,
-                    cursor: busy ? 'default' : 'pointer',
-                  }}>
-                  CANCEL
-                </button>
-              </div>
+              <ListingRow key={l.id} listing={l} mine
+                action={
+                  <button onClick={() => cancel(l.id)} disabled={busy}
+                    style={{
+                      flexShrink: 0, padding: '7px 11px', borderRadius: 8,
+                      border: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.06)',
+                      color: C.boneDim, fontWeight: 900, fontSize: 11.5,
+                      cursor: busy ? 'default' : 'pointer',
+                    }}>
+                    CANCEL
+                  </button>
+                } />
             ))}
           </div>
         </div>
@@ -242,25 +287,17 @@ export function MarketPanel({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {book.map((l) => (
-            <div key={l.id} style={{
-              ...glass(9), padding: '9px 11px', display: 'flex', alignItems: 'center',
-              justifyContent: 'space-between', gap: 10,
-            }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 900, fontSize: 13.5, color: C.bone }}>{l.goldAmount} GOLD</div>
-                <div style={{ fontSize: 11, color: C.boneDim, marginTop: 1 }}>
-                  {l.priceGrave} $GRAVE · {short(l.seller)}
-                </div>
-              </div>
-              {/* Token yokken sahte bir "BUY" düğmesi göstermek, oyuncuyu
-                  olmayan bir işleme sokmak olurdu. Durum açıkça yazılıyor. */}
-              <span style={{
-                flexShrink: 0, padding: '7px 11px', borderRadius: 8, fontWeight: 900, fontSize: 11,
-                color: C.boneFaint, background: 'rgba(255,255,255,0.05)', letterSpacing: 0.6,
-              }}>
-                {tokenLive ? 'BUY' : 'AWAITING $GRAVE'}
-              </span>
-            </div>
+            <ListingRow key={l.id} listing={l}
+              action={
+                /* Token yokken sahte bir "BUY" düğmesi göstermek, oyuncuyu
+                   olmayan bir işleme sokmak olurdu. Durum açıkça yazılıyor. */
+                <span style={{
+                  flexShrink: 0, padding: '7px 11px', borderRadius: 8, fontWeight: 900, fontSize: 10.5,
+                  color: C.boneFaint, background: 'rgba(255,255,255,0.05)', letterSpacing: 0.6,
+                }}>
+                  {tokenLive ? 'BUY' : 'AWAITING $GRAVE'}
+                </span>
+              } />
           ))}
         </div>
       )}

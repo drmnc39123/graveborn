@@ -10,6 +10,7 @@ import { STAGES, depthGold } from '@/game/config';
 import { FORGE, costOf, spentOn } from '@/game/forge';
 import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton } from '@/components/ui/kit';
+import { Card, Tag } from '@/components/ui/cards';
 import { fetchLeaderboard, type LeaderRow } from '@/lib/gameSession';
 import { C, FONT, glass } from '@/lib/theme';
 
@@ -85,16 +86,30 @@ function MyRecord({ progress }: { progress: Progress }) {
           const locked = !progress.cleared[s.id];
           const best = paidDepth(progress, s.id);
           return (
-            <div key={s.id} style={{ ...glass(9), padding: '8px 11px', display: 'flex',
-              justifyContent: 'space-between', alignItems: 'center', gap: 10,
-              opacity: locked ? 0.45 : 1, fontFamily: FONT.ui }}>
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: C.bone }}>{s.id}. {s.name}</span>
-              <span style={{ fontSize: 11.5, color: best > 0 ? C.candle : C.boneFaint, whiteSpace: 'nowrap' }}>
-                {locked ? 'not cleared'
-                  : best > 0 ? `depth ${best} · next pays ${depthGold(s.id, best + 1)}`
-                  : `never entered · depth 1 pays ${depthGold(s.id, 1)}`}
-              </span>
-            </div>
+            <Card key={s.id} dim={locked}>
+              <div style={{ padding: '9px 11px', display: 'flex',
+                justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: C.bone }}>
+                  <span style={{ color: C.boneFaint, marginRight: 5 }}>{s.id}</span>{s.name}
+                </span>
+                {locked ? <Tag>NOT CLEARED</Tag>
+                  : best > 0 ? (
+                    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                      <Tag tone="gold">DEPTH {best}</Tag>
+                      <span style={{ fontSize: 10.5, color: C.boneFaint, whiteSpace: 'nowrap' }}>
+                        next pays {depthGold(s.id, best + 1).toLocaleString('en-US')}
+                      </span>
+                    </span>
+                  ) : (
+                    <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                      <Tag tone="blood">UNTOUCHED</Tag>
+                      <span style={{ fontSize: 10.5, color: C.boneFaint, whiteSpace: 'nowrap' }}>
+                        depth 1 pays {depthGold(s.id, 1).toLocaleString('en-US')}
+                      </span>
+                    </span>
+                  )}
+              </div>
+            </Card>
           );
         })}
       </div>
@@ -187,25 +202,20 @@ function Line({ row, mine }: { row: LeaderRow; mine: boolean }) {
   const stage = STAGES.find((s) => s.id === row.stage);
   const medal = row.rank === 1 ? C.candle : row.rank <= 3 ? C.bone : C.boneFaint;
   return (
-    <div style={{
-      ...glass(9), padding: '8px 11px', display: 'flex', alignItems: 'center', gap: 10,
-      fontFamily: FONT.ui,
-      border: `1px solid ${mine ? `${C.candle}66` : 'transparent'}`,
-      background: mine ? 'rgba(239,167,46,0.10)' : undefined,
-    }}>
-      <span style={{ width: 30, flexShrink: 0, fontSize: 13, fontWeight: 900, color: medal }}>
-        #{row.rank}
-      </span>
-      <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.bone, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {mine ? 'You' : `${row.wallet.slice(0, 4)}…${row.wallet.slice(-4)}`}
-      </span>
-      <span style={{ flexShrink: 0, fontSize: 11.5, color: C.candle, fontWeight: 800 }}>
-        Depth {row.depth}
-      </span>
-      <span style={{ flexShrink: 0, fontSize: 10.5, color: C.boneFaint, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {stage?.name ?? `Stage ${row.stage}`}
-      </span>
-    </div>
+    <Card accent={mine}>
+      <div style={{ padding: '8px 11px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ width: 30, flexShrink: 0, fontSize: 13, fontWeight: 900, color: medal }}>
+          #{row.rank}
+        </span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.bone, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {mine ? 'You' : `${row.wallet.slice(0, 4)}…${row.wallet.slice(-4)}`}
+        </span>
+        <Tag tone="gold">DEPTH {row.depth}</Tag>
+        <span style={{ flexShrink: 0, fontSize: 10, color: C.boneFaint, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {stage?.name ?? `Stage ${row.stage}`}
+        </span>
+      </div>
+    </Card>
   );
 }
 
