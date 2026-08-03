@@ -8,7 +8,7 @@
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatial';
 import {
-  CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
+  BOSS, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
   WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, weaponById,
   weaponCooldownAt, weaponCountAt, weaponDamageAt, xpForLevel,
@@ -29,7 +29,19 @@ export interface Enemy {
   /** alan hasarı (aura/orbit) bekleme sayacı — sürekli temas anında eritmesin */
   contactCd: number;
   /** boss ise: ölünce sandık düşürür, HP barı çizilir */
-  boss?: { label: string; evolutionChest: boolean };
+  boss?: {
+    label: string; evolutionChest: boolean;
+    /** >0 iken giriş sekansı: hareketsiz ve DOKUNULMAZ */
+    intro: number;
+    /** 0 = ilk faz, 1 = öfke fazı (HP yarıya inince) */
+    phase: number;
+    /** bir sonraki saldırıya kalan süre */
+    atkCd: number;
+    /** >0 iken tehlike alanı görünür ama henüz vurmadı (kaçma penceresi) */
+    telegraph: number;
+    /** telegraf/darbe yarıçapı */
+    slamR: number;
+  };
 
   // ── davranış durumu ──
   behavior: Behavior;
@@ -530,7 +542,11 @@ export class Game {
       // Boss KOVALAR. Menzilli/hücumcu bir boss tek başına sahnedeyken
       // mesafe tutarsa bölüm finali sonsuza kadar uzar.
       behavior: 'chase', atkCd: 0, cState: 0, cdx: 0, cdy: 0, phase: 0,
-      boss: { label: b.label, evolutionChest: true },
+      boss: {
+        label: b.label, evolutionChest: true,
+        intro: BOSS.introSec, phase: 0, atkCd: BOSS.atkCd,
+        telegraph: 0, slamR: BOSS.slamRadius,
+      },
     });
     this.events.add('boss');
   }
@@ -622,6 +638,10 @@ export class Game {
       // AV MODU davranışı EZER: son 8 düşman kaldığında herkes kovalar.
       // Menzilli/hücumcu bir düşman mesafe tutmaya devam ederse bölüm
       // kilitlenir; yakınsama garantisi her şeyin üstünde.
+      // ⚠️ BOSS AYRI YOL — ama yine KOVALAR. Aşağıdaki hiçbir dal mesafe
+      // tutmuyor; saldırı sadece DURARAK yapılıyor.
+      if (e.boss) { this.moveBoss(e, dt, nx, ny, d, sp); continue; }
+
       const bh: Behavior = huntFloor > 0 ? 'chase' : e.behavior;
 
       switch (bh) {
@@ -644,6 +664,70 @@ export class Game {
       else if (dx < -0.5) e.facingRight = false;
       if (e.hitFlash > 0) e.hitFlash -= dt;
       if (e.contactCd > 0) e.contactCd -= dt;
+    }
+  }
+
+  /**
+   * BOSS — giriş sekansı, iki faz, telegraflı yer darbesi.
+   *
+   * ⚠️ HİÇBİR DAL MESAFE TUTMAZ. Boss sahnedeki tek düşmanken kiting yaparsa
+   * bölüm sonsuza kadar bitmez — repo bu tuzağa bir kez düştü (Ossuary Halls,
+   * 25 dakika, hiç bitmedi). Saldırı DURARAK yapılır (telegraf zaten bir
+   * duruştur) ve biter bitmez kovalamaya döner.
+   *
+   * ⚠️ Saldırı seçimi RNG KULLANMAZ. Hem determinizm hem okunabilirlik:
+   * oyuncu kalıbı öğrenebilmeli, zar atılırsa öğrenilecek şey kalmaz.
+   */
+  private moveBoss(e: Enemy, dt: number, nx: number, ny: number, d: number, sp: number) {
+    const b = e.boss!;
+
+    // ── giriş: hareketsiz ve DOKUNULMAZ ──
+    if (b.intro > 0) {
+      b.intro -= dt;
+      e.animT += dt;
+      return;
+    }
+
+    // ── faz geçişi: canı yarıya inince öfkelenir ──
+    if (b.phase === 0 && e.hp <= e.maxHp * BOSS.phase2At) {
+      b.phase = 1;
+      b.telegraph = 0;
+      b.atkCd = BOSS.atkCd * BOSS.phase2Cd * 0.5;  // faz değişimi bir saldırıyı öne çeker
+      this.events.add('boss');
+    }
+    const hiz = b.phase === 1 ? sp * BOSS.phase2Speed : sp;
+
+    // ── telegraf: darbe hazırlanıyor. Boss DURUR — bu kiting değil, oyuncuya
+    //    kaçma penceresi; süre dolunca hemen kovalamaya dönüyor.
+    if (b.telegraph > 0) {
+      b.telegraph -= dt;
+      e.animT += dt;
+      if (b.telegraph <= 0) {
+        const dist = Math.hypot(this.px - e.x, this.py - e.y);
+        if (dist <= b.slamR && this.iframe <= 0) {
+          const taken = Math.max(1, Math.round(e.damage * BOSS.slamDamageMul) - this.stats.armor);
+          this.hp -= taken;
+          this.iframe = PLAYER.iframeSec;
+          this.events.add('hurt');
+          this.hurtT = 0.32;
+          if (this.hurts.length < 4) this.hurts.push({ amount: taken });
+        }
+        b.atkCd = BOSS.atkCd * (b.phase === 1 ? BOSS.phase2Cd : 1);
+      }
+      return;
+    }
+
+    // ── normal: KOVALA ──
+    e.x += nx * hiz * dt;
+    e.y += ny * hiz * dt;
+    e.animT += dt;
+
+    // Saldırıyı sadece YAKINDAYKEN hazırla — uzaktan telegraf açmak hem
+    // anlamsız hem oyuncuya bedava kaçış verir.
+    b.atkCd -= dt;
+    if (b.atkCd <= 0 && d < b.slamR * 1.6) {
+      b.telegraph = BOSS.telegraphSec;
+      this.events.add('charge');
     }
   }
 
@@ -1018,11 +1102,17 @@ export class Game {
    * Render bununla doğru çarpma efektini seçer (bkz. combatArt.ts).
    */
   private damageEnemy(e: Enemy, dmg: number, wid = '') {
-    // ⚠️ ZAR HER VURUŞTA ATILIR — kritik şansı 0 olsa bile.
-    // `rollRareGold` ile AYNI kural: zarı koşula bağlı atmak RNG akışını
-    // BUILD'E GÖRE kaydırır, aynı seed farklı koşu üretir ve sunucu
-    // doğrulaması ile istemci sonsuza kadar ayrışır.
+    // ⚠️ ZAR HER VURUŞTA ATILIR — kritik şansı 0 olsa bile, hatta vuruş
+    // boşa gidecek olsa bile. `rollRareGold` ile AYNI kural: zarı koşula
+    // bağlı atmak RNG akışını duruma göre kaydırır, aynı seed farklı koşu
+    // üretir ve sunucu doğrulaması ile istemci sonsuza kadar ayrışır.
+    // ⚠️ Bu yüzden aşağıdaki "boss dokunulmaz" kontrolü zardan SONRA geliyor.
     const crit = this.rng.next() < this.stats.crit;
+
+    // Boss giriş sekansında DOKUNULMAZ — yoksa oyuncu boss daha belirmeden
+    // eritir ve giriş anı (isim kartı, telegrafı öğrenme) hiç yaşanmaz.
+    if (e.boss && e.boss.intro > 0) return;
+
     const out = crit ? dmg * this.stats.critMul : dmg;
 
     e.hp -= out;

@@ -135,6 +135,35 @@ export function stageById(id: number): StageDef | undefined {
 //
 // Koşuyu bitiren şey zamanlayıcı DEĞİL, CAN: derinlikler arası HP dolmaz.
 // Ne kadar derine inebildiğin tamamen ne kadar hasar yemeden oynadığına bağlı.
+/**
+ * BOSS DAVRANIŞI.
+ *
+ * ⚠️ KIRMIZI ÇİZGİ: BOSS'UN HİÇBİR FAZI MESAFE TUTMAZ. Boss sahnedeki TEK
+ * düşmanken kiting yaparsa bölüm sonsuza kadar bitmez — bu tuzağa bir kez
+ * düşüldü (Ossuary Halls, 25 dakika, hiç bitmedi). Saldırılar DURARAK
+ * yapılır (telegraf zaten bir duruş); hareket her zaman kovalamadır.
+ *
+ * ⚠️ Saldırı seçimi RNG KULLANMAZ — sırayla döner. Hem determinizm hem
+ * okunabilirlik: oyuncu kalıbı öğrenebilmeli, zar atılırsa öğrenilecek bir
+ * şey kalmaz.
+ */
+export const BOSS = {
+  /** giriş: dokunulmaz, hareketsiz, isim kartı görünür */
+  introSec: 2.0,
+  /** tehlike alanı görünür ama henüz vurmuyor — kaçma penceresi */
+  telegraphSec: 0.9,
+  /** saldırılar arası bekleme (faz 1'de kısalır) */
+  atkCd: 4.2,
+  /** yer darbesi: yarıçap ve hasar çarpanı */
+  slamRadius: 190,
+  slamDamageMul: 1.5,
+  /** HP bu oranın altına inince 2. faza geçer */
+  phase2At: 0.5,
+  /** 2. fazda hız ve saldırı sıklığı çarpanı */
+  phase2Speed: 1.22,
+  phase2Cd: 0.68,
+} as const;
+
 export const DESCENT = {
   /** derinlik d'de gelen düşman sayısı: base + perDepth·d */
   enemyBase: 60,

@@ -168,6 +168,40 @@ function drawChests(ctx: CanvasRenderingContext2D, g: Game) {
 function drawBossBars(ctx: CanvasRenderingContext2D, g: Game) {
   for (const e of g.enemies) {
     if (!e.boss) continue;
+    const b = e.boss;
+
+    // ── GİRİŞ HALKASI: boss belirirken dokunulmaz olduğunu göstermeli,
+    //    yoksa oyuncu "vuruyorum ama canı inmiyor" der ve haklıdır.
+    if (b.intro > 0) {
+      const k = 1 - b.intro / 2.0;
+      ctx.save();
+      ctx.globalAlpha = 0.5 + Math.sin(b.intro * 9) * 0.2;
+      ctx.strokeStyle = C.blood;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius + 26 - k * 18, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ── TELEGRAF: "buradan çık" mesajı yarım saniyede okunmalı.
+    //    Dolan daire = kalan süre.
+    if (b.telegraph > 0) {
+      const dolu = 1 - b.telegraph / 0.9;
+      ctx.save();
+      ctx.fillStyle = `rgba(160,18,38,${(0.10 + dolu * 0.22).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, b.slamR, 0, Math.PI * 2);
+      ctx.fill();
+      // kenar: dolan yay — süre bittiğinde tam tur
+      ctx.strokeStyle = C.blood;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, b.slamR, -Math.PI / 2, -Math.PI / 2 + dolu * Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     const w = 118, h = 8;
     const x = e.x - w / 2;
     const y = e.y - e.radius - 34;
@@ -175,8 +209,13 @@ function drawBossBars(ctx: CanvasRenderingContext2D, g: Game) {
 
     ctx.fillStyle = 'rgba(10,8,6,0.75)';
     ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
-    ctx.fillStyle = C.blood;
+    // Öfke fazında bar rengi değişir — oyuncu "iş ciddileşti" bilgisini
+    // sayı okumadan almalı
+    ctx.fillStyle = b.phase === 1 ? C.candle : C.blood;
     ctx.fillRect(x, y, w * k, h);
+    // Faz eşiği çentiği: nereye kadar dövüşeceğini görsün
+    ctx.fillStyle = 'rgba(227,216,192,0.5)';
+    ctx.fillRect(x + w * 0.5 - 1, y - 2, 2, h + 4);
     ctx.strokeStyle = 'rgba(227,216,192,0.35)';
     ctx.lineWidth = 1;
     ctx.strokeRect(x, y, w, h);
@@ -184,7 +223,7 @@ function drawBossBars(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.fillStyle = C.bone;
     ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(e.boss.label, e.x, y - 6);
+    ctx.fillText(b.phase === 1 ? `${e.boss.label} · ENRAGED` : e.boss.label, e.x, y - 6);
     ctx.textAlign = 'left';
   }
 }

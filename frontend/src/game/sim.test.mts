@@ -944,6 +944,49 @@ console.log('\n[10] Boss / sandık / evrim');
   check('boss normal düşmandan çok daha güçlü', bossMaxHp > 2000, `${Math.round(bossMaxHp)} HP`);
 }
 
+// ── 10B) BOSS YAKINSAMA GARANTİSİ — en tehlikeli regresyon ──
+// ⚠️ KIRMIZI ÇİZGİ: boss'un hiçbir fazı MESAFE TUTMAZ. Boss sahnedeki tek
+// düşmanken kiting yaparsa bölüm SONSUZA KADAR bitmez. Repo bu tuzağa bir kez
+// düştü (Ossuary Halls, 25 dakika, hiç bitmedi) ve orada kaçanlar normal
+// düşmanlardı — boss tek başına çok daha kolay kilitler.
+console.log('\n[10B] Boss yakınsama garantisi');
+{
+  const g = new Game(seedFromString('boss-yakinsama'), STAGES[2]);  // ilk boss'lu bölüm
+  g.setViewport(1280, 720);
+  let enYakin = Infinity;
+  let bossGoruldu = false;
+  let telegrafGoruldu = false;
+  let fazDegisti = false;
+
+  const ticks = Math.round(600 / TICK);   // 10 dakika bütçe
+  for (let i = 0; i < ticks; i++) {
+    if (g.phase === 'levelup') g.choose(g.offers[0].id);
+    if (g.phase !== 'running') break;
+    g.hp = g.stats.maxHp;                  // ölçüm: oyuncu ölmesin
+    const t = i * TICK;
+    g.setInput(Math.cos(t * 0.7), Math.sin(t * 0.7));
+    g.step();
+
+    const boss = g.enemies.find((e) => e.boss);
+    if (boss?.boss) {
+      bossGoruldu = true;
+      enYakin = Math.min(enYakin, Math.hypot(boss.x - g.px, boss.y - g.py));
+      if (boss.boss.telegraph > 0) telegrafGoruldu = true;
+      if (boss.boss.phase === 1) fazDegisti = true;
+    }
+  }
+
+  check('boss sahneye geldi', bossGoruldu);
+  // ⚠️ ASIL TEST: boss oyuncuya YAKLAŞABİLİYOR mu? Mesafe tutsaydı bu sayı
+  // hiç düşmez ve bölüm asla bitmezdi.
+  check('boss oyuncuya YAKLAŞIYOR (kiting yapmıyor)', enYakin < 140,
+    `en yakın ${Math.round(enYakin)} px`);
+  check('bölüm 10 dakika içinde BİTİYOR', g.phase === 'won',
+    `${g.phase} · ${Math.round(g.time)} sn`);
+  check('telegraf çalışıyor (saldırı hazırlanıyor)', telegrafGoruldu);
+  check('boss faz değiştirdi (canı yarıya inince)', fazDegisti);
+}
+
 // Evrim ŞARTLARI: eksik pasifle evrim OLMAMALI, tam şartla OLMALI
 function evolveScenario(weaponMax: boolean, passiveMax: boolean) {
   const g = new Game(1);
