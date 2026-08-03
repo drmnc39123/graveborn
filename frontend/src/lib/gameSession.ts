@@ -77,6 +77,25 @@ export async function buyUpgrade(id: string, current: Progress, cost: number): P
   return progress;
 }
 
+// ── LEADERBOARD ───────────────────────────────────────────────────────
+// ⚠️ Puan İSTEMCİDEN GİTMEZ. Sunucu koşu kapanışında kendi hesapladığı
+// derinlikten yazar; burada sadece okunur.
+
+export interface LeaderRow {
+  rank: number;
+  wallet: string;
+  stage: number;
+  depth: number;
+  rating: number;
+  hero: string;
+}
+
+export async function fetchLeaderboard(): Promise<{ rows: LeaderRow[]; me: { rank: number; row: LeaderRow } | null }> {
+  // Demo oyuncusu da tabloyu GÖREBİLİR — girmek için sebep olsun diye.
+  // Kendi sırası yok, çünkü demo ilerlemesi sunucuda hiç yok.
+  return api<{ rows: LeaderRow[]; me: { rank: number; row: LeaderRow } | null }>('/leaderboard');
+}
+
 // ── MARKETPLACE ───────────────────────────────────────────────────────
 // ⚠️ DEMO MODUNDA MARKET KAPALI. Demo gold'u localStorage'da üretiliyor ve
 // ekonomiye girmiyor; listelenebilseydi sahte gold gerçek $GRAVE karşılığı

@@ -12,6 +12,8 @@ import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { canStart, settleRun } from './reward.js';
+import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
+import { paidDepth } from '@game/progress';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
 import {
   MarketError, cancelListing, createListing, escrowedGold, listActive, listMine, tokenEnabled,
@@ -187,7 +189,8 @@ app.post('/run/finish', wrap(async (req, res) => {
 
   const player = await getOrCreatePlayer(wallet);
   const before = toProgress(player);
-  const s = settleRun(before, run.mode as 'campaign' | 'descent', run.stageId, body.data);
+  const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
+  const s = settleRun(before, run.mode as 'campaign' | 'descent', run.stageId, body.data, elapsedSec);
 
   const [saved] = await prisma.$transaction([
     prisma.player.update({ where: { wallet }, data: fromProgress(s.progress) }),
@@ -198,6 +201,7 @@ app.post('/run/finish', wrap(async (req, res) => {
         claimedDepth: body.data.deepestCleared,
         claimedGold: body.data.rareGold,
         awarded: s.awarded,
+        awardedDepth: paidDepth(s.progress, run.stageId),
         capped: s.capped,
       },
     }),
@@ -205,12 +209,36 @@ app.post('/run/finish', wrap(async (req, res) => {
 
   if (s.capped) console.warn('[kirpildi]', wallet, run.id, s.reason.join(' | '));
 
+  // Leaderboard rekoru — istemcinin iddiasından DEĞİL, sunucunun kabul ettiği
+  // derinlikten.
+  //
+  // ⚠️ KIRPILAN KOŞU REKOR YAZMAZ. Gold tarafında kırpılmış bir iddiadan
+  // kalanı ödemek zararsız (miktar küçülür), ama sıralamada tek bir yalan
+  // tepeyi kalıcı kilitler. Şüpheliyse tabloya hiç girmesin.
+  const reached = paidDepth(s.progress, run.stageId);
+  const record = s.capped ? false : await recordDescent(wallet, run.mode, run.stageId, reached);
+
   res.json({
     progress: toProgress(saved),
     awarded: s.awarded,
     progressGold: s.progressGold,
     dropGold: s.dropGold,
+    record,
   });
+}));
+
+// ── LEADERBOARD ──
+// Puan istemciden gelmez; koşu kapanışında sunucu yazar (bkz. leaderboard.ts).
+app.get('/leaderboard', wrap(async (req, res) => {
+  const limit = Number(req.query.limit ?? 50);
+  // Oturum varsa kendi sıranı da dön — top 50'de olmayan oyuncu nerede
+  // olduğunu göremezse tablo ona hiçbir şey söylemiyor demektir.
+  const wallet = auth(req);
+  const [rows, me] = await Promise.all([
+    lbTop(Number.isFinite(limit) ? limit : 50),
+    wallet ? rankOf(wallet) : Promise.resolve(null),
+  ]);
+  res.json({ rows, me });
 }));
 
 // ── MARKETPLACE ──

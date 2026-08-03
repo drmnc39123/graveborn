@@ -101,6 +101,59 @@ const CHEST_ALLOWANCE = 400;
  */
 export const MAX_DEPTH_CLAIM = 500;
 
+/**
+ * SÜRE TABANI — "derinlik 500'e indim" iddiasını FİZİKLE keser.
+ *
+ * `MAX_DEPTH_CLAIM` tek başına yetmiyor: 500'e kırpılan bir yalan hâlâ 500'dür
+ * ve leaderboard'ın tepesini kalıcı olarak kilitler. Gold tarafında yapısal
+ * tavan bunu tolere edebiliyordu (kırpılan miktar küçük), sıralamada
+ * edemiyor — orada tek bir yalan tabloyu bitirir.
+ *
+ * Her derinlik en az `enemyCount / spawnRate` saniye sürer: düşmanlar o hızın
+ * üstünde SAHNEYE ÇIKAMAZ, hepsi ölmeden derinlik bitmez. Bu alt sınır
+ * motorun kendi sayılarından türer, uydurma değil.
+ *
+ * ⚠️ Cömert olmak ZORUNDA: gerçek koşu bundan uzun sürer (oyuncu düşmanı
+ * anında öldürmez). Amaç dürüst oyuncuyu kırpmak değil, imkânsızı elemek.
+ */
+export function minDescentSeconds(stageId: number, depth: number): number {
+  let s = 0;
+  for (let d = 1; d <= depth; d++) {
+    const def = descentStage(stageId, d);
+    s += (def.enemyCount / def.spawnRate) * TIME_SAFETY;
+  }
+  return s;
+}
+
+/**
+ * ⚠️ GÜVENLİK PAYI. `enemyCount / spawnRate` teoride kusursuz bir alt sınır
+ * ama uygulamada ±1 düşmanlık kaymalara duyarlı (ilk düşman t=0'da mı yoksa
+ * bir aralık sonra mı çıkıyor). Ölçtük: gerçek koşuda pay yalnızca 1
+ * derinlikti — o kadar dar ki motorda tek bir zamanlama değişikliği DÜRÜST
+ * oyuncuyu kırpmaya başlardı. Bu sessiz bir hatadır: kimse "derinliğim
+ * eksik sayıldı" diye şikâyet etmez, oyun sadece bozuk hissettirir.
+ *
+ * %15 pay yalancıya hiçbir şey kazandırmıyor (o saniyeler değil derinlikler
+ * uyduruyor), dürüst oyuncuya nefes alanı veriyor.
+ */
+const TIME_SAFETY = 0.85;
+
+/** Geçen sürede en fazla hangi derinliğe inilebilirdi */
+export function maxDepthInTime(stageId: number, elapsedSec: number): number {
+  // Süre bilinmiyorsa (Infinity) sınır uygulanmaz — saf hesaplarda ve
+  // testlerde `settleRun` süresiz çağrılabiliyor.
+  if (Number.isNaN(elapsedSec) || elapsedSec <= 0) return 0;
+  if (!Number.isFinite(elapsedSec)) return MAX_DEPTH_CLAIM;
+
+  let s = 0;
+  for (let d = 1; d <= MAX_DEPTH_CLAIM; d++) {
+    const def = descentStage(stageId, d);
+    s += (def.enemyCount / def.spawnRate) * TIME_SAFETY;
+    if (s > elapsedSec) return d - 1;
+  }
+  return MAX_DEPTH_CLAIM;
+}
+
 export interface Settlement {
   progress: Progress;
   awarded: number;
@@ -120,6 +173,8 @@ export function settleRun(
   mode: 'campaign' | 'descent',
   stageId: number,
   claim: RunClaim,
+  /** koşu açıldığından beri geçen saniye — süre tabanı kontrolü için */
+  elapsedSec = Infinity,
 ): Settlement {
   const reason: string[] = [];
   let capped = false;
@@ -130,6 +185,15 @@ export function settleRun(
     depth = MAX_DEPTH_CLAIM;
     capped = true;
     reason.push(`derinlik iddiası ${claim.deepestCleared} → ${MAX_DEPTH_CLAIM}`);
+  }
+  // Süre tabanı — mutlak tavandan çok daha keskin bir sınır
+  if (mode === 'descent' && depth > 0) {
+    const fizik = maxDepthInTime(stageId, elapsedSec);
+    if (depth > fizik) {
+      reason.push(`derinlik ${depth} → süreye sığan ${fizik} (${Math.round(elapsedSec)} sn)`);
+      depth = fizik;
+      capped = true;
+    }
   }
   if (mode === 'campaign' && depth !== 0) {
     depth = 0;

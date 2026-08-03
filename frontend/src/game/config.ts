@@ -181,6 +181,28 @@ export function descentStage(stageId: number, depth: number): StageDef {
   return def;
 }
 
+/**
+ * SIRALAMA EKSENİ — bir (bölüm, derinlik) çiftinin ne kadar zor olduğu.
+ *
+ * Neden gerekli: leaderboard tek sütun olacaksa "bölüm 1'de derinlik 40" ile
+ * "bölüm 10'da derinlik 12" karşılaştırılabilir olmalı. Sadece derinliğe
+ * bakmak yanlış — bölüm 10'un tabanı bölüm 1'in 14 katı. Sadece bölüme
+ * bakmak da yanlış — derinlik üssel büyüyor.
+ *
+ * Ölçü = o derinlikte yere serilmesi gereken TOPLAM İŞ: düşman sayısı × can
+ * çarpanı. Uydurma bir puan değil, `descentStage`'in KENDİ çıktısından
+ * türer; denge sayısı değişirse sıralama da kendiliğinden düzelir.
+ *
+ * ⚠️ Boss canı KATILMIYOR: `hpMul` bir çarpan, `boss.hp` ham can — ikisini
+ * toplamak birim karıştırmak olurdu.
+ */
+export function challengeRating(stageId: number, depth: number): number {
+  const d = Math.floor(depth);
+  if (d < 1) return 0;
+  const def = descentStage(stageId, d);
+  return def.enemyCount * def.hpMul;
+}
+
 // ── GOLD MUSLUĞU ──────────────────────────────────────────────────────
 // İki parça: (1) ilerleme ödülü — bir derinliği İLK kez geçince, bir kez.
 //            (2) nadir düşüş  — her koşuda, düşük ihtimalle, sonsuz damla.

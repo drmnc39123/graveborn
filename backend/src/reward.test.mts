@@ -8,7 +8,7 @@
 
 import { emptyProgress, type Progress } from '@game/progress';
 import { STAGES } from '@game/config';
-import { canStart, maxRareGold, settleRun, MAX_DEPTH_CLAIM } from './reward.js';
+import { canStart, maxDepthInTime, maxRareGold, minDescentSeconds, settleRun, MAX_DEPTH_CLAIM } from './reward.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -134,6 +134,76 @@ console.log('\n[6] Tavan gerçek koşuya göre kalibre mi');
   const d40 = maxRareGold('descent', 1, 40);
   console.log(`     tavan büyümesi: d20 ${d20} · d40 ${d40}`);
   check('derinleştikçe tavan büyüyor', d40 > d20);
+
+  // ── [7] SÜRE TABANI ──
+  // MAX_DEPTH_CLAIM tek başına yetmiyor: 500'e kırpılan yalan hâlâ 500'dür ve
+  // leaderboard'ın tepesini kalıcı kilitler. Süre tabanı fizikle keser.
+  //
+  // ⚠️ Bu sınırın DÜRÜST oyuncuyu kırpmadığını tahminle değil, gerçek koşuyla
+  // ölçüyoruz: aşağıdaki koşu motorun kendisi, süresi de simülasyondan geliyor.
+  console.log('\n[7] Süre tabanı');
+  {
+    const timedRun = (seed: string, targetDepth: number) => {
+      const g = new Game(seedFromString(seed), STAGES[0], {}, 'descent');
+      g.setViewport(1280, 720);
+      let ticks = 0;
+      for (let i = 0; i < Math.round(1800 / TICK); i++) {
+        if (g.phase === 'levelup') {
+          const p = g.offers.find((o) => o.kind === 'weapon-new') ?? g.offers[0];
+          g.choose(p.id);
+        }
+        if (g.phase !== 'running') break;
+        g.hp = g.stats.maxHp;
+        const t = i * TICK;
+        const c = t % 3;
+        g.setInput(...(c < 1.5 ? [Math.cos(t * 0.7), Math.sin(t * 0.7)] as const : [0, 0] as const));
+        g.step();
+        ticks = i + 1;
+        if (g.stage.deepestCleared >= targetDepth) break;
+      }
+      return { depth: g.stage.deepestCleared, sec: ticks * TICK };
+    };
+
+    let enDar = Infinity;
+    for (const s of ['t1', 't2', 't3']) {
+      const r = timedRun(s, 5);
+      const izin = maxDepthInTime(1, r.sec);
+      enDar = Math.min(enDar, izin - r.depth);
+      console.log(`     ${s}: derinlik ${r.depth} · ${Math.round(r.sec)} sn · süreye sığan ${izin}`);
+      check(`${s}: DÜRÜST koşu süre tabanına takılmıyor`, izin >= r.depth, `${izin} ≥ ${r.depth}`);
+
+      const honest = settleRun(cleared1, 'descent', 1, {
+        deepestCleared: r.depth, rareGold: 0, cleared: false,
+      }, r.sec);
+      check(`${s}: dürüst koşu kırpılmadı olarak işaretlenmiyor`, !honest.capped,
+        honest.reason.join(' | ') || 'temiz');
+    }
+    // ⚠️ Payı ÖLÇMEK zorunlu. İlk sürümde pay 1 derinlikti — motorda tek bir
+    // spawn zamanlaması değişikliği dürüst oyuncuyu kırpmaya başlardı ve
+    // kimse şikâyet etmezdi, oyun sadece bozuk hissettirirdi.
+    console.log(`     en dar pay: ${enDar} derinlik`);
+    check('dürüst koşuyla sınır arasında en az 2 derinlik pay var', enDar >= 2, `${enDar}`);
+
+    // ⭐ ASIL SALDIRI: anında kapatılan koşuda derin iddia
+    const liar = settleRun(cleared1, 'descent', 1, {
+      deepestCleared: 99_999, rareGold: 0, cleared: false,
+    }, 1);
+    check('1 saniyede derin iniş iddiası SIFIRLANIYOR', liar.progressGold === 0,
+      `+${liar.progressGold} · ${liar.reason.join(' | ')}`);
+    check('kırpıldı olarak işaretlendi', liar.capped);
+
+    // MAX_DEPTH_CLAIM'e kırpılmış yalan da geçmemeli
+    const capLiar = settleRun(cleared1, 'descent', 1, {
+      deepestCleared: MAX_DEPTH_CLAIM, rareGold: 0, cleared: false,
+    }, 30);
+    check('30 saniyede 500 derinlik geçmiyor', capLiar.progressGold === 0,
+      `+${capLiar.progressGold}`);
+
+    check('süre tabanı derinlikle artıyor',
+      minDescentSeconds(1, 20) > minDescentSeconds(1, 10));
+    check('süresiz çağrı (varsayılan) kırpmıyor',
+      !settleRun(cleared1, 'descent', 1, { deepestCleared: 8, rareGold: 0, cleared: false }).capped);
+  }
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ SUNUCU ÖDÜL KAPISI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

@@ -7,6 +7,19 @@
 
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
+import { prisma } from './db.js';
+
+/**
+ * Koşunun açılış zamanını geriye al — uzun bir koşuyu taklit etmenin dürüst
+ * yolu. Alternatif, üretim koduna "test modunda süre kontrolünü atla" gibi
+ * bir kaçamak koymak olurdu; o kaçamak canlıda da açık kalırdı.
+ */
+async function geriAl(runId: string, saniye: number) {
+  await prisma.run.update({
+    where: { id: runId },
+    data: { startedAt: new Date(Date.now() - saniye * 1000) },
+  });
+}
 
 const API = process.env.API ?? 'http://localhost:4100';
 const FAIL: string[] = [];
@@ -187,6 +200,67 @@ console.log('\n[8] Marketplace — HTTP katmanı');
   check('kendi ilanımı iptal edebiliyorum', iptal.status === 200, `${iptal.status}`);
   check('gold HTTP üzerinden geri geldi', iptal.json?.progress?.gold === bakiye, `${iptal.json?.progress?.gold}`);
   check('escrow sıfırlandı', iptal.json?.escrowedGold === 0, `${iptal.json?.escrowedGold}`);
+}
+
+console.log('\n[9] Leaderboard — HTTP katmanı');
+{
+  const bos = await api('/leaderboard');
+  check('tablo herkese açık', bos.status === 200 && Array.isArray(bos.json?.rows), `${bos.status}`);
+  check('oturumsuz istekte kendi sıran YOK', bos.json?.me === null, `${JSON.stringify(bos.json?.me)}`);
+
+  // Descent'e girebilmek için bölüm 1 zaten [4]'te temizlendi.
+  //
+  // ⚠️ SÜRE TABANI: derinlik 12 için sunucu ~500 saniyelik bir koşu bekliyor
+  // (düşmanlar spawn hızından daha çabuk sahneye çıkamaz). Test 500 saniye
+  // bekleyemez, o yüzden koşunun AÇILIŞ ZAMANINI geriye alıyoruz — dürüst
+  // bir oyuncuyu taklit etmenin tek dürüst yolu bu. Üretim koduna test
+  // kaçamağı eklemek, o kaçamağı canlıda da açık bırakmak olurdu.
+  const d1 = await api('/run/start', { method: 'POST', token, body: { mode: 'descent', stageId: 1 } });
+  check('descent koşusu açılıyor', d1.status === 200, `${d1.status} ${d1.json?.detay ?? ''}`);
+
+  // Önce SÜRESİZ dene: yalan burada yakalanmalı
+  const hizli = await api('/run/finish', {
+    method: 'POST', token, body: { runId: d1.json.runId, deepestCleared: 12, rareGold: 0, cleared: false },
+  });
+  check('SANİYELER içinde derinlik 12 iddiası kırpılıyor',
+    hizli.json?.progressGold === 0 && hizli.json?.record === false,
+    `+${hizli.json?.progressGold} · rekor ${hizli.json?.record}`);
+
+  const d1b = await api('/run/start', { method: 'POST', token, body: { mode: 'descent', stageId: 1 } });
+  await geriAl(d1b.json.runId, 600);
+  const f1 = await api('/run/finish', {
+    method: 'POST', token, body: { runId: d1b.json.runId, deepestCleared: 12, rareGold: 0, cleared: false },
+  });
+  check('derinlik ödendi', f1.json?.progressGold > 0, `+${f1.json?.progressGold}`);
+  check('REKOR bildirildi', f1.json?.record === true, `${f1.json?.record}`);
+
+  const mine = await api('/leaderboard', { token });
+  check('kendi sıram dönüyor', mine.json?.me?.rank >= 1, `#${mine.json?.me?.rank}`);
+  check('sıra derinliği doğru', mine.json?.me?.row?.depth === 12, `${mine.json?.me?.row?.depth}`);
+  check('tabloda görünüyorum', mine.json?.rows?.some((r: any) => r.wallet === wallet));
+
+  // ⭐ Daha SIĞ bir koşu rekoru düşürmemeli
+  const d2 = await api('/run/start', { method: 'POST', token, body: { mode: 'descent', stageId: 1 } });
+  await geriAl(d2.json.runId, 600);
+  const f2 = await api('/run/finish', {
+    method: 'POST', token, body: { runId: d2.json.runId, deepestCleared: 4, rareGold: 0, cleared: false },
+  });
+  check('sığ koşu REKOR bildirmiyor', f2.json?.record === false, `${f2.json?.record}`);
+  const after = await api('/leaderboard', { token });
+  check('rekor korundu', after.json?.me?.row?.depth === 12, `${after.json?.me?.row?.depth}`);
+
+  // ⭐ UYDURMA derinlik: uzun süre beklemek bile 99.999'u meşrulaştırmamalı.
+  // Kırpılan koşu leaderboard'a HİÇ yazılmamalı — gold'da kırpıp kalanı
+  // ödemek zararsız, sıralamada tek yalan tepeyi kalıcı kilitler.
+  const d3 = await api('/run/start', { method: 'POST', token, body: { mode: 'descent', stageId: 1 } });
+  await geriAl(d3.json.runId, 40 * 60);
+  const yalan = await api('/run/finish', {
+    method: 'POST', token, body: { runId: d3.json.runId, deepestCleared: 99_999, rareGold: 0, cleared: false },
+  });
+  check('kırpılan koşu REKOR YAZMIYOR', yalan.json?.record === false, `${yalan.json?.record}`);
+  const liarBoard = await api('/leaderboard', { token });
+  check('yalancı tabloyu ele geçiremedi', liarBoard.json?.me?.row?.depth === 12,
+    `derinlik ${liarBoard.json?.me?.row?.depth}`);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ UÇTAN UCA SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

@@ -36,8 +36,21 @@ model Player {
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
 
+  // ── Leaderboard (denormalize) ──
+  // ⚠️ `depthPaid` JSON'ından her istekte türetilebilirdi ama SIRALANAMAZ:
+  // tüm oyuncuları belleğe çekip sıralamak oyuncu sayısıyla birlikte çöker.
+  // Bu üç alan koşu kapanışında yazılır ve SADECE ARTAR.
+  /// en zorlu temizlenen inişin bölümü
+  bestStage  Int   @default(0)
+  /// o inişteki derinlik
+  bestDepth  Int   @default(0)
+  /// challengeRating(bestStage, bestDepth) — sıralama bunun üzerinden
+  bestRating Float @default(0)
+
   runs     Run[]
   listings Listing[]
+
+  @@index([bestRating])
 }
 
 // Bir koşu. POST /run/start ile AÇILIR, /run/finish ile KAPANIR.
@@ -69,6 +82,10 @@ model Run {
   claimedGold  Int?
   /// sunucunun verdiği
   awarded Int?
+  /// ⚠️ sunucunun KABUL ETTİĞİ derinlik — `claimedDepth` ham iddia, bu ise
+  /// kırpma sonrası. Olmadan yanlış yazılmış bir leaderboard rekoru geri
+  /// hesaplanamıyordu (bkz. leaderboard.recomputeAll).
+  awardedDepth Int?
   /// sunucu iddiayı kırptıysa işaretlenir — admin panelinde şüpheli listesi
   capped Boolean @default(false)
 
