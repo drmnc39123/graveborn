@@ -8,6 +8,7 @@ export const prisma = new PrismaClient();
 export function toProgress(p: {
   gold: number; unlockedStage: number; hero: string;
   cleared: unknown; firstClear: unknown; depthPaid: unknown; upgrades: unknown;
+  charms?: unknown;
 }): Progress {
   const obj = <T,>(v: unknown): T => (v && typeof v === 'object' ? (v as T) : ({} as T));
   return {
@@ -18,6 +19,7 @@ export function toProgress(p: {
     firstClear: obj<Record<number, boolean>>(p.firstClear),
     depthPaid: obj<Record<number, number>>(p.depthPaid),
     upgrades: obj<Record<string, number>>(p.upgrades),
+    charms: Array.isArray(p.charms) ? (p.charms as string[]) : [],
   };
 }
 
@@ -31,6 +33,7 @@ export function fromProgress(p: Progress) {
     firstClear: p.firstClear as object,
     depthPaid: p.depthPaid as object,
     upgrades: p.upgrades as object,
+    charms: p.charms as object,
   };
 }
 

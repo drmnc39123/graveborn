@@ -130,6 +130,33 @@ app.post('/progress/buy', wrap(async (req, res) => {
   res.json({ progress: toProgress(saved), spent: cost });
 }));
 
+/**
+ * PEDLAR'S STALL — tılsım satın alma.
+ *
+ * ⚠️ Fiyat ve slot sınırı SUNUCUDA doğrulanır; istemcinin gönderdiği tek şey
+ * tılsımın id'si. Aksi hâlde "bedava tılsım" en kolay exploit olurdu.
+ */
+app.post('/charm/buy', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const id = z.string().max(40).safeParse(req.body?.id);
+  if (!id.success) { res.status(400).json({ error: 'gecersiz_tilsim' }); return; }
+
+  const { CHARMS, CHARM_SLOTS } = await import('@game/charms');
+  const c = CHARMS.find((x) => x.id === id.data);
+  if (!c) { res.status(400).json({ error: 'bilinmeyen_tilsim' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  const p = toProgress(player);
+  if (p.charms.length >= CHARM_SLOTS) { res.status(400).json({ error: 'slot_dolu' }); return; }
+  if (p.gold < c.cost) { res.status(400).json({ error: 'yetersiz_gold' }); return; }
+
+  p.gold -= c.cost;
+  p.charms = [...p.charms, c.id];
+  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(p) });
+  res.json({ progress: toProgress(saved), spent: c.cost });
+}));
+
 // ── KOŞU ──
 const startSchema = z.object({
   mode: z.enum(['campaign', 'descent']),
@@ -155,6 +182,14 @@ app.post('/run/start', wrap(async (req, res) => {
   const runId = crypto.randomUUID();
   const seed = seedFromString(`${runId}:${crypto.randomBytes(8).toString('hex')}`);
 
+  // ⚠️ TILSIMLAR KOŞU AÇILIRKEN YANAR, kapanırken değil. Kapanışta tüketseydik
+  // oyuncu koşuyu başlatıp hemen çıkarak tılsımı sonsuza kadar saklardı —
+  // tek koşuluk olmalarının anlamı kalmazdı.
+  const charms = p.charms;
+  if (charms.length) {
+    await prisma.player.update({ where: { wallet }, data: { charms: [] } });
+  }
+
   await prisma.run.create({
     data: {
       id: runId, wallet, seed: BigInt(seed), hero: p.hero,
@@ -162,7 +197,8 @@ app.post('/run/start', wrap(async (req, res) => {
     },
   });
   // BigInt JSON'a serileşmez; seed uint32 olduğu için Number'a sığar.
-  res.json({ runId, seed, hero: p.hero });
+  // `charms` geri dönüyor: istemci koşuyu bu tılsımlarla kuracak.
+  res.json({ runId, seed, hero: p.hero, charms });
 }));
 
 const finishSchema = z.object({

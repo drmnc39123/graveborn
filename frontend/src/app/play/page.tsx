@@ -10,11 +10,13 @@ import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
 import { MarketPanel } from '@/components/MarketPanel';
+import { StallPanel } from '@/components/StallPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { Card, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
+import { charmBonus, mergeBonus } from '@/game/charms';
 import { STAGES, challengeRating, depthGold, stageById } from '@/game/config';
 import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import type { RunMode } from '@/game/engine';
@@ -119,12 +121,15 @@ export default function PlayPage() {
     const p = progress ?? loadProgress();
     return (
       <div style={{ position: 'fixed', inset: 0 }}>
+        {/* ⚠️ Tılsımlar `progress.charms`'tan DEĞİL BİLETTEN okunur: koşu
+            açılırken tüketildiler, kayıtta artık yoklar. Kayıttan okumak bu
+            koşuyu tılsımsız başlatırdı. */}
         <GameCanvas
           stage={def}
           mode={screen.mode}
           hero={p.hero}
           seed={screen.ticket.seed}
-          permanent={permanentBonus(p.upgrades)}
+          permanent={mergeBonus(permanentBonus(p.upgrades), charmBonus(screen.ticket.charms))}
           onFinish={finishRun}
         />
       </div>
@@ -212,6 +217,11 @@ export default function PlayPage() {
               <RecordsPanel progress={progress ?? loadProgress()} />
             ) : panel === 'market' ? (
               <MarketPanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+              />
+            ) : panel === 'shop' ? (
+              <StallPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
               />
@@ -399,16 +409,7 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
 // ⚠️ Hiçbir yerde "swap gold for $GRAVE" DEMİYORUZ: hazine sabit kurdan alım
 // yaparsa oyun token BASMIŞ olur ve sıfır-emisyon sözü çöker. İkisi de P2P.
 const LOCKED: Record<string, { kicker: string; title: string; body: string; bullets: string[]; gate: string }> = {
-  shop: {
-    kicker: "THE PEDLAR'S STALL", title: 'Shuttered',
-    body: 'The pedlar deals in things you carry into a run — not permanent power. That is the Forge’s business.',
-    bullets: [
-      'Charms consumed on a single descent',
-      'Bought with gold, spent whether you win or lose',
-      'Deliberately weaker than Forge levels — convenience, not a shortcut',
-    ],
-    gate: 'Opens when run-consumables land.',
-  },
+  // ⚠️ `shop` ARTIK BURADA DEĞİL — StallPanel canlı.
   // ⚠️ `market` ARTIK BURADA DEĞİL — MarketPanel canlı (listeleme + escrow +
   // iptal çalışıyor, sadece satın alma tarafı token bekliyor).
   exchange: {

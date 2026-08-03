@@ -13,6 +13,7 @@
 import { STAGES, depthGold, stageById } from './config';
 import { permanentBonus } from './forge';
 import { DEFAULT_HERO, heroById } from './heroes';
+import { CHARM_SLOTS, charmById } from './charms';
 
 const KEY = 'graveborn:progress:v2';
 const KEY_V1 = 'graveborn:progress:v1';
@@ -32,12 +33,18 @@ export interface Progress {
   depthPaid: Record<number, number>;
   /** seçili karakter (heroes.ts id) */
   hero: string;
+  /**
+   * Pedlar's Stall'dan alınmış, koşuya TAŞINAN tılsımlar (charms.ts id).
+   * ⚠️ Koşu AÇILDIĞINDA tüketilir, bittiğinde değil: yoksa oyuncu koşuyu
+   * başlatıp hemen çıkarak tılsımı sonsuza kadar saklardı.
+   */
+  charms: string[];
 }
 
 export function emptyProgress(): Progress {
   return {
     gold: 0, unlockedStage: 1, cleared: {}, upgrades: {},
-    firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO,
+    firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO, charms: [],
   };
 }
 
@@ -52,6 +59,13 @@ function normalize(p: Partial<Progress>): Progress {
     depthPaid: p.depthPaid ?? {},
     // Bilinmeyen/eski kayıtta varsayılana düş — heroById zaten savunmacı
     hero: heroById(p.hero).id,
+    // ⚠️ Tılsım alanı sonradan eklendi; eski kayıtlarda YOK. Ayrı bir şema
+    // sürümü gerekmiyor çünkü eksikliği zararsız — boş listeye düşer.
+    // Bilinmeyen id'ler ve slot taşması burada da kırpılır: kayıt elle
+    // düzenlenebilir, güvenilmez.
+    charms: Array.isArray(p.charms)
+      ? p.charms.filter((c) => typeof c === 'string' && !!charmById(c)).slice(0, CHARM_SLOTS)
+      : [],
   };
 }
 

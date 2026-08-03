@@ -263,5 +263,61 @@ console.log('\n[9] Leaderboard — HTTP katmanı');
     `derinlik ${liarBoard.json?.me?.row?.depth}`);
 }
 
+console.log('\n[10] Pedlar\'s Stall — tılsımlar');
+{
+  const { CHARMS, CHARM_SLOTS } = await import('@game/charms');
+  const ucuz = [...CHARMS].sort((a, b) => a.cost - b.cost)[0];
+
+  check('jetonsuz tılsım alınamıyor',
+    (await api('/charm/buy', { method: 'POST', body: { id: ucuz.id } })).status === 401);
+  check('UYDURMA tılsım reddediliyor',
+    (await api('/charm/buy', { method: 'POST', token, body: { id: 'yok_boyle' } })).status === 400);
+
+  // Bakiyeyi ölç, varsayma — önceki testler değişken miktarda gold bıraktı
+  let bakiye = (await api('/progress', { token })).json.progress.gold as number;
+  if (bakiye < ucuz.cost * CHARM_SLOTS) {
+    const r = await api('/run/start', { method: 'POST', token, body: { mode: 'campaign', stageId: 2 } });
+    await api('/run/finish', { method: 'POST', token, body: { runId: r.json.runId, deepestCleared: 0, rareGold: 100, cleared: true } });
+    bakiye = (await api('/progress', { token })).json.progress.gold as number;
+  }
+
+  const al = await api('/charm/buy', { method: 'POST', token, body: { id: ucuz.id } });
+  check('tılsım alınıyor', al.status === 200, `${al.status} ${al.json?.error ?? ''}`);
+  check('gold SUNUCUDA düşüldü', al.json?.progress?.gold === bakiye - ucuz.cost,
+    `${bakiye} − ${ucuz.cost} = ${al.json?.progress?.gold}`);
+  check('tılsım kayda yazıldı', al.json?.progress?.charms?.includes(ucuz.id));
+
+  // Slot sınırı
+  for (let i = al.json.progress.charms.length; i < CHARM_SLOTS; i++) {
+    await api('/charm/buy', { method: 'POST', token, body: { id: ucuz.id } });
+  }
+  const tasma = await api('/charm/buy', { method: 'POST', token, body: { id: ucuz.id } });
+  check('SLOT SINIRI aşılamıyor', tasma.status === 400 && tasma.json?.error === 'slot_dolu',
+    `${tasma.status} ${tasma.json?.error}`);
+
+  // ⭐ ASIL KURAL: tılsım koşu AÇILIRKEN yanar. Kapanışta tüketilseydi
+  // oyuncu koşuyu başlatıp hemen çıkarak tılsımı sonsuza kadar saklardı.
+  const oncesi = (await api('/progress', { token })).json.progress.charms as string[];
+  check('koşu öncesi tılsım taşınıyor', oncesi.length === CHARM_SLOTS, `${oncesi.length}`);
+
+  const kosu = await api('/run/start', { method: 'POST', token, body: { mode: 'campaign', stageId: 1 } });
+  check('koşu tılsımları BİLDİRİYOR', Array.isArray(kosu.json?.charms) && kosu.json.charms.length === CHARM_SLOTS,
+    `${JSON.stringify(kosu.json?.charms)}`);
+
+  const sonrasi = (await api('/progress', { token })).json.progress.charms as string[];
+  check('tılsımlar koşu AÇILIRKEN yandı', sonrasi.length === 0, `${sonrasi.length} kaldı`);
+
+  // Koşuyu kapatmadan çıkmak tılsımı geri getirmemeli (yukarıdaki koşu açık kaldı)
+  const hala = (await api('/progress', { token })).json.progress.charms as string[];
+  check('koşuyu bitirmemek tılsımı GERİ GETİRMİYOR', hala.length === 0, `${hala.length}`);
+
+  // Parası yetmeyen alım
+  const pahali = [...CHARMS].sort((a, b) => b.cost - a.cost)[0];
+  await prisma.player.update({ where: { wallet }, data: { gold: 1 } });
+  const fakir = await api('/charm/buy', { method: 'POST', token, body: { id: pahali.id } });
+  check('parası yetmeyen alım reddediliyor',
+    fakir.status === 400 && fakir.json?.error === 'yetersiz_gold', `${fakir.json?.error}`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ UÇTAN UCA SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

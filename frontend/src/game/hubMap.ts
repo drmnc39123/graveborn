@@ -102,7 +102,7 @@ export const BUILDINGS: readonly HubBuilding[] = [
     foot: { dx: 110, dy: 370, w: 300, h: 120 }, doorX: 300, doorY: 492,
   },
   {
-    id: 'shop', name: "Pedlar's Stall", hint: 'Buy items and consumables',
+    id: 'shop', name: "Pedlar's Stall", hint: 'Charms you carry into a run',
     src: `${R}/spr_Ruined_Tavern.png`, x: 1248, y: 224, w: 256, h: 256,
     foot: { dx: 40, dy: 170, w: 180, h: 80 }, doorX: 1376, doorY: 452,
   },

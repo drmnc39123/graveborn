@@ -13,6 +13,7 @@ import {
   applyRunResult, loadProgress, paidDepth, saveProgress,
   type Progress, type RunResult,
 } from '@/game/progress';
+import { CHARM_SLOTS } from '@/game/charms';
 import { seedFromString } from '@/game/rng';
 import { api, getMode } from '@/lib/session';
 
@@ -28,6 +29,8 @@ export interface RunTicket {
   /** cüzdan modunda sunucunun açtığı koşu; demoda null */
   runId: string | null;
   seed: number;
+  /** koşuya taşınan tılsımlar — açılışta tüketildiler, artık bu koşuya ait */
+  charms: string[];
 }
 
 const isWallet = () => getMode() === 'wallet';
@@ -136,12 +139,38 @@ export async function cancelGoldListing(id: string) {
   });
 }
 
+/**
+ * Tılsım satın al. ⚠️ Demo modunda da çalışır (demo gold'u ekonomiye
+ * girmiyor, sadece bu tarayıcıda güç veriyor) — market'in aksine burada
+ * kapatmaya gerek yok, hiçbir şey dışarı satılmıyor.
+ */
+export async function buyCharm(id: string, current: Progress, cost: number): Promise<Progress> {
+  if (!isWallet()) {
+    if (current.gold < cost || current.charms.length >= CHARM_SLOTS) return current;
+    const next: Progress = { ...current, gold: current.gold - cost, charms: [...current.charms, id] };
+    saveProgress(next);
+    return next;
+  }
+  // Cüzdan modunda fiyatı ve slot sınırını SUNUCU doğrular
+  const { progress } = await api<{ progress: Progress }>('/charm/buy', {
+    method: 'POST', body: { id },
+  });
+  return progress;
+}
+
 export async function startRun(mode: 'campaign' | 'descent', stageId: number): Promise<RunTicket> {
-  if (!isWallet()) return { runId: null, seed: demoSeed(mode, stageId) };
-  const out = await api<{ runId: string; seed: number }>('/run/start', {
+  if (!isWallet()) {
+    // ⚠️ Demoda da tılsımlar koşu AÇILIRKEN yanar — cüzdan modundaki kuralın
+    // aynısı, yoksa iki mod farklı davranır ve demo yanıltıcı olur.
+    const p = loadProgress();
+    const charms = p.charms;
+    if (charms.length) saveProgress({ ...p, charms: [] });
+    return { runId: null, seed: demoSeed(mode, stageId), charms };
+  }
+  const out = await api<{ runId: string; seed: number; charms?: string[] }>('/run/start', {
     method: 'POST', body: { mode, stageId },
   });
-  return { runId: out.runId, seed: out.seed };
+  return { runId: out.runId, seed: out.seed, charms: out.charms ?? [] };
 }
 
 export async function finishRun(

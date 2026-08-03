@@ -25,7 +25,7 @@ export interface DockEntry {
 export const BUILDINGS: readonly DockEntry[] = [
   { id: 'quests', label: 'STAGES', sub: "The Warden's Post — stages & the Descent" },
   { id: 'upgrade', label: 'FORGE', sub: 'The Forge — permanent power' },
-  { id: 'shop', label: 'STALL', sub: "Pedlar's Stall — consumables" },
+  { id: 'shop', label: 'STALL', sub: "Pedlar's Stall — charms for one run" },
   { id: 'market', label: 'MARKET', sub: 'Marketplace — sell gold for $GRAVE' },
   { id: 'exchange', label: 'EXCHANGE', sub: 'The Exchange — player order book' },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },

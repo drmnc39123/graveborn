@@ -23,7 +23,7 @@ type Tool = 'object' | 'tile' | 'marker';
 const DOOR_ROLES = [
   { id: 'quests', name: "The Warden's Post — bölüm seçimi" },
   { id: 'upgrade', name: 'The Forge — kalıcı yükseltme' },
-  { id: 'shop', name: 'General Store — item satın alma' },
+  { id: 'shop', name: "Pedlar's Stall — tılsım satın alma" },
   { id: 'market', name: 'Market Hall — oyuncu ticareti' },
   { id: 'exchange', name: 'The Exchange — alış emirleri' },
   { id: 'tavern', name: 'The Rest — profil / kayıtlar' },

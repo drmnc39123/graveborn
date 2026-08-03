@@ -32,6 +32,9 @@ model Player {
   depthPaid Json @default("{}")
   /// Forge yükseltmeleri: id → seviye
   upgrades Json @default("{}")
+  /// Pedlar's Stall'dan alınmış, koşuya taşınan tılsımlar (charms.ts id'leri)
+  /// ⚠️ Koşu AÇILDIĞINDA tüketilir — koşuyu başlatıp çıkmak tılsımı kurtarmaz
+  charms Json @default("[]")
 
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
