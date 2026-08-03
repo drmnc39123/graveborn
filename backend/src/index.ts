@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { canStart, settleRun } from './reward.js';
+import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
 import { seedFromString } from '@game/rng';
 
 const app = express();
@@ -207,6 +208,41 @@ app.post('/run/finish', wrap(async (req, res) => {
     progressGold: s.progressGold,
     dropGold: s.dropGold,
   });
+}));
+
+// ── ADMIN ──
+// Bot politikasının ikinci yarısı: tavan kodda, denetim burada.
+// ADMIN_SECRET tanımlı değilse tüm bu uçlar 403 döner (bkz. adminOnly).
+app.get('/admin/overview', adminOnly, wrap(async (_req, res) => {
+  res.json(await overview());
+}));
+
+app.get('/admin/players', adminOnly, wrap(async (req, res) => {
+  const sort = req.query.sort === 'capped' ? 'capped' : req.query.sort === 'new' ? 'new' : 'gold';
+  const limit = Number(req.query.limit ?? 50);
+  res.json({ players: await listPlayers(sort, Number.isFinite(limit) ? limit : 50) });
+}));
+
+app.get('/admin/runs', adminOnly, wrap(async (req, res) => {
+  const limit = Number(req.query.limit ?? 50);
+  res.json({ runs: await listRuns(req.query.capped === '1', Number.isFinite(limit) ? limit : 50) });
+}));
+
+app.get('/admin/player/:wallet', adminOnly, wrap(async (req, res) => {
+  const detail = await playerDetail(req.params.wallet);
+  if (!detail) { res.status(404).json({ error: 'oyuncu_yok' }); return; }
+  res.json(detail);
+}));
+
+app.post('/admin/ban', adminOnly, wrap(async (req, res) => {
+  const { wallet, banned } = req.body ?? {};
+  if (!isValidWallet(wallet) || typeof banned !== 'boolean') {
+    res.status(400).json({ error: 'gecersiz_istek' }); return;
+  }
+  const exists = await prisma.player.findUnique({ where: { wallet }, select: { wallet: true } });
+  if (!exists) { res.status(404).json({ error: 'oyuncu_yok' }); return; }
+  console.warn('[admin]', banned ? 'BAN' : 'BAN KALDIR', wallet);
+  res.json(await setBanned(wallet, banned));
 }));
 
 const port = Number(process.env.PORT ?? 4100);
