@@ -4,6 +4,19 @@
 export const TICK = 1 / 60; // sabit timestep — simülasyon 60Hz, render ayrı
 export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana gidince donma olmasın)
 
+/**
+ * SİMÜLASYON SÜRÜMÜ — RNG akışını değiştiren her değişiklikte ARTAR.
+ *
+ * ⚠️ Aynı seed'in aynı koşuyu üretmesi sunucu ödül doğrulamasının temeli
+ * (backend `settleRun` bu motoru çalıştırıyor). Bir `rng.next()` çağrısı
+ * eklemek/çıkarmak/yerini değiştirmek TÜM eski seed'leri geçersiz kılar.
+ * Böyle bir değişiklik yaparken:
+ *   1. bu sayıyı artır,
+ *   2. `sim.test.mts`'teki SIM_SEAL mührünü yeniden hesapla,
+ *   3. günlük seed / leaderboard kayıtlarının sürümle etiketlendiğini doğrula.
+ */
+export const SIM_VERSION = 1;
+
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
   durationSec: 30 * 60,

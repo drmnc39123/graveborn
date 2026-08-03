@@ -7,10 +7,13 @@
 // DİKKAT: ölçüm testlerinde oyuncu ÖLMEMELİ. Ölünce step() no-op olur ve
 // test hiçbir şey ölçmediği hâlde "geçer". İlk sürümde tam bu tuzağa düşüldü.
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Game } from './engine.js';
 import {
   COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES, MAX_WEAPONS, PASSIVES,
-  STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
+  SIM_VERSION, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
   descentStage, rareDropChance,
 } from './config.js';
 import { ENEMY_ART } from './sprites.js';
@@ -85,9 +88,13 @@ function fleeInput(g: Game): [number, number] {
   return [vx, vy];
 }
 
-interface RunOpts { seconds: number; driver?: Driver; invincible?: boolean; stage?: typeof STAGES[number] }
+interface RunOpts {
+  seconds: number; driver?: Driver; invincible?: boolean; stage?: typeof STAGES[number];
+  /** her tick sonrası çağrılır — render katmanını taklit etmek için (bkz. [1C]) */
+  onTick?: (g: Game) => void;
+}
 
-function run(seed: number, { seconds, driver = 'circle', invincible = false, stage }: RunOpts) {
+function run(seed: number, { seconds, driver = 'circle', invincible = false, stage, onTick }: RunOpts) {
   const g = new Game(seed, stage);
   g.setViewport(1280, 720);
   const ticks = Math.round(seconds / TICK);
@@ -99,6 +106,7 @@ function run(seed: number, { seconds, driver = 'circle', invincible = false, sta
     if (driver === 'circle') g.setInput(Math.cos(t * 0.7), Math.sin(t * 0.7));
     else g.setInput(...fleeInput(g));
     g.step();
+    onTick?.(g);
   }
   return g;
 }
@@ -113,6 +121,78 @@ check('aynı seed aynı level', a.level === b.level, `LV${a.level}`);
 check('aynı seed aynı konum', Math.abs(a.px - b.px) < 1e-9 && Math.abs(a.py - b.py) < 1e-9);
 const diff = run(seedFromString('baska-seed'), { seconds: 60, invincible: true });
 check('farklı seed farklı sonuç', diff.kills !== a.kills, `${diff.kills} vs ${a.kills} kill`);
+
+// ── 1B) DETERMİNİZM MÜHRÜ ──
+// ⚠️ Yukarıdaki testler AYNI SÜREÇTE iki koşuyu karşılaştırıyor. Bir kod
+// değişikliği İKİSİNİ BİRDEN kaydırırsa hepsi yine geçer — yani RNG akışının
+// sessizce değişmesini yakalayamazlar. Mühür bunu kapatıyor: tek bir sabit
+// tüm simülasyon durumunu özetliyor.
+//
+// ⚠️ BU SAYI DEĞİŞTİYSE RNG AKIŞI KAYDI. Kasıtlıysa:
+//   1. config.ts'teki SIM_VERSION'ı artır,
+//   2. aşağıdaki sabiti yeni değerle güncelle,
+//   3. sunucunun aynı sürümü koştuğunu doğrula — backend `settleRun` bu
+//      motoru çalıştırıyor, eski seed'ler geçersiz olur.
+const SIM_SEAL = '3adcd88b';
+
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+const seal = fnv1a([
+  a.kills, a.level, a.px.toFixed(6), a.py.toFixed(6),
+  Math.round(a.rareGold * 1000), a.enemies.length,
+  a.enemies.reduce((s, e) => s + e.x + e.y, 0).toFixed(3),
+  a.weapons.map((w) => `${w.def.id}:${w.level}`).join(','),
+  a.passives.map((p) => `${p.def.id}:${p.level}`).join(','),
+].join('|'));
+
+check(`simülasyon mührü (SIM_VERSION ${SIM_VERSION})`, seal === SIM_SEAL,
+  seal === SIM_SEAL ? seal : `${seal} ≠ ${SIM_SEAL} — RNG AKIŞI KAYDI`);
+
+// ── 1C) KOZMETİK İZOLASYON ──
+// Render katmanı motorun kozmetik kuyruklarını her frame boşaltıyor. Bu
+// boşaltmanın simülasyonu ETKİLEYEMEYECEĞİ kanıtlanmalı — aksi hâlde
+// "tarayıcıda başka, sunucuda başka sonuç" sınıfı bir hata mümkün olur.
+{
+  const drained = run(SEED, {
+    seconds: 60, invincible: true,
+    onTick: (g) => {
+      g.deaths.length = 0;
+      g.hits.length = 0;
+      g.hurts.length = 0;
+      g.arcs.length = 0;
+      g.events.clear();
+    },
+  });
+  check('kozmetik kuyruğu boşaltmak simülasyonu ETKİLEMİYOR',
+    drained.kills === a.kills && Math.abs(drained.px - a.px) < 1e-9 && drained.level === a.level,
+    `${drained.kills} = ${a.kills} kill`);
+}
+
+// ── 1D) Math.random DENETİMİ ──
+// Kural bugüne kadar sadece yorumda yaşıyordu. Teste dönüşmeli: tek bir
+// `Math.random()` çağrısı determinizmi sessizce bitirir ve sunucu
+// doğrulaması ile istemci sonsuza kadar ayrışır.
+{
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const files = fs.readdirSync(here).filter((f) => f.endsWith('.ts'));
+  const kirli: string[] = [];
+  for (const f of files) {
+    const kod = fs.readFileSync(path.join(here, f), 'utf8')
+      .split('\n')
+      .filter((l) => { const t = l.trim(); return !t.startsWith('*') && !t.startsWith('//') && !t.startsWith('/*'); })
+      .join('\n');
+    if (/Math\.random\s*\(/.test(kod)) kirli.push(f);
+  }
+  check('game/ altında Math.random ÇAĞRISI yok', kirli.length === 0,
+    kirli.join(', ') || `${files.length} dosya temiz`);
+}
 
 // ── 2) Çekirdek döngü ──
 console.log('\n[2] Çekirdek döngü (60 sn)');

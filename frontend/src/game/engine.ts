@@ -62,6 +62,9 @@ export interface Projectile {
   returning?: boolean;
   /** boomerang: dönüş hızı (ilk atış hızı) */
   speed?: number;
+  /** ⚠️ SADECE GÖRSEL ETİKET — hangi silahtan çıktı. Hiçbir mantığı beslemez;
+   *  render doğru mermi/çarpma sprite'ını seçmek için okur. */
+  wid?: string;
 }
 
 /** Zincir silahının kozmetik yayı — render her frame boşaltır, simülasyona girmez */
@@ -82,6 +85,8 @@ export interface HitZone {
   retickCd?: number;
   /** true ise dikdörtgen değil DAİRE olarak çarpışır ve çizilir */
   round?: boolean;
+  /** ⚠️ SADECE GÖRSEL ETİKET — bkz. Projectile.wid */
+  wid?: string;
 }
 
 /** Sahip olunan silah — seviyesi ve kendi bekleme sayacı */
@@ -190,11 +195,27 @@ export class Game {
   lastEvolution: { name: string; at: number } | null = null;
 
   /**
-   * KOZMETİK olay kuyruğu — render katmanı her frame boşaltır.
+   * KOZMETİK olay kuyrukları — render katmanı her frame boşaltır.
    * Simülasyon durumunu ETKİLEMEZ ve RNG tüketmez; determinizm bozulmaz.
    * Render çalışmasa bile (headless test) tavanla sınırlı, sızıntı yapmaz.
+   *
+   * ⚠️ TAVANLAR UZUNLUK KONTROLÜYLE — asla `rng` ya da zaman bazlı örneklemeyle.
+   * `if (len < N)` deterministik; "her 3 frame'de bir atla" değil.
    */
-  deaths: { x: number; y: number }[] = [];
+  deaths: {
+    x: number; y: number;
+    /** ölüm animasyonu için: hangi sprite, hangi yöne bakıyordu, ne kadar büyüktü */
+    art?: string; facingRight: boolean; radius: number; boss: boolean;
+  }[] = [];
+
+  /**
+   * Vuruş kuyruğu — hasar sayısı ve çarpma efektinin kaynağı.
+   * `wid` vuran silahın id'si; render doğru mermi/çarpma görselini seçer.
+   */
+  hits: { x: number; y: number; dmg: number; crit: boolean; wid: string; killed: boolean }[] = [];
+
+  /** Oyuncunun yediği hasar — ekran flaşı/vinyet/sarsıntı için */
+  hurts: { amount: number }[] = [];
 
   /**
    * Ses ipuçları. Set kullanılıyor çünkü aynı frame'de 200 ölüm olsa da
@@ -702,6 +723,7 @@ export class Game {
           this.hp -= taken;
           this.iframe = PLAYER.iframeSec;
           this.events.add('hurt');
+          if (this.hurts.length < 4) this.hurts.push({ amount: taken });
           this.swapRemove(this.enemyShots, i);
           continue;
         }
@@ -797,6 +819,7 @@ export class Game {
         x: this.px, y: this.py,
         vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
         damage: dmg, radius: 6, life, pierce: def.pierce ?? 2,
+        wid: def.id,
       });
     }
   }
@@ -821,6 +844,7 @@ export class Game {
         retick: def.groundTickSec ?? 0.5,
         retickCd: 0,
         round: true,
+        wid: def.id,
       });
     }
   }
@@ -845,6 +869,7 @@ export class Game {
         maxDist: (def.range ?? 620) * 0.5 * this.wArea(w),
         returnAt: life * (def.returnAt ?? 0.5),
         speed: spd,
+        wid: def.id,
       });
     }
   }
@@ -865,7 +890,7 @@ export class Game {
     let fx = this.px, fy = this.py;
 
     for (let j = 0; j <= jumps; j++) {
-      this.damageEnemy(cur, dmg);
+      this.damageEnemy(cur, dmg, def.id);
       if (this.arcs.length < 64) this.arcs.push({ x1: fx, y1: fy, x2: cur.x, y2: cur.y });
       fx = cur.x; fy = cur.y;
 
@@ -903,6 +928,7 @@ export class Game {
         damage: this.wDamage(w), radius: 5,
         life: (def.lifeSec ?? 1.5) * this.stats.duration, // Binding Sigil
         pierce: def.pierce ?? 0,
+        wid: def.id,
       });
     }
   }
@@ -925,6 +951,7 @@ export class Game {
         damage: this.wDamage(w),
         facingRight: right,
         hit: new Set<Enemy>(),
+        wid: def.id,
       });
     }
   }
@@ -940,7 +967,7 @@ export class Game {
       const dx = e.x - this.px, dy = e.y - this.py;
       const rr = r + e.radius;
       if (dx * dx + dy * dy > rr * rr) continue;
-      this.damageEnemy(e, dmg);
+      this.damageEnemy(e, dmg, w.def.id);
     }
   }
 
@@ -963,17 +990,27 @@ export class Game {
         const rr = orbR + e.radius;
         if (dx * dx + dy * dy > rr * rr) continue;
         e.contactCd = CONTACT_HIT_CD;
-        this.damageEnemy(e, dmg);
+        this.damageEnemy(e, dmg, def.id);
       }
     }
   }
 
-  /** Tek noktadan hasar — ölüm/gem/efekt mantığı burada toplanır */
-  private damageEnemy(e: Enemy, dmg: number) {
+  /**
+   * Tek noktadan hasar — ölüm/gem/efekt mantığı burada toplanır.
+   *
+   * `wid` vuran silahın id'si: SADECE görsel etiket, hiçbir mantığı beslemez.
+   * Render bununla doğru çarpma efektini seçer (bkz. combatArt.ts).
+   */
+  private damageEnemy(e: Enemy, dmg: number, wid = '') {
     e.hp -= dmg;
     e.hitFlash = 0.09;
     this.events.add('hit');
-    if (e.hp <= 0) this.killEnemy(e);
+    const killed = e.hp <= 0;
+    // ⚠️ Tavan uzunluk kontrolüyle — zaman/rng bazlı örnekleme determinizmi bozar
+    if (this.hits.length < 96) {
+      this.hits.push({ x: e.x, y: e.y, dmg, crit: false, wid, killed });
+    }
+    if (killed) this.killEnemy(e);
   }
 
   /** Sweep hitbox'larını ilerlet ve temas edenlere vur */
@@ -1007,7 +1044,7 @@ export class Game {
           if (Math.abs(e.y - z.y) > hh + e.radius) continue;
         }
         z.hit.add(e);
-        this.damageEnemy(e, z.damage);
+        this.damageEnemy(e, z.damage, z.wid);
       }
 
       z.life -= dt;
@@ -1063,7 +1100,7 @@ export class Game {
         const dx = e.x - p.x, dy = e.y - p.y;
         if (dx * dx + dy * dy > rr * rr) continue;
 
-        this.damageEnemy(e, p.damage);
+        this.damageEnemy(e, p.damage, p.wid);
 
         if (p.pierce > 0) { p.pierce -= 1; continue; }
         consumed = true;
@@ -1088,8 +1125,15 @@ export class Game {
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
     this.events.add('kill');
     if (e.boss) this.chests.push({ x: e.x, y: e.y, evolution: e.boss.evolutionChest });
-    // headless koşuda render boşaltmaz → tavan koy, sonsuz büyümesin
-    if (this.deaths.length < 256) this.deaths.push({ x: e.x, y: e.y });
+    // headless koşuda render boşaltmaz → tavan koy, sonsuz büyümesin.
+    // Görsel etiketler taşınıyor: leş animasyonu ölen düşmanın sprite'ını,
+    // baktığı yönü ve boyutunu bilmeli (motor bunları zaten tutuyor).
+    if (this.deaths.length < 256) {
+      this.deaths.push({
+        x: e.x, y: e.y, art: e.art,
+        facingRight: e.facingRight, radius: e.radius, boss: !!e.boss,
+      });
+    }
   }
 
   /**
@@ -1126,6 +1170,7 @@ export class Game {
       this.hp -= taken;
       this.iframe = PLAYER.iframeSec;
       this.events.add('hurt');
+      if (this.hurts.length < 4) this.hurts.push({ amount: taken });
       if (this.hp <= 0) {
         if (this.stats.revival > 0) {
           // Second Burial — VS'teki gibi %50 canla dirilir, hak tükenir

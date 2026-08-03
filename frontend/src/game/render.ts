@@ -7,6 +7,7 @@ import { PLAYER, RUN, WEAPON } from './config';
 import type { Game } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
+import { drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
 
 // ── Kozmetik efektler ──
 // Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
@@ -19,6 +20,7 @@ const MAX_FX = 90; // ekranda aynı anda en fazla; sürü ölümünde çizim pat
 export function resetEffects() {
   deathFx.length = 0;
   artTime = 0;
+  resetFx();
   resetStageGround(); // yeni bölüm gelirse chunk önbelleği geçersiz
 }
 
@@ -65,9 +67,14 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   ctx.fillStyle = C.void;
   ctx.fillRect(0, 0, w, h);
 
-  // kamera oyuncuyu ortalar
+  // ⚠️ pumpFx kamera dönüşümünden ÖNCE: sarsıntı büyüklüğü bu karede
+  // hesaplanmalı ki translate onu kullanabilsin.
+  pumpFx(g, dt);
+  const sh = shakeOffset();
+
+  // kamera oyuncuyu ortalar (+ ekran sarsıntısı)
   ctx.save();
-  ctx.translate(cx - g.px, cy - g.py);
+  ctx.translate(cx - g.px + sh.x, cy - g.py + sh.y);
 
   pumpEffects(g, dt);
 
@@ -86,12 +93,18 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawArcs(ctx, g);         // zincir yayları mermilerin üstünde parlar
   drawEnemyShots(ctx, g);   // oyuncunun ÜSTÜNDE değil altında: karakteri örtmesin
   drawPlayer(ctx, g);
+  // Kıvılcım ve hasar sayıları EN ÜSTTE — oyuncunun altında kalırlarsa
+  // vuruşun geri bildirimi kayboluyor.
+  drawFxWorld(ctx);
 
   ctx.restore();
 
   // ⚠️ ATMOSFER EN SONDA, ekran uzayında. Kameradan önce çizilseydi dünyayla
   // birlikte kayardı; oyuncunun taşıdığı ışık halesi ekranda SABİT durmalı.
   drawAtmosphere(ctx, g.stage.def.id, w, h, artTime);
+  // Hasar vinyeti atmosferin ÜSTÜNDE — yoksa bölümün kendi karartması
+  // kırmızıyı yutar ve "vuruldum" sinyali kaybolur.
+  drawFxScreen(ctx, w, h);
 }
 
 function drawArenaEdge(ctx: CanvasRenderingContext2D, g: Game) {

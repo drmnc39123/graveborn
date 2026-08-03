@@ -8,6 +8,7 @@ import { Game, type RunMode } from '@/game/engine';
 import type { RunResult } from '@/game/progress';
 import { render, resetEffects } from '@/game/render';
 import { MAX_CATCHUP, TICK, type StageDef, type StatKey } from '@/game/config';
+import { takeFreeze } from '@/game/fx';
 
 // Günlük seed — aynı gün aynı bölüm herkeste aynı akışı verir (adil kıyas)
 function dailySeed() {
@@ -188,6 +189,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
     let raf = 0;
     let last = performance.now();
     let acc = 0;
+    let freeze = 0;   // hit-stop kalan süresi (sn)
     let hudAcc = 0;
     let frames = 0;
     let fpsTimer = 0;
@@ -219,6 +221,16 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
       }
       game.setInput(ix, iy);
 
+      // HIT-STOP — kritik vuruş / boss ölümü / oyuncu hasarında oyun bir an
+      // donar. ⚠️ Motorda tick ATLANMAZ (simülasyon değişir, sunucu
+      // doğrulamasıyla ayrışır); burada sadece `step()` çağrılmaz.
+      if (freeze > 0) {
+        freeze = Math.max(0, freeze - dt);
+        render(ctx, game, cssW, cssH, dpr, dt);
+        acc = 0;   // ⚠️ birikeni at, yoksa donma bitince tick patlaması gelir
+        return;
+      }
+
       acc += dt;
       let ticks = 0;
       while (acc >= TICK && ticks < MAX_CATCHUP) {
@@ -229,6 +241,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
       if (acc > TICK * MAX_CATCHUP) acc = 0; // birikmiş açığı at
 
       render(ctx, game, cssW, cssH, dpr, dt);
+      // render efekt kuyruklarını işledi; biriken donma isteğini şimdi al
+      freeze = Math.max(freeze, takeFreeze());
 
       // ses ipuçlarını boşalt (sfx kendi içinde kısıyor)
       if (game.events.size) {
