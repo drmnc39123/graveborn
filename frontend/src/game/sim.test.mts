@@ -133,7 +133,9 @@ check('farklı seed farklı sonuç', diff.kills !== a.kills, `${diff.kills} vs $
 //   2. aşağıdaki sabiti yeni değerle güncelle,
 //   3. sunucunun aynı sürümü koştuğunu doğrula — backend `settleRun` bu
 //      motoru çalıştırıyor, eski seed'ler geçersiz olur.
-const SIM_SEAL = '3adcd88b';
+// v1 → v2: kritik vuruş eklendi, `damageEnemy` her çağrıda rng tüketiyor.
+// Eski mühür 3adcd88b idi; kırılma KASITLI ve SIM_VERSION 2'ye çıkarıldı.
+const SIM_SEAL = '1f8be03c';
 
 function fnv1a(s: string): string {
   let h = 0x811c9dc5;
@@ -665,6 +667,7 @@ console.log('\n[8E] Karakterler');
     weapons.join(', '));
 
   const READ = new Set(['might', 'armor', 'maxHp', 'recovery', 'cooldown', 'area',
+    'crit', 'critMul',
     'projSpeed', 'duration', 'amount', 'moveSpeed', 'magnet', 'growth', 'greed', 'curse', 'revival']);
   const deadStat = HEROES.flatMap((h) => Object.keys(h.stats).filter((s) => !READ.has(s)).map((s) => `${h.id}→${s}`));
   check('karakter istatistikleri motorda okunuyor', deadStat.length === 0, deadStat.join(', '));
@@ -820,6 +823,7 @@ console.log('\n[8C] Evrim tablosu tutarlı');
 
   // Pasif havuzunda motorun OKUMADIĞI istatistik olmamalı (ölü seçim)
   const READ = new Set(['might', 'armor', 'maxHp', 'recovery', 'cooldown', 'area',
+    'crit', 'critMul',
     'projSpeed', 'duration', 'amount', 'moveSpeed', 'magnet', 'growth', 'greed', 'curse', 'revival']);
   const dead = PASSIVES.filter((p) => !READ.has(p.stat)).map((p) => `${p.id}→${p.stat}`);
   check('ölü pasif yok (hepsi motorda okunuyor)', dead.length === 0, dead.join(', '));

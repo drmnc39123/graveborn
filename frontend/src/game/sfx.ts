@@ -7,7 +7,7 @@
 // = 200 oscillator = ses çamuru + CPU patlaması. Her sesin kendi minimum aralığı var.
 
 type Voice = 'hit' | 'kill' | 'gem' | 'levelup' | 'evolve' | 'boss' | 'hurt' | 'chest'
-  | 'coin' | 'depth' | 'eshot' | 'charge' | 'chain';
+  | 'coin' | 'depth' | 'eshot' | 'charge' | 'chain' | 'crit';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -19,6 +19,8 @@ const lastPlayed: Record<string, number> = {};
 /** Aynı sesin iki çalınışı arasındaki minimum süre (ms) */
 const THROTTLE: Record<Voice, number> = {
   hit: 45, kill: 55, gem: 70, levelup: 0, evolve: 0, boss: 0, hurt: 180, chest: 0,
+  // Kritik normal vuruştan seyrek ama sürüde yine sıklaşır — biraz daha kıs.
+  crit: 60,
   // Nadir gold düşüşü zaten seyrek ama derinlikte sıklaşıyor — yine de kıs.
   coin: 90,
   depth: 0,
@@ -107,6 +109,8 @@ export function play(v: Voice) {
 
   switch (v) {
     case 'hit':   tone(760, 0.05, 'square', 0.08, 520); break;
+    // Kritik: normalden PARLAK ve kısa — kulak 'bu farklıydı' demeli
+    case 'crit':  tone(1240, 0.07, 'square', 0.11, 820); tone(1860, 0.05, 'sine', 0.06, undefined, 0.02); break;
     case 'kill':  noise(0.11, 0.16, 1500); tone(180, 0.09, 'triangle', 0.09, 90); break;
     case 'gem':   tone(1180, 0.055, 'sine', 0.07, 1560); break;
     case 'hurt':  tone(150, 0.2, 'sawtooth', 0.2, 60); noise(0.14, 0.14, 700); break;

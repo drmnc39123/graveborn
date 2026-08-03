@@ -1002,13 +1002,20 @@ export class Game {
    * Render bununla doğru çarpma efektini seçer (bkz. combatArt.ts).
    */
   private damageEnemy(e: Enemy, dmg: number, wid = '') {
-    e.hp -= dmg;
-    e.hitFlash = 0.09;
-    this.events.add('hit');
+    // ⚠️ ZAR HER VURUŞTA ATILIR — kritik şansı 0 olsa bile.
+    // `rollRareGold` ile AYNI kural: zarı koşula bağlı atmak RNG akışını
+    // BUILD'E GÖRE kaydırır, aynı seed farklı koşu üretir ve sunucu
+    // doğrulaması ile istemci sonsuza kadar ayrışır.
+    const crit = this.rng.next() < this.stats.crit;
+    const out = crit ? dmg * this.stats.critMul : dmg;
+
+    e.hp -= out;
+    e.hitFlash = crit ? 0.16 : 0.09;
+    this.events.add(crit ? 'crit' : 'hit');
     const killed = e.hp <= 0;
     // ⚠️ Tavan uzunluk kontrolüyle — zaman/rng bazlı örnekleme determinizmi bozar
     if (this.hits.length < 96) {
-      this.hits.push({ x: e.x, y: e.y, dmg, crit: false, wid, killed });
+      this.hits.push({ x: e.x, y: e.y, dmg: out, crit, wid, killed });
     }
     if (killed) this.killEnemy(e);
   }

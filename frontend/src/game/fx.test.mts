@@ -207,5 +207,48 @@ console.log('\n[9] Leş havuzu');
   check('leşler zamanla sönüyor (sızıntı yok)', true);
 }
 
+console.log('\n[10] Kritik vuruş — zar KOŞULSUZ atılıyor mu');
+{
+  // ⚠️ ASIL RİSK: zarı "crit > 0 ise at" diye koşula bağlamak. O zaman RNG
+  // akışı BUILD'E GÖRE kayar — kritiksiz oyuncuyla kritikli oyuncu aynı
+  // seed'de farklı düşman dizilimi görür ve sunucu doğrulaması çöker.
+  //
+  // Kanıt: crit=0 ve crit=0.99 iki koşuda düşman dizilimi ve oyuncu konumu
+  // birebir aynı kalmalı (critMul=1 verilerek hasar farkı nötrlendi).
+  const mk = (crit: number) => {
+    const g = new Game(13579);
+    g.setViewport(1280, 720);
+    for (let i = 0; i < 60; i++) {
+      if (g.phase !== 'running') break;
+      // ⚠️ recomputeStats her tick pasiflerden türetiyor — zorlama tick'ten
+      // SONRA yapılmalı ki bir sonraki step onu kullansın
+      g.stats.crit = crit;
+      g.stats.critMul = 1;
+      g.setInput(1, 0);
+      g.step();
+    }
+    return g;
+  };
+  const yok = mk(0);
+  const tam = mk(0.99);
+  check('kritik şansı RNG akışını KAYDIRMIYOR',
+    yok.enemies.length === tam.enemies.length && Math.abs(yok.px - tam.px) < 1e-9,
+    `${yok.enemies.length} = ${tam.enemies.length} düşman`);
+
+  // Kritik gerçekten işaretleniyor ve hasarı çarpıyor mu
+  const g2 = new Game(2468);
+  g2.setViewport(1280, 720);
+  let kritikSayisi = 0, normalSayisi = 0;
+  for (let i = 0; i < 300; i++) {
+    if (g2.phase !== 'running') break;
+    g2.stats.crit = 1; g2.stats.critMul = 3;
+    g2.step();
+    for (const h of g2.hits) { if (h.crit) kritikSayisi++; else normalSayisi++; }
+    g2.hits.length = 0;
+  }
+  check('crit=1 iken TÜM vuruşlar kritik', normalSayisi === 0 && kritikSayisi > 0,
+    `${kritikSayisi} kritik / ${normalSayisi} normal`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ EFEKT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

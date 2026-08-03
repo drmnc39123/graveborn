@@ -15,7 +15,9 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
  *   2. `sim.test.mts`'teki SIM_SEAL mührünü yeniden hesapla,
  *   3. günlük seed / leaderboard kayıtlarının sürümle etiketlendiğini doğrula.
  */
-export const SIM_VERSION = 1;
+// v2: kritik vuruş eklendi — `damageEnemy` her çağrıda `rng.next()` tüketiyor.
+// Bu TÜM eski seed'leri geçersiz kıldı (bilinçli; oyun henüz canlı değildi).
+export const SIM_VERSION = 2;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -705,13 +707,20 @@ export const GEM = {
 export type StatKey =
   | 'might' | 'armor' | 'maxHp' | 'recovery' | 'cooldown' | 'area'
   | 'projSpeed' | 'duration' | 'amount' | 'moveSpeed' | 'magnet'
-  | 'luck' | 'growth' | 'greed' | 'curse' | 'revival';
+  | 'luck' | 'growth' | 'greed' | 'curse' | 'revival'
+  // ⚠️ KRİTİK VURUŞ — VS'te yok, bizim eklememiz. Zar HER vuruşta atılır
+  // (bkz. engine.damageEnemy); bu SIM_VERSION 2'yi getirdi.
+  | 'crit' | 'critMul';
 
 /** VS taban değerleri. Yüzdeler 1.0 = %100. */
 export const STAT_BASE: Record<StatKey, number> = {
   might: 1, armor: 0, maxHp: PLAYER.maxHp, recovery: 0, cooldown: 1, area: 1,
   projSpeed: 1, duration: 1, amount: 0, moveSpeed: 1, magnet: 1,
   luck: 1, growth: 1, greed: 1, curse: 1, revival: 0,
+  /** %5 taban kritik şansı — her build'de arada bir sarı sayı görünsün */
+  crit: 0.05,
+  /** kritik hasar çarpanı */
+  critMul: 1.5,
 };
 
 /** VS tavanları. cooldown TABAN değil TAVAN sınırı (%10'un altına inemez). */
@@ -722,6 +731,10 @@ export const STAT_CAP: Partial<Record<StatKey, number>> = {
   projSpeed: 5,   // %500
   duration: 5,    // %500
   amount: 10,
+  // ⚠️ "her vuruş kritik" build'i olmasın — %60 tavan. Üstü hem denge hem
+  // görsel gürültü sorunu (ekran sürekli sarı sayı olurdu).
+  crit: 0.6,
+  critMul: 4,
 };
 export const COOLDOWN_FLOOR = 0.10; // %10 — VS'in dibi
 
@@ -758,6 +771,9 @@ export const PASSIVES: readonly PassiveDef[] = [
   { id: 'coinmask', name: 'Coin Mask', vs: 'Stone Mask', stat: 'greed', perLevel: 0.10, maxLevel: 5, desc: '+10% gold' },
   { id: 'skull', name: 'Cursed Skull', vs: "Skull O'Maniac", stat: 'curse', perLevel: 0.10, maxLevel: 5, desc: '+10% curse — deadlier, richer' },
   { id: 'burial', name: 'Second Burial', vs: 'Tirajisú', stat: 'revival', perLevel: 1, maxLevel: 2, desc: '+1 revival' },
+  // ── kritik arketipi ──
+  { id: 'edge', name: 'Whetted Bone', vs: '—', stat: 'crit', perLevel: 0.05, maxLevel: 5, desc: '+5% critical chance' },
+  { id: 'frenzy', name: 'Grave Frenzy', vs: '—', stat: 'critMul', perLevel: 0.25, maxLevel: 4, desc: '+25% critical damage' },
 ] as const;
 
 /** Aynı anda taşınabilecek pasif sayısı (VS: 6, silahlardan ayrı) */

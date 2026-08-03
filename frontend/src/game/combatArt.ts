@@ -197,6 +197,9 @@ export const PASSIVE_ART: Record<string, { icon: string }> = {
   coinmask: { icon: `${ICO}/Golden Coin.png` },
   skull: { icon: `${ICO}/Skull.png` },
   burial: { icon: `${ICO}/ghost_form_(physical_damage_immunity).png` },
+  // ── kritik arketipi (SIM_VERSION 2 ile geldi) ──
+  edge: { icon: `${ICO}/critical_boost.png` },
+  frenzy: { icon: `${ICO}/frenzy_spell_(critical_booster).png` },
 };
 
 /** Bilinmeyen silah → shard görseli. Eksik veri sahneyi boş bırakmasın. */
