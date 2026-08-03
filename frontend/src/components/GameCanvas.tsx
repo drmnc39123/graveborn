@@ -40,7 +40,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -53,6 +53,12 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
    * Verilmezse demo davranışı: günlük seed istemcide türetilir.
    */
   seed?: number;
+  /**
+   * Descent'in başlayacağı derinlik (checkpoint). ⚠️ SUNUCUDAN gelir
+   * (`/run/start` yanıtı) — burada hesaplanmaz, yoksa oynanan koşu ile
+   * sunucunun doğruladığı koşu ayrışır.
+   */
+  startDepth?: number;
   onFinish: (result: RunResult) => void;
 }) {
   // ⚠️ Seed'i istemcide türetmek "en kârlı günü bul, sistem saatini ona kur"
@@ -112,7 +118,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, on
 
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero);
+    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth);
     gameRef.current = game;
     // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
     // üretimini kıstığı için oyunu gerçek zamanda oynayıp level-up/ölüm gibi

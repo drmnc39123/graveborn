@@ -6,9 +6,12 @@
 //
 // Çalıştır:  npx tsx src/reward.test.mts
 
-import { emptyProgress, type Progress } from '@game/progress';
+import { depthRewardBetween, emptyProgress, type Progress } from '@game/progress';
 import { STAGES } from '@game/config';
-import { canStart, maxDepthInTime, maxRareGold, minDescentSeconds, settleRun, MAX_DEPTH_CLAIM } from './reward.js';
+import {
+  canStart, greedCeiling, maxDepthInTime, maxRareGold, minDescentSeconds,
+  resolveStartDepth, settleRun, MAX_DEPTH_CLAIM,
+} from './reward.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -30,7 +33,10 @@ console.log('\n[1] Uydurma nadir gold kırpılıyor');
   check('dürüst koşu kırpılmıyor', !honest.capped);
 
   const liar = settleRun(cleared1, 'descent', 1, { deepestCleared: 5, rareGold: 999_999, cleared: false });
-  const cap = maxRareGold('descent', 1, 5);
+  // ⚠️ Tavan OYUNCUYA GÖRE daralıyor (bkz. greedCeiling) — testin beklentisi
+  // de aynı fonksiyondan türemeli, yoksa iki yerde iki farklı tavan olur ve
+  // ayrışan taraf sessizce yanılır.
+  const cap = maxRareGold('descent', 1, 5, greedCeiling(cleared1));
   console.log(`     yalancı 999.999 istedi → ${liar.awarded} aldı (tavan ${cap})`);
   check('uydurma gold tavana kırpılıyor', liar.dropGold <= cap, `${liar.dropGold} ≤ ${cap}`);
   check('kırpma işaretleniyor (admin için)', liar.capped);
@@ -203,6 +209,50 @@ console.log('\n[6] Tavan gerçek koşuya göre kalibre mi');
       minDescentSeconds(1, 20) > minDescentSeconds(1, 10));
     check('süresiz çağrı (varsayılan) kırpmıyor',
       !settleRun(cleared1, 'descent', 1, { deepestCleared: 8, rareGold: 0, cleared: false }).capped);
+  }
+
+  // ── [8] CHECKPOINT ──
+  // Checkpoint oyuncuyu derinliğe ışınlıyor. İki şeyin BİRDEN doğru olması
+  // şart, yoksa tek koşuda servet basılır:
+  //   • başlangıç derinliği SUNUCUDA kırpılıyor (istemci seçemiyor)
+  //   • süre tabanı başlangıçtan sayılıyor (dürüst oyuncu kırpılmıyor)
+  console.log('\n[8] Checkpoint');
+  {
+    const derin: Progress = {
+      ...emptyProgress(), unlockedStage: 2,
+      cleared: { 1: true }, firstClear: { 1: true }, depthPaid: { 1: 23 },
+    };
+
+    // ⭐ ASIL SALDIRI: "derinlik 400'den başlıyorum" iddiası
+    check('uydurma başlangıç derinliği kırpılıyor',
+      resolveStartDepth(derin, 'descent', 1, 400) === 21,
+      `d${resolveStartDepth(derin, 'descent', 1, 400)} (hak edilen d21)`);
+    check('hiç inmemiş oyuncu d1\'den başlıyor',
+      resolveStartDepth(cleared1, 'descent', 1, 400) === 1);
+    check('kampanyada checkpoint yok',
+      resolveStartDepth(derin, 'campaign', 1, 20) === 0);
+    // Kırpma REDDETME değil: başka cihazda ilerlemiş oyuncunun elindeki sayı
+    // eski olabilir, oynayamayan bir oyuncu üretmemeli
+    check('istenen değer hakkın altındaysa aynen kabul',
+      resolveStartDepth(derin, 'descent', 1, 6) === 6);
+
+    // Süre tabanı checkpoint'ten sayılmalı — 1'den saysaydı d21'den başlayan
+    // DÜRÜST oyuncu "imkânsız hızlı" görünüp kırpılırdı
+    const bastan = maxDepthInTime(1, 300, 1);
+    const checkpointten = maxDepthInTime(1, 300, 21);
+    console.log(`     300 sn: d1'den d${bastan}'e · d21'den d${checkpointten}'e`);
+    check('süre tabanı checkpoint\'ten sayılıyor', checkpointten > bastan,
+      `d${bastan} vs d${checkpointten}`);
+
+    // Aynı iddia: taban 1'den sayılınca kırpılır, checkpoint'ten sayılınca geçer
+    const iddia = { deepestCleared: 26, rareGold: 0, cleared: false };
+    const yanlis = settleRun(derin, 'descent', 1, iddia, 420, 1);
+    const dogru = settleRun(derin, 'descent', 1, iddia, 420, 21);
+    check('checkpoint\'siz taban dürüst oyuncuyu kırpardı', yanlis.capped);
+    check('checkpoint tabanıyla kırpılmıyor', !dogru.capped, dogru.reason.join(' | ') || 'temiz');
+    check('ödül SADECE yeni derinlikler için (d24-d26)',
+      dogru.progressGold > 0 && dogru.progressGold === depthRewardBetween(derin, 1, 23, 26),
+      `${dogru.progressGold} gold`);
   }
 }
 

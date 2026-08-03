@@ -8,8 +8,40 @@
 // yerde yazmak, er ya da geç iki yerde ayrışmak demektir — ve ayrışan taraf
 // para basar. `progress.ts` en baştan bu yüzden saf fonksiyon yazıldı.
 
-import { applyRunResult, type Progress, type RunResult } from '@game/progress';
-import { GOLD, STAGES, descentStage, rareDropChance, stageById } from '@game/config';
+import { allowedStartDepth, applyRunResult, type Progress, type RunResult } from '@game/progress';
+import { GOLD, PASSIVES, STAGES, descentStage, rareDropChance, stageById } from '@game/config';
+import { CHARMS, CHARM_SLOTS } from '@game/charms';
+import { permanentBonus } from '@game/forge';
+
+/**
+ * BU OYUNCUNUN nadir düşüş çarpanı — yapısal tavan bunu saymak ZORUNDA.
+ *
+ * Motor tarafında `greed` artık düşüş MİKTARINI çarpıyor. Tavan bunu
+ * saymazsa Forge'unu doldurmuş DÜRÜST oyuncu kırpılır; bu sessiz bir hatadır,
+ * kimse "gold'um eksik geldi" diye şikâyet etmez.
+ *
+ * ⚠️ AMA HERKESE GLOBAL TAVANI VERMEK DE YANLIŞ. İlk denemede sabit 2,5
+ * kullanıldı ve ölçüldü: yalancının kazancı dürüst oyuncunun 2,1 katına
+ * çıktı — yani greed'i HİÇ olmayan bir hesap, sanki tam doldurmuş gibi
+ * yalan söyleyebiliyordu. Tavan oyuncuya göre daralmalı.
+ *
+ * Forge seviyesi sunucuda BİLİNİYOR. Koşu içi kaynaklar (Coin Mask pasifi,
+ * ileride bir tılsım) bilinmiyor, onlar için teorik en yüksek pay bırakılır.
+ */
+export function greedCeiling(p: Progress): number {
+  const forge = permanentBonus(p.upgrades).greed ?? 0;
+  // Koşu içinde toplanabilecek en yüksek greed — havuzdan TÜRETİLİR, elle
+  // yazılmaz: yeni bir greed pasifi eklenirse tavan kendiliğinden büyür.
+  const passive = PASSIVES
+    .filter((x) => x.stat === 'greed')
+    .reduce((s, x) => s + x.perLevel * x.maxLevel, 0);
+  const charm = [...CHARMS]
+    .map((c) => c.stats.greed ?? 0)
+    .sort((a, b) => b - a)
+    .slice(0, CHARM_SLOTS)
+    .reduce((s, v) => s + v, 0);
+  return 1 + forge + passive + charm;
+}
 
 /** İstemcinin koşu sonunda gönderdiği iddia — HİÇBİRİ doğrudan kabul edilmez */
 export interface RunClaim {
@@ -30,12 +62,17 @@ export interface RunClaim {
  * × mümkün olan en yüksek düşüş miktarı. Gerçekte bunun çok altı düşer;
  * amaç adaleti değil TAVANI garanti etmek.
  */
-export function maxRareGold(mode: string, stageId: number, deepestCleared: number): number {
+export function maxRareGold(
+  mode: string, stageId: number, deepestCleared: number,
+  /** oyuncunun düşüş çarpanı tavanı — bkz. greedCeiling. 1 = greed yok. */
+  greedMul = 1,
+): number {
   const st = stageById(stageId);
   if (!st) return 0;
 
+  const g = Math.max(1, greedMul);
   const dropMax = (depth: number) =>
-    Math.max(1, Math.round(GOLD.dropMax * (1 + GOLD.dropAmountPerDepth * depth)));
+    Math.max(1, Math.round(GOLD.dropMax * (1 + GOLD.dropAmountPerDepth * depth) * g));
 
   if (mode === 'campaign') {
     // Kampanyada oyuncu bölümü tekrar tekrar oynayabilir; tek bir koşuda
@@ -116,9 +153,9 @@ export const MAX_DEPTH_CLAIM = 500;
  * ⚠️ Cömert olmak ZORUNDA: gerçek koşu bundan uzun sürer (oyuncu düşmanı
  * anında öldürmez). Amaç dürüst oyuncuyu kırpmak değil, imkânsızı elemek.
  */
-export function minDescentSeconds(stageId: number, depth: number): number {
+export function minDescentSeconds(stageId: number, depth: number, startDepth = 1): number {
   let s = 0;
-  for (let d = 1; d <= depth; d++) {
+  for (let d = Math.max(1, Math.floor(startDepth)); d <= depth; d++) {
     const def = descentStage(stageId, d);
     s += (def.enemyCount / def.spawnRate) * TIME_SAFETY;
   }
@@ -138,15 +175,24 @@ export function minDescentSeconds(stageId: number, depth: number): number {
  */
 const TIME_SAFETY = 0.85;
 
-/** Geçen sürede en fazla hangi derinliğe inilebilirdi */
-export function maxDepthInTime(stageId: number, elapsedSec: number): number {
+/**
+ * Geçen sürede en fazla hangi derinliğe inilebilirdi.
+ *
+ * ⚠️ `startDepth` ŞART. Checkpoint'ten başlayan oyuncu d1..d(start−1)'i
+ * OYNAMIYOR, dolayısıyla o derinliklerin süresini de harcamıyor. Tabanı hep
+ * 1'den saymak, checkpoint kullanan DÜRÜST oyuncuyu "imkânsız hızlı" ilan
+ * edip kırpardı — ve bu sessiz bir hata olurdu: kimse "derinliğim eksik
+ * sayıldı" diye şikâyet etmez, oyun sadece bozuk hissettirir.
+ */
+export function maxDepthInTime(stageId: number, elapsedSec: number, startDepth = 1): number {
+  const from = Math.max(1, Math.floor(startDepth));
   // Süre bilinmiyorsa (Infinity) sınır uygulanmaz — saf hesaplarda ve
   // testlerde `settleRun` süresiz çağrılabiliyor.
-  if (Number.isNaN(elapsedSec) || elapsedSec <= 0) return 0;
+  if (Number.isNaN(elapsedSec) || elapsedSec <= 0) return from - 1;
   if (!Number.isFinite(elapsedSec)) return MAX_DEPTH_CLAIM;
 
   let s = 0;
-  for (let d = 1; d <= MAX_DEPTH_CLAIM; d++) {
+  for (let d = from; d <= MAX_DEPTH_CLAIM; d++) {
     const def = descentStage(stageId, d);
     s += (def.enemyCount / def.spawnRate) * TIME_SAFETY;
     if (s > elapsedSec) return d - 1;
@@ -175,6 +221,11 @@ export function settleRun(
   claim: RunClaim,
   /** koşu açıldığından beri geçen saniye — süre tabanı kontrolü için */
   elapsedSec = Infinity,
+  /**
+   * Koşunun başladığı derinlik. ⚠️ İSTEMCİDEN DEĞİL, Run kaydından gelir —
+   * `/run/start` bunu `allowedStartDepth`'e göre kendisi yazmıştı.
+   */
+  startDepth = 1,
 ): Settlement {
   const reason: string[] = [];
   let capped = false;
@@ -188,10 +239,11 @@ export function settleRun(
   }
   // Süre tabanı — mutlak tavandan çok daha keskin bir sınır
   if (mode === 'descent' && depth > 0) {
-    const fizik = maxDepthInTime(stageId, elapsedSec);
+    // Checkpoint'ten başlayan koşu d1..d(start−1)'i oynamadı; taban oradan sayılır
+    const fizik = maxDepthInTime(stageId, elapsedSec, startDepth);
     if (depth > fizik) {
       reason.push(`derinlik ${depth} → süreye sığan ${fizik} (${Math.round(elapsedSec)} sn)`);
-      depth = fizik;
+      depth = Math.max(0, fizik);
       capped = true;
     }
   }
@@ -202,7 +254,7 @@ export function settleRun(
 
   // 2) Nadir düşüş iddiası — yapısal tavana kırp
   const rawGold = Math.max(0, Math.floor(Number(claim.rareGold) || 0));
-  const goldCap = maxRareGold(mode, stageId, depth);
+  const goldCap = maxRareGold(mode, stageId, depth, greedCeiling(before));
   let rareGold = rawGold;
   if (rareGold > goldCap) {
     rareGold = goldCap;
@@ -236,6 +288,22 @@ export function settleRun(
     capped,
     reason,
   };
+}
+
+/**
+ * Koşunun GERÇEKTEN başlayacağı derinlik.
+ *
+ * İstemci bir istek gönderir, sunucu onu oyuncunun hak ettiği checkpoint'e
+ * KIRPAR. Reddetmek yerine kırpmak bilinçli: oyuncu başka cihazda ilerlemiş
+ * olabilir, elindeki sayı eskimiş olabilir. Kırpma sessizce doğru olanı yapar;
+ * reddetmek ise oynayamayan bir oyuncu üretirdi.
+ */
+export function resolveStartDepth(
+  p: Progress, mode: string, stageId: number, wanted: unknown,
+): number {
+  if (mode !== 'descent') return 0;
+  const w = Math.max(1, Math.floor(Number(wanted) || 1));
+  return Math.min(w, allowedStartDepth(p, stageId));
 }
 
 /** Koşu başlatılabilir mi (bölüm açık mı, descent için bölüm geçilmiş mi) */

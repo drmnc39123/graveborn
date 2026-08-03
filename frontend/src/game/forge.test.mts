@@ -3,11 +3,20 @@
 // ESKİ KISIT (artık geçersiz): oyundaki gold 8.800'de sabitti, ağaç ona göre
 // kısılmıştı. O model oyunu ~30 dakikada bitiriyordu.
 //
-// YENİ KISIT: gold SONSUZ akıyor (derinlik ödülü + nadir düşüş), o yüzden
-//   - ağaç ASLA doymamalı (alacak bir sonraki seviye hep olmalı)
-//   - ama erken oyunda hemen bir şey alınabilmeli (ilk his)
-//   - ve tek para mimarisinde P2W sarmalı için: Forge kalıcı bir TABAN verir,
+// YENİ KISIT (KARMA MODEL): gold SONSUZ akıyor (derinlik ödülü + nadir düşüş).
+//   - Forge erken-orta oyunun güç TABANI; bitirilebilir olması SORUN DEĞİL
+//   - erken oyunda hemen bir şey alınabilmeli (ilk his)
+//   - tek para mimarisinde P2W sarmalı için: Forge kalıcı bir TABAN verir,
 //     motorun STAT_CAP'ini DOLDURMAZ — farkın çoğunu koşu içi ilerleme taşır
+//
+// ⚠️ EMEKLİYE AYRILAN KURAL: "ağaç ASLA doymamalı".
+// O kural Forge'un TEK gold sinki olduğu tasarımdan kalmaydı — dolduğunda
+// harcanacak yer kalmıyor, ekonomi ölüyordu. Karma model kararıyla asıl
+// sinkler sonsuz ve tekrarlanan olanlar (Reliquary, Grave Goods, The Wager,
+// Crypt Deed, Ossuary); Forge'un bitmesi artık bir son değil bir kilometre
+// taşı. Kuralı GERİ KOYMAYIN: geri koymak ağacı yeniden 1,6 milyona şişirir
+// ve ölçülen sonuç şuydu — %84,8'i 3 satırda, en pahalı seviye 157 koşu,
+// yani oyuncuya 15 seçenek gösterip 3 tanesinde karar verdiren sahte bir ağaç.
 //
 // Çalıştır:  npx tsx src/game/forge.test.mts
 
@@ -49,36 +58,54 @@ function levelsAffordable(budget: number): { levels: number; spent: number } {
 
 const tree = treeTotalCost();
 
-console.log('\n[1] Ağaç doymuyor');
+console.log('\n[1] Ağacın büyüklüğü ve şekli');
 const campaignGold = STAGES.reduce((n, st) => n + st.firstClearGold, 0);
 console.log(`     kampanya toplam gold  : ${campaignGold.toLocaleString('en-US')}`);
 console.log(`     ağacın toplam maliyeti: ${tree.toLocaleString('en-US')}`);
-check('ağaç kampanya gelirinden çok pahalı', tree > campaignGold * 20,
-  `${tree} > ${campaignGold * 20}`);
+// Kampanya TEK SEFERLİK içerik. Ağaç onunla dolabiliyorsa descent'in ekonomik
+// bir sebebi kalmaz — merdiven sadece leaderboard süsü olur.
+check('ağaç kampanya gelirinden belirgin pahalı', tree > campaignGold * 2.5,
+  `${tree.toLocaleString('en-US')} > ${(campaignGold * 2.5).toLocaleString('en-US')}`);
 
-// Sonlu bir ağaç, sonsuz bir muslukla ER YA DA GEÇ doyar. Doğru soru
-// "doyar mı" değil, "doyduğu derinliğe ULAŞILABİLİR Mİ" — çünkü zorluk
-// üssel (hpMul = 1.16^d). Doyma noktasını hesaplayıp oradaki duvarı ölçüyoruz.
+// ⚠️ ASIL ŞEKİL TESTİ. Eski ağaçta 15 satırın 3'ü paranın %84,8'ini yutuyordu;
+// geri kalan 12 satır oyuncuya karar gibi görünen ama karar OLMAYAN süstü.
+// Bu bir maliyet sorunu değil GEOMETRİK BÜYÜME sorunuydu: 1,55^19 ≈ 4.133.
+const satirlar = FORGE.map((u) => ({ u, cost: totalCost(u) })).sort((a, b) => b.cost - a.cost);
+const enBuyukPay = satirlar[0].cost / tree;
+const ilkUcPay = (satirlar[0].cost + satirlar[1].cost + satirlar[2].cost) / tree;
+console.log(`     en pahalı satır ${satirlar[0].u.name}: ağacın %${(enBuyukPay * 100).toFixed(1)}'i`);
+console.log(`     ilk 3 satır: ağacın %${(ilkUcPay * 100).toFixed(1)}'i`);
+check('tek satır ağacın %20\'sini geçmiyor', enBuyukPay <= 0.20, `%${(enBuyukPay * 100).toFixed(1)}`);
+check('ilk 3 satır ağacın %45\'ini geçmiyor', ilkUcPay <= 0.45, `%${(ilkUcPay * 100).toFixed(1)}`);
+
+// Bir satırın son seviyesi ilkinin kaç katı — patlama koruması. Uzun satırlarda
+// (maxLevel 20) yüksek growth burayı 4.000 katına çıkarıyordu.
+let enKotuPatlama = 0, patlayan = '';
+for (const u of FORGE) {
+  const oran = costOf(u, u.maxLevel - 1) / costOf(u, 0);
+  if (oran > enKotuPatlama) { enKotuPatlama = oran; patlayan = u.name; }
+}
+console.log(`     en dik satır ${patlayan}: son seviye ilkinin ${Math.round(enKotuPatlama)} katı`);
+check('hiçbir satırda son seviye ilkinin 200 katını geçmiyor', enKotuPatlama <= 200,
+  `${patlayan} ${Math.round(enKotuPatlama)}×`);
+
+// Karma modelde ağaç BİTEBİLİR — ama ancak gerçek descent oyunundan sonra.
+// Sığ oyunla dolabiliyorsa erken oyun tükenmiş demektir.
 let saturationDepth = 0;
 for (let d = 1; d <= 400; d++) {
   if (goldByDepth(5, d) >= tree) { saturationDepth = d; break; }
 }
-const wall = descentStage(5, saturationDepth).hpMul;
-console.log(`     ağacın doyduğu derinlik: ${saturationDepth || '>400'}`);
-console.log(`     o derinlikte düşman canı: ${wall.toExponential(1)}× taban`);
-check('ağaç ancak ULAŞILAMAZ derinlikte doyuyor', saturationDepth === 0 || saturationDepth > 80,
+const wall = descentStage(5, saturationDepth || 400).hpMul;
+console.log(`     ağacın doyduğu derinlik: ${saturationDepth || '>400'} ` +
+  `(orada düşman canı ${wall.toExponential(1)}× taban)`);
+check('ağaç ancak DERİN oyunla doyuyor', saturationDepth === 0 || saturationDepth >= 40,
   `derinlik ${saturationDepth}`);
-check('doyma derinliğindeki duvar aşılamaz (>100.000× can)', wall > 1e5,
-  `${wall.toExponential(1)}×`);
-
-// Gerçekçi tavan: çok iyi bir oyuncu için derinlik ~50. Orada ağaç açık kalmalı.
-const reachable = goldByDepth(5, 50);
-console.log(`     derinlik 50'ye inenin geliri: ${Math.round(reachable).toLocaleString('en-US')}` +
-  ` (ağacın %${Math.round((reachable / tree) * 100)}'i)`);
-check('ulaşılabilir derinlikte ağaç hâlâ açık', reachable < tree * 0.6,
-  `%${Math.round((reachable / tree) * 100)} < %60`);
-check('ama anlamlı ilerleme var', reachable > tree * 0.1,
-  `%${Math.round((reachable / tree) * 100)} > %10`);
+// Sığ oyuncu (d20) ağacı bitirememeli — yoksa ilk gün her şey açılır
+const sig = goldByDepth(5, 20);
+console.log(`     derinlik 20'ye inenin geliri: ${Math.round(sig).toLocaleString('en-US')}` +
+  ` (ağacın %${Math.round((sig / tree) * 100)}'i)`);
+check('sığ oyun ağacın yarısını geçmiyor', sig < tree * 0.5,
+  `%${Math.round((sig / tree) * 100)} < %50`);
 
 console.log('\n[2] Erken oyun hissi');
 const firstStage = STAGES[0].firstClearGold;

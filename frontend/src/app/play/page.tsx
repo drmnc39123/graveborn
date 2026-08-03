@@ -17,7 +17,7 @@ import { Panel, PixelButton } from '@/components/ui/kit';
 import { Card, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
-import { STAGES, challengeRating, depthGold, stageById } from '@/game/config';
+import { STAGES, challengeRating, checkpointFor, depthGold, stageById, startLevelFor } from '@/game/config';
 import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
@@ -95,10 +95,10 @@ export default function PlayPage() {
       .catch(() => setNote('Koşu kaydedilemedi — ödül işlenmedi.'));
   }, [screen, progress]);
 
-  /** Bölüm başlat: cüzdan modunda seed'i ve koşu kimliğini SUNUCU verir */
-  const beginStage = useCallback((stageId: number, mode: RunMode) => {
+  /** Bölüm başlat: cüzdan modunda seed'i, koşu kimliğini ve checkpoint'i SUNUCU verir */
+  const beginStage = useCallback((stageId: number, mode: RunMode, wantStartDepth = 1) => {
     setPanel(null);
-    startRun(mode, stageId)
+    startRun(mode, stageId, wantStartDepth)
       .then((ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }))
       .catch(() => setNote('Koşu başlatılamadı.'));
   }, []);
@@ -129,6 +129,7 @@ export default function PlayPage() {
           mode={screen.mode}
           hero={p.hero}
           seed={screen.ticket.seed}
+          startDepth={screen.ticket.startDepth}
           permanent={mergeBonus(permanentBonus(p.upgrades), charmBonus(screen.ticket.charms))}
           onFinish={finishRun}
         />
@@ -258,7 +259,7 @@ function Row({ label, value, hint }: { label: string; value: number; hint?: stri
 
 function StageSelect({ progress, onPick, onHero }: {
   progress: Progress | null;
-  onPick: (id: number, mode: RunMode) => void;
+  onPick: (id: number, mode: RunMode, startDepth?: number) => void;
   onHero: (id: string) => void;
 }) {
   const p = progress ?? loadProgress();
@@ -305,7 +306,7 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
   cleared: boolean;
   claimed: boolean;
   bestDepth: number;
-  onPick: (id: number, mode: RunMode) => void;
+  onPick: (id: number, mode: RunMode, startDepth?: number) => void;
 }) {
   // Taban süre: düşmanlar spawn hızından çabuk sahneye çıkamaz, hepsi ölmeden
   // bölüm bitmez. Gerçek koşu bundan uzun sürer — "en az" diyoruz.
@@ -314,6 +315,10 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
   const zorluk = Math.max(1, Math.min(5, Math.ceil(Math.log(s.hpMul) / Math.log(1.72) + 1)));
   const derinlikOdemesi = depthGold(s.id, bestDepth + 1);
   const derinlikZorlugu = challengeRating(s.id, bestDepth + 1) / Math.max(1, challengeRating(s.id, 1));
+  // Checkpoint = geçilmiş en derin boss basamağı; koşu onun BİR ALTINDAN başlar
+  const kontrolNoktasi = checkpointFor(bestDepth);
+  const devamDerinligi = kontrolNoktasi + 1;
+  const baslangicSeviyesi = startLevelFor(devamDerinligi);
 
   return (
     <Card accent={cleared} dim={locked}>
@@ -375,32 +380,79 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
 
       {/* ── Descent bacağı — bölüm bir kez temizlenince açılır ── */}
       {cleared && (
-        <button onClick={() => onPick(s.id, 'descent')}
-          style={{ all: 'unset', display: 'block', width: '100%', boxSizing: 'border-box',
-            padding: '10px 13px 12px',
-            borderTop: '1px solid rgba(255,255,255,0.08)',
-            background: 'linear-gradient(180deg, rgba(160,18,38,0.10), rgba(0,0,0,0.20))',
-            cursor: 'pointer' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontWeight: 900, fontSize: 13, color: '#e4657a', letterSpacing: 0.5 }}>⛏ THE DESCENT</span>
-            {bestDepth > 0
-              ? <Tag tone="gold">BEST · DEPTH {bestDepth}</Tag>
-              : <Tag>NEVER ENTERED</Tag>}
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: C.boneFaint }}>
-              endless · no depth pays twice
-            </span>
+        <div style={{
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          background: 'linear-gradient(180deg, rgba(160,18,38,0.10), rgba(0,0,0,0.20))',
+        }}>
+          <div style={{ padding: '10px 13px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 900, fontSize: 13, color: '#e4657a', letterSpacing: 0.5 }}>⛏ THE DESCENT</span>
+              {bestDepth > 0
+                ? <Tag tone="gold">BEST · DEPTH {bestDepth}</Tag>
+                : <Tag>NEVER ENTERED</Tag>}
+              <span style={{ marginLeft: 'auto', fontSize: 10, color: C.boneFaint }}>
+                endless · no depth pays twice
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: C.candle }}>
+                Depth {bestDepth + 1} pays {derinlikOdemesi.toLocaleString('en-US')} gold
+              </span>
+              <Tag tone="blood" title="How much harder than depth 1">
+                ×{derinlikZorlugu.toFixed(1)} HARDER
+              </Tag>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: C.candle }}>
-              Depth {bestDepth + 1} pays {derinlikOdemesi.toLocaleString('en-US')} gold
-            </span>
-            <Tag tone="blood" title="How much harder than depth 1">
-              ×{derinlikZorlugu.toFixed(1)} HARDER
-            </Tag>
+
+          {/* ── Nereden başlanacak ──
+              Checkpoint yoksa (hiç boss derinliği geçilmemişse) tek düğme
+              kalır — ortada seçim yokken iki düğme göstermek kullanıcıya
+              olmayan bir karar verdirmek olurdu. */}
+          <div style={{ display: 'flex', gap: 7, padding: '9px 13px 12px', flexWrap: 'wrap' }}>
+            <DescentStart
+              label={kontrolNoktasi > 0 ? `RESUME · DEPTH ${devamDerinligi}` : 'ENTER · DEPTH 1'}
+              hint={kontrolNoktasi > 0
+                ? `Start at the last checkpoint with level ${baslangicSeviyesi} to draft`
+                : 'Clear a boss depth to unlock a checkpoint'}
+              primary
+              onClick={() => onPick(s.id, 'descent', devamDerinligi)}
+            />
+            {kontrolNoktasi > 0 && (
+              <DescentStart
+                label="FROM THE TOP"
+                hint="Depth 1 · build from nothing"
+                onClick={() => onPick(s.id, 'descent', 1)}
+              />
+            )}
           </div>
-        </button>
+        </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * Descent giriş düğmesi. İki seçenek de aynı görsel dili konuşsun diye ayrı
+ * bileşen — biri "kaldığın yerden", diğeri "baştan".
+ */
+function DescentStart({ label, hint, primary, onClick }: {
+  label: string;
+  hint: string;
+  primary?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick}
+      style={{ all: 'unset', flex: '1 1 150px', boxSizing: 'border-box', cursor: 'pointer',
+        padding: '9px 11px', borderRadius: 7,
+        background: primary
+          ? 'linear-gradient(180deg, rgba(160,18,38,0.42), rgba(120,12,28,0.30))'
+          : 'rgba(255,255,255,0.05)',
+        border: `1px solid ${primary ? 'rgba(228,101,122,0.55)' : 'rgba(255,255,255,0.12)'}` }}>
+      <div style={{ fontSize: 11.5, fontWeight: 900, letterSpacing: 0.8,
+        color: primary ? '#ffd9df' : C.bone }}>{label}</div>
+      <div style={{ fontSize: 10, color: C.boneFaint, marginTop: 3, lineHeight: 1.35 }}>{hint}</div>
+    </button>
   );
 }
 

@@ -10,7 +10,7 @@
 // hiç karışmaz (bkz. session.ts).
 
 import {
-  applyRunResult, loadProgress, paidDepth, saveProgress,
+  allowedStartDepth, applyRunResult, loadProgress, paidDepth, saveProgress,
   type Progress, type RunResult,
 } from '@/game/progress';
 import { CHARM_SLOTS } from '@/game/charms';
@@ -31,6 +31,11 @@ export interface RunTicket {
   seed: number;
   /** koşuya taşınan tılsımlar — açılışta tüketildiler, artık bu koşuya ait */
   charms: string[];
+  /**
+   * Koşunun başlayacağı derinlik. ⚠️ SUNUCUNUN kararı — motor bu değerle
+   * kurulmalı, yoksa oynanan koşu ile doğrulanan koşu ayrışır.
+   */
+  startDepth: number;
 }
 
 const isWallet = () => getMode() === 'wallet';
@@ -158,19 +163,32 @@ export async function buyCharm(id: string, current: Progress, cost: number): Pro
   return progress;
 }
 
-export async function startRun(mode: 'campaign' | 'descent', stageId: number): Promise<RunTicket> {
+export async function startRun(
+  mode: 'campaign' | 'descent', stageId: number,
+  /** oyuncunun seçtiği checkpoint — SUNUCU kırpar, burada gönderilen sadece bir istek */
+  wantStartDepth = 1,
+): Promise<RunTicket> {
   if (!isWallet()) {
     // ⚠️ Demoda da tılsımlar koşu AÇILIRKEN yanar — cüzdan modundaki kuralın
     // aynısı, yoksa iki mod farklı davranır ve demo yanıltıcı olur.
     const p = loadProgress();
     const charms = p.charms;
     if (charms.length) saveProgress({ ...p, charms: [] });
-    return { runId: null, seed: demoSeed(mode, stageId), charms };
+    // Demoda sunucu yok; kırpmayı aynı saf fonksiyonla İSTEMCİ yapar. Kural
+    // tek yerde kalsın diye `allowedStartDepth` burada da çağrılıyor.
+    const start = mode === 'descent'
+      ? Math.min(Math.max(1, wantStartDepth), allowedStartDepth(p, stageId)) : 1;
+    return { runId: null, seed: demoSeed(mode, stageId), charms, startDepth: start };
   }
-  const out = await api<{ runId: string; seed: number; charms?: string[] }>('/run/start', {
-    method: 'POST', body: { mode, stageId },
-  });
-  return { runId: out.runId, seed: out.seed, charms: out.charms ?? [] };
+  const out = await api<{ runId: string; seed: number; charms?: string[]; startDepth?: number }>(
+    '/run/start', { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth } },
+  );
+  // ⚠️ SUNUCUNUN döndürdüğü değer kullanılır, istenen değil. Motoru başka bir
+  // derinlikte kurmak koşuyu doğrulanamaz hale getirirdi.
+  return {
+    runId: out.runId, seed: out.seed, charms: out.charms ?? [],
+    startDepth: Math.max(1, out.startDepth ?? 1),
+  };
 }
 
 export async function finishRun(

@@ -11,7 +11,7 @@ import cors from 'cors';
 import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
-import { canStart, settleRun } from './reward.js';
+import { canStart, resolveStartDepth, settleRun } from './reward.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
 import { paidDepth } from '@game/progress';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
@@ -161,6 +161,11 @@ app.post('/charm/buy', wrap(async (req, res) => {
 const startSchema = z.object({
   mode: z.enum(['campaign', 'descent']),
   stageId: z.number().int().min(1).max(99),
+  /**
+   * İstemcinin başlamak İSTEDİĞİ derinlik. Bir istek, bir izin değil —
+   * `resolveStartDepth` bunu oyuncunun hak ettiği checkpoint'e kırpar.
+   */
+  startDepth: z.number().int().min(1).max(100000).optional(),
 });
 
 app.post('/run/start', wrap(async (req, res) => {
@@ -190,15 +195,21 @@ app.post('/run/start', wrap(async (req, res) => {
     await prisma.player.update({ where: { wallet }, data: { charms: [] } });
   }
 
+  // Checkpoint SUNUCUDA çözülür — istemcinin isteği burada kırpılır
+  const startDepth = resolveStartDepth(p, body.data.mode, body.data.stageId, body.data.startDepth);
+
   await prisma.run.create({
     data: {
       id: runId, wallet, seed: BigInt(seed), hero: p.hero,
       mode: body.data.mode, stageId: body.data.stageId,
+      startDepth: Math.max(1, startDepth),
     },
   });
   // BigInt JSON'a serileşmez; seed uint32 olduğu için Number'a sığar.
   // `charms` geri dönüyor: istemci koşuyu bu tılsımlarla kuracak.
-  res.json({ runId, seed, hero: p.hero, charms });
+  // `startDepth` de dönüyor: istemci motoru BU değerle kurmak ZORUNDA, yoksa
+  // oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
+  res.json({ runId, seed, hero: p.hero, charms, startDepth });
 }));
 
 const finishSchema = z.object({
@@ -226,7 +237,10 @@ app.post('/run/finish', wrap(async (req, res) => {
   const player = await getOrCreatePlayer(wallet);
   const before = toProgress(player);
   const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
-  const s = settleRun(before, run.mode as 'campaign' | 'descent', run.stageId, body.data, elapsedSec);
+  const s = settleRun(
+    before, run.mode as 'campaign' | 'descent', run.stageId, body.data, elapsedSec,
+    run.startDepth,
+  );
 
   const [saved] = await prisma.$transaction([
     prisma.player.update({ where: { wallet }, data: fromProgress(s.progress) }),

@@ -76,6 +76,11 @@ model Run {
   mode    String
   stageId Int
   hero    String
+  /// ⚠️ Descent'in başladığı derinlik (checkpoint). SUNUCU yazar, istemci
+  /// seçemez: kapanışta süre tabanı buradan sayılıyor ve "d400'den başladım,
+  /// d401'i geçtim" iddiası ancak burada tutulan gerçek değerle çürütülebilir.
+  /// Eski koşularda 1 (varsayılan) zaten doğru değer.
+  startDepth Int @default(1)
 
   startedAt DateTime  @default(now())
   claimedAt DateTime?

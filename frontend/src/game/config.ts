@@ -183,7 +183,54 @@ export const DESCENT = {
   bossGrowth: 1.35,
   /** her 3 derinlikte havuza bir düşman tipi daha eklenir */
   poolEvery: 3,
+
+  /**
+   * CHECKPOINT'TEN BAŞLARKEN VERİLEN SEVİYE — `startLevelFor` bunu kullanır.
+   *
+   * Uydurma değil ÖLÇÜM: `curve.test.mts` dürüst bir inişte oyuncunun her
+   * derinlikte kaçıncı seviyede olduğunu kaydediyor. Ölçülen medyan koşu:
+   *   d1→LV3 · d5→LV8 · d10→LV12 · d15→LV17 · d17→LV18
+   * Buna oturan doğru: LV ≈ 3 + 0,95·(d−1).
+   *
+   * ⚠️ KASITLI OLARAK BİRAZ CİMRİ (ölçülenin ~1 seviye altı). Checkpoint'ten
+   * başlamak, o derinliğe kendi inmekten GÜÇLÜ olmamalı; yoksa oyuncu için
+   * en kârlı strateji koşuyu baştan oynamak yerine hep checkpoint'ten
+   * başlamak olurdu ve merdivenin ortası ölü içeriğe dönerdi.
+   */
+  startLevelBase: 3,
+  startLevelPerDepth: 0.95,
 } as const;
+
+/**
+ * CHECKPOINT — bir derinliğe kadar inmiş oyuncunun geri dönebileceği basamak.
+ *
+ * NEDEN VAR: descent her koşuda derinlik 1'den başlıyordu. d20'yi görmek
+ * isteyen oyuncu d1..d19'u HER SEFERİNDE yeniden temizlemek zorundaydı ve
+ * ölçüldü — koşunun %71'i zaten ödenmiş, ödül vermeyen derinliklerde geçiyordu.
+ * Bu sadece can sıkıcı değil, ekonomiyi de kırıyordu: 30 dakikalık süre tavanı
+ * oyuncuyu CAN'ından önce TAKVİM'den durduruyordu.
+ *
+ * Boss derinlikleri checkpoint: merdivenin zaten var olan ritmi, ayrı bir
+ * kavram uydurmaya gerek yok.
+ */
+export function checkpointFor(depth: number): number {
+  const d = Math.max(0, Math.floor(depth));
+  return Math.floor(d / DESCENT.bossEvery) * DESCENT.bossEvery;
+}
+
+/**
+ * Checkpoint'ten başlayan koşuya verilecek başlangıç seviyesi.
+ *
+ * Seviyeler HEDİYE EDİLMEZ, DRAFT EDİLİR: motor bunları bekleyen level-up
+ * olarak kuyruğa alır, oyuncu kartları normal ekrandan kendi seçer. Böylece
+ * "hazır build" verilmiş olmuyor — VS'in asıl keyfi olan seçim korunuyor.
+ */
+export function startLevelFor(startDepth: number): number {
+  const d = Math.floor(startDepth);
+  if (d <= 1) return 1;
+  // Başlangıç derinliği d ise oyuncu (d−1)'i temizlemiş sayılır
+  return Math.max(1, Math.round(DESCENT.startLevelBase + DESCENT.startLevelPerDepth * (d - 2)));
+}
 
 /**
  * Derinlik d için bölüm tanımı üretir. SAF FONKSİYON — motor bunu çağırır,
@@ -282,8 +329,17 @@ export function depthGold(stageId: number, depth: number): number {
 /**
  * Bir kill'in gold düşürme ihtimali. Derinlikle iyileşir → derin oyuncu
  * üretici, sığ oyuncu/bot cüzi kalır.
- * ⚠️ Bu ihtimal Forge'a BAĞLANMAZ (greed burayı çarpmaz) — yoksa
- * "gold al → düşüş oranını artır → daha çok gold" sarmalı kurulur.
+ *
+ * ⚠️ İHTİMAL Forge'a BAĞLANMAZ — `greed` burayı çarpmaz. Sarmal riski
+ * ihtimalde gerçek: ihtimal zaten derinlikle büyüyor, bir de gold ile
+ * büyütmek iki üssel etkiyi çarpardı.
+ *
+ * MİKTAR ise (bkz. rareDropAmount) greed ile çarpılır. Bu ölçümden gelen bir
+ * düzeltme: `greed` yalnızca İLERLEME ödülünü çarpıyordu ve duvarına çarpmış
+ * oyuncuda ilerleme ödülü 0 olduğu için tam ihtiyaç anında ÖLÜ bir
+ * yükseltmeydi (19.129 gold yatırıp sıfır getiri). Aynı hata `Coin Mask`
+ * pasifini de baştan beri tamamen işlevsiz bırakıyordu. Miktarı çarpmak
+ * sarmal kurmuyor: doğrusal bir çarpan, maliyeti geometrik satın alınıyor.
  */
 export function rareDropChance(depth: number): number {
   const d = Math.max(0, Math.floor(depth));
@@ -764,6 +820,11 @@ export const STAT_CAP: Partial<Record<StatKey, number>> = {
   // görsel gürültü sorunu (ekran sürekli sarı sayı olurdu).
   crit: 0.6,
   critMul: 4,
+  // ⚠️ `greed` artık nadir düşüş MİKTARINI çarpıyor, yani musluğun doğrudan
+  // parçası. Tavansız bırakmak sunucunun yapısal gold tavanını da tavansız
+  // bırakırdı (bkz. reward.maxRareGold). Forge (+0,72) + Coin Mask (+0,50)
+  // toplamı 2,22; 2,5 rahat ama kapalı bir sınır.
+  greed: 2.5,
 };
 export const COOLDOWN_FLOOR = 0.10; // %10 — VS'in dibi
 

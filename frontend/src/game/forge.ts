@@ -53,32 +53,56 @@ export function effectText(u: ForgeUpgrade, level: number): string {
   return `${u.inverse ? '−' : '+'}${Math.round(v * 100)}%`;
 }
 
+/**
+ * ⚠️ `growth` DEĞERLERİ ÖLÇÜMLE BELİRLENDİ — göz kararı değil.
+ *
+ * Eski tabloda hepsi ~1,55'ti ve sonuç şuydu (`curve.test.mts` ile ölçüldü):
+ *   • ağaç toplamı 1.635.887 gold — tekrar koşusu geliriyle ~510 SAAT
+ *   • ağacın %84,8'i SADECE 3 satırda (Whetstone + Thick Hide + Wide Swing)
+ *   • en pahalı tek seviye 186.001 gold = 157 tekrar koşusu
+ *
+ * 1,55^19 ≈ 4.133 olduğu için 20 seviyeli satırlar diğer her şeyi eziyordu:
+ * oyuncuya 15 seçenek gösteriliyor ama gerçek karar 3 tanesindeydi, kalan 12
+ * satır süstü. Sorun seçeneklerin sayısında değil, geometrik büyümenin uzun
+ * satırlarda patlamasındaydı — bu yüzden düzeltme maxLevel'ı kısmak DEĞİL,
+ * satır başına HEDEF MALİYET tutturan growth'u çözmek oldu.
+ *
+ * Yeni tablo: ağaç 249.370 · ilk 3 satır %33,2 · en pahalı seviye 7.364.
+ * Ağacın tamamı hâlâ uzun vadeli bir hedef (~210 tekrar koşusu) ama artık
+ * 20 seviyenin HEPSİ alınabilir bir karar.
+ */
 export const FORGE: readonly ForgeUpgrade[] = [
   // ── ucuz giriş: ilk bölümün ardından hemen bir şey alınabilmeli ──
-  { id: 'might', name: 'Whetstone', desc: '+5% damage', stat: 'might', perLevel: 0.05, maxLevel: 20, baseCost: 45, growth: 1.55 },
-  { id: 'health', name: 'Thick Hide', desc: '+6% max health', stat: 'maxHp', perLevel: 0.06, maxLevel: 20, baseCost: 45, growth: 1.55 },
-  { id: 'greed', name: 'Coin Sense', desc: '+6% gold from new depths', stat: 'greed', perLevel: 0.06, maxLevel: 12, baseCost: 55, growth: 1.55 },
-  { id: 'magnet', name: 'Grave Pull', desc: '+6% pickup radius', stat: 'magnet', perLevel: 0.06, maxLevel: 12, baseCost: 55, growth: 1.52 },
+  { id: 'might', name: 'Whetstone', desc: '+5% damage', stat: 'might', perLevel: 0.05, maxLevel: 20, baseCost: 45, growth: 1.30 },
+  { id: 'health', name: 'Thick Hide', desc: '+6% max health', stat: 'maxHp', perLevel: 0.06, maxLevel: 20, baseCost: 45, growth: 1.30 },
+  // ⚠️ Açıklama "from new depths" DEĞİL: greed artık nadir düşüş miktarını da
+  // çarpıyor (bkz. config.rareDropChance başlığı). Eski metin, duvarına
+  // çarpmış oyuncuya işe yaramaz bir şey sattığımızı gizliyordu.
+  { id: 'greed', name: 'Coin Sense', desc: '+6% gold from every source', stat: 'greed', perLevel: 0.06, maxLevel: 12, baseCost: 55, growth: 1.51 },
+  { id: 'magnet', name: 'Grave Pull', desc: '+6% pickup radius', stat: 'magnet', perLevel: 0.06, maxLevel: 12, baseCost: 55, growth: 1.47 },
 
   // ── orta kademe ──
-  { id: 'area', name: 'Wide Swing', desc: '+4% attack area', stat: 'area', perLevel: 0.04, maxLevel: 18, baseCost: 70, growth: 1.55 },
-  { id: 'recovery', name: 'Slow Mend', desc: '+0.12 HP/sec', stat: 'recovery', perLevel: 0.12, maxLevel: 12, baseCost: 70, growth: 1.55, unit: 'hpsec' },
-  { id: 'pspeed', name: 'Swift Shot', desc: '+5% projectile speed', stat: 'projSpeed', perLevel: 0.05, maxLevel: 10, baseCost: 80, growth: 1.55 },
-  { id: 'duration', name: 'Lasting Mark', desc: '+5% effect duration', stat: 'duration', perLevel: 0.05, maxLevel: 10, baseCost: 80, growth: 1.55 },
+  { id: 'area', name: 'Wide Swing', desc: '+4% attack area', stat: 'area', perLevel: 0.04, maxLevel: 18, baseCost: 70, growth: 1.30 },
+  { id: 'recovery', name: 'Slow Mend', desc: '+0.12 HP/sec', stat: 'recovery', perLevel: 0.12, maxLevel: 12, baseCost: 70, growth: 1.48, unit: 'hpsec' },
+  { id: 'pspeed', name: 'Swift Shot', desc: '+5% projectile speed', stat: 'projSpeed', perLevel: 0.05, maxLevel: 10, baseCost: 80, growth: 1.56 },
+  { id: 'duration', name: 'Lasting Mark', desc: '+5% effect duration', stat: 'duration', perLevel: 0.05, maxLevel: 10, baseCost: 80, growth: 1.56 },
   // Hareket hızı survivors-like'ta en güçlü istatistik — bilerek küçük adımlı
-  { id: 'mspeed', name: 'Restless Boots', desc: '+3% move speed', stat: 'moveSpeed', perLevel: 0.03, maxLevel: 12, baseCost: 90, growth: 1.58 },
+  { id: 'mspeed', name: 'Restless Boots', desc: '+3% move speed', stat: 'moveSpeed', perLevel: 0.03, maxLevel: 12, baseCost: 90, growth: 1.45 },
 
   // ── pahalı, güçlü ──
-  { id: 'armor', name: 'Bone Plating', desc: '+1 armor (flat damage cut)', stat: 'armor', perLevel: 1, maxLevel: 10, baseCost: 120, growth: 1.62, unit: 'flat' },
-  { id: 'cooldown', name: 'Quick Hands', desc: '-2% cooldown', stat: 'cooldown', perLevel: 0.02, maxLevel: 12, baseCost: 130, growth: 1.58, inverse: true },
-  { id: 'growth', name: 'Soul Harvest', desc: '+5% experience', stat: 'growth', perLevel: 0.05, maxLevel: 10, baseCost: 150, growth: 1.6 },
+  { id: 'armor', name: 'Bone Plating', desc: '+1 armor (flat damage cut)', stat: 'armor', perLevel: 1, maxLevel: 10, baseCost: 120, growth: 1.58, unit: 'flat' },
+  { id: 'cooldown', name: 'Quick Hands', desc: '-2% cooldown', stat: 'cooldown', perLevel: 0.02, maxLevel: 12, baseCost: 130, growth: 1.41, inverse: true },
+  { id: 'growth', name: 'Soul Harvest', desc: '+5% experience', stat: 'growth', perLevel: 0.05, maxLevel: 10, baseCost: 150, growth: 1.51 },
 
   // ── risk/ödül: düşman güçlenir ama sürü de kalabalıklaşır ──
-  { id: 'curse', name: 'Cursed Blood', desc: '+8% curse — deadlier enemies, more of them', stat: 'curse', perLevel: 0.08, maxLevel: 8, baseCost: 90, growth: 1.5 },
+  { id: 'curse', name: 'Cursed Blood', desc: '+8% curse — deadlier enemies, more of them', stat: 'curse', perLevel: 0.08, maxLevel: 8, baseCost: 90, growth: 1.71 },
 
   // ── nadir, oyunu değiştiren alımlar ──
-  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 900, growth: 3.0, unit: 'flat' },
-  { id: 'revival', name: 'Second Burial', desc: '+1 revival per run', stat: 'revival', perLevel: 1, maxLevel: 3, baseCost: 700, growth: 2.6, unit: 'flat' },
+  // ⚠️ Bu ikisinde growth DEĞİL baseCost yükseltildi: sadece 3 seviyeleri var,
+  // geometrik büyüme 3 adımda anlamlı bir toplam üretemiyor. Oyunu değiştiren
+  // alımlar pahalı KALMALI, yoksa erken oyunda alınıp eğriyi düzleştirirler.
+  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 1400, growth: 2.4, unit: 'flat' },
+  { id: 'revival', name: 'Second Burial', desc: '+1 revival per run', stat: 'revival', perLevel: 1, maxLevel: 3, baseCost: 1100, growth: 2.4, unit: 'flat' },
 ] as const;
 
 /** Bir sonraki seviyenin maliyeti (level = şu anki seviye, 0 = hiç alınmamış) */

@@ -10,7 +10,7 @@
 // sunucu run özetini doğrulayıp gold'u KENDİSİ hesaplayacak. Buradaki
 // fonksiyonlar sunucuda BİREBİR çalıştırılabilsin diye saf tutuluyor.
 
-import { STAGES, depthGold, stageById } from './config';
+import { STAGES, checkpointFor, depthGold, stageById } from './config';
 import { permanentBonus } from './forge';
 import { DEFAULT_HERO, heroById } from './heroes';
 import { CHARM_SLOTS, charmById } from './charms';
@@ -156,6 +156,21 @@ export function firstClearAvailable(p: Progress, stageId: number): number {
 /** Descent'te bu bölümde ödeme yapılmış en derin seviye */
 export function paidDepth(p: Progress, stageId: number): number {
   return Math.max(0, Number(p.depthPaid[stageId]) || 0);
+}
+
+/**
+ * Koşunun başlayabileceği EN DERİN nokta — checkpoint'in bir altı.
+ *
+ * ⚠️ SUNUCUNUN KARARI. `/run/start` bu fonksiyonu çağırıp izin verilen değeri
+ * Run kaydına yazar; istemcinin gönderdiği sayı doğrudan kullanılmaz.
+ *
+ * Ödül kuralı DEĞİŞMEZ: ödeme hâlâ yalnızca `depthPaid`'in ötesindeki
+ * derinlikler için yapılır. Checkpoint sadece oyuncuyu oraya kadar
+ * ışınlıyor — para basmıyor. d23'e inmiş oyuncu d21'den başlar, d21..d23'ü
+ * bedava tekrar oynar (nadir düşüş hariç), kazancı d24'te başlar.
+ */
+export function allowedStartDepth(p: Progress, stageId: number): number {
+  return checkpointFor(paidDepth(p, stageId)) + 1;
 }
 
 /** `from`(hariç) → `to`(dahil) arası derinliklerin toplam ödülü */

@@ -10,7 +10,7 @@ import { SpatialHash } from './spatial';
 import {
   BOSS, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
-  WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, weaponById,
+  WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, startLevelFor, weaponById,
   weaponCooldownAt, weaponCountAt, weaponDamageAt, xpForLevel,
   type Behavior, type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
 } from './config';
@@ -167,6 +167,15 @@ export class Game {
   xp = 0;
   xpNext: number = xpForLevel(1);
 
+  /** descent'in başladığı derinlik (checkpoint); campaign'de 0 */
+  readonly startDepth: number;
+  /**
+   * Başlangıç draft'ında oyuncunun SEÇMESİ gereken kalan seviye sayısı.
+   * Koşu saati bunlar bitene kadar İŞLEMEZ — yoksa süre tabanı doğrulaması
+   * draft ekranında geçen saniyeleri oynanmış sanardı.
+   */
+  pendingLevels = 0;
+
   // run durumu
   time = 0;
   phase: Phase = 'running';
@@ -266,6 +275,16 @@ export class Game {
     permanent: Partial<Record<StatKey, number>> = {},
     mode: RunMode = 'campaign',
     heroId: string = DEFAULT_HERO,
+    /**
+     * Descent'in başlayacağı derinlik (checkpoint). 1 = merdivenin başı.
+     *
+     * ⚠️ İSTEMCİ BUNU SEÇEMEZ. Sunucu `/run/start`'ta oyuncunun ödemesi
+     * yapılmış derinliğine bakıp izin verilen değeri KENDİ belirler ve Run
+     * kaydına yazar; koşu kapanırken de istemcinin gönderdiğini değil o
+     * kayıttaki değeri kullanır. Aksi hâlde "derinlik 400'den başladım,
+     * 401'i temizledim" tek koşuda servet basardı.
+     */
+    startDepth = 1,
   ) {
     this.seed = seed;
     this.rng = createRng(seed);
@@ -274,19 +293,27 @@ export class Game {
     // Karakter eğilimi Forge bonuslarıyla AYNI kanaldan geçer — ayrı bir kod
     // yolu yok, ikisi toplanır. Sunucu da aynı fonksiyonu çalıştırabilir.
     this.permanent = mergeStats(hero.stats, permanent);
-    // descent'te 1. derinlikten başlanır; verilen stageDef sadece "hangi bölümün
-    // merdiveni" bilgisini taşır, asıl tanım descentStage()'ten gelir
-    const startDef = mode === 'descent' ? descentStage(stageDef.id, 1) : stageDef;
+    // Verilen stageDef sadece "hangi bölümün merdiveni" bilgisini taşır,
+    // descent'te asıl tanım descentStage()'ten gelir
+    const start = mode === 'descent' ? Math.max(1, Math.floor(startDepth)) : 0;
+    const startDef = mode === 'descent' ? descentStage(stageDef.id, start) : stageDef;
     this.baseStageId = stageDef.id;
+    this.startDepth = start;
     this.stage = {
       def: startDef,
       toSpawn: startDef.enemyCount,
       killed: 0,
       bossSpawned: false,
       mode,
-      depth: mode === 'descent' ? 1 : 0,
+      depth: start,
+      // ⚠️ 0'DAN BAŞLAR, start−1'den değil: bu alan "BU koşuda temizlenen en
+      // derin seviye" demek. Checkpoint'ten başlayan oyuncu d15'i bu koşuda
+      // OYNAMADI; oraya yazmak oynanmamış bir derinliği iddia etmek olurdu.
       deepestCleared: 0,
     };
+    // Checkpoint'e kadarki seviyeler bekleyen level-up olarak kuyruğa girer —
+    // oyuncu kartları normal ekrandan kendi seçer (bkz. startLevelFor)
+    this.pendingLevels = start > 1 ? Math.max(0, startLevelFor(start) - 1) : 0;
     this.recomputeStats();          // kalıcı bonuslar daha ilk kareden geçerli
     this.hp = this.stats.maxHp;     // +max can alındıysa dolu başla
     // Başlangıç silahı KARAKTERDEN gelir (VS'te her karakterin imza silahı var)
@@ -380,6 +407,13 @@ export class Game {
   /** Bir sabit tick ilerlet. dt HER ZAMAN TICK'tir — değişken dt kabul edilmez. */
   step() {
     if (this.phase !== 'running') return;
+    // BAŞLANGIÇ DRAFT'I — checkpoint'ten başlayan koşuda birikmiş seviyeler
+    // sırayla sunulur. Saat ilerlemeden ÖNCE, çünkü draft oyun süresi değil.
+    if (this.pendingLevels > 0) {
+      this.pendingLevels -= 1;
+      this.levelUp();
+      return;
+    }
     const dt = TICK;
     this.time += dt;
     // Güvenlik tavanı — bölüm bir şekilde bitmezse run sonsuza kadar sürmesin
@@ -1264,7 +1298,10 @@ export class Game {
     const hit = this.rng.next() < rareDropChance(depth);
     const roll = this.rng.next();
     if (hit) {
-      this.rareGold += rareDropAmount(depth, roll);
+      // ⚠️ `greed` MİKTARI çarpar, İHTİMALİ değil (bkz. rareDropChance başlığı).
+      // Zar zaten atıldı — çarpma RNG tüketmiyor, yani mühür kaymıyor.
+      // greed tabanı 1.0 olduğu için yükseltmesiz oyuncuda etkisi yok.
+      this.rareGold += rareDropAmount(depth, roll) * Math.max(1, this.stats.greed);
       this.events.add('coin');
     }
   }
@@ -1328,12 +1365,24 @@ export class Game {
     this.xp += amount * this.stats.growth; // Grave Crown
     if (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
-      this.level += 1;
-      this.xpNext = xpForLevel(this.level);
-      this.rollOffers();
-      this.events.add('levelup');
-      this.phase = 'levelup';
+      this.levelUp();
     }
+  }
+
+  /**
+   * Bir seviye atla ve kart ekranını aç.
+   *
+   * ⚠️ `rollOffers()` RNG TÜKETİR. Bu yüzden çağıran taraf koşullu olmamalı:
+   * `pendingLevels` sadece checkpoint'li koşularda 0'dan büyük, normal koşuda
+   * bu yol hiç işlemiyor — yani derinlik 1'den başlayan tüm eski seed'ler
+   * aynı akışı görüyor ve SIM_VERSION artmıyor.
+   */
+  private levelUp() {
+    this.level += 1;
+    this.xpNext = xpForLevel(this.level);
+    this.rollOffers();
+    this.events.add('levelup');
+    this.phase = 'levelup';
   }
 
   /**
@@ -1443,6 +1492,7 @@ export class Game {
       seed: this.seed,
       mode: this.stage.mode,
       stageId: this.baseStageId,
+      startDepth: this.startDepth,
       depth: this.stage.depth,
       deepestCleared: this.stage.deepestCleared,
       durationSec: Math.round(this.time),
