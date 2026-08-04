@@ -22,6 +22,7 @@ import { C, FONT, glass, ctaButton } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
+import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
@@ -93,6 +94,10 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   auraRef.current = aura;
   const limitRef = useRef(timeLimitSec);
   limitRef.current = timeLimitSec;
+  /** görünen ipucu — ref'te, çünkü döngü her karede okuyor */
+  const hintRef = useRef<{ def: HintDef; at: number } | null>(null);
+  const seenRef = useRef<string[]>([]);
+  const [hint, setHint] = useState<string | null>(null);
   const keysRef = useRef(new Set<string>());
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
   const [hud, setHud] = useState<Hud | null>(null);
@@ -148,6 +153,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       (window as unknown as { __gbGame?: Game }).__gbGame = game;
     }
     resetEffects(); // önceki run'ın patlamaları yeni run'a taşmasın
+    // ⚠️ Görülenler HER KOŞUDA yeniden okunur: oyuncu ayarlardan sıfırlarsa
+    // bir sonraki koşuda ipuçları geri gelmeli.
+    seenRef.current = loadSeenHints();
+    hintRef.current = null;
+    setHint(null);
 
     let dpr = 1;
     let cssW = 0;
@@ -293,6 +303,25 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       hudAcc += rawDt;
       if (hudAcc >= 1 / 12 || game.phase !== 'running') {
         hudAcc = 0;
+
+        // ── TUTORIAL ──
+        // ⚠️ HUD örneklemesine bağlı: ayrı bir zamanlayıcı kurmak 60Hz'de
+        // ikinci bir React akışı açardı. Motor OKUNUYOR, hiçbir alan yazılmıyor.
+        if (hintRef.current) {
+          // görünen ipucunun süresi doldu mu (OYUN zamanı — duraklamada donar)
+          if (game.time - hintRef.current.at >= hintRef.current.def.hold) {
+            hintRef.current = null;
+            setHint(null);
+          }
+        } else {
+          const h = nextHint(game, seenRef.current);
+          if (h) {
+            hintRef.current = { def: h, at: game.time };
+            seenRef.current = [...seenRef.current, h.id];
+            markHintSeen(h.id);
+            setHint(h.text);
+          }
+        }
         setHud({
           time: game.time, hp: game.hp, maxHp: game.stats.maxHp, level: game.level,
           xp: game.xp, xpNext: game.xpNext, kills: game.kills, rareGold: game.rareGold,
@@ -475,6 +504,30 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 3, color: C.boneFaint, marginBottom: 2 }}>DESCENDING</div>
           <div style={{ fontSize: 40, fontWeight: 900, color: C.bone, textShadow: `0 0 26px ${C.blood}, 0 2px 0 ${C.void}` }}>
             DEPTH {hud.depth}
+          </div>
+        </div>
+      )}
+
+      {/* ── TUTORIAL İPUCU ──
+          ⚠️ ALTTA duruyor: level-up kartları ekranın ortasında, derinlik
+          bandı %26'da. Üstte olsaydı ilk kart seçiminde tam üstüne binerdi.
+          ⚠️ `pointerEvents: none` — ipucu ASLA tıklamayı yemez; oyuncu
+          altındaki bir şeye basmaya çalışırken engellenmemeli. */}
+      {hint && hud?.phase === 'running' && (
+        <div style={{
+          position: 'absolute', left: 0, right: 0, bottom: 96,
+          display: 'flex', justifyContent: 'center', pointerEvents: 'none', padding: '0 16px',
+        }}>
+          <div style={{
+            ...glass(10), padding: '10px 15px', maxWidth: 460,
+            fontFamily: FONT.ui, fontSize: 12.5, lineHeight: 1.5,
+            color: C.bone, textAlign: 'center',
+            borderColor: `${C.candle}44`,
+          }}>
+            <span style={{ color: C.candle, fontWeight: 900, letterSpacing: 1.2, fontSize: 9.5 }}>
+              A VOICE FROM THE DARK
+            </span>
+            <div style={{ marginTop: 4 }}>{hint}</div>
           </div>
         </div>
       )}

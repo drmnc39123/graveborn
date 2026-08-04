@@ -14,6 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { applyFxSettings } from '@/game/fx';
 import { loadSettings, saveSettings, type Settings } from '@/game/settings';
 import { setVolume } from '@/game/sfx';
+import { resetHints } from '@/game/tutorial';
 import { Card, CardSection } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
 
@@ -59,6 +60,7 @@ function Toggle({ label, hint, on, onChange }: {
 
 export function SettingsPanel() {
   const [s, setS] = useState<Settings | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
 
   useEffect(() => { setS(applyStoredSettings()); }, []);
 
@@ -136,6 +138,34 @@ export function SettingsPanel() {
           />
         </Card>
       </div>
+
+      {/* ⚠️ Tutorial ipuçları bir kez görünüp bir daha çıkmıyor; sıfırlama
+          olmadan oyuncu kaçırdığı bir cümleyi bir daha ASLA göremez. */}
+      <Card>
+        <div style={{ padding: '11px 12px', display: 'flex', alignItems: 'center', gap: 11 }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 900, color: C.bone }}>
+              Hints
+            </span>
+            <span style={{ display: 'block', fontSize: 11, color: C.boneFaint, marginTop: 3, lineHeight: 1.45 }}>
+              Each one shows once. Bring them back if you missed something.
+            </span>
+          </span>
+          <button onClick={() => { resetHints(); setFlash('Hints will show again next run.'); }}
+            style={{
+              all: 'unset', cursor: 'pointer', flexShrink: 0,
+              padding: '7px 11px', borderRadius: 6, fontSize: 10.5, fontWeight: 900,
+              letterSpacing: 0.8, color: C.ice,
+              background: 'rgba(138,151,163,0.14)', border: '1px solid rgba(138,151,163,0.4)',
+            }}>
+            SHOW AGAIN
+          </button>
+        </div>
+        {flash && (
+          <div style={{ padding: '7px 12px', borderTop: '1px solid rgba(255,255,255,0.08)',
+            fontSize: 11, color: C.ice }}>{flash}</div>
+        )}
+      </Card>
 
       <CardSection label="WHERE THESE LIVE">
         <span style={{ fontSize: 11, color: C.boneFaint, lineHeight: 1.5 }}>

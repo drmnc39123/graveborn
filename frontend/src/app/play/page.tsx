@@ -58,6 +58,8 @@ export default function PlayPage() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  /** rıhtımın ölçülen yüksekliği — panel boşluğu buna göre (bkz. BuildingDock) */
+  const [dockH, setDockH] = useState(78);
   // ⚠️ Doğrudan `getWallet()` ÇAĞIRMA. localStorage okur; sunucuda null döner,
   // istemcide adres döner ve navbar rozeti "DEMO" ↔ adres arasında uyuşmazlığa
   // düşerek hidrasyonu bozar (React tüm ağacı istemci içeriğiyle değiştirir).
@@ -212,7 +214,8 @@ export default function PlayPage() {
       />
 
       {/* Cüzdan + bina rıhtımı — yürümek seçenek, zorunluluk değil */}
-      <BuildingDock open={panel} onOpen={setPanel} gold={progress?.gold ?? 0} wallet={wallet} />
+      <BuildingDock open={panel} onOpen={setPanel} gold={progress?.gold ?? 0} wallet={wallet}
+        onHeight={setDockH} />
 
       {/* Sunucu hatası oyuncudan GİZLENMEZ: cüzdan modunda ilerleme sunucuda,
           sessizce yerel kayda düşmek iki gerçeklik yaratırdı. */}
@@ -286,10 +289,20 @@ export default function PlayPage() {
       )}
 
       {panel && (
+        // ⚠️ ÜST BOŞLUK ÖLÇÜLÜR, SABİT DEĞİL. Eskiden 78 px yazıyordu ve tek
+        // satırlık navbar'a göre ölçülmüştü; 9. düğme satırı sardırınca rıhtım
+        // (zIndex 6) panelin (zIndex 5) ilk 31 pikselini örttü ve oradaki
+        // tıklamalar rıhtımın son düğmesine gitti — oyuncu karakter seçerken
+        // kendini Settings'te buluyordu.
         <div onClick={() => setPanel(null)}
-          style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
+          style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: `${dockH + 24}px 20px 20px`, overflowY: 'auto' }}>
+          {/* ⚠️ `alignItems: center` DEĞİL `flex-start`. Ortalamak, içeriği
+              boşluktan uzun panellerde yukarı taşırıyordu: padding 99 px olsa
+              bile panel 65 px'te başlıyor ve rıhtımın altına giriyordu.
+              Hizalama üstten olunca panel boşluğun ALTINDA kalmayı garanti
+              ediyor; maxHeight de ölçülen rıhtıma göre. */}
           <Panel variant="07A" scale={3} pad={6} onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 560, maxHeight: '84vh', overflowY: 'auto' }}>
+            style={{ width: '100%', maxWidth: 560, maxHeight: `calc(100vh - ${dockH + 48}px)`, overflowY: 'auto' }}>
             {/* Panel içinde ikinci bir bina sırası YOK — navbar panelin üstünde
                 (zIndex 6) ve açıkken de tıklanabilir kalıyor. İki sıra hem
                 gereksizdi hem panelin içinde sarıp dağınık duruyordu. */}

@@ -9,7 +9,7 @@
 // Ayrıca haritada 'quests' kapısı HİÇ YOK — Warden's Post'a tek giriş dövüş
 // portalıydı. Bu navbar o boşluğu da kapatıyor.
 
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { PixelButton } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
 
@@ -42,7 +42,20 @@ export const BUILDINGS: readonly DockEntry[] = [
   { id: 'settings', label: 'SETTINGS', sub: 'Sound, motion, graphics' },
 ] as const;
 
-export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style }: {
+/**
+ * ⚠️ RIHTIM YÜKSEKLİĞİ DIŞARI BİLDİRİLİR (`onHeight`).
+ *
+ * Panel katmanı üstten sabit 78 px boşluk bırakıyordu — TEK SATIRLIK bir
+ * navbar için ölçülmüş sihirli bir sayı. 9. düğme (SETTINGS) eklenince satır
+ * sardı, rıhtım 85 px'e çıktı ve panelin ilk 31 pikselini ÖRTTÜ. Rıhtım
+ * zIndex 6, panel 5 — yani oradaki her tıklama panele değil rıhtımın son
+ * düğmesine gidiyordu: oyuncu karakter seçerken/WEAR'a basarken kendini
+ * Settings'te buluyordu.
+ *
+ * Sabit sayı yerine GERÇEK yükseklik ölçülüyor; düğme sayısı ya da ekran
+ * genişliği değişince kendiliğinden doğru kalıyor.
+ */
+export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onHeight }: {
   /** açık olan panel — buton "Selected" görünür */
   open: string | null;
   onOpen: (id: string) => void;
@@ -51,7 +64,23 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style }: {
   /** bağlı cüzdan; yoksa DEMO modundayız */
   wallet?: string | null;
   style?: CSSProperties;
+  /** rıhtımın kapladığı toplam yükseklik (px) — panel boşluğu buna göre ayarlanır */
+  onHeight?: (h: number) => void;
 }) {
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Satır sarması ekran genişliğine bağlı; `ResizeObserver` her değişimde
+  // haber veriyor — pencere yeniden boyutlandırılınca da doğru kalıyor.
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el || !onHeight) return;
+    const bildir = () => onHeight(el.getBoundingClientRect().height);
+    bildir();
+    const ro = new ResizeObserver(bildir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onHeight]);
+
   return (
     <div style={{
       // zIndex panel katmanının (5) ÜSTÜNDE: navbar her zaman tıklanabilir
@@ -61,7 +90,7 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style }: {
     }}>
       {/* Koyu zemin şart: parlak çimenin üstünde metin okunmuyordu.
           Dar ekranda sarar — mobilde tek satıra sığmıyor. */}
-      <div style={{
+      <div ref={boxRef} style={{
         display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
         justifyContent: 'center', padding: '8px 12px', maxWidth: 'calc(100vw - 24px)',
         pointerEvents: 'auto', ...glass(12),

@@ -11,6 +11,7 @@ import { Game } from './engine.js';
 import { TICK } from './config.js';
 import { applyFxSettings, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx.js';
 import { defaultSettings, normalizeSettings, type Settings } from './settings.js';
+import { HINTS, nextHint } from './tutorial.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -161,6 +162,51 @@ console.log('\n[4] Kapalı sayılar çizimi bozmuyor');
   check('kapalıyken hiç sayı yazılmıyor', kapaliSayi === 0, `${kapaliSayi} çağrı`);
   const acikSayi = ciz(true);
   check('AÇIKKEN sayı yazılıyor', acikSayi > 0, `${acikSayi} çağrı`);
+}
+
+console.log('\n[5] Tutorial ipuçları');
+{
+  // ⚠️ Tarayıcıda doğrulanamıyor: ipucu mantığı rAF döngüsünün içinde ve
+  // otomatik doğrulamada tarayıcı paneli görünmediği için rAF DONUK
+  // (projede bilinen kısıt). Mantık burada, motorun kendisiyle ölçülüyor.
+  const ids = HINTS.map((h) => h.id);
+  check('id\'ler benzersiz', new Set(ids).size === ids.length, `${ids.length} ipucu`);
+  check('her ipucunun süresi pozitif', HINTS.every((h) => h.hold > 0));
+  check('metinler tek nefeste okunacak kadar kısa',
+    HINTS.every((h) => h.text.length <= 110),
+    `en uzun ${Math.max(...HINTS.map((h) => h.text.length))} karakter`);
+
+  // ⚠️ TETİKLEYİCİLER SAF OLMALI: motoru değiştiren bir `when` simülasyonu
+  // bozardı ve aynı seed farklı koşu üretirdi.
+  const g = new Game(31337);
+  g.setViewport(1280, 720);
+  const once = { kills: g.kills, px: g.px, py: g.py, hp: g.hp, level: g.level };
+  for (const h of HINTS) h.when(g);
+  check('tetikleyiciler motoru DEĞİŞTİRMİYOR',
+    g.kills === once.kills && g.px === once.px && g.py === once.py
+    && g.hp === once.hp && g.level === once.level);
+
+  // Gerçek koşuda en az bir ipucu tetiklenmeli — hiç çıkmayan tutorial,
+  // olmayan tutorial demektir
+  const gorulen: string[] = [];
+  const g2 = new Game(555);
+  g2.setViewport(1280, 720);
+  for (let i = 0; i < 60 * 60; i++) {
+    if (g2.phase === 'levelup') g2.choose(g2.offers[0].id);
+    if (g2.phase !== 'running') break;
+    g2.hp = g2.stats.maxHp;
+    const t = i * TICK;
+    g2.setInput(Math.cos(t * 0.7), Math.sin(t * 0.7));
+    g2.step();
+    const h = nextHint(g2, gorulen);
+    if (h) gorulen.push(h.id);
+  }
+  console.log(`     60 sn'lik koşuda tetiklenen: ${gorulen.join(', ') || 'hiçbiri'}`);
+  check('gerçek koşuda ipucu tetikleniyor', gorulen.length >= 2, `${gorulen.length} ipucu`);
+  check('ilk ipucu hareket ipucu', gorulen[0] === 'move', gorulen[0] ?? 'yok');
+  // ⚠️ Aynı ipucu iki kez ÇIKMAMALI: aynı cümleyi tekrar göstermek bilgi
+  // değil gürültüdür, oyuncu üçüncüsünde okumayı bırakır.
+  check('hiçbir ipucu tekrar etmiyor', new Set(gorulen).size === gorulen.length);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ AYARLAR SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
