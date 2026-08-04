@@ -40,7 +40,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, aura = null, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, aura = null, timeLimitSec, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -64,6 +64,14 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * girmez, `render`'a ayrı parametre olarak veriliyor. Denge etkisi yok.
    */
   aura?: string | null;
+  /**
+   * Koşuyu bu sürede kapat (saniye). Haftalık boss odası için: orada bölüm
+   * "bitmiyor", oyuncu 5 dakika vurup çıkıyor.
+   * ⚠️ Motora DOKUNMUYOR — `RUN.durationSec` motorun kendi takılma koruması,
+   * bu ise moda özel bir oturum sınırı. İkisini karıştırmak, motorun
+   * güvenlik tavanını moda göre değiştirmek olurdu.
+   */
+  timeLimitSec?: number;
   onFinish: (result: RunResult) => void;
 }) {
   // ⚠️ Seed'i istemcide türetmek "en kârlı günü bul, sistem saatini ona kur"
@@ -83,6 +91,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   // değişmesi de zararsız.
   const auraRef = useRef(aura);
   auraRef.current = aura;
+  const limitRef = useRef(timeLimitSec);
+  limitRef.current = timeLimitSec;
   const keysRef = useRef(new Set<string>());
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
   const [hud, setHud] = useState<Hud | null>(null);
@@ -106,6 +116,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       cleared: g?.phase === 'won',
       deepestCleared: g?.stage.deepestCleared ?? 0,
       rareGold: Math.floor(g?.rareGold ?? 0),
+      bossDamage: Math.floor(g?.bossDamage ?? 0),
     });
   }, [onFinish, mode, stage.id]);
 
@@ -255,6 +266,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
         game.step();
         acc -= TICK;
         ticks++;
+        // Moda özel oturum sınırı — süre dolunca koşu ölümle biter, oyuncu
+        // özet ekranını görür ve hasarı sunucuya gider.
+        if (limitRef.current && game.time >= limitRef.current && game.phase === 'running') {
+          game.phase = 'dead';
+        }
       }
       if (acc > TICK * MAX_CATCHUP) acc = 0; // birikmiş açığı at
 

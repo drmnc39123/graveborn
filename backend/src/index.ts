@@ -22,6 +22,7 @@ import { seedFromString } from '@game/rng';
 import { wagerPayout } from '@game/wager';
 import { PULL_COST } from '@game/cosmetics';
 import { profileOf } from './profile.js';
+import { bossState, contribute } from './worldBoss.js';
 import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
@@ -259,6 +260,71 @@ app.get('/profile', wrap(async (req, res) => {
   const wallet = auth(req);
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
   res.json(await profileOf(wallet));
+}));
+
+// ── HAFTALIK ORTAK BOSS ──
+//
+// ⚠️ AYRI UÇLAR, `settleRun`'a DOKUNULMADI. Boss odası gold ÖDEMİYOR, yani
+// `settleRun`'ın kampanya/descent dallarına üçüncü bir mod eklemek sadece
+// risk olurdu — ödül hesabı en hassas kod ve boss'un onunla işi yok.
+app.get('/worldboss', wrap(async (req, res) => {
+  // Kimlik ZORUNLU DEĞİL: boss odası herkese görünür, "gir de gör" olsun.
+  res.json(await bossState(auth(req) ?? undefined));
+}));
+
+app.post('/boss/start', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+
+  const st = await bossState(wallet);
+  if (st.defeated) { res.status(409).json({ error: 'boss_devrildi' }); return; }
+
+  const runId = crypto.randomUUID();
+  const seed = seedFromString(`${runId}:${crypto.randomBytes(8).toString('hex')}`);
+  await prisma.run.create({
+    data: {
+      id: runId, wallet, seed: BigInt(seed), hero: toProgress(player).hero,
+      mode: 'worldboss', stageId: 0,
+    },
+  });
+  res.json({ runId, seed, hero: toProgress(player).hero, week: st.week, bossId: st.bossId });
+}));
+
+app.post('/boss/finish', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const body = z.object({
+    runId: z.string().uuid(),
+    damage: z.number().int().min(0).max(2_000_000_000),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: 'gecersiz_istek' }); return; }
+
+  const run = await prisma.run.findUnique({ where: { id: body.data.runId } });
+  if (!run || run.wallet !== wallet || run.mode !== 'worldboss') {
+    res.status(404).json({ error: 'kosu_yok' }); return;
+  }
+  if (run.claimedAt) { res.status(409).json({ error: 'zaten_kapatildi' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  // ⚠️ SÜRE SUNUCUDAN. Tavan buna bağlı; istemciden alınsaydı tavan da
+  // istemcinin elinde olurdu.
+  const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
+  const out = await contribute(wallet, toProgress(player), body.data.damage, elapsedSec);
+
+  await prisma.run.update({
+    where: { id: run.id },
+    data: {
+      claimedAt: new Date(),
+      claimedGold: body.data.damage,   // ham iddia — admin panelinde okunur
+      awarded: out.accepted,
+      capped: out.capped,
+    },
+  });
+  if (out.capped) console.warn('[boss-kirpildi]', wallet, run.id, body.data.damage, '→', out.accepted);
+
+  res.json({ accepted: out.accepted, capped: out.capped, state: out.state });
 }));
 
 // ── BAŞARIMLAR + GÜNLÜK SERİ ──

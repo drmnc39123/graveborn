@@ -469,6 +469,13 @@ export interface RunResult {
   deepestCleared: number;
   /** koşu içinde nadir düşüşten toplanan gold */
   rareGold: number;
+  /**
+   * BOSS'lara verilen hasar — haftalık ortak boss katkısı.
+   * ⚠️ Ödül hesabına GİRMEZ (`applyRunResult` bunu okumaz): boss odası gold
+   * ödemiyor, sadece toz/kozmetik. Doğrulanamayan bir sayıya gold bağlamak
+   * musluğu doğrulanamayan bir kanala açmak olurdu.
+   */
+  bossDamage?: number;
 }
 
 /**

@@ -266,6 +266,39 @@ export async function equipCosmetic(
   return progress;
 }
 
+// ── HAFTALIK ORTAK BOSS ───────────────────────────────────────────────
+// ⚠️ DEMODA YOK. Ortak can havuzu sunucuda; demo oyuncusunun vurduğu hasarı
+// oraya işlemek, ekonomiye girmeyen bir ilerlemenin herkesin gördüğü tabloyu
+// etkilemesi olurdu (market'in demoda kapalı olmasıyla aynı gerekçe).
+
+export interface BossState {
+  week: number; bossId: string; name: string; epithet: string; art: string;
+  hp: number; maxHp: number; endsAt: number; defeated: boolean;
+  top: { wallet: string; damage: number }[];
+  me: { damage: number; rank: number } | null;
+}
+
+export const worldBossAvailable = () => isWallet();
+
+export async function fetchWorldBoss(): Promise<BossState> {
+  if (!isWallet()) throw new Error('demo');
+  return api<BossState>('/worldboss');
+}
+
+export async function startBossRun(): Promise<{ runId: string; seed: number; hero: string }> {
+  return api<{ runId: string; seed: number; hero: string }>('/boss/start', {
+    method: 'POST', body: {},
+  });
+}
+
+export async function finishBossRun(runId: string, damage: number): Promise<{
+  accepted: number; capped: boolean; state: BossState;
+}> {
+  return api<{ accepted: number; capped: boolean; state: BossState }>('/boss/finish', {
+    method: 'POST', body: { runId, damage },
+  });
+}
+
 // ── BAŞARIMLAR + SERİ ─────────────────────────────────────────────────
 // ⚠️ Demoda gün İSTEMCİ saatinden okunuyor ve bu bilinçli bir taviz: demo
 // ilerlemesi ekonomiye hiç girmiyor. Cüzdan modunda gün SUNUCUDAN gelir.

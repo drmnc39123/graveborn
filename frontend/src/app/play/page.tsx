@@ -12,6 +12,7 @@ import { RecordsPanel } from '@/components/RecordsPanel';
 import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
 import { ReliquaryPanel } from '@/components/ReliquaryPanel';
+import { WorldBossPanel } from '@/components/WorldBossPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
@@ -19,17 +20,22 @@ import { Card, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
 import { STAGES, challengeRating, checkpointFor, depthGold, stageById, startLevelFor } from '@/game/config';
+import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
 import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, glass, ctaButton } from '@/lib/theme';
 import { getMode, getWallet } from '@/lib/session';
 import {
-  buyUpgrade, finishRun as settleRun, loadSessionProgress, setHero as saveHero,
+  buyUpgrade, finishBossRun, finishRun as settleRun, loadSessionProgress, setHero as saveHero, startBossRun,
   startRun, type RunTicket,
 } from '@/lib/gameSession';
 
-type Screen = { kind: 'hub' } | { kind: 'stage'; stageId: number; mode: RunMode; ticket: RunTicket };
+type Screen =
+  | { kind: 'hub' }
+  | { kind: 'stage'; stageId: number; mode: RunMode; ticket: RunTicket }
+  /** ⚠️ Boss odası AYRI bir ekran: `settleRun`'a hiç uğramıyor, gold ödemiyor */
+  | { kind: 'boss'; runId: string; seed: number };
 
 /** Koşu sonu bildirimi — ödülün nereden geldiği oyuncuya AÇIKÇA gösterilir */
 type Payout = {
@@ -107,6 +113,32 @@ export default function PlayPage() {
       .catch(() => setNote('Koşu başlatılamadı.'));
   }, []);
 
+  /**
+   * Boss odasına gir. ⚠️ Ayrı uçlar (`/boss/start`) — ödül hesabına
+   * dokunmuyor, o yüzden `settleRun`'ın kampanya/descent dallarına üçüncü
+   * bir mod eklemek sadece risk olurdu.
+   */
+  const beginBoss = useCallback(() => {
+    setPanel(null);
+    startBossRun()
+      .then((t) => setScreen({ kind: 'boss', runId: t.runId, seed: t.seed }))
+      .catch(() => setNote('Barrow açılamadı — cüzdan gerekiyor.'));
+  }, []);
+
+  /** Boss koşusu bitti: hasarı sunucuya bildir, tavana kırpılmışsa söyle */
+  const finishBoss = useCallback((run: RunResult) => {
+    const runId = screen.kind === 'boss' ? screen.runId : null;
+    setScreen({ kind: 'hub' });
+    if (!runId) return;
+    finishBossRun(runId, Math.floor(run.bossDamage ?? 0))
+      .then((r) => {
+        setNote(r.capped
+          ? `Barrow: ${r.accepted.toLocaleString('en-US')} damage counted (claim trimmed).`
+          : `Barrow: ${r.accepted.toLocaleString('en-US')} damage dealt.`);
+      })
+      .catch(() => setNote('Hasar kaydedilemedi.'));
+  }, [screen]);
+
   // GELİŞTİRME KANCASI — üretimde YOK.
   // Hub'da gezmek requestAnimationFrame'e bağlı; otomatik doğrulamada tarayıcı
   // paneli görünmediğinde rAF donuyor ve hiçbir panele yürüyerek ulaşılamıyor.
@@ -119,6 +151,28 @@ export default function PlayPage() {
     if (q) setPanel(q);
     return () => { delete w.__gb; };
   }, [finishRun]);
+
+  if (screen.kind === 'boss') {
+    const p = progress ?? loadProgress();
+    const def = bossOfWeek(bossWeek(new Date()));
+    return (
+      <div style={{ position: 'fixed', inset: 0 }}>
+        {/* ⚠️ Tılsım YOK ve bu kasıtlı: tılsımlar koşu açılırken yanıyor ve
+            boss odası ayrı bir uçtan başlıyor. Oyuncunun tılsımını burada
+            harcatmak, descent için sakladığı şeyi sessizce yakmak olurdu. */}
+        <GameCanvas
+          stage={bossRoomStage(def)}
+          mode="campaign"
+          hero={p.hero}
+          seed={screen.seed}
+          aura={p.equipped.aura ?? null}
+          timeLimitSec={BOSS_RUN_SEC}
+          permanent={permanentBonus(p.upgrades)}
+          onFinish={finishBoss}
+        />
+      </div>
+    );
+  }
 
   if (screen.kind === 'stage') {
     const def = stageById(screen.stageId)!;
@@ -246,6 +300,8 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : panel === 'boss' ? (
+              <WorldBossPanel onEnter={beginBoss} />
             ) : panel === 'reliquary' ? (
               <ReliquaryPanel
                 progress={progress ?? loadProgress()}

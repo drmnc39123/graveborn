@@ -186,6 +186,34 @@ model Ledger {
   @@index([kind, at])
 }
 
+// ── HAFTALIK ORTAK BOSS ───────────────────────────────────────────────
+// Herkesin AYNI düşmana vurduğu tek yer. Can havuzu burada tutuluyor;
+// istemcinin "canı şu kadar kaldı" demesi mümkün değil.
+model WorldBoss {
+  /// UTC Pazartesi başlangıçlı hafta numarası — kimlik budur
+  week   Int    @id
+  bossId String
+  /// kalan ortak can (0 = devrildi)
+  hp     Int
+  maxHp  Int
+
+  createdAt DateTime @default(now())
+}
+
+// Bir oyuncunun o haftaki toplam katkısı.
+// ⚠️ Hasar TOPLANIR (increment) — her koşu bir öncekinin üstüne biner.
+model BossDamage {
+  id     String @id
+  week   Int
+  wallet String
+  damage Int    @default(0)
+  /// kaç koşuda vurdu — admin için "insan hızı" sinyali
+  runs   Int    @default(0)
+
+  @@unique([week, wallet])
+  @@index([week, damage])
+}
+
 // Cüzdan doğrulama için tek kullanımlık metin. İmzalanır, sonra silinir.
 model AuthNonce {
   wallet    String   @id

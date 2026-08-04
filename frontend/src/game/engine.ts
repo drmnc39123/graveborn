@@ -186,6 +186,11 @@ export class Game {
    * İsim bilerek `gold` değil: eskiden `gold` "kazanılan her şey" sanılıyordu.
    */
   rareGold = 0;
+  /**
+   * Bu koşuda BOSS'lara verilen toplam hasar. Haftalık ortak boss katkısı
+   * buradan okunur (bkz. worldBoss.ts). Sürü hasarı DAHİL DEĞİL.
+   */
+  bossDamage = 0;
   /** kaç kez dirilindi (Second Burial) — run özetinde raporlanır */
   revives = 0;
 
@@ -1150,6 +1155,11 @@ export class Game {
     const out = crit ? dmg * this.stats.critMul : dmg;
 
     e.hp -= out;
+    // ⚠️ SUNUM DEĞİL, KOŞU ÇIKTISI: haftalık ortak boss'a katkı bu sayıdan
+    // hesaplanıyor. Sadece BOSS'a vurulan sayılır — sürüye vurulan hasar
+    // ortak cana katılırsa oyuncu boss'a hiç yaklaşmadan katkı üretirdi.
+    // RNG tüketmiyor, mühür etkilenmiyor.
+    if (e.boss) this.bossDamage += out;
     e.hitFlash = crit ? 0.16 : 0.09;
     this.events.add(crit ? 'crit' : 'hit');
     const killed = e.hp <= 0;

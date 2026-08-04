@@ -32,6 +32,9 @@ export const BUILDINGS: readonly DockEntry[] = [
   { id: 'reliquary', label: 'RELIQUARY', sub: 'The Reliquary — relics, titles, auras (appearance only)' },
   { id: 'market', label: 'MARKET', sub: 'Marketplace — sell gold for $GRAVE' },
   { id: 'exchange', label: 'EXCHANGE', sub: 'The Exchange — player order book' },
+  // ⚠️ Sonda duruyor ama en dikkat çeken yer olmalı — haftalık, kaçırılırsa
+  // bir daha o boss gelmiyor. Rozet/vurgu Faz 5 cilasında eklenecek.
+  { id: 'boss', label: 'BARROW', sub: "The Shared Barrow — this week's world boss" },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
 ] as const;
 
