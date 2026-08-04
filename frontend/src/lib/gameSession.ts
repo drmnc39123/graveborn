@@ -17,6 +17,9 @@ import {
   raiseOssuary as localRaise,
   placeWager as localPlaceWager,
   clearWager as localClearWager,
+  claimAchievement as localClaimAch,
+  claimStreak as localClaimStreak,
+  utcDay,
   type Progress, type RunResult,
 } from '@/game/progress';
 import type { CosmeticSlot } from '@/game/cosmetics';
@@ -261,6 +264,42 @@ export async function equipCosmetic(
     method: 'POST', body: { slot, id },
   });
   return progress;
+}
+
+// ── BAŞARIMLAR + SERİ ─────────────────────────────────────────────────
+// ⚠️ Demoda gün İSTEMCİ saatinden okunuyor ve bu bilinçli bir taviz: demo
+// ilerlemesi ekonomiye hiç girmiyor. Cüzdan modunda gün SUNUCUDAN gelir.
+
+export async function claimAchievement(id: string, current: Progress): Promise<Progress> {
+  if (!isWallet()) {
+    const out = localClaimAch(current, id);
+    if (out.error) throw new Error(out.error);
+    saveProgress(out.progress);
+    return out.progress;
+  }
+  const { progress } = await api<{ progress: Progress }>('/achievement/claim', {
+    method: 'POST', body: { id },
+  });
+  return progress;
+}
+
+export async function claimStreak(current: Progress): Promise<{
+  progress: Progress; reward: number; days: number;
+}> {
+  if (!isWallet()) {
+    const out = localClaimStreak(current, utcDay(new Date()));
+    if (out.error) throw new Error(out.error);
+    saveProgress(out.progress);
+    return { progress: out.progress, reward: out.reward, days: out.days };
+  }
+  return api<{ progress: Progress; reward: number; days: number }>('/streak/claim', {
+    method: 'POST', body: {},
+  });
+}
+
+/** Bugün seri alınabilir mi — arayüz kartı buna göre gösterir */
+export function streakAvailable(p: Progress): boolean {
+  return p.streak.last !== utcDay(new Date());
 }
 
 // ── OSSUARY + WAGER ───────────────────────────────────────────────────

@@ -11,6 +11,7 @@ export function toProgress(p: {
   charms?: unknown;
   cosmetics?: unknown; equipped?: unknown; dust?: number;
   ossuary?: number; wager?: unknown;
+  achievements?: unknown; streak?: unknown;
 }): Progress {
   const obj = <T,>(v: unknown): T => (v && typeof v === 'object' ? (v as T) : ({} as T));
   return {
@@ -29,6 +30,15 @@ export function toProgress(p: {
     // ⚠️ Ham JSON doğrudan geçiyor; doğrulamayı `normalize` DEĞİL, saf
     // fonksiyonlar yapıyor. Buradaki tek iş taşımak.
     wager: (p.wager ?? null) as Progress['wager'],
+    achievements: Array.isArray(p.achievements) ? (p.achievements as string[]) : [],
+    // ⚠️ `obj<T>()` eksik alanı `{}` yapar ve `streak.days` UNDEFINED kalırdı;
+    // `claimStreak` içinde `days + 1` o zaman NaN üretir ve seri sessizce
+    // bozulur. Şekil burada TAM kurulmalı.
+    streak: {
+      days: Math.max(0, Math.floor(Number((p.streak as { days?: unknown })?.days) || 0)),
+      last: typeof (p.streak as { last?: unknown })?.last === 'string'
+        ? ((p.streak as { last: string }).last) : '',
+    },
   };
 }
 
@@ -52,6 +62,8 @@ export function fromProgress(p: Progress) {
     // sonra da kayıtta durup ikinci kez yanardı. Nullable Json'u boşaltmanın
     // tek doğru yolu DbNull.
     wager: p.wager === null ? Prisma.DbNull : (p.wager as object),
+    achievements: p.achievements as object,
+    streak: p.streak as object,
   };
 }
 

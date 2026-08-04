@@ -13,6 +13,7 @@
 import { STAGES, checkpointFor, depthGold, stageById } from './config';
 import { ossuaryCost } from './ossuary';
 import { WAGER, wagerError, wagerTarget, type WagerTicket } from './wager';
+import { achievementById } from './achievements';
 import { permanentBonus } from './forge';
 import { DEFAULT_HERO, heroById } from './heroes';
 import { CHARM_SLOTS, charmById } from './charms';
@@ -56,6 +57,14 @@ export interface Progress {
    * (bkz. ossuary.ts). Sadece görünürlük verir, güç vermez.
    */
   ossuary: number;
+  /** Alınmış başarımlar (achievements.ts id) — bir kez alınır */
+  achievements: string[];
+  /**
+   * Günlük seri. `last` UTC gün damgası (YYYY-MM-DD).
+   * ⚠️ Tarihi İSTEMCİ VERMEZ: cüzdan modunda sunucunun günü kullanılır,
+   * yoksa sistem saatini ileri alıp her gün üst üste seri toplanırdı.
+   */
+  streak: { days: number; last: string };
   /**
    * KURULMUŞ bahis — henüz yanmadı.
    * ⚠️ Tılsımlardaki kuralın aynısı: gold koşu AÇILIRKEN düşer, bahis
@@ -70,6 +79,7 @@ export function emptyProgress(): Progress {
     gold: 0, unlockedStage: 1, cleared: {}, upgrades: {},
     firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO, charms: [],
     cosmetics: [], equipped: {}, dust: 0, ossuary: 0, wager: null,
+    achievements: [], streak: { days: 0, last: '' },
   };
 }
 
@@ -137,6 +147,13 @@ function normalize(p: Partial<Progress>): Progress {
     dust: Math.max(0, Math.floor(Number(p.dust) || 0)),
     ossuary: Math.max(0, Math.floor(Number(p.ossuary) || 0)),
     wager: cleanWager(p.wager),
+    achievements: Array.isArray(p.achievements)
+      ? [...new Set(p.achievements.filter((a) => typeof a === 'string'))]
+      : [],
+    streak: {
+      days: Math.max(0, Math.floor(Number(p.streak?.days) || 0)),
+      last: typeof p.streak?.last === 'string' ? p.streak.last : '',
+    },
   };
   out.equipped = cleanEquipped(p.equipped, out.cosmetics);
   return out;
@@ -319,6 +336,86 @@ export function raiseOssuary(p: Progress): { progress: Progress; error: string |
   return {
     progress: { ...p, gold: p.gold - cost, ossuary: p.ossuary + 1, equipped: { ...p.equipped } },
     error: null,
+  };
+}
+
+// ── BAŞARIMLAR + GÜNLÜK SERİ ──────────────────────────────────────────
+
+/**
+ * Başarım ödülünü al. Koşul `Progress`ten okunuyor (achievements.ts), yani
+ * sunucu aynı fonksiyonu çalıştırıp aynı cevabı buluyor.
+ *
+ * ⚠️ Ödül GOLD DEĞİL. Gold vermek musluğu büyütür ve Faz 2'de dengelenen
+ * musluk/sink oranını bozar. Toz + satın alınamayan kozmetik veriliyor.
+ */
+export function claimAchievement(p: Progress, id: string): {
+  progress: Progress; error: string | null;
+} {
+  const def = achievementById(id);
+  if (!def) return { progress: p, error: 'unknown achievement' };
+  if (p.achievements.includes(id)) return { progress: p, error: 'already claimed' };
+  if (def.read(p) < def.goal) return { progress: p, error: 'not finished' };
+
+  const cosmetics = def.cosmetic && !p.cosmetics.includes(def.cosmetic)
+    ? [...p.cosmetics, def.cosmetic]
+    : [...p.cosmetics];
+
+  return {
+    progress: {
+      ...p, equipped: { ...p.equipped },
+      achievements: [...p.achievements, id],
+      dust: p.dust + def.dust,
+      cosmetics,
+    },
+    error: null,
+  };
+}
+
+/** Seri ödülü: gün başına artan, tavanlı toz */
+export const STREAK = {
+  baseDust: 15,
+  perDay: 8,
+  /** ⚠️ TAVAN ŞART: tavansız bir seri 200. günde absürt toz basar */
+  maxDust: 120,
+} as const;
+
+export function streakReward(days: number): number {
+  return Math.min(STREAK.maxDust, STREAK.baseDust + STREAK.perDay * Math.max(0, days - 1));
+}
+
+/** `YYYY-MM-DD` biçiminde UTC gün damgası */
+export function utcDay(d: Date): string {
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Günlük seriyi işle.
+ *
+ * ⚠️ `today` ÇAĞIRANDAN gelir ve cüzdan modunda SUNUCUNUN günüdür. İstemcinin
+ * saatine güvenmek, sistem tarihini ileri alıp aynı gün içinde seriyi
+ * defalarca toplamanın kapısını açardı.
+ *
+ * Kural: dün toplandıysa seri UZAR, daha eskiyse SIFIRDAN başlar
+ * (1'e döner, 0'a değil — bugün de bir gündür).
+ */
+export function claimStreak(p: Progress, today: string): {
+  progress: Progress; reward: number; days: number; error: string | null;
+} {
+  if (p.streak.last === today) {
+    return { progress: p, reward: 0, days: p.streak.days, error: 'already claimed today' };
+  }
+  const dun = new Date(`${today}T00:00:00Z`);
+  dun.setUTCDate(dun.getUTCDate() - 1);
+  const devam = p.streak.last === utcDay(dun);
+  const days = devam ? p.streak.days + 1 : 1;
+  const reward = streakReward(days);
+  return {
+    progress: {
+      ...p, equipped: { ...p.equipped },
+      dust: p.dust + reward,
+      streak: { days, last: today },
+    },
+    reward, days, error: null,
   };
 }
 

@@ -34,6 +34,12 @@ export interface CosmeticDef {
   rarity: Rarity;
   /** Nereden geldiğinin kısa hikâyesi — kartta okunur */
   desc: string;
+  /**
+   * ⚠️ `earned` olanlar ÇEKİLİŞE GİRMEZ. Başarımla kazanılan bir unvanın
+   * tek değeri "satın alınamaz" olmasıdır; gacha havuzunda da bulunursa o
+   * değer anında yok olur. `rollCosmetic` bunları dışarıda bırakıyor.
+   */
+  source?: 'reliquary' | 'earned';
   /** plate: isim gradyanı */
   plate?: { from: string; to: string };
   /** trophy: /art/loot/ şeridi (32×32) */
@@ -136,6 +142,14 @@ export const COSMETICS: readonly CosmeticDef[] = [
   A('a_ember', 'Emberfall', 'rare', '#d2691e', 50, 'Sparks that refuse to land.'),
   A('a_blood', 'Bloodmark', 'epic', '#a01226', 54, 'It is not your blood. It has not been for a while.'),
   A('a_candle', 'Vigil Flame', 'legendary', '#efa72e', 58, 'Lit at your first death. Never put out since.'),
+
+  // ── KAZANILANLAR (çekilişte YOK) ──────────────────────────────────
+  // ⚠️ Bunların tek değeri satın alınamaz olmaları. Havuza girerlerse
+  // başarımlar anlamsızlaşır ve gacha "her şeyi verir" hale gelir.
+  { ...T('t_stair', 'Who Counts the Stair', 'legendary', 'Earned, not found. Depth 40 with your own two feet.'), source: 'earned' },
+  { ...T('t_hollow', 'Hollow-Handed', 'epic', 'Earned by clearing every road the campaign offers.'), source: 'earned' },
+  { ...P('p_relic', 'Reliquary Gold', 'legendary', '#ffe9a8', '#efa72e', 'Earned by emptying the reliquary of every relic it holds.'), source: 'earned' },
+  { ...A('a_stone', 'Monument Light', 'epic', '#b8ae98', 52, 'Earned by raising the monument twenty stones high.'), source: 'earned' },
 ] as const;
 
 export function cosmeticById(id: string): CosmeticDef | undefined {
@@ -144,6 +158,16 @@ export function cosmeticById(id: string): CosmeticDef | undefined {
 
 export function cosmeticsInSlot(slot: CosmeticSlot): CosmeticDef[] {
   return COSMETICS.filter((c) => c.slot === slot);
+}
+
+/** Çekilişten çıkabilen kozmetikler — koleksiyon sayacı bunu kullanmalı */
+export function rollableCosmetics(): CosmeticDef[] {
+  return COSMETICS.filter((c) => c.source !== 'earned');
+}
+
+/** Başarımla kazanılanlar — Reliquary'de "kazanılır, satın alınmaz" olarak gösterilir */
+export function earnedCosmetics(): CosmeticDef[] {
+  return COSMETICS.filter((c) => c.source === 'earned');
 }
 
 /**
@@ -166,7 +190,9 @@ export function rollCosmetic(rarityRoll: number, pickRoll: number): CosmeticDef 
     acc += RARITY[key].weight;
     if (target < acc) { chosen = key; break; }
   }
-  const pool = COSMETICS.filter((c) => c.rarity === chosen);
+  // ⚠️ `earned` kozmetikler HAVUZDA YOK — başarımla kazanılanlar satın
+  // alınamamalı (bkz. CosmeticDef.source).
+  const pool = COSMETICS.filter((c) => c.rarity === chosen && c.source !== 'earned');
   const i = Math.min(pool.length - 1, Math.floor(Math.max(0, pickRoll) * pool.length));
   return pool[i];
 }

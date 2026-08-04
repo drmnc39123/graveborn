@@ -261,6 +261,43 @@ app.get('/profile', wrap(async (req, res) => {
   res.json(await profileOf(wallet));
 }));
 
+// ── BAŞARIMLAR + GÜNLÜK SERİ ──
+//
+// ⚠️ Başarım koşulları SADECE `Progress`ten okunuyor (achievements.ts) ve
+// `Progress` sunucu-otoriteli. Yani istemcinin "şu başarımı hak ettim"
+// demesine gerek yok — sunucu aynı saf fonksiyonu çalıştırıp kendisi bakıyor.
+app.post('/achievement/claim', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const id = z.string().max(40).safeParse(req.body?.id);
+  if (!id.success) { res.status(400).json({ error: 'gecersiz_id' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  const { claimAchievement } = await import('@game/progress');
+  const out = claimAchievement(toProgress(player), id.data);
+  if (out.error) { res.status(400).json({ error: 'alinamadi', detay: out.error }); return; }
+
+  // ⚠️ Deftere GOLD hareketi yazılmıyor çünkü YOK — ödül toz ve kozmetik.
+  // Faz 2'de dengelenen musluk/sink oranı bu sayede bozulmuyor.
+  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(out.progress) });
+  res.json({ progress: toProgress(saved) });
+}));
+
+app.post('/streak/claim', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  const { claimStreak, utcDay } = await import('@game/progress');
+  // ⚠️ GÜN SUNUCUDAN. İstemcinin tarihine güvenmek, sistem saatini ileri
+  // alıp aynı gün içinde seriyi defalarca toplamanın kapısını açardı.
+  const out = claimStreak(toProgress(player), utcDay(new Date()));
+  if (out.error) { res.status(400).json({ error: 'alinamadi', detay: out.error }); return; }
+
+  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(out.progress) });
+  res.json({ progress: toProgress(saved), reward: out.reward, days: out.days });
+}));
+
 // ── THE OSSUARY ──
 // Ekonominin dipsiz kovası. Tavan YOK; maliyet `ossuaryCost` ile SUNUCUDA
 // hesaplanır, istemciden fiyat alınmaz.

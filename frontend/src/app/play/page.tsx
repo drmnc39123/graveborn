@@ -253,7 +253,7 @@ export default function PlayPage() {
                 onError={setNote}
               />
             ) : panel === 'tavern' ? (
-              <RecordsPanel progress={progress ?? loadProgress()} />
+              <RecordsPanel progress={progress ?? loadProgress()} onChange={setProgress} onError={setNote} />
             ) : panel === 'market' ? (
               <MarketPanel
                 progress={progress ?? loadProgress()}

@@ -16,25 +16,44 @@ import {
   type LeaderRow, type ProfileData, type ProfileRun,
 } from '@/lib/gameSession';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
+import { AchievementsTab } from '@/components/AchievementsTab';
+import { achievementStates } from '@/game/achievements';
+import { streakAvailable } from '@/lib/gameSession';
 import { C, FONT, glass } from '@/lib/theme';
 
-export function RecordsPanel({ progress }: { progress: Progress }) {
-  const [tab, setTab] = useState<'record' | 'history' | 'board'>('record');
+export function RecordsPanel({ progress, onChange, onError }: {
+  progress: Progress;
+  onChange: (p: Progress) => void;
+  onError: (msg: string) => void;
+}) {
+  const [tab, setTab] = useState<'record' | 'deeds' | 'history' | 'board'>('record');
+  // ⚠️ Rozet SERİYİ de sayıyor: alınabilir bir şey varken sekmenin sessiz
+  // durması, günlük ödülün fark edilmemesinin en kolay yolu olurdu.
+  const claimableCount = useMemo(
+    () => achievementStates(progress).filter((s) => s.claimable).length
+      + (streakAvailable(progress) ? 1 : 0),
+    [progress],
+  );
 
   return (
     <>
       <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>THE TAVERN</div>
       <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 900, color: C.bone }}>
         {tab === 'record' ? 'Your record'
+          : tab === 'deeds' ? 'Deeds and vigil'
           : tab === 'history' ? 'Every road walked' : 'Deepest descents'}
       </h2>
 
-      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         <PixelButton variant="02A" scale={2} active={tab ==='record'} onClick={() => setTab('record')}
           style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
           MY RECORD
         </PixelButton>
-        {/* ⚠️ Koşu geçmişi AYRI BİR SAYFA (/profile) DEĞİL, Tavern'in üçüncü
+        <PixelButton variant="02A" scale={2} active={tab ==='deeds'} onClick={() => setTab('deeds')}
+          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          DEEDS{claimableCount > 0 ? ` (${claimableCount})` : ''}
+        </PixelButton>
+        {/* ⚠️ Koşu geçmişi AYRI BİR SAYFA (/profile) DEĞİL, Tavern'in bir
             sekmesi. Bu oyunda profil zaten burası; ayrı bir rota açmak aynı
             bilgiyi iki yerde göstermek olurdu. */}
         <PixelButton variant="02A" scale={2} active={tab ==='history'} onClick={() => setTab('history')}
@@ -48,6 +67,7 @@ export function RecordsPanel({ progress }: { progress: Progress }) {
       </div>
 
       {tab === 'record' ? <MyRecord progress={progress} />
+        : tab === 'deeds' ? <AchievementsTab progress={progress} onChange={onChange} onError={onError} />
         : tab === 'history' ? <History />
         : <Leaderboard />}
     </>

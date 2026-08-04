@@ -48,6 +48,10 @@ model Player {
   ossuary Int @default(0)
   /// KURULMUŞ bahis (henüz yanmadı). Koşu AÇILIRKEN Run satırına taşınır.
   wager Json?
+  /// alınmış başarımlar (achievements.ts id'leri)
+  achievements Json @default("[]")
+  /// günlük seri: { days, last }  — `last` SUNUCUNUN UTC günü
+  streak Json @default("{}")
 
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)

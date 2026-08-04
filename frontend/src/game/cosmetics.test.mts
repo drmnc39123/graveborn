@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   COSMETICS, PULL_COST, RARITY, cosmeticById, cosmeticsInSlot,
-  resolvePull, rollCosmetic, type Rarity,
+  earnedCosmetics, resolvePull, rollCosmetic, rollableCosmetics, type Rarity,
 } from './cosmetics.js';
 import {
   buyWithDust, emptyProgress, equipCosmetic, pullReliquary, type Progress,
@@ -123,8 +123,21 @@ console.log('\n[4] Çekiliş dağılımı');
     `en kötü %${(enKotuSapma * 100).toFixed(1)}`);
   // ⚠️ ASIL TUZAK: nadirlik içindeki seçim de dengeli olmalı. Tek zarı ikiye
   // bölmek burayı sessizce eğerdi — bu yüzden iki ayrı zar kullanılıyor.
-  check('havuzdaki HER kozmetik çıkabiliyor', gorulen.size === COSMETICS.length,
-    `${gorulen.size}/${COSMETICS.length}`);
+  //
+  // ⚠️ KAPSAM: `COSMETICS` değil `rollableCosmetics()`. Başarımla kazanılanlar
+  // (source:'earned') çekilişe GİRMEZ ve girmemeleri gerekir — eşiği
+  // gevşetmek değil, ölçülen kümeyi düzeltmek doğru olan.
+  const cekilebilir = rollableCosmetics();
+  check('çekilebilir HER kozmetik çıkabiliyor', gorulen.size === cekilebilir.length,
+    `${gorulen.size}/${cekilebilir.length}`);
+
+  // ⭐ YENİ INVARYANT: kazanılanlar ASLA çekilişten çıkmamalı. Çıkarlarsa
+  // başarımların tek değeri ("satın alınamaz") yok olur.
+  const kazanilanlar = new Set(earnedCosmetics().map((c) => c.id));
+  const sizinti = [...gorulen].filter((id) => kazanilanlar.has(id));
+  check('KAZANILAN kozmetikler çekilişten çıkmıyor', sizinti.length === 0,
+    sizinti.join(', ') || `${kazanilanlar.size} kazanılan korundu`);
+  check('kazanılan kozmetikler gerçekten var', kazanilanlar.size > 0, `${kazanilanlar.size}`);
 }
 
 console.log('\n[5] Toz ekonomisi');
@@ -168,7 +181,7 @@ console.log('\n[6] Ekonomi kapısı');
   // ⚠️ Koleksiyon dolduğunda çekiliş DEĞERSİZ olmamalı — sink sonsuz kalsın
   const tamKoleksiyon: Progress = {
     ...emptyProgress(), gold: 10_000, cosmetics: COSMETICS.map((c) => c.id),
-  };
+  };  // kazanılanlar dahil: çekiliş yine de bir şey döndürmeli
   const dolu = pullReliquary(tamKoleksiyon, rnd(), rnd());
   check('koleksiyon doluyken çekiliş hâlâ toz veriyor',
     dolu.result!.duplicate && dolu.result!.dust > 0, `${dolu.result!.dust} toz`);
