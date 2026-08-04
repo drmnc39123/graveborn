@@ -152,11 +152,11 @@ export default function Home() {
           <div style={{ ...glass(9), padding: '7px 14px', display: 'inline-block', fontSize: 11, color: C.boneDim }}>
             <b style={{ color: C.candle }}>${BRAND.ticker}</b> has not launched yet — there is no contract address.
           </div>
+          {/* ⚠️ Franuka kredi satırı KULLANICI KARARIYLA KALDIRILDI (5 Ağu 2026).
+              Gerekçesi: paketler satın alındı, atıf şartı satıştan SONRA bir
+              dosyanın içinde geçiyor. Bu bir ürün kararı — geri EKLEMEYİN. */}
           <div style={{ marginTop: 10, fontSize: 10, color: C.boneFaint }}>
-            UI art by{' '}
-            <a href="https://franuka.itch.io" target="_blank" rel="noreferrer noopener"
-              style={{ color: C.boneDim, textDecoration: 'underline' }}>franuka.itch.io</a>
-            {' · '}world art by MutterPixel Studio
+            World art by MutterPixel Studio
           </div>
         </div>
 

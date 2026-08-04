@@ -36,6 +36,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // bir daha o boss gelmiyor. Rozet/vurgu Faz 5 cilasında eklenecek.
   { id: 'boss', label: 'BARROW', sub: "The Shared Barrow — this week's world boss" },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
+  // ⚠️ Bir BİNA değil ama buraya konuldu: ayarlar ulaşılabilir olmalı ve
+  // köyde onu barındıracak bir kapı yok. Ayrı bir dişli ikonu eklemek
+  // rıhtımın dilini bozardı.
+  { id: 'settings', label: 'SETTINGS', sub: 'Sound, motion, graphics' },
 ] as const;
 
 export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style }: {

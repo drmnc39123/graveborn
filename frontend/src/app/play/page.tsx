@@ -13,6 +13,7 @@ import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
 import { ReliquaryPanel } from '@/components/ReliquaryPanel';
 import { WorldBossPanel } from '@/components/WorldBossPanel';
+import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
@@ -67,6 +68,10 @@ export default function PlayPage() {
   // oyuna girmek, sonradan "ilerlemem nerede?" demek olurdu.
   useEffect(() => {
     if (getMode() === null) { router.replace('/'); return; }
+    // ⚠️ Ayarlar HER ŞEYDEN ÖNCE uygulanır: koşu başladıktan sonra
+    // uygulanırsa oyuncu ilk saniyelerde kapattığı sarsıntıyı görür ve
+    // kıstığı sesi duyar.
+    applyStoredSettings();
     setWallet(getWallet());
     loadSessionProgress()
       .then(setProgress)
@@ -300,6 +305,8 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : panel === 'settings' ? (
+              <SettingsPanel />
             ) : panel === 'boss' ? (
               <WorldBossPanel onEnter={beginBoss} />
             ) : panel === 'reliquary' ? (

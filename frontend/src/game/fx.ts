@@ -92,6 +92,26 @@ let frameSeq = 0;
 /** biriken donma isteği — `takeFreeze()` okuyup sıfırlar */
 let freezeReq = 0;
 
+/**
+ * OYUNCU AYARLARI — sunum kısıtları.
+ *
+ * ⚠️ Modül seviyesinde tutuluyor çünkü `pumpFx`/`drawFxWorld` her karede
+ * çağrılıyor ve her seferinde localStorage okumak saçma olurdu. Ayar
+ * değişince `applyFxSettings` bir kez çağrılır.
+ *
+ * ⚠️ SİMÜLASYONA GİRMEZ. Buradaki hiçbir bayrak motorun durumuna dokunmuyor;
+ * sarsıntı kapalıyken de `pumpFx` aynı kuyrukları aynı sırayla boşaltıyor,
+ * sadece çizim değişiyor. Testte aynı seed → aynı koşu ile kanıtlanıyor.
+ */
+let shakeOn = true;
+let numbersOn = true;
+
+export function applyFxSettings(v: { screenShake: boolean; damageNumbers: boolean }) {
+  shakeOn = v.screenShake;
+  numbersOn = v.damageNumbers;
+  if (!shakeOn) shakeMag = 0;
+}
+
 /** Yeni koşu — önceki koşudan efekt taşmasın */
 export function resetFx() {
   for (const s of sparks) s.on = false;
@@ -231,7 +251,10 @@ export function takeFreeze(): number {
  * onu sarsmak kamerayı değil "gözlüğü" sallamak gibi görünür.
  */
 export function shakeOffset(): { x: number; y: number } {
-  if (shakeMag <= 0) return { x: 0, y: 0 };
+  // ⚠️ Kapatma BURADA, biriktirmede değil: `shakeMag` yine hesaplanıyor ama
+  // kameraya uygulanmıyor. Böylece ayarı koşu ortasında açmak/kapatmak
+  // anında ve tutarlı çalışıyor, hiçbir durum tutarsız kalmıyor.
+  if (!shakeOn || shakeMag <= 0) return { x: 0, y: 0 };
   return {
     x: (tileHash(frameSeq, 0, 1) - 0.5) * 2 * shakeMag,
     y: (tileHash(0, frameSeq, 2) - 0.5) * 2 * shakeMag,
@@ -280,6 +303,10 @@ export function drawFxWorld(ctx: CanvasRenderingContext2D) {
   }
 
   // ── hasar sayıları ──
+  // ⚠️ Kapalıysa ÇİZİM atlanıyor, havuz yine işletiliyor (pumpFx). Havuzu
+  // durdurmak, ayarı koşu ortasında açınca ekranı bir anda eski sayılarla
+  // doldururdu.
+  if (!numbersOn) return;
   let anyNum = false;
   for (let i = 0; i < nums.length; i++) if (nums[i].on) { anyNum = true; break; }
   if (!anyNum) return;

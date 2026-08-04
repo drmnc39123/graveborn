@@ -37,7 +37,10 @@ function ensure(): AudioContext | null {
     if (!AC) return null;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.32;
+    // ⚠️ Ses bağlamı ilk kullanıcı hareketinde kuruluyor; oyuncunun kayıtlı
+    // seviyesi o ana kadar `volume` değişkeninde bekliyor. Burada uygulamak
+    // şart, yoksa ayar "bir sonraki açılışta" etkili olurdu.
+    master.gain.value = BASE_GAIN * volume;
     master.connect(ctx.destination);
   }
   return ctx;
@@ -53,6 +56,23 @@ export function unlockAudio() {
 
 export function setSoundEnabled(on: boolean) { enabled = on; }
 export function isSoundEnabled() { return enabled; }
+
+/**
+ * Ana ses seviyesi (0..1).
+ *
+ * ⚠️ `master.gain` DOĞRUDAN 0..1 YAZILMAZ. Zincirdeki tabanın 0.32 olması
+ * bir kalibrasyon: seslerin kendi `vol` değerleri ona göre ayarlandı. Ham
+ * 1.0 yazmak her efekti üç kat yükseltip kırpma (clipping) üretirdi.
+ * Oyuncunun seçtiği oran o tabanı ÇARPAR.
+ */
+const BASE_GAIN = 0.32;
+let volume = 1;
+
+export function setVolume(v: number) {
+  volume = Math.min(1, Math.max(0, Number(v) || 0));
+  if (master) master.gain.value = BASE_GAIN * volume;
+}
+export function getVolume() { return volume; }
 
 /** Tek osilatör notası */
 function tone(freq: number, dur: number, type: OscillatorType, vol: number, slideTo?: number, delay = 0) {
