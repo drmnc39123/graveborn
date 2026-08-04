@@ -280,8 +280,17 @@ export interface BossState {
 
 export const worldBossAvailable = () => isWallet();
 
+/**
+ * Boss durumu — HERKESE AÇIK, cüzdan gerektirmez.
+ *
+ * ⚠️ Burada bir `isWallet()` kapısı VARDI ve yanlıştı: ana sayfadaki
+ * ziyaretçi tanımı gereği giriş yapmamıştır, yani "şu an ne oluyor" bölümü
+ * HİÇ görünmezdi — tam da onu görmesi gereken kişiye. Sunucudaki uç zaten
+ * kimlik istemiyor; kimliksiz istekte sadece `me` null döner.
+ *
+ * Cüzdan kapısı BOSS ODASINA GİRMEKTE (`/boss/start`), izlemekte değil.
+ */
 export async function fetchWorldBoss(): Promise<BossState> {
-  if (!isWallet()) throw new Error('demo');
   return api<BossState>('/worldboss');
 }
 

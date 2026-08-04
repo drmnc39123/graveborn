@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MenuBackground } from '@/components/MenuBackground';
+import { HomeSections } from '@/components/HomeSections';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { Turnstile, turnstileEnabled } from '@/components/Turnstile';
 import { BRAND, C, FONT, glass } from '@/lib/theme';
@@ -55,8 +56,12 @@ export default function Home() {
     <main style={{ position: 'fixed', inset: 0, overflow: 'auto' }}>
       <MenuBackground />
 
+      {/* ⚠️ Kapı TAM EKRAN kalıyor (minHeight 100vh): ziyaretçi ilk anda
+          sadece "gir" kararıyla karşılaşsın. İçerik bölümleri ALTINDA —
+          isteyen kaydırıp okur, istemeyen tek tıkla girer. Kapıyı içerikle
+          doldurmak huniyi yavaşlatırdı. */}
       <div style={{
-        position: 'relative', zIndex: 1, minHeight: '100%',
+        position: 'relative', zIndex: 1, minHeight: '100vh',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', padding: '40px 20px', gap: 18,
       }}>
@@ -154,6 +159,16 @@ export default function Home() {
             {' · '}world art by MutterPixel Studio
           </div>
         </div>
+
+        {/* Kaydırma ipucu — altında içerik olduğu görünmezse kimse aramaz */}
+        <div style={{ marginTop: 22, fontFamily: FONT.ui, fontSize: 10.5,
+          letterSpacing: 1.4, color: C.boneFaint }}>
+          ↓ WHAT IS DOWN THERE
+        </div>
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 1 }}>
+        <HomeSections />
       </div>
     </main>
   );

@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { BOSS_RUN_SEC, bossProgress } from '@/game/worldBoss';
-import { fetchWorldBoss, type BossState } from '@/lib/gameSession';
+import { fetchWorldBoss, worldBossAvailable, type BossState } from '@/lib/gameSession';
 import { Card, CardSection, Tag } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
 
@@ -31,12 +31,16 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
   const [state, setState] = useState<BossState | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // ⚠️ İZLEMEK SERBEST, GİRMEK CÜZDANLI. Demo oyuncusuna boss'u hiç
+  // göstermemek, katılmak için en güçlü sebebi saklamak olurdu. Hata sadece
+  // sunucuya ulaşılamadığında görünür.
   useEffect(() => {
     fetchWorldBoss()
       .then(setState)
-      .catch(() => setErr('The barrow door will not open. Connect a wallet to enter.'));
+      .catch(() => setErr('The barrow does not answer. The server may be down.'));
   }, []);
 
+  const canEnter = worldBossAvailable();
   const enter = useCallback(() => { onEnter(); }, [onEnter]);
 
   if (err) {
@@ -117,22 +121,35 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
             </div>
           )}
 
-          <button onClick={enter} disabled={state.defeated}
-            style={{
-              all: 'unset', boxSizing: 'border-box', display: 'block', width: '100%',
-              marginTop: 13, padding: '12px 14px', borderRadius: 8, textAlign: 'center',
-              cursor: state.defeated ? 'default' : 'pointer', opacity: state.defeated ? 0.45 : 1,
-              background: state.defeated
-                ? 'rgba(255,255,255,0.05)'
-                : 'linear-gradient(180deg, rgba(160,18,38,0.55), rgba(120,12,28,0.36))',
-              border: `1px solid ${state.defeated ? 'rgba(255,255,255,0.12)' : 'rgba(228,101,122,0.65)'}`,
-              fontSize: 12.5, fontWeight: 900, letterSpacing: 1,
-              color: state.defeated ? C.boneFaint : '#ffd9df',
-            }}>
-            {state.defeated
-              ? 'IT IS ALREADY DOWN'
-              : `GO IN · ${Math.round(BOSS_RUN_SEC / 60)} MINUTES`}
-          </button>
+          {(() => {
+            const kapali = state.defeated || !canEnter;
+            return (
+              <button onClick={enter} disabled={kapali}
+                style={{
+                  all: 'unset', boxSizing: 'border-box', display: 'block', width: '100%',
+                  marginTop: 13, padding: '12px 14px', borderRadius: 8, textAlign: 'center',
+                  cursor: kapali ? 'default' : 'pointer', opacity: kapali ? 0.45 : 1,
+                  background: kapali
+                    ? 'rgba(255,255,255,0.05)'
+                    : 'linear-gradient(180deg, rgba(160,18,38,0.55), rgba(120,12,28,0.36))',
+                  border: `1px solid ${kapali ? 'rgba(255,255,255,0.12)' : 'rgba(228,101,122,0.65)'}`,
+                  fontSize: 12.5, fontWeight: 900, letterSpacing: 1,
+                  color: kapali ? C.boneFaint : '#ffd9df',
+                }}>
+                {state.defeated ? 'IT IS ALREADY DOWN'
+                  : !canEnter ? 'CONNECT A WALLET TO GO IN'
+                  : `GO IN · ${Math.round(BOSS_RUN_SEC / 60)} MINUTES`}
+              </button>
+            );
+          })()}
+          {/* ⚠️ Demo oyuncusu NEDEN giremediğini bilmeli — sadece soluk bir
+              düğme göstermek "bozuk" hissettirir. */}
+          {!canEnter && !state.defeated && (
+            <div style={{ fontSize: 10.5, color: C.boneFaint, marginTop: 6, lineHeight: 1.45 }}>
+              The shared pool is one number for everyone, so it only counts damage from
+              wallet-backed runs. Demo progress never touches it.
+            </div>
+          )}
         </div>
       </Card>
 
