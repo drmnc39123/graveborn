@@ -44,6 +44,10 @@ model Player {
   equipped Json @default("{}")
   /// tekrar çıkan kozmetiklerden biriken toz
   dust Int @default(0)
+  /// anıt seviyesi — TAVANI YOK, ekonominin dipsiz kovası (bkz. ossuary.ts)
+  ossuary Int @default(0)
+  /// KURULMUŞ bahis (henüz yanmadı). Koşu AÇILIRKEN Run satırına taşınır.
+  wager Json?
 
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
@@ -90,6 +94,13 @@ model Run {
   /// d401'i geçtim" iddiası ancak burada tutulan gerçek değerle çürütülebilir.
   /// Eski koşularda 1 (varsayılan) zaten doğru değer.
   startDepth Int @default(1)
+
+  /// ⚠️ Bahis koşu AÇILIRKEN buraya YAZILIR ve oyuncudan düşülür. Progress'te
+  /// bırakılsaydı oyuncu koşu sırasında bahsi değiştirebilirdi.
+  wagerStake  Int @default(0)
+  wagerTarget Int @default(0)
+  /// kapanışta: bahis kazanıldı mı (admin panelinde okunur)
+  wagerWon Boolean @default(false)
 
   startedAt DateTime  @default(now())
   claimedAt DateTime?

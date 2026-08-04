@@ -40,6 +40,8 @@ type Payout = {
   progressGold: number;
   dropGold: number;
   paidRange: { from: number; to: number } | null;
+  /** bahis vardıysa sonucu — gold değil TOZ öder (bkz. game/wager.ts) */
+  wager: { stake: number; target: number; won: boolean; dust: number } | null;
 };
 
 export default function PlayPage() {
@@ -91,6 +93,7 @@ export default function PlayPage() {
         setPayout({
           mode: run.mode, deepestCleared: run.deepestCleared,
           progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
+          wager: r.wager,
         });
       })
       .catch(() => setNote('Koşu kaydedilemedi — ödül işlenmedi.'));
@@ -190,6 +193,33 @@ export default function PlayPage() {
               />
               <Row label="Rare finds" value={payout.dropGold} hint={payout.dropGold === 0 ? 'nothing dropped this run' : undefined} />
             </div>
+
+            {/* ⚠️ BAHİS AYRI KUTUDA. Yukarıdaki satırlar GOLD sayıyor; bahis
+                toz ödüyor. Aynı listeye koymak "+45" satırını gold sanmaya
+                yol açardı — oyuncunun kazandığı şeyi yanlış okuması en kötü
+                arayüz hatasıdır. */}
+            {payout.wager && (
+              <div style={{
+                marginTop: 12, padding: '11px 12px', borderRadius: 8,
+                background: payout.wager.won ? 'rgba(138,151,163,0.12)' : 'rgba(160,18,38,0.12)',
+                border: `1px solid ${payout.wager.won ? 'rgba(138,151,163,0.4)' : 'rgba(160,18,38,0.34)'}`,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.2, color: C.boneFaint }}>
+                  THE WAGER · DEPTH {payout.wager.target}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 900, marginTop: 4,
+                  color: payout.wager.won ? C.ice : C.bloodSoft }}>
+                  {payout.wager.won
+                    ? `+${payout.wager.dust} dust`
+                    : `${payout.wager.stake.toLocaleString('en-US')} gold lost`}
+                </div>
+                <div style={{ fontSize: 11, color: C.boneFaint, marginTop: 3, lineHeight: 1.4 }}>
+                  {payout.wager.won
+                    ? 'You went deeper than you ever had. The dead paid up.'
+                    : 'You did not get past your own record. The stake stays down there.'}
+                </div>
+              </div>
+            )}
             <button onClick={() => setPayout(null)}
               style={{ ...ctaButton(true), marginTop: 18, width: '100%' }}>Continue</button>
           </div>

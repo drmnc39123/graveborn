@@ -14,9 +14,13 @@ import {
   buyWithDust as localDustBuy,
   equipCosmetic as localEquip,
   pullReliquary as localPull,
+  raiseOssuary as localRaise,
+  placeWager as localPlaceWager,
+  clearWager as localClearWager,
   type Progress, type RunResult,
 } from '@/game/progress';
 import type { CosmeticSlot } from '@/game/cosmetics';
+import { wagerPayout, wagerWon } from '@/game/wager';
 import { CHARM_SLOTS } from '@/game/charms';
 import { seedFromString } from '@/game/rng';
 import { api, getMode } from '@/lib/session';
@@ -27,6 +31,8 @@ export interface Settled {
   progressGold: number;
   dropGold: number;
   paidRange: { from: number; to: number } | null;
+  /** koşuda bahis vardıysa sonucu — koşu sonu dökümünde gösterilir */
+  wager: { stake: number; target: number; won: boolean; dust: number } | null;
 }
 
 export interface RunTicket {
@@ -40,6 +46,11 @@ export interface RunTicket {
    * kurulmalı, yoksa oynanan koşu ile doğrulanan koşu ayrışır.
    */
   startDepth: number;
+  /**
+   * Demoda koşuya taşınan bahis (sunucu yok, istemci çözecek).
+   * Cüzdan modunda null — orada bahsi Run satırı taşıyor.
+   */
+  wager: { stake: number; target: number; stageId: number } | null;
 }
 
 const isWallet = () => getMode() === 'wallet';
@@ -226,31 +237,93 @@ export async function equipCosmetic(
   return progress;
 }
 
+// ── OSSUARY + WAGER ───────────────────────────────────────────────────
+// İkisi de saf fonksiyonu paylaşıyor; cüzdan modunda sunucu, demoda istemci
+// çalıştırıyor. Fiyat ve hedef HER İKİ YOLDA DA saf fonksiyondan geliyor.
+
+export async function raiseOssuary(current: Progress): Promise<Progress> {
+  if (!isWallet()) {
+    const out = localRaise(current);
+    if (out.error) throw new Error(out.error);
+    saveProgress(out.progress);
+    return out.progress;
+  }
+  const { progress } = await api<{ progress: Progress }>('/ossuary/raise', {
+    method: 'POST', body: {},
+  });
+  return progress;
+}
+
+export async function placeWager(
+  stageId: number, stake: number, current: Progress,
+): Promise<Progress> {
+  if (!isWallet()) {
+    const out = localPlaceWager(current, stageId, stake);
+    if (out.error) throw new Error(out.error);
+    saveProgress(out.progress);
+    return out.progress;
+  }
+  // ⚠️ `stake` gidiyor ama HEDEF gitmiyor — onu sunucu oyuncunun kendi
+  // rekorundan türetiyor. Hedefi istemcinin vermesi bedava toz demekti.
+  const { progress } = await api<{ progress: Progress }>('/wager/place', {
+    method: 'POST', body: { stageId, stake },
+  });
+  return progress;
+}
+
+export async function cancelWager(current: Progress): Promise<Progress> {
+  if (!isWallet()) {
+    const next = localClearWager(current);
+    saveProgress(next);
+    return next;
+  }
+  const { progress } = await api<{ progress: Progress }>('/wager/clear', {
+    method: 'POST', body: {},
+  });
+  return progress;
+}
+
 export async function startRun(
   mode: 'campaign' | 'descent', stageId: number,
   /** oyuncunun seçtiği checkpoint — SUNUCU kırpar, burada gönderilen sadece bir istek */
   wantStartDepth = 1,
 ): Promise<RunTicket> {
   if (!isWallet()) {
-    // ⚠️ Demoda da tılsımlar koşu AÇILIRKEN yanar — cüzdan modundaki kuralın
-    // aynısı, yoksa iki mod farklı davranır ve demo yanıltıcı olur.
+    // ⚠️ Demoda da tılsımlar VE BAHİS koşu AÇILIRKEN yanar — cüzdan
+    // modundaki kuralın aynısı, yoksa iki mod farklı davranır ve demo
+    // yanıltıcı olur. Bahsi demoda hiç yakmamak daha da kötüsü olurdu:
+    // oyuncu kurabildiği ama asla çözülmeyen bir bahis görürdü.
     const p = loadProgress();
     const charms = p.charms;
-    if (charms.length) saveProgress({ ...p, charms: [] });
     // Demoda sunucu yok; kırpmayı aynı saf fonksiyonla İSTEMCİ yapar. Kural
     // tek yerde kalsın diye `allowedStartDepth` burada da çağrılıyor.
     const start = mode === 'descent'
       ? Math.min(Math.max(1, wantStartDepth), allowedStartDepth(p, stageId)) : 1;
-    return { runId: null, seed: demoSeed(mode, stageId), charms, startDepth: start };
+
+    // Bahis SADECE aynı bölümün descent'inde geçerli — kampanyada derinlik yok
+    const w = p.wager;
+    const wagerLive = !!w && mode === 'descent' && w.stageId === stageId && p.gold >= w.stake;
+    if (charms.length || w) {
+      saveProgress({
+        ...p, charms: [], wager: null,
+        gold: wagerLive ? p.gold - w!.stake : p.gold,
+      });
+    }
+    return {
+      runId: null, seed: demoSeed(mode, stageId), charms, startDepth: start,
+      wager: wagerLive ? w! : null,
+    };
   }
   const out = await api<{ runId: string; seed: number; charms?: string[]; startDepth?: number }>(
     '/run/start', { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth } },
   );
   // ⚠️ SUNUCUNUN döndürdüğü değer kullanılır, istenen değil. Motoru başka bir
   // derinlikte kurmak koşuyu doğrulanamaz hale getirirdi.
+  // Cüzdan modunda bahsi SUNUCU takip ediyor (Run satırında) — bilette
+  // taşımaya gerek yok, kapanış yanıtı sonucu bildiriyor.
   return {
     runId: out.runId, seed: out.seed, charms: out.charms ?? [],
-    startDepth: Math.max(1, out.startDepth ?? 1),
+    startDepth: Math.max(1, out.startDepth ?? 1), wager: null,
   };
 }
 
@@ -261,15 +334,29 @@ export async function finishRun(
 
   if (!isWallet() || !ticket?.runId) {
     const r = applyRunResult(current, run);
-    saveProgress(r.progress);
+    // ⚠️ Bahis, ÖDÜL İŞLENDİKTEN SONRA çözülür: kazanma ölçüsü "rekorunu
+    // geçti mi" ve rekor `applyRunResult` içinde güncelleniyor. Önce
+    // bakılsaydı oyuncu her zaman kaybederdi.
+    let prog = r.progress;
+    let wagerOut: Settled['wager'] = null;
+    const w = ticket?.wager ?? null;
+    if (w && run.mode === 'descent' && w.stageId === run.stageId) {
+      const won = wagerWon(w, paidDepth(prog, run.stageId));
+      const dust = won ? wagerPayout(w.stake) : 0;
+      if (dust > 0) prog = { ...prog, dust: prog.dust + dust };
+      wagerOut = { stake: w.stake, target: w.target, won, dust };
+    }
+    saveProgress(prog);
     return {
-      progress: r.progress, awarded: r.awarded,
+      progress: prog, awarded: r.awarded,
       progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
+      wager: wagerOut,
     };
   }
 
   const out = await api<{
     progress: Progress; awarded: number; progressGold: number; dropGold: number;
+    wager: Settled['wager'];
   }>('/run/finish', {
     method: 'POST',
     body: {

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import type { Progress } from '@game/progress';
 import { DEFAULT_HERO, heroById } from '@game/heroes';
 
@@ -10,6 +10,7 @@ export function toProgress(p: {
   cleared: unknown; firstClear: unknown; depthPaid: unknown; upgrades: unknown;
   charms?: unknown;
   cosmetics?: unknown; equipped?: unknown; dust?: number;
+  ossuary?: number; wager?: unknown;
 }): Progress {
   const obj = <T,>(v: unknown): T => (v && typeof v === 'object' ? (v as T) : ({} as T));
   return {
@@ -24,6 +25,10 @@ export function toProgress(p: {
     cosmetics: Array.isArray(p.cosmetics) ? (p.cosmetics as string[]) : [],
     equipped: obj<Progress['equipped']>(p.equipped),
     dust: Math.max(0, Math.floor(Number(p.dust) || 0)),
+    ossuary: Math.max(0, Math.floor(Number(p.ossuary) || 0)),
+    // ⚠️ Ham JSON doğrudan geçiyor; doğrulamayı `normalize` DEĞİL, saf
+    // fonksiyonlar yapıyor. Buradaki tek iş taşımak.
+    wager: (p.wager ?? null) as Progress['wager'],
   };
 }
 
@@ -41,6 +46,12 @@ export function fromProgress(p: Progress) {
     cosmetics: p.cosmetics as object,
     equipped: p.equipped as object,
     dust: Math.max(0, Math.floor(p.dust)),
+    ossuary: Math.max(0, Math.floor(p.ossuary)),
+    // ⚠️ `undefined` DEĞİL `Prisma.DbNull`. Prisma'da `undefined` "bu alana
+    // dokunma" demek — bahis o zaman ASLA temizlenemez ve koşu açıldıktan
+    // sonra da kayıtta durup ikinci kez yanardı. Nullable Json'u boşaltmanın
+    // tek doğru yolu DbNull.
+    wager: p.wager === null ? Prisma.DbNull : (p.wager as object),
   };
 }
 

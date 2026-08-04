@@ -22,6 +22,8 @@ import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSes
 import { Card, CardSection, Tag } from '@/components/ui/cards';
 import { pixel } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
+import { OssuarySection } from '@/components/OssuarySection';
+import { WagerSection } from '@/components/WagerSection';
 
 const SLOTS: { id: CosmeticSlot; label: string; hint: string }[] = [
   { id: 'title', label: 'TITLES', hint: 'Shown after your name in the tavern and on the ladder.' },
@@ -103,6 +105,8 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
   onChange: (p: Progress) => void;
   onError: (msg: string) => void;
 }) {
+  /** hangi sink görünüyor — üçü de gold'u ekonomiden çıkarır */
+  const [view, setView] = useState<'relics' | 'monument' | 'wager'>('relics');
   const [tab, setTab] = useState<CosmeticSlot>('trophy');
   const [busy, setBusy] = useState(false);
   /** son çekilişin sonucu — açılış animasyonu bunu gösterir */
@@ -176,7 +180,45 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
       <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>
         THE RELIQUARY
       </div>
-      <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>What the dead left behind</h2>
+      <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 900, color: C.bone }}>
+        {view === 'relics' ? 'What the dead left behind'
+          : view === 'monument' ? 'Your monument' : 'A bet with the dead'}
+      </h2>
+
+      {/* ⚠️ ÜÇÜ AYNI BİNADA. Hepsi aynı işi yapıyor — gold'u ekonomiden
+          ÇIKARMAK — ve dock zaten 7 kapıya ulaşmıştı. Ayrı binalar açmak
+          oyuncuya üç ayrı sistem gibi görünürdü; oysa tek bir soru var:
+          "kazandığın gold nereye gidiyor". */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+        {([
+          { id: 'relics', label: 'RELICS' },
+          { id: 'monument', label: 'MONUMENT' },
+          { id: 'wager', label: 'THE WAGER' },
+        ] as const).map((v) => {
+          const on = view === v.id;
+          return (
+            <button key={v.id} onClick={() => setView(v.id)}
+              style={{
+                all: 'unset', cursor: 'pointer', flex: '1 1 90px', textAlign: 'center',
+                padding: '8px 10px', borderRadius: 7,
+                fontSize: 11, fontWeight: 900, letterSpacing: 1,
+                color: on ? '#ffd9df' : C.boneFaint,
+                background: on ? 'rgba(160,18,38,0.36)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${on ? 'rgba(228,101,122,0.5)' : 'rgba(255,255,255,0.10)'}`,
+              }}>
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {view === 'monument' && (
+        <OssuarySection progress={progress} onChange={onChange} onError={onError} />
+      )}
+      {view === 'wager' && (
+        <WagerSection progress={progress} onChange={onChange} onError={onError} />
+      )}
+      {view === 'relics' && <>
       {/* ⚠️ Bu cümle KALDIRILAMAZ — oyuncu neye para verdiğini bilmeli */}
       <p style={{ margin: '0 0 14px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
         Everything here is <strong style={{ color: C.bone }}>appearance only</strong> — no damage, no health,
@@ -352,6 +394,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
           good — that is the point, and it is why the gold you earn keeps its worth.
         </span>
       </CardSection>
+      </>}
     </>
   );
 }

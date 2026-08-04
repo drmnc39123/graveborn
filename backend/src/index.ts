@@ -19,6 +19,11 @@ import {
   MarketError, cancelListing, createListing, escrowedGold, listActive, listMine, tokenEnabled,
 } from './market.js';
 import { seedFromString } from '@game/rng';
+import { wagerPayout } from '@game/wager';
+import { Prisma } from '@prisma/client';
+
+/** Nullable Json'u boşaltmanın tek doğru yolu — `undefined` "dokunma" demek */
+const DbNull = Prisma.DbNull;
 
 const app = express();
 app.use(express.json({ limit: '32kb' }));
@@ -228,6 +233,62 @@ app.post('/cosmetic/equip', wrap(async (req, res) => {
   res.json({ progress: toProgress(saved) });
 }));
 
+// ── THE OSSUARY ──
+// Ekonominin dipsiz kovası. Tavan YOK; maliyet `ossuaryCost` ile SUNUCUDA
+// hesaplanır, istemciden fiyat alınmaz.
+app.post('/ossuary/raise', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  const { raiseOssuary } = await import('@game/progress');
+  const out = raiseOssuary(toProgress(player));
+  if (out.error) { res.status(400).json({ error: 'yukseltilemedi', detay: out.error }); return; }
+
+  const saved = await prisma.player.update({
+    where: { wallet }, data: fromProgress(out.progress),
+  });
+  res.json({ progress: toProgress(saved) });
+}));
+
+// ── THE WAGER ──
+// ⚠️ Bahis GOLD ÖDEMEZ, TOZ öder (bkz. wager.ts başlığı) — gold ödeseydi
+// erken oyunda rekor her koşuda arttığı için bir MUSLUK olurdu.
+app.post('/wager/place', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const body = z.object({
+    stageId: z.number().int().min(1).max(99),
+    stake: z.number().int().min(1).max(10_000_000),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: 'gecersiz_istek' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+
+  const { placeWager } = await import('@game/progress');
+  // ⚠️ Hedef İSTEMCİDEN ALINMAZ — `placeWager` oyuncunun kendi rekorundan
+  // türetir. Alınsaydı "hedefim derinlik 1" deyip bedava toz basılırdı.
+  const out = placeWager(toProgress(player), body.data.stageId, body.data.stake);
+  if (out.error) { res.status(400).json({ error: 'bahis_kurulamadi', detay: out.error }); return; }
+
+  const saved = await prisma.player.update({
+    where: { wallet }, data: fromProgress(out.progress),
+  });
+  res.json({ progress: toProgress(saved) });
+}));
+
+app.post('/wager/clear', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  const { clearWager } = await import('@game/progress');
+  const saved = await prisma.player.update({
+    where: { wallet }, data: fromProgress(clearWager(toProgress(player))),
+  });
+  res.json({ progress: toProgress(saved) });
+}));
+
 // ── KOŞU ──
 const startSchema = z.object({
   mode: z.enum(['campaign', 'descent']),
@@ -262,8 +323,25 @@ app.post('/run/start', wrap(async (req, res) => {
   // oyuncu koşuyu başlatıp hemen çıkarak tılsımı sonsuza kadar saklardı —
   // tek koşuluk olmalarının anlamı kalmazdı.
   const charms = p.charms;
-  if (charms.length) {
-    await prisma.player.update({ where: { wallet }, data: { charms: [] } });
+
+  // ⚠️ BAHİS DE KOŞU AÇILIRKEN YANAR — tılsımlardaki gerekçenin aynısı.
+  // Sadece DESCENT'te ve SADECE aynı bölümde geçerli: kampanyada derinlik
+  // kavramı yok, başka bölümde de rekor başka.
+  const bahis = p.wager;
+  const bahisGecerli = !!bahis
+    && body.data.mode === 'descent'
+    && bahis.stageId === body.data.stageId
+    && p.gold >= bahis.stake;
+
+  if (charms.length || bahis) {
+    await prisma.player.update({
+      where: { wallet },
+      data: {
+        charms: [],
+        wager: DbNull,   // geçersiz olsa bile temizlenir — koşuya taşınmayan bahis kalmaz
+        ...(bahisGecerli ? { gold: { decrement: bahis!.stake } } : {}),
+      },
+    });
   }
 
   // Checkpoint SUNUCUDA çözülür — istemcinin isteği burada kırpılır
@@ -274,6 +352,8 @@ app.post('/run/start', wrap(async (req, res) => {
       id: runId, wallet, seed: BigInt(seed), hero: p.hero,
       mode: body.data.mode, stageId: body.data.stageId,
       startDepth: Math.max(1, startDepth),
+      wagerStake: bahisGecerli ? bahis!.stake : 0,
+      wagerTarget: bahisGecerli ? bahis!.target : 0,
     },
   });
   // BigInt JSON'a serileşmez; seed uint32 olduğu için Number'a sığar.
@@ -313,8 +393,29 @@ app.post('/run/finish', wrap(async (req, res) => {
     run.startDepth,
   );
 
+  // ── BAHİS ──
+  // ⚠️ Kazanç ölçüsü SUNUCUNUN kabul ettiği derinlik. `settleRun` iddiayı
+  // zaten süre tabanına kırptı; bahis o çıktıyı okuyor, istemcinin sayısını
+  // değil. Hedef = koşu öncesi rekor + 1 olduğu için "paidDepth arttı mı"
+  // sorusu tam olarak "rekorunu geçti mi" demek.
+  //
+  // ⚠️ KIRPILAN KOŞU BAHSİ KAZANAMAZ — leaderboard'daki kuralın aynısı.
+  // Şüpheli bir koşuya toz ödemek, kırpmanın anlamını ortadan kaldırırdı.
+  const ulasilan = paidDepth(s.progress, run.stageId);
+  const bahisKazandi = run.wagerStake > 0 && !s.capped && ulasilan >= run.wagerTarget;
+  const bahisTozu = bahisKazandi ? wagerPayout(run.wagerStake) : 0;
+
   const [saved] = await prisma.$transaction([
-    prisma.player.update({ where: { wallet }, data: fromProgress(s.progress) }),
+    prisma.player.update({
+      where: { wallet },
+      data: {
+        ...fromProgress(s.progress),
+        // ⚠️ `increment` kullanılıyor: `fromProgress` toz alanını koşu
+        // ÖNCESİ değerle yazıyor, üstüne düz atama yapmak eşzamanlı bir
+        // Reliquary çekilişini silebilirdi.
+        ...(bahisTozu > 0 ? { dust: { increment: bahisTozu } } : {}),
+      },
+    }),
     prisma.run.update({
       where: { id: run.id },
       data: {
@@ -322,8 +423,9 @@ app.post('/run/finish', wrap(async (req, res) => {
         claimedDepth: body.data.deepestCleared,
         claimedGold: body.data.rareGold,
         awarded: s.awarded,
-        awardedDepth: paidDepth(s.progress, run.stageId),
+        awardedDepth: ulasilan,
         capped: s.capped,
+        wagerWon: bahisKazandi,
       },
     }),
   ]);
@@ -336,8 +438,7 @@ app.post('/run/finish', wrap(async (req, res) => {
   // ⚠️ KIRPILAN KOŞU REKOR YAZMAZ. Gold tarafında kırpılmış bir iddiadan
   // kalanı ödemek zararsız (miktar küçülür), ama sıralamada tek bir yalan
   // tepeyi kalıcı kilitler. Şüpheliyse tabloya hiç girmesin.
-  const reached = paidDepth(s.progress, run.stageId);
-  const record = s.capped ? false : await recordDescent(wallet, run.mode, run.stageId, reached);
+  const record = s.capped ? false : await recordDescent(wallet, run.mode, run.stageId, ulasilan);
 
   res.json({
     progress: toProgress(saved),
@@ -345,6 +446,10 @@ app.post('/run/finish', wrap(async (req, res) => {
     progressGold: s.progressGold,
     dropGold: s.dropGold,
     record,
+    // Bahis vardıysa sonucu — arayüz koşu sonu dökümünde gösterir
+    wager: run.wagerStake > 0
+      ? { stake: run.wagerStake, target: run.wagerTarget, won: bahisKazandi, dust: bahisTozu }
+      : null,
   });
 }));
 

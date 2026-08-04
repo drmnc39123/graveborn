@@ -11,6 +11,8 @@
 // fonksiyonlar sunucuda BİREBİR çalıştırılabilsin diye saf tutuluyor.
 
 import { STAGES, checkpointFor, depthGold, stageById } from './config';
+import { ossuaryCost } from './ossuary';
+import { WAGER, wagerError, wagerTarget, type WagerTicket } from './wager';
 import { permanentBonus } from './forge';
 import { DEFAULT_HERO, heroById } from './heroes';
 import { CHARM_SLOTS, charmById } from './charms';
@@ -49,14 +51,40 @@ export interface Progress {
   equipped: Partial<Record<CosmeticSlot, string>>;
   /** Tekrar çıkan kozmetiklerden biriken toz — istenen kozmetiği doğrudan alır */
   dust: number;
+  /**
+   * Anıt seviyesi. TAVANI YOK — ekonominin dipsiz kovası burası
+   * (bkz. ossuary.ts). Sadece görünürlük verir, güç vermez.
+   */
+  ossuary: number;
+  /**
+   * KURULMUŞ bahis — henüz yanmadı.
+   * ⚠️ Tılsımlardaki kuralın aynısı: gold koşu AÇILIRKEN düşer, bahis
+   * kurulurken değil. Kurulunca düşseydi oyuncu bahsi kurup hiç oynamadan
+   * parasını kaybederdi; koşu bitince düşseydi kaybeden çıkıp kaçardı.
+   */
+  wager: WagerTicket | null;
 }
 
 export function emptyProgress(): Progress {
   return {
     gold: 0, unlockedStage: 1, cleared: {}, upgrades: {},
     firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO, charms: [],
-    cosmetics: [], equipped: {}, dust: 0,
+    cosmetics: [], equipped: {}, dust: 0, ossuary: 0, wager: null,
   };
+}
+
+/** Elle düzenlenmiş kayda karşı bahis biletini doğrula — hepsi ya da hiçbiri */
+function cleanWager(raw: unknown): WagerTicket | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const w = raw as Record<string, unknown>;
+  const stake = Math.floor(Number(w.stake) || 0);
+  const target = Math.floor(Number(w.target) || 0);
+  const stageId = Math.floor(Number(w.stageId) || 0);
+  // ⚠️ Sınırlar burada da uygulanır: kayıt güvenilmez, "stake: 1" yazıp
+  // hedefi 1'e çekmek bedava toz basmanın en kolay yolu olurdu.
+  if (stake < WAGER.minStake || stake > WAGER.maxStake) return null;
+  if (target < 1 || stageId < 1) return null;
+  return { stake, target, stageId };
 }
 
 /**
@@ -107,6 +135,8 @@ function normalize(p: Partial<Progress>): Progress {
       : [],
     equipped: {},   // aşağıda sahiplik listesine göre doldurulur
     dust: Math.max(0, Math.floor(Number(p.dust) || 0)),
+    ossuary: Math.max(0, Math.floor(Number(p.ossuary) || 0)),
+    wager: cleanWager(p.wager),
   };
   out.equipped = cleanEquipped(p.equipped, out.cosmetics);
   return out;
@@ -274,6 +304,48 @@ export function buyWithDust(p: Progress, id: string): {
     },
     error: null,
   };
+}
+
+/**
+ * Anıtı bir seviye yükselt. Ekonominin dipsiz kovası — tavan YOK.
+ *
+ * ⚠️ Maliyet `ossuaryCost` ile hesaplanır, çağırandan ALINMAZ. Tılsımda ve
+ * Forge'da olduğu gibi: fiyatı istemcinin göndermesi, istemcinin fiyat
+ * belirlemesi demektir.
+ */
+export function raiseOssuary(p: Progress): { progress: Progress; error: string | null } {
+  const cost = ossuaryCost(p.ossuary);
+  if (p.gold < cost) return { progress: p, error: 'not enough gold' };
+  return {
+    progress: { ...p, gold: p.gold - cost, ossuary: p.ossuary + 1, equipped: { ...p.equipped } },
+    error: null,
+  };
+}
+
+// ── THE WAGER ─────────────────────────────────────────────────────────
+
+/**
+ * Bahsi KUR. Gold henüz düşmez — koşu açılırken yanar (bkz. Progress.wager).
+ * Hedef oyuncunun kendi rekorundan türetilir, istemciden alınmaz.
+ */
+export function placeWager(p: Progress, stageId: number, stake: number): {
+  progress: Progress; error: string | null;
+} {
+  if (!p.cleared[stageId]) return { progress: p, error: 'clear the stage first' };
+  const err = wagerError(stake, p.gold);
+  if (err) return { progress: p, error: err };
+  return {
+    progress: {
+      ...p, equipped: { ...p.equipped },
+      wager: { stake: Math.floor(stake), target: wagerTarget(paidDepth(p, stageId)), stageId },
+    },
+    error: null,
+  };
+}
+
+/** Kurulmuş bahsi iptal et — henüz yanmadığı için bedelsiz */
+export function clearWager(p: Progress): Progress {
+  return { ...p, equipped: { ...p.equipped }, wager: null };
 }
 
 /** Kozmetik tak/çıkar. `id` null ise yuva boşaltılır. */
