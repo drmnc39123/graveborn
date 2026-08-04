@@ -154,6 +154,34 @@ model Listing {
   @@index([seller, status])
 }
 
+// ── GOLD DEFTERİ ──────────────────────────────────────────────────────
+// Her gold hareketinin kaydı. Bugüne kadar HİÇ tutulmuyordu: bakiye
+// değişiyordu ama nereye gittiği kaybolyordu.
+//
+// İki soruyu birden cevaplıyor:
+//   • oyuncu:  "gold'um nereye gitti"
+//   • yönetim: "musluk mu sink mi ağır basıyor, ekonomi sızdırıyor mu"
+//
+// ⚠️ KAYIT, BAKİYE DEĞİŞİMİYLE AYNI TRANSACTION'DA yazılmalı. Ayrı yazılırsa
+// biri başarısız olduğunda defter yalan söyler — ve yalan söyleyen bir defter
+// hiç defter tutmamaktan kötüdür, çünkü ona bakıp karar verilir.
+model Ledger {
+  id     String   @id
+  wallet String
+  at     DateTime @default(now())
+
+  /// nereye/nereden: 'run' | 'forge' | 'charm' | 'reliquary' | 'dust' |
+  /// 'ossuary' | 'wager' | 'market_list' | 'market_cancel'
+  kind String
+  /// gold değişimi — POZİTİF kazanç (musluk), NEGATİF harcama (sink)
+  gold Int
+  /// serbest ayrıntı: yükseltme id'si, kozmetik id'si, derinlik…
+  detail String?
+
+  @@index([wallet, at])
+  @@index([kind, at])
+}
+
 // Cüzdan doğrulama için tek kullanımlık metin. İmzalanır, sonra silinir.
 model AuthNonce {
   wallet    String   @id

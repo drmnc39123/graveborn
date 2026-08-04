@@ -20,6 +20,9 @@ import {
 } from './market.js';
 import { seedFromString } from '@game/rng';
 import { wagerPayout } from '@game/wager';
+import { PULL_COST } from '@game/cosmetics';
+import { profileOf } from './profile.js';
+import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
 /** Nullable Json'u boşaltmanın tek doğru yolu — `undefined` "dokunma" demek */
@@ -131,7 +134,8 @@ app.post('/progress/buy', wrap(async (req, res) => {
 
   p.gold -= cost;
   p.upgrades = { ...p.upgrades, [u.id]: lv + 1 };
-  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(p) });
+  const saved = await withLedger(wallet, fromProgress(p),
+    { kind: 'forge', gold: -cost, detail: `${u.id} L${lv + 1}` });
   res.json({ progress: toProgress(saved), spent: cost });
 }));
 
@@ -158,7 +162,8 @@ app.post('/charm/buy', wrap(async (req, res) => {
 
   p.gold -= c.cost;
   p.charms = [...p.charms, c.id];
-  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(p) });
+  const saved = await withLedger(wallet, fromProgress(p),
+    { kind: 'charm', gold: -c.cost, detail: c.id });
   res.json({ progress: toProgress(saved), spent: c.cost });
 }));
 
@@ -183,8 +188,9 @@ app.post('/reliquary/pull', wrap(async (req, res) => {
   const out = pullReliquary(toProgress(player), roll(), roll());
   if (out.error) { res.status(400).json({ error: 'cekilis_yok', detay: out.error }); return; }
 
-  const saved = await prisma.player.update({
-    where: { wallet }, data: fromProgress(out.progress),
+  const saved = await withLedger(wallet, fromProgress(out.progress), {
+    kind: 'reliquary', gold: -PULL_COST,
+    detail: out.result!.duplicate ? `${out.result!.cosmetic.id} (dup)` : out.result!.cosmetic.id,
   });
   res.json({
     progress: toProgress(saved),
@@ -207,9 +213,10 @@ app.post('/reliquary/dust-buy', wrap(async (req, res) => {
   const out = buyWithDust(toProgress(player), id.data);
   if (out.error) { res.status(400).json({ error: 'alinamadi', detay: out.error }); return; }
 
-  const saved = await prisma.player.update({
-    where: { wallet }, data: fromProgress(out.progress),
-  });
+  // ⚠️ gold: 0 — bu bir TOZ harcaması. Deftere yine de giriyor: kozmetiğin
+  // nereden geldiği (çekiliş mi, hedefli alım mı) sonradan sorulabilir olmalı.
+  const saved = await withLedger(wallet, fromProgress(out.progress),
+    { kind: 'dust', gold: 0, detail: id.data });
   res.json({ progress: toProgress(saved) });
 }));
 
@@ -233,6 +240,27 @@ app.post('/cosmetic/equip', wrap(async (req, res) => {
   res.json({ progress: toProgress(saved) });
 }));
 
+/**
+ * GOLD DEFTERİ — oyuncunun kendi hareketleri.
+ * "Gold'um nereye gitti" sorusunun cevabı; bugüne kadar hiçbir yerde yoktu.
+ */
+app.get('/ledger', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json({ entries: await ledgerOf(wallet) });
+}));
+
+/**
+ * OYUNCU DOSYASI — Tavern'in "HISTORY" sekmesi.
+ * Sadece KENDİ dosyanı görürsün; başkasının koşu geçmişi kişisel veridir ve
+ * leaderboard'da zaten görünmesi gereken her şey görünüyor.
+ */
+app.get('/profile', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json(await profileOf(wallet));
+}));
+
 // ── THE OSSUARY ──
 // Ekonominin dipsiz kovası. Tavan YOK; maliyet `ossuaryCost` ile SUNUCUDA
 // hesaplanır, istemciden fiyat alınmaz.
@@ -242,11 +270,13 @@ app.post('/ossuary/raise', wrap(async (req, res) => {
 
   const player = await getOrCreatePlayer(wallet);
   const { raiseOssuary } = await import('@game/progress');
-  const out = raiseOssuary(toProgress(player));
+  const before = toProgress(player);
+  const out = raiseOssuary(before);
   if (out.error) { res.status(400).json({ error: 'yukseltilemedi', detay: out.error }); return; }
 
-  const saved = await prisma.player.update({
-    where: { wallet }, data: fromProgress(out.progress),
+  const saved = await withLedger(wallet, fromProgress(out.progress), {
+    kind: 'ossuary', gold: -(before.gold - out.progress.gold),
+    detail: `L${out.progress.ossuary}`,
   });
   res.json({ progress: toProgress(saved) });
 }));
@@ -334,7 +364,7 @@ app.post('/run/start', wrap(async (req, res) => {
     && p.gold >= bahis.stake;
 
   if (charms.length || bahis) {
-    await prisma.player.update({
+    const temizle = prisma.player.update({
       where: { wallet },
       data: {
         charms: [],
@@ -342,6 +372,13 @@ app.post('/run/start', wrap(async (req, res) => {
         ...(bahisGecerli ? { gold: { decrement: bahis!.stake } } : {}),
       },
     });
+    // ⚠️ Bahis yanması da deftere girer ve AYNI transaction'da: yoksa
+    // "gold nereye gitti" sorusunun cevabı bir yerde eksik kalır.
+    await (bahisGecerli
+      ? prisma.$transaction([temizle, ledgerWrite({
+          wallet, kind: 'wager', gold: -bahis!.stake, detail: `target d${bahis!.target}`,
+        })])
+      : temizle);
   }
 
   // Checkpoint SUNUCUDA çözülür — istemcinin isteği burada kırpılır
@@ -405,6 +442,9 @@ app.post('/run/finish', wrap(async (req, res) => {
   const bahisKazandi = run.wagerStake > 0 && !s.capped && ulasilan >= run.wagerTarget;
   const bahisTozu = bahisKazandi ? wagerPayout(run.wagerStake) : 0;
 
+  // ⚠️ SIRA ÖNEMLİ: `saved` DİZİNİN İLK ELEMANI. Defter kaydını başa koymak
+  // `saved`'a oyuncu satırı yerine defter satırını verirdi ve yanıt sessizce
+  // bozulurdu — oyuncu güncellemesi hep 0. sırada kalmalı.
   const [saved] = await prisma.$transaction([
     prisma.player.update({
       where: { wallet },
@@ -427,6 +467,10 @@ app.post('/run/finish', wrap(async (req, res) => {
         capped: s.capped,
         wagerWon: bahisKazandi,
       },
+    }),
+    ledgerWrite({
+      wallet, kind: 'run', gold: s.awarded,
+      detail: `${run.mode} s${run.stageId}${ulasilan ? ` d${ulasilan}` : ''}${s.capped ? ' (trimmed)' : ''}`,
     }),
   ]);
 
@@ -552,7 +596,22 @@ app.get('/admin/runs', adminOnly, wrap(async (req, res) => {
 app.get('/admin/player/:wallet', adminOnly, wrap(async (req, res) => {
   const detail = await playerDetail(req.params.wallet);
   if (!detail) { res.status(404).json({ error: 'oyuncu_yok' }); return; }
-  res.json(detail);
+  // Oyuncu dosyası artık gold hareketlerini de taşıyor — "bu hesap gold'u
+  // nereden buldu, nereye harcadı" sorusu tek ekranda cevaplanabilmeli.
+  res.json({ ...detail, ledger: await ledgerOf(req.params.wallet, 80) });
+}));
+
+/**
+ * EKONOMİ PANOSU — musluk/sink dengesi.
+ *
+ * ⚠️ Faz 2'nin bütün sink çalışması bu oranı dengelemek içindi ve o zamana
+ * kadar ÖLÇÜLEMİYORDU. Üretim sürekli tüketimi aşarsa gold birikip
+ * değersizleşir (ve market'te satılık gold'un fiyatı çöker); tersi olursa
+ * oyuncu hiçbir şey alamaz.
+ */
+app.get('/admin/economy', adminOnly, wrap(async (req, res) => {
+  const hours = Number(req.query.hours ?? 168);
+  res.json(await economy(Number.isFinite(hours) ? Math.min(Math.max(hours, 1), 24 * 90) : 168));
 }));
 
 app.post('/admin/ban', adminOnly, wrap(async (req, res) => {

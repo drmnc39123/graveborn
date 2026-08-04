@@ -11,18 +11,22 @@ import { FORGE, costOf, spentOn } from '@/game/forge';
 import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton } from '@/components/ui/kit';
 import { Card, Tag } from '@/components/ui/cards';
-import { fetchLeaderboard, type LeaderRow } from '@/lib/gameSession';
+import {
+  fetchLeaderboard, fetchProfile,
+  type LeaderRow, type ProfileData, type ProfileRun,
+} from '@/lib/gameSession';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
 import { C, FONT, glass } from '@/lib/theme';
 
 export function RecordsPanel({ progress }: { progress: Progress }) {
-  const [tab, setTab] = useState<'record' | 'board'>('record');
+  const [tab, setTab] = useState<'record' | 'history' | 'board'>('record');
 
   return (
     <>
       <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>THE TAVERN</div>
       <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 900, color: C.bone }}>
-        {tab === 'record' ? 'Your record' : 'Deepest descents'}
+        {tab === 'record' ? 'Your record'
+          : tab === 'history' ? 'Every road walked' : 'Deepest descents'}
       </h2>
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
@@ -30,13 +34,22 @@ export function RecordsPanel({ progress }: { progress: Progress }) {
           style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
           MY RECORD
         </PixelButton>
+        {/* ⚠️ Koşu geçmişi AYRI BİR SAYFA (/profile) DEĞİL, Tavern'in üçüncü
+            sekmesi. Bu oyunda profil zaten burası; ayrı bir rota açmak aynı
+            bilgiyi iki yerde göstermek olurdu. */}
+        <PixelButton variant="02A" scale={2} active={tab ==='history'} onClick={() => setTab('history')}
+          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          HISTORY
+        </PixelButton>
         <PixelButton variant="02A" scale={2} active={tab ==='board'} onClick={() => setTab('board')}
           style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
           LEADERBOARD
         </PixelButton>
       </div>
 
-      {tab === 'record' ? <MyRecord progress={progress} /> : <Leaderboard />}
+      {tab === 'record' ? <MyRecord progress={progress} />
+        : tab === 'history' ? <History />
+        : <Leaderboard />}
     </>
   );
 }
@@ -201,6 +214,103 @@ function Leaderboard() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * KOŞU GEÇMİŞİ — Run tablosunda biriken ama bugüne kadar hiç gösterilmeyen veri.
+ *
+ * ⚠️ Buradaki HİÇBİR sayı istemciden gelmiyor (bkz. backend/profile.ts):
+ * süre sunucu saatinden, gold sunucunun kendi hesabından, derinlik ise
+ * `settleRun`'ın KIRPTIĞI değerden. Oyuncuya kendi iddiasını geri göstermek,
+ * kırpılmış bir koşuyu başarı gibi okutmak olurdu.
+ */
+function History() {
+  const [data, setData] = useState<ProfileData | null>(null);
+  const [err, setErr] = useState(false);
+
+  useEffect(() => {
+    fetchProfile().then(setData).catch(() => setErr(true));
+  }, []);
+
+  if (err) {
+    return (
+      <Note>
+        Run history lives on the server. Connect a wallet and every descent you make
+        from then on is written down — how deep, how long, what it paid.
+      </Note>
+    );
+  }
+  if (!data) return <Note>Reading the ledger…</Note>;
+  if (!data.totals.runs) {
+    return <Note>No runs recorded yet. The ledger fills itself once you go below.</Note>;
+  }
+
+  const t = data.totals;
+  const saat = Math.floor(t.playSec / 3600);
+  const dakika = Math.floor((t.playSec % 3600) / 60);
+
+  return (
+    <>
+      <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+        <Stat label="Runs finished" value={t.runs.toLocaleString('en-US')} />
+        <Stat label="Time below" value={saat > 0 ? `${saat}h ${dakika}m` : `${dakika}m`} accent />
+        <Stat label="Gold earned" value={t.goldEarned.toLocaleString('en-US')} accent />
+        {t.wagersPlaced > 0 && (
+          <Stat label="Wagers won" value={`${t.wagersWon} / ${t.wagersPlaced}`} />
+        )}
+      </div>
+
+      {/* ⚠️ Kırpılan koşular oyuncudan GİZLENMİYOR. Gizli bir sicil tutmak,
+          oyuncunun neden ödül alamadığını hiç anlayamaması demekti. */}
+      {t.capped > 0 && (
+        <div style={{
+          marginTop: 10, padding: '9px 11px', borderRadius: 7, fontSize: 11,
+          color: C.boneDim, lineHeight: 1.45,
+          background: 'rgba(160,18,38,0.10)', border: '1px solid rgba(160,18,38,0.28)',
+        }}>
+          <strong style={{ color: C.bloodSoft }}>{t.capped}</strong> of your runs were trimmed —
+          the depth claimed was more than the time allowed for. Trimmed runs still pay,
+          but they never set a record.
+        </div>
+      )}
+
+      <div style={{ margin: '16px 0 8px', fontSize: 11, fontWeight: 900, letterSpacing: 1.6, color: C.boneFaint }}>
+        LAST {data.runs.length} RUNS
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {data.runs.map((r) => <RunLine key={r.id} run={r} />)}
+      </div>
+    </>
+  );
+}
+
+function RunLine({ run }: { run: ProfileRun }) {
+  const stage = STAGES.find((s) => s.id === run.stageId);
+  const sure = run.durationSec === null ? null
+    : `${Math.floor(run.durationSec / 60)}:${String(run.durationSec % 60).padStart(2, '0')}`;
+  const tarih = new Date(run.startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+  return (
+    <Card dim={run.durationSec === null}>
+      <div style={{ padding: '7px 10px', display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+        <span style={{ width: 42, flexShrink: 0, fontSize: 10, color: C.boneFaint }}>{tarih}</span>
+        <span style={{ flex: 1, minWidth: 90, fontSize: 11.5, color: C.boneDim,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {stage?.name ?? `Stage ${run.stageId}`}
+        </span>
+        {run.mode === 'descent' && run.depth !== null && <Tag tone="gold">D{run.depth}</Tag>}
+        {run.capped && <Tag tone="blood">TRIMMED</Tag>}
+        {run.wagerStake > 0 && (
+          <Tag tone={run.wagerWon ? 'gold' : 'dim'}>{run.wagerWon ? 'BET WON' : 'BET LOST'}</Tag>
+        )}
+        {sure && <span style={{ fontSize: 10, color: C.boneFaint, width: 40, textAlign: 'right' }}>{sure}</span>}
+        <span style={{ width: 62, textAlign: 'right', flexShrink: 0, fontSize: 11.5, fontWeight: 800,
+          color: run.awarded ? C.candle : C.boneFaint }}>
+          {run.durationSec === null ? 'open' : `+${(run.awarded ?? 0).toLocaleString('en-US')}`}
+        </span>
+      </div>
+    </Card>
   );
 }
 

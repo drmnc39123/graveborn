@@ -121,6 +121,32 @@ export async function fetchLeaderboard(): Promise<{ rows: LeaderRow[]; me: { ran
   return api<{ rows: LeaderRow[]; me: { rank: number; row: LeaderRow } | null }>('/leaderboard');
 }
 
+// ── OYUNCU DOSYASI ────────────────────────────────────────────────────
+// ⚠️ Bu veri SADECE sunucuda var (Run tablosu). Demo modunda koşu geçmişi
+// tutulmuyor — orada `fetchProfile` hata verir ve Tavern açıklayıcı bir
+// mesaj gösterir. Sahte bir geçmiş uydurmak, demo oyuncusuna gerçek
+// sanacağı bir sicil göstermek olurdu.
+
+export interface ProfileRun {
+  id: string; mode: string; stageId: number; startedAt: string;
+  depth: number | null; awarded: number | null; durationSec: number | null;
+  capped: boolean; wagerStake: number; wagerWon: boolean;
+}
+
+export interface ProfileData {
+  totals: {
+    runs: number; playSec: number; goldEarned: number; abandoned: number;
+    bestDepth: number; bestStage: number; capped: number;
+    wagersPlaced: number; wagersWon: number;
+  };
+  runs: ProfileRun[];
+}
+
+export async function fetchProfile(): Promise<ProfileData> {
+  if (!isWallet()) throw new Error('demo');
+  return api<ProfileData>('/profile');
+}
+
 // ── MARKETPLACE ───────────────────────────────────────────────────────
 // ⚠️ DEMO MODUNDA MARKET KAPALI. Demo gold'u localStorage'da üretiliyor ve
 // ekonomiye girmiyor; listelenebilseydi sahte gold gerçek $GRAVE karşılığı

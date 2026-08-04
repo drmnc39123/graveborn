@@ -66,6 +66,16 @@ export async function createListing(seller: string, goldAmount: number, priceGra
     });
     if (hit.count === 0) throw new MarketError('yetersiz_gold', 409);
 
+    // ⚠️ Defter kaydı AYNI transaction içinde (tx). Escrow'a kilitlenen gold
+    // oyuncunun bakiyesinden çıkmış görünür; nereye gittiğini defter
+    // yazmazsa "gold'um kayboldu" şikâyetinin cevabı olmaz.
+    await tx.ledger.create({
+      data: {
+        id: crypto.randomUUID(), wallet: seller, kind: 'market_list',
+        gold: -goldAmount, detail: id,
+      },
+    });
+
     return tx.listing.create({
       data: { id, seller, goldAmount, priceGrave, status: 'active' },
     });
@@ -87,6 +97,12 @@ export async function cancelListing(seller: string, id: string) {
     await tx.player.update({
       where: { wallet: seller },
       data: { gold: { increment: listing.goldAmount } },
+    });
+    await tx.ledger.create({
+      data: {
+        id: crypto.randomUUID(), wallet: seller, kind: 'market_cancel',
+        gold: listing.goldAmount, detail: id,
+      },
     });
     return listing;
   });

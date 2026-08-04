@@ -34,7 +34,29 @@ interface RunRow {
   durationSec: number | null;
 }
 
+interface LedgerRow {
+  id: string; kind: string; gold: number; detail: string | null; at: string;
+}
+interface Economy {
+  since: string;
+  slices: { kind: string; gold: number; count: number }[];
+  faucet: number;
+  sink: number;
+}
+interface Detail {
+  player: PlayerRow & { cosmetics?: unknown; ossuary?: number; dust?: number };
+  runs: RunRow[];
+  ledger: LedgerRow[];
+}
+
 type Sort = 'capped' | 'gold' | 'new';
+
+/** Defter kalemlerinin okunur adları — ham anahtar operatöre bir şey söylemiyor */
+const KIND_TR: Record<string, string> = {
+  run: 'koşu ödülü', forge: 'Forge', charm: 'tılsım', reliquary: 'çekiliş',
+  dust: 'tozla alım', ossuary: 'anıt', wager: 'bahis',
+  market_list: 'ilan (escrow)', market_cancel: 'ilan iptali',
+};
 
 export default function AdminPage() {
   const [secret, setSecret] = useState('');
@@ -45,6 +67,9 @@ export default function AdminPage() {
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [sort, setSort] = useState<Sort>('capped');
   const [onlyCapped, setOnlyCapped] = useState(true);
+  const [eco, setEco] = useState<Economy | null>(null);
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [q, setQ] = useState('');
 
   useEffect(() => {
     const s = sessionStorage.getItem(K_SECRET);
@@ -63,12 +88,13 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     setErr(null);
     try {
-      const [o, p, r] = await Promise.all([
+      const [o, p, r, e] = await Promise.all([
         call<Overview>('/admin/overview'),
         call<{ players: PlayerRow[] }>(`/admin/players?sort=${sort}&limit=50`),
         call<{ runs: RunRow[] }>(`/admin/runs?limit=50${onlyCapped ? '&capped=1' : ''}`),
+        call<Economy>('/admin/economy?hours=168'),
       ]);
-      setOv(o); setPlayers(p.players); setRuns(r.runs);
+      setOv(o); setPlayers(p.players); setRuns(r.runs); setEco(e);
       sessionStorage.setItem(K_SECRET, secret);
       setAuthed(true);
     } catch (e) {
@@ -81,6 +107,15 @@ export default function AdminPage() {
   }, [call, sort, onlyCapped, secret]);
 
   useEffect(() => { if (authed) void refresh(); }, [authed, sort, onlyCapped]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /**
+   * Oyuncu dosyasını aç. ⚠️ Uç ZATEN VARDI (`/admin/player/:wallet`) ama
+   * frontend onu hiç çağırmıyordu — panelin en ucuz kazancı buydu.
+   */
+  const openDetail = useCallback(async (wallet: string) => {
+    try { setDetail(await call<Detail>(`/admin/player/${wallet}`)); }
+    catch { setErr('Oyuncu dosyası alınamadı.'); }
+  }, [call]);
 
   const toggleBan = async (wallet: string, banned: boolean) => {
     if (!confirm(`${wallet}\n\n${banned ? 'BANLA' : 'banı kaldır'}?`)) return;
@@ -140,6 +175,42 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* ── EKONOMİ: MUSLUK / SİNK ── */}
+      {eco && (
+        <section style={{ marginTop: 22 }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 15, color: C.bone }}>Ekonomi · son 7 gün</h2>
+          {/* ⚠️ ASIL SAYI BU. Üretim sürekli tüketimi aşarsa gold birikip
+              değersizleşir ve market'te satılık gold'un fiyatı çöker; tersi
+              olursa oyuncu hiçbir şey alamaz. Faz 2'deki tüm sink çalışması
+              bu oranı dengelemek içindi ve o güne kadar ÖLÇÜLEMİYORDU. */}
+          <div style={{ display: 'grid', gap: 8, marginTop: 10,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+            <Stat label="Üretilen (musluk)" value={eco.faucet.toLocaleString('en-US')} />
+            <Stat label="Harcanan (sink)" value={eco.sink.toLocaleString('en-US')} />
+            <Stat
+              label="Sink / musluk"
+              value={eco.faucet > 0 ? `%${Math.round((eco.sink / eco.faucet) * 100)}` : '—'}
+              tone={eco.faucet > 0 && eco.sink / eco.faucet < 0.35 ? 'warn' : undefined}
+            />
+            <Stat label="Net birikim" value={(eco.faucet - eco.sink).toLocaleString('en-US')}
+              tone={eco.faucet - eco.sink > 0 ? 'warn' : undefined} />
+          </div>
+          {eco.slices.length > 0 && (
+            <Table head={['Kalem', 'Gold', 'İşlem']}>
+              {eco.slices.map((sl) => (
+                <tr key={sl.kind}>
+                  <Td>{KIND_TR[sl.kind] ?? sl.kind}</Td>
+                  <Td tone={sl.gold > 0 ? undefined : 'warn'}>
+                    {sl.gold > 0 ? '+' : ''}{sl.gold.toLocaleString('en-US')}
+                  </Td>
+                  <Td>{sl.count}</Td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </section>
+      )}
+
       {/* ── OYUNCULAR ── */}
       <section style={{ marginTop: 22 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -152,9 +223,17 @@ export default function AdminPage() {
           ))}
         </div>
         <Table head={['Cüzdan', 'Gold', 'Bölüm', 'Karakter', 'Koşu', 'KIRPILAN', 'Gold/sa', 'Koşu/sa', '']}>
-          {players.map((p) => (
+          {players
+            .filter((p) => !q || p.wallet.toLowerCase().includes(q.toLowerCase()))
+            .map((p) => (
             <tr key={p.wallet} style={{ background: p.banned ? 'rgba(160,18,38,0.14)' : undefined }}>
-              <Td mono title={p.wallet}>{p.wallet.slice(0, 6)}…{p.wallet.slice(-4)}</Td>
+              <Td mono title={p.wallet}>
+                <button onClick={() => void openDetail(p.wallet)}
+                  style={{ all: 'unset', cursor: 'pointer', color: C.candle,
+                    textDecoration: 'underline', textUnderlineOffset: 2 }}>
+                  {p.wallet.slice(0, 6)}…{p.wallet.slice(-4)}
+                </button>
+              </Td>
               <Td>{p.gold.toLocaleString('en-US')}</Td>
               <Td>{p.unlockedStage}</Td>
               <Td>{p.hero}</Td>
@@ -199,6 +278,78 @@ export default function AdminPage() {
           ))}
         </Table>
       </section>
+
+      {/* ── OYUNCU DOSYASI ── */}
+      {detail && (
+        <div onClick={() => setDetail(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 40, background: 'rgba(6,4,3,0.86)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            padding: '24px 14px', overflowY: 'auto' }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ ...glass(12), padding: 18, width: 'min(96vw, 860px)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between',
+              alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <h2 style={{ margin: 0, fontSize: 15, color: C.bone, fontFamily: FONT.ui,
+                wordBreak: 'break-all' }}>{detail.player.wallet}</h2>
+              <button onClick={() => setDetail(null)} style={btn}>kapat</button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 8, marginTop: 12,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}>
+              <Stat label="Gold" value={detail.player.gold.toLocaleString('en-US')} />
+              <Stat label="Bölüm" value={detail.player.unlockedStage} />
+              <Stat label="Karakter" value={detail.player.hero} />
+              <Stat label="Anıt" value={detail.player.ossuary ?? 0} />
+              <Stat label="Toz" value={detail.player.dust ?? 0} />
+              <Stat label="Durum" value={detail.player.banned ? 'BANLI' : 'aktif'}
+                tone={detail.player.banned ? 'bad' : undefined} />
+            </div>
+
+            {/* ⚠️ ASIL YENİ ŞEY: gold hareketleri. "Bu hesap gold'u nereden
+                buldu, nereye harcadı" sorusu bugüne kadar cevapsızdı. */}
+            <h3 style={{ margin: '18px 0 0', fontSize: 13, color: C.bone }}>Gold defteri</h3>
+            <Table head={['Zaman', 'Kalem', 'Gold', 'Ayrıntı']}>
+              {detail.ledger.map((l) => (
+                <tr key={l.id}>
+                  <Td>{new Date(l.at).toLocaleString('tr-TR', {
+                    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</Td>
+                  <Td>{KIND_TR[l.kind] ?? l.kind}</Td>
+                  <Td tone={l.gold > 0 ? undefined : 'warn'}>
+                    {l.gold > 0 ? '+' : ''}{l.gold.toLocaleString('en-US')}
+                  </Td>
+                  <Td mono>{l.detail ?? '—'}</Td>
+                </tr>
+              ))}
+            </Table>
+            {!detail.ledger.length && (
+              <div style={{ fontSize: 11, color: C.boneFaint, marginTop: 8 }}>
+                Defterde kayıt yok — bu hesap defter eklendikten sonra hiç hareket yapmamış.
+              </div>
+            )}
+
+            <h3 style={{ margin: '18px 0 0', fontSize: 13, color: C.bone }}>Son koşular</h3>
+            <Table head={['Mod', 'Bölüm', 'İddia', 'Verilen', 'Süre', 'Durum']}>
+              {detail.runs.map((r) => (
+                <tr key={r.id} style={{ background: r.capped ? 'rgba(160,18,38,0.14)' : undefined }}>
+                  <Td>{r.mode}</Td>
+                  <Td>{r.stageId}</Td>
+                  <Td>{r.claimedDepth ?? '—'}</Td>
+                  <Td>{r.awarded ?? '—'}</Td>
+                  <Td tone={r.durationSec !== null && r.durationSec < 10 ? 'warn' : undefined}>
+                    {r.durationSec === null ? 'açık' : `${r.durationSec}s`}
+                  </Td>
+                  <Td tone={r.capped ? 'bad' : undefined}>{r.capped ? 'KIRPILDI' : 'temiz'}</Td>
+                </tr>
+              ))}
+            </Table>
+
+            <button onClick={() => void toggleBan(detail.player.wallet, !detail.player.banned)}
+              style={{ ...btn, marginTop: 14, color: detail.player.banned ? C.ok : C.bad }}>
+              {detail.player.banned ? 'banı kaldır' : 'banla'}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
