@@ -40,7 +40,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, aura = null, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -59,6 +59,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * sunucunun doğruladığı koşu ayrışır.
    */
   startDepth?: number;
+  /**
+   * Takılı kozmetik hale (cosmetics.ts id). SADECE GÖRÜNÜR — motora hiç
+   * girmez, `render`'a ayrı parametre olarak veriliyor. Denge etkisi yok.
+   */
+  aura?: string | null;
   onFinish: (result: RunResult) => void;
 }) {
   // ⚠️ Seed'i istemcide türetmek "en kârlı günü bul, sistem saatini ona kur"
@@ -73,6 +78,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   // kimliği gelir ve oyun kendini yeniden başlatır. Run başında okunması yeterli.
   const permRef = useRef(permanent);
   permRef.current = permanent;
+  // Hale ref'te: bonuslardaki gerekçenin aynısı — dep dizisine koymak her
+  // render'da oyunu yeniden başlatırdı. Kozmetik olduğu için koşu ortasında
+  // değişmesi de zararsız.
+  const auraRef = useRef(aura);
+  auraRef.current = aura;
   const keysRef = useRef(new Set<string>());
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
   const [hud, setHud] = useState<Hud | null>(null);
@@ -224,7 +234,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       if (pausedRef.current) {
         game.setInput(0, 0);
         acc = 0;
-        render(ctx, game, cssW, cssH, dpr, 0);
+        render(ctx, game, cssW, cssH, dpr, 0, auraRef.current);
         return;
       }
       game.setInput(ix, iy);
@@ -234,7 +244,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       // doğrulamasıyla ayrışır); burada sadece `step()` çağrılmaz.
       if (freeze > 0) {
         freeze = Math.max(0, freeze - dt);
-        render(ctx, game, cssW, cssH, dpr, dt);
+        render(ctx, game, cssW, cssH, dpr, dt, auraRef.current);
         acc = 0;   // ⚠️ birikeni at, yoksa donma bitince tick patlaması gelir
         return;
       }
@@ -248,7 +258,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       }
       if (acc > TICK * MAX_CATCHUP) acc = 0; // birikmiş açığı at
 
-      render(ctx, game, cssW, cssH, dpr, dt);
+      render(ctx, game, cssW, cssH, dpr, dt, auraRef.current);
       // render efekt kuyruklarını işledi; biriken donma isteğini şimdi al
       freeze = Math.max(freeze, takeFreeze());
 

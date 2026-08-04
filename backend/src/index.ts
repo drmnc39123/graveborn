@@ -157,6 +157,77 @@ app.post('/charm/buy', wrap(async (req, res) => {
   res.json({ progress: toProgress(saved), spent: c.cost });
 }));
 
+// ── THE RELIQUARY ──
+//
+// ⚠️ ZARI SUNUCU ATAR. Çekiliş sonucu istemciden gelseydi oyuncu 450 gold'a
+// istediği legendary'yi "çekmiş" olurdu. İstemci tek bir sayı bile
+// göndermiyor: sadece "çek" diyor.
+//
+// ⚠️ `crypto.randomInt` kullanılıyor, `Math.random()` değil. Oyun motorunun
+// mulberry32'si BURAYA UYMAZ — o determinizm için var (aynı seed → aynı koşu);
+// gacha'da tam tersi isteniyor, sonuç tahmin EDİLEMEMELİ.
+app.post('/reliquary/pull', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+
+  const { pullReliquary } = await import('@game/progress');
+  const roll = () => crypto.randomInt(0, 1 << 30) / (1 << 30);
+  const out = pullReliquary(toProgress(player), roll(), roll());
+  if (out.error) { res.status(400).json({ error: 'cekilis_yok', detay: out.error }); return; }
+
+  const saved = await prisma.player.update({
+    where: { wallet }, data: fromProgress(out.progress),
+  });
+  res.json({
+    progress: toProgress(saved),
+    // Kozmetiğin TANIMI değil sadece id'si dönüyor — tanım zaten istemcide
+    // (`cosmetics.ts` iki tarafta ortak), ağdan tekrar taşımak gereksiz.
+    id: out.result!.cosmetic.id,
+    duplicate: out.result!.duplicate,
+    dust: out.result!.dust,
+  });
+}));
+
+app.post('/reliquary/dust-buy', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const id = z.string().max(40).safeParse(req.body?.id);
+  if (!id.success) { res.status(400).json({ error: 'gecersiz_id' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  const { buyWithDust } = await import('@game/progress');
+  const out = buyWithDust(toProgress(player), id.data);
+  if (out.error) { res.status(400).json({ error: 'alinamadi', detay: out.error }); return; }
+
+  const saved = await prisma.player.update({
+    where: { wallet }, data: fromProgress(out.progress),
+  });
+  res.json({ progress: toProgress(saved) });
+}));
+
+app.post('/cosmetic/equip', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const body = z.object({
+    slot: z.enum(['title', 'plate', 'trophy', 'aura']),
+    // null = yuvayı boşalt
+    id: z.string().max(40).nullable(),
+  }).safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: 'gecersiz_istek' }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  const { equipCosmetic } = await import('@game/progress');
+  // ⚠️ Sahiplik kontrolü `equipCosmetic` içinde — sunucuya ayrı bir kontrol
+  // yazmak, iki yerde iki kural demekti. Sahip olmadığını takmaya çalışan
+  // istek sessizce eskisini korur.
+  const next = equipCosmetic(toProgress(player), body.data.slot, body.data.id);
+  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(next) });
+  res.json({ progress: toProgress(saved) });
+}));
+
 // ── KOŞU ──
 const startSchema = z.object({
   mode: z.enum(['campaign', 'descent']),

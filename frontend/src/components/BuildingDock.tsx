@@ -26,6 +26,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   { id: 'quests', label: 'STAGES', sub: "The Warden's Post — stages & the Descent" },
   { id: 'upgrade', label: 'FORGE', sub: 'The Forge — permanent power' },
   { id: 'shop', label: 'STALL', sub: "Pedlar's Stall — charms for one run" },
+  // ⚠️ Forge'un HEMEN ARDINDA duruyor ve bu kasıtlı: oyuncunun gold döngüsü
+  // "kalıcı güç → görünür prestij" sırasında okunmalı. Forge sonlu, Reliquary
+  // değil; ağaç bitince gold'un gideceği yer bir sonraki durak olsun.
+  { id: 'reliquary', label: 'RELIQUARY', sub: 'The Reliquary — relics, titles, auras (appearance only)' },
   { id: 'market', label: 'MARKET', sub: 'Marketplace — sell gold for $GRAVE' },
   { id: 'exchange', label: 'EXCHANGE', sub: 'The Exchange — player order book' },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },

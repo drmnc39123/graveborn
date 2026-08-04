@@ -12,6 +12,7 @@ import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton } from '@/components/ui/kit';
 import { Card, Tag } from '@/components/ui/cards';
 import { fetchLeaderboard, type LeaderRow } from '@/lib/gameSession';
+import { IdentityLine, identityOf } from '@/components/ui/Identity';
 import { C, FONT, glass } from '@/lib/theme';
 
 export function RecordsPanel({ progress }: { progress: Progress }) {
@@ -62,6 +63,11 @@ function MyRecord({ progress }: { progress: Progress }) {
 
   return (
     <>
+      {/* Takılı kozmetikler burada da görünür — oyuncu satın aldığı şeyi
+          leaderboard'a çıkmadan ÖNCE kendi kaydında görebilmeli. */}
+      <div style={{ marginBottom: 10 }}>
+        <IdentityLine size={17} id={identityOf(progress, 'You')} />
+      </div>
       <p style={{ margin: '0 0 14px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
         Everything the village knows about you.
       </p>
@@ -207,8 +213,16 @@ function Line({ row, mine }: { row: LeaderRow; mine: boolean }) {
         <span style={{ width: 30, flexShrink: 0, fontSize: 13, fontWeight: 900, color: medal }}>
           #{row.rank}
         </span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: C.bone, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {mine ? 'You' : `${row.wallet.slice(0, 4)}…${row.wallet.slice(-4)}`}
+        {/* ⚠️ Kimlik satırı: kozmetik prestij ANCAK BURADA görüldüğü için
+            değerli. Sadece Reliquary panelinde görünen bir unvana kimse gold
+            vermez ve sink işlevini kaybeder. */}
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <IdentityLine compact size={12} id={{
+            name: mine ? 'You' : `${row.wallet.slice(0, 4)}…${row.wallet.slice(-4)}`,
+            title: row.equipped?.title,
+            plate: row.equipped?.plate,
+            trophy: row.equipped?.trophy,
+          }} />
         </span>
         <Tag tone="gold">DEPTH {row.depth}</Tag>
         <span style={{ flexShrink: 0, fontSize: 10, color: C.boneFaint, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

@@ -11,8 +11,12 @@
 
 import {
   allowedStartDepth, applyRunResult, loadProgress, paidDepth, saveProgress,
+  buyWithDust as localDustBuy,
+  equipCosmetic as localEquip,
+  pullReliquary as localPull,
   type Progress, type RunResult,
 } from '@/game/progress';
+import type { CosmeticSlot } from '@/game/cosmetics';
 import { CHARM_SLOTS } from '@/game/charms';
 import { seedFromString } from '@/game/rng';
 import { api, getMode } from '@/lib/session';
@@ -96,6 +100,8 @@ export interface LeaderRow {
   depth: number;
   rating: number;
   hero: string;
+  /** takılı kozmetikler — sıralamayı ETKİLEMEZ, sadece kim olduğunu gösterir */
+  equipped?: { title?: string; plate?: string; trophy?: string };
 }
 
 export async function fetchLeaderboard(): Promise<{ rows: LeaderRow[]; me: { rank: number; row: LeaderRow } | null }> {
@@ -159,6 +165,63 @@ export async function buyCharm(id: string, current: Progress, cost: number): Pro
   // Cüzdan modunda fiyatı ve slot sınırını SUNUCU doğrular
   const { progress } = await api<{ progress: Progress }>('/charm/buy', {
     method: 'POST', body: { id },
+  });
+  return progress;
+}
+
+// ── THE RELIQUARY ─────────────────────────────────────────────────────
+// ⚠️ Demoda zarı istemci atar, cüzdan modunda SUNUCU. İkisi de AYNI saf
+// fonksiyonu (`pullReliquary`) çalıştırıyor — kural tek yerde.
+//
+// ⚠️ Demoda `Math.random()` KULLANILIYOR ve bu bilinçli bir istisna: motorun
+// determinizm kuralı koşu simülasyonu içindir (aynı seed → aynı koşu), gacha
+// ise tam tersini ister. Demo gold'u zaten ekonomiye girmiyor, sunucuda ise
+// bu yol hiç çalışmıyor.
+
+export interface PullOutcome {
+  progress: Progress;
+  /** çekilen kozmetiğin id'si — tanımı istemcide zaten var */
+  id: string;
+  duplicate: boolean;
+  dust: number;
+}
+
+export async function pullReliquary(current: Progress): Promise<PullOutcome> {
+  if (!isWallet()) {
+    const out = localPull(current, Math.random(), Math.random());
+    if (out.error || !out.result) throw new Error(out.error ?? 'pull failed');
+    saveProgress(out.progress);
+    return {
+      progress: out.progress, id: out.result.cosmetic.id,
+      duplicate: out.result.duplicate, dust: out.result.dust,
+    };
+  }
+  return api<PullOutcome>('/reliquary/pull', { method: 'POST', body: {} });
+}
+
+export async function buyCosmeticWithDust(id: string, current: Progress): Promise<Progress> {
+  if (!isWallet()) {
+    const out = localDustBuy(current, id);
+    if (out.error) throw new Error(out.error);
+    saveProgress(out.progress);
+    return out.progress;
+  }
+  const { progress } = await api<{ progress: Progress }>('/reliquary/dust-buy', {
+    method: 'POST', body: { id },
+  });
+  return progress;
+}
+
+export async function equipCosmetic(
+  slot: CosmeticSlot, id: string | null, current: Progress,
+): Promise<Progress> {
+  if (!isWallet()) {
+    const next = localEquip(current, slot, id);
+    saveProgress(next);
+    return next;
+  }
+  const { progress } = await api<{ progress: Progress }>('/cosmetic/equip', {
+    method: 'POST', body: { slot, id },
   });
   return progress;
 }

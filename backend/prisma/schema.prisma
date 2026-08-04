@@ -36,6 +36,15 @@ model Player {
   /// ⚠️ Koşu AÇILDIĞINDA tüketilir — koşuyu başlatıp çıkmak tılsımı kurtarmaz
   charms Json @default("[]")
 
+  /// The Reliquary'den çıkmış kozmetikler (cosmetics.ts id'leri)
+  /// ⚠️ SADECE GÖRÜNÜR — hiçbiri stat/güç vermez. Gold'un sonsuz talebi bu
+  /// koldan geliyor; güç satan ikinci bir sink P2W sarmalını ikiye katlardı.
+  cosmetics Json @default("[]")
+  /// yuva → takılı kozmetik id'si
+  equipped Json @default("{}")
+  /// tekrar çıkan kozmetiklerden biriken toz
+  dust Int @default(0)
+
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
 

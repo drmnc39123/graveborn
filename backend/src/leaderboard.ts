@@ -22,6 +22,26 @@ export interface Row {
   depth: number;
   rating: number;
   hero: string;
+  /** takılı kozmetikler — SADECE görünür, sıralamayı etkilemez */
+  equipped: { title?: string; plate?: string; trophy?: string };
+}
+
+/**
+ * DB'deki `equipped` JSON'undan leaderboard'a ÇIKACAK alanları süz.
+ *
+ * ⚠️ İki sebeple ham JSON gönderilmiyor: (1) `aura` yalnızca koşu içinde
+ * görünür, tabloda işi yok; (2) dışarı açılan her alan bir yüzeydir, kapsam
+ * dar tutulur.
+ *
+ * Sahiplik doğrulaması BURADA YAPILMAZ: `equipCosmetic` yazarken doğruluyor,
+ * `normalize` okurken tekrar süzüyor. Üçüncü bir kopya, üçüncü bir ayrışma
+ * noktası olurdu.
+ */
+function wornOf(raw: unknown): Row['equipped'] {
+  if (!raw || typeof raw !== 'object') return {};
+  const e = raw as Record<string, unknown>;
+  const pick = (k: string) => (typeof e[k] === 'string' ? (e[k] as string) : undefined);
+  return { title: pick('title'), plate: pick('plate'), trophy: pick('trophy') };
 }
 
 /**
@@ -53,7 +73,13 @@ export async function top(limit = 50): Promise<Row[]> {
     where: { banned: false, bestRating: { gt: 0 } },
     orderBy: [{ bestRating: 'desc' }, { lastSeen: 'asc' }],
     take: Math.min(Math.max(limit, 1), 100),
-    select: { wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true },
+    // ⚠️ `equipped` de çekiliyor: kozmetik prestij ANCAK BAŞKALARI GÖRÜRSE
+    // değerlidir. Sadece kendi panelinde görünen bir unvana kimse gold vermez
+    // ve Reliquary bir gold sinki olarak işlevini kaybeder.
+    select: {
+      wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true,
+      equipped: true,
+    },
   });
   return rows.map((r, i) => ({
     rank: i + 1,
@@ -62,6 +88,7 @@ export async function top(limit = 50): Promise<Row[]> {
     depth: r.bestDepth,
     rating: r.bestRating,
     hero: r.hero,
+    equipped: wornOf(r.equipped),
   }));
 }
 
@@ -75,7 +102,10 @@ export async function top(limit = 50): Promise<Row[]> {
 export async function rankOf(wallet: string): Promise<{ rank: number; row: Row } | null> {
   const me = await prisma.player.findUnique({
     where: { wallet },
-    select: { wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true, banned: true },
+    select: {
+      wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true,
+      banned: true, equipped: true,
+    },
   });
   if (!me || me.banned || me.bestRating <= 0) return null;
 
@@ -85,7 +115,10 @@ export async function rankOf(wallet: string): Promise<{ rank: number; row: Row }
   const rank = ahead + 1;
   return {
     rank,
-    row: { rank, wallet: me.wallet, stage: me.bestStage, depth: me.bestDepth, rating: me.bestRating, hero: me.hero },
+    row: {
+      rank, wallet: me.wallet, stage: me.bestStage, depth: me.bestDepth,
+      rating: me.bestRating, hero: me.hero, equipped: wornOf(me.equipped),
+    },
   };
 }
 

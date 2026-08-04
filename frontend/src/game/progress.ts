@@ -14,6 +14,10 @@ import { STAGES, checkpointFor, depthGold, stageById } from './config';
 import { permanentBonus } from './forge';
 import { DEFAULT_HERO, heroById } from './heroes';
 import { CHARM_SLOTS, charmById } from './charms';
+import {
+  PULL_COST, RARITY, cosmeticById, resolvePull, rollCosmetic,
+  type CosmeticSlot, type PullResult,
+} from './cosmetics';
 
 const KEY = 'graveborn:progress:v2';
 const KEY_V1 = 'graveborn:progress:v1';
@@ -39,18 +43,47 @@ export interface Progress {
    * başlatıp hemen çıkarak tılsımı sonsuza kadar saklardı.
    */
   charms: string[];
+  /** Reliquary'den çıkmış kozmetikler (cosmetics.ts id) — SADECE görünür, güç vermez */
+  cosmetics: string[];
+  /** Yuva başına takılı kozmetik */
+  equipped: Partial<Record<CosmeticSlot, string>>;
+  /** Tekrar çıkan kozmetiklerden biriken toz — istenen kozmetiği doğrudan alır */
+  dust: number;
 }
 
 export function emptyProgress(): Progress {
   return {
     gold: 0, unlockedStage: 1, cleared: {}, upgrades: {},
     firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO, charms: [],
+    cosmetics: [], equipped: {}, dust: 0,
   };
+}
+
+/**
+ * Takılı kozmetikleri sahiplik listesine göre süz.
+ *
+ * ⚠️ SAHİP OLMADIĞINI TAKAMAZ. Kayıt elle düzenlenebilir; "equipped" alanına
+ * hiç çekilmemiş bir legendary yazmak, gacha'yı tamamen atlamanın en kolay
+ * yolu olurdu. Kozmetik güç vermiyor ama prestij TAM DA değerini burada
+ * buluyor — leaderboard'da görünen şey o.
+ */
+function cleanEquipped(
+  raw: unknown, owned: readonly string[],
+): Partial<Record<CosmeticSlot, string>> {
+  const out: Partial<Record<CosmeticSlot, string>> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [slot, id] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof id !== 'string' || !owned.includes(id)) continue;
+    const def = cosmeticById(id);
+    // Yuva adı da tanımdan doğrulanır: 'aura' yuvasına bir unvan takılamaz
+    if (def && def.slot === slot) out[def.slot] = id;
+  }
+  return out;
 }
 
 /** Eksik/bozuk alanlara karşı savunmacı normalize — kayıt biçimi değişse de oyun açılsın */
 function normalize(p: Partial<Progress>): Progress {
-  return {
+  const out: Progress = {
     gold: Math.max(0, Number(p.gold) || 0),
     unlockedStage: Math.min(STAGES.length, Math.max(1, Number(p.unlockedStage) || 1)),
     cleared: p.cleared ?? {},
@@ -66,7 +99,17 @@ function normalize(p: Partial<Progress>): Progress {
     charms: Array.isArray(p.charms)
       ? p.charms.filter((c) => typeof c === 'string' && !!charmById(c)).slice(0, CHARM_SLOTS)
       : [],
+    // ⚠️ Kozmetik alanları da SONRADAN eklendi; tılsımlardaki gerekçenin
+    // aynısı geçerli — eksikliği zararsız, boşa düşer, ayrı şema sürümü
+    // gerektirmez. Bilinmeyen id'ler burada eleniyor (kayıt güvenilmez).
+    cosmetics: Array.isArray(p.cosmetics)
+      ? [...new Set(p.cosmetics.filter((c) => typeof c === 'string' && !!cosmeticById(c)))]
+      : [],
+    equipped: {},   // aşağıda sahiplik listesine göre doldurulur
+    dust: Math.max(0, Math.floor(Number(p.dust) || 0)),
   };
+  out.equipped = cleanEquipped(p.equipped, out.cosmetics);
+  return out;
 }
 
 /**
@@ -178,6 +221,74 @@ export function depthRewardBetween(p: Progress, stageId: number, from: number, t
   let sum = 0;
   for (let d = Math.floor(from) + 1; d <= Math.floor(to); d++) sum += depthGold(stageId, d);
   return Math.round(sum * greedMul(p));
+}
+
+// ── THE RELIQUARY ─────────────────────────────────────────────────────
+// Gold'un sonsuz talebinin ilk ayağı. Saf fonksiyonlar: sunucu bunları
+// BİREBİR çalıştırıyor, ekonomi iki yerde yazılmıyor.
+
+/**
+ * Bir çekiliş yap. Zarları ÇAĞIRAN verir (cüzdan modunda sunucu, demoda
+ * istemci) — `Math.random()` bu dosyaya asla girmez.
+ *
+ * ⚠️ Gold kontrolü BURADA. Çağıran tarafa bırakmak, iki çağıran (istemci ve
+ * sunucu) arasında er ya da geç ayrışma demekti.
+ */
+export function pullReliquary(p: Progress, rarityRoll: number, pickRoll: number): {
+  progress: Progress;
+  result: PullResult | null;
+  /** başarısızsa sebebi — arayüz bunu gösterir */
+  error: string | null;
+} {
+  if (p.gold < PULL_COST) return { progress: p, result: null, error: 'not enough gold' };
+
+  const def = rollCosmetic(rarityRoll, pickRoll);
+  const result = resolvePull(p.cosmetics, def);
+
+  const next: Progress = {
+    ...p,
+    gold: p.gold - PULL_COST,
+    cosmetics: result.duplicate ? [...p.cosmetics] : [...p.cosmetics, def.id],
+    dust: p.dust + result.dust,
+    equipped: { ...p.equipped },
+  };
+  return { progress: next, result, error: null };
+}
+
+/**
+ * Tozla DOĞRUDAN alma — şansa teslim olmamanın yolu (pity).
+ * Koleksiyonun son parçası için 300 çekiliş beklemek oyuncuyu kaybettirir.
+ */
+export function buyWithDust(p: Progress, id: string): {
+  progress: Progress; error: string | null;
+} {
+  const def = cosmeticById(id);
+  if (!def) return { progress: p, error: 'unknown item' };
+  if (p.cosmetics.includes(id)) return { progress: p, error: 'already owned' };
+  const cost = RARITY[def.rarity].dustCost;
+  if (p.dust < cost) return { progress: p, error: 'not enough dust' };
+  return {
+    progress: {
+      ...p, dust: p.dust - cost,
+      cosmetics: [...p.cosmetics, id], equipped: { ...p.equipped },
+    },
+    error: null,
+  };
+}
+
+/** Kozmetik tak/çıkar. `id` null ise yuva boşaltılır. */
+export function equipCosmetic(p: Progress, slot: CosmeticSlot, id: string | null): Progress {
+  const equipped = { ...p.equipped };
+  if (id === null) {
+    delete equipped[slot];
+  } else {
+    const def = cosmeticById(id);
+    // Sahip olmadığını ya da yuvası tutmayanı takmayı sessizce yok say —
+    // `cleanEquipped` ile aynı kural, tek fark bunun yazma yolu olması
+    if (!def || def.slot !== slot || !p.cosmetics.includes(id)) return p;
+    equipped[slot] = id;
+  }
+  return { ...p, equipped };
 }
 
 export interface RunResult {

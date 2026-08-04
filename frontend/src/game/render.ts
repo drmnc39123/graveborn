@@ -9,6 +9,7 @@ import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
 import { weaponArt } from './combatArt';
+import { cosmeticById } from './cosmetics';
 
 // ── Kozmetik efektler ──
 // Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
@@ -57,7 +58,38 @@ function drawEffects(ctx: CanvasRenderingContext2D) {
 /** Atmosfer animasyonu için biriken süre — simülasyona GİRMEZ, kozmetik */
 let artTime = 0;
 
-export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number, dpr: number, dt = 1 / 60) {
+/**
+ * KOZMETİK HALE — Reliquary'den takılan aura.
+ *
+ * ⚠️ Sadece ÇİZİM. Motorun durumuna, rng'sine ve dengeye hiç dokunmaz;
+ * `artTime` üzerinden nefes alıyor, o da zaten simülasyon dışı.
+ * ⚠️ `shadowBlur` YOK — sıcak döngüde yasak (projenin perf kuralı). Yumuşak
+ * kenar radial gradient'ten geliyor, bedava.
+ */
+function drawCosmeticAura(ctx: CanvasRenderingContext2D, g: Game, auraId: string | null) {
+  if (!auraId) return;
+  const def = cosmeticById(auraId);
+  if (!def?.aura) return;
+  const nefes = 1 + Math.sin(artTime * 1.7) * 0.06;
+  const r = def.aura.radius * nefes;
+  const grad = ctx.createRadialGradient(g.px, g.py, r * 0.28, g.px, g.py, r);
+  grad.addColorStop(0, `${def.aura.color}00`);
+  grad.addColorStop(0.62, `${def.aura.color}3a`);
+  grad.addColorStop(1, `${def.aura.color}00`);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(g.px, g.py, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+export function render(
+  ctx: CanvasRenderingContext2D, g: Game, w: number, h: number, dpr: number, dt = 1 / 60,
+  /** takılı kozmetik hale (cosmetics.ts id) — yoksa hiçbir şey çizilmez */
+  auraId: string | null = null,
+) {
   const cx = w / 2;
   const cy = h / 2;
   artTime += dt;
@@ -95,6 +127,7 @@ export function render(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
   drawProjectiles(ctx, g);
   drawArcs(ctx, g);         // zincir yayları mermilerin üstünde parlar
   drawEnemyShots(ctx, g);   // oyuncunun ÜSTÜNDE değil altında: karakteri örtmesin
+  drawCosmeticAura(ctx, g, auraId);  // halenin ALTINDA kalması gereken tek şey oyuncu
   drawPlayer(ctx, g);
   // Kıvılcım ve hasar sayıları EN ÜSTTE — oyuncunun altında kalırlarsa
   // vuruşun geri bildirimi kayboluyor.

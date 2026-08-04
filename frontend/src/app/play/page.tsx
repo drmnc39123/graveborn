@@ -11,6 +11,7 @@ import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
 import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
+import { ReliquaryPanel } from '@/components/ReliquaryPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
@@ -130,6 +131,7 @@ export default function PlayPage() {
           hero={p.hero}
           seed={screen.ticket.seed}
           startDepth={screen.ticket.startDepth}
+          aura={p.equipped.aura ?? null}
           permanent={mergeBonus(permanentBonus(p.upgrades), charmBonus(screen.ticket.charms))}
           onFinish={finishRun}
         />
@@ -210,6 +212,12 @@ export default function PlayPage() {
               />
             ) : panel === 'upgrade' ? (
               <ForgePanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
+              />
+            ) : panel === 'reliquary' ? (
+              <ReliquaryPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}

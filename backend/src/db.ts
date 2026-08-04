@@ -9,6 +9,7 @@ export function toProgress(p: {
   gold: number; unlockedStage: number; hero: string;
   cleared: unknown; firstClear: unknown; depthPaid: unknown; upgrades: unknown;
   charms?: unknown;
+  cosmetics?: unknown; equipped?: unknown; dust?: number;
 }): Progress {
   const obj = <T,>(v: unknown): T => (v && typeof v === 'object' ? (v as T) : ({} as T));
   return {
@@ -20,6 +21,9 @@ export function toProgress(p: {
     depthPaid: obj<Record<number, number>>(p.depthPaid),
     upgrades: obj<Record<string, number>>(p.upgrades),
     charms: Array.isArray(p.charms) ? (p.charms as string[]) : [],
+    cosmetics: Array.isArray(p.cosmetics) ? (p.cosmetics as string[]) : [],
+    equipped: obj<Progress['equipped']>(p.equipped),
+    dust: Math.max(0, Math.floor(Number(p.dust) || 0)),
   };
 }
 
@@ -34,6 +38,9 @@ export function fromProgress(p: Progress) {
     depthPaid: p.depthPaid as object,
     upgrades: p.upgrades as object,
     charms: p.charms as object,
+    cosmetics: p.cosmetics as object,
+    equipped: p.equipped as object,
+    dust: Math.max(0, Math.floor(p.dust)),
   };
 }
 
