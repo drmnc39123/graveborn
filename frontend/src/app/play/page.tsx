@@ -3,7 +3,7 @@
 // Hub'da gezersin, Warden's Post'tan bölüm seçersin, bölüm biter/ölürsün,
 // gold TAVANA GÖRE cüzdana yazılır ve hub'a dönersin.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
 import { GameCanvas } from '@/components/GameCanvas';
@@ -30,6 +30,7 @@ import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/p
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
+import { installAudioUnlock, play } from '@/game/sfx';
 import { getMode, getWallet } from '@/lib/session';
 import {
   buyUpgrade, finishBossRun, finishRun as settleRun, loadSessionProgress, setHero as saveHero, startBossRun,
@@ -58,10 +59,53 @@ type Payout = {
 export default function PlayPage() {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: 'hub' });
-  const [panel, setPanel] = useState<BuildingId | null>(null);
+  const [panel, setPanelRaw] = useState<BuildingId | null>(null);
+  /**
+   * ⚠️ AÇILIŞ/KAPANIŞ SESİ BURADA — tek kaynak.
+   *
+   * `Panel` bileşeninin içine konmuştu ve hiç çalmadı: sekmeler arası geçişte
+   * React o elemanı yeniden monte etmiyor, sadece çocuklarını değiştiriyor.
+   * Durum değişimi burada olduğu için ses de burada.
+   *
+   * Aynı paneli tekrar seçmek ses çıkarmaz (`p === panel`) — düğmenin kendi
+   * tıklama sesi zaten var, ikisi üst üste binmemeli.
+   */
+  const panelRef = useRef<BuildingId | null>(null);
+  const setPanel = useCallback((p: BuildingId | null) => {
+    // ⚠️ KARŞILAŞTIRMA REF ÜZERİNDEN, `setPanelRaw` GÜNCELLEYİCİSİNİN İÇİNDE
+    // DEĞİL. İlk sürüm sesi güncelleyicinin içinde çalıyordu; React geliştirme
+    // modunda (StrictMode) güncelleyici fonksiyonları İKİ KEZ çağırıyor — ses
+    // çift çalardı. Güncelleyici SAF olmak zorunda, yan etki dışarıda kalır.
+    if (p !== panelRef.current) play(p ? 'open' : 'close');
+    panelRef.current = p;
+    setPanelRaw(p);
+  }, []);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
-  const [note, setNote] = useState<string | null>(null);
+  const [note, setNoteRaw] = useState<string | null>(null);
+
+  /**
+   * ⚠️ SES BAĞLAMINI KÖYDE DE AÇ.
+   *
+   * `unlockAudio` daha önce YALNIZCA `GameCanvas` içinde çağrılıyordu — yani
+   * ses ancak bir koşuya girildikten sonra açılıyordu. Arayüz sesleri
+   * (tıklama, panel açılışı, reddedilme) hub'da çalınıyor ve `play()`
+   * kilitliyken SESSİZCE geri dönüyor: hiçbir hata çıkmadan hiçbir ses
+   * duyulmaz, sebebi de görünmezdi.
+   */
+  useEffect(() => installAudioUnlock(), []);
+  /**
+   * ⚠️ HER HATA MESAJI BURADAN GEÇİYOR — reddedilme sesi de burada.
+   *
+   * `deny`'ı 11 ayrı `onError` çağrısına serpmek denenmedi ve denenmemeli:
+   * yeni bir panel eklendiğinde biri unutulur, "bazı hatalar ses çıkarıyor"
+   * hâli hiç ses olmamasından kötüdür. Ses mesajın KENDİSİNE bağlı, mesajı
+   * üreten yere değil.
+   */
+  const setNote = useCallback((m: string | null) => {
+    if (m) play('deny');
+    setNoteRaw(m);
+  }, []);
   /** rıhtımın ölçülen yüksekliği — panel boşluğu buna göre (bkz. BuildingDock) */
   const [dockH, setDockH] = useState(78);
   // ⚠️ Doğrudan `getWallet()` ÇAĞIRMA. localStorage okur; sunucuda null döner,

@@ -27,7 +27,7 @@ export function StallPanel({ progress, onChange }: {
   const buy = (c: CharmDef) => {
     if (dolu || progress.gold < c.cost || busy) return;
     setErr(null); setBusy(true);
-    play('chest');
+    play('buy');
     buyCharm(c.id, progress, c.cost)
       .then(onChange)
       .catch(() => setErr('The pedlar turned you away — try again.'))

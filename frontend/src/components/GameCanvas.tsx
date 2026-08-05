@@ -17,7 +17,7 @@ function dailySeed() {
 }
 import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
-import { isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
+import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
@@ -192,10 +192,10 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     // ── girdi ──
     // Tarayıcı otomatik oynatmayı engeller — ilk kullanıcı hareketinde aç.
     // Bu olmadan ses hiç çalmaz ve sebebi de görünmez (sessiz başarısızlık).
-    const onFirstGesture = () => unlockAudio();
-    window.addEventListener('keydown', onFirstGesture, { once: true });
-    window.addEventListener('pointerdown', onFirstGesture, { once: true });
-    window.addEventListener('touchstart', onFirstGesture, { once: true });
+    // ⚠️ Ortak yardımcı — `{once:true}` ile elle kurulmuştu ve o kurulum
+    // bağlam çalışmadan tetiklenirse sesi kalıcı olarak öldürüyordu
+    // (bkz. sfx.installAudioUnlock başlığı). İki kopya da olmamalı.
+    const sesKilidiniKaldir = installAudioUnlock();
 
     const onKeyDown = (e: KeyboardEvent) => {
       keysRef.current.add(e.key.toLowerCase());
@@ -366,9 +366,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
 
     return () => {
       cancelAnimationFrame(raf);
-      window.removeEventListener('keydown', onFirstGesture);
-      window.removeEventListener('pointerdown', onFirstGesture);
-      window.removeEventListener('touchstart', onFirstGesture);
+      sesKilidiniKaldir();
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);

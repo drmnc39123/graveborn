@@ -135,7 +135,7 @@ export function MarketPanel({
     setBusy(true);
     try {
       const out = await listGold(gold, price);
-      play('chest');
+      play('buy');
       onChange(out.progress);
       setEscrow(out.escrowedGold);
       setAmount(''); setPrice('');

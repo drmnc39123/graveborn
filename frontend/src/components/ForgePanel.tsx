@@ -31,7 +31,7 @@ export function ForgePanel({
     if (lv >= u.maxLevel) return;
     const cost = costOf(u, lv);
     if (progress.gold < cost) return;
-    play('chest');
+    play('buy');
     // Cüzdan modunda fiyatı ve bakiyeyi SUNUCU doğrular; demo modunda
     // yerel kayda yazılır. Ayrımı gameSession yapar, panel bilmez.
     buyUpgrade(u.id, progress, cost)

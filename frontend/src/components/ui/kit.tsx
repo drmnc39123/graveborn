@@ -12,6 +12,7 @@
 // LİSANS: Franuka RPG UI pack — ticari kullanım serbest, ANCAK Credits'te
 // franuka.itch.io bağlantısı ZORUNLU. (ATTRIBUTION.md)
 
+import { play } from '@/game/sfx';
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { C, FONT } from '@/lib/theme';
 
@@ -90,6 +91,16 @@ export function sliceH(src: string, slice = 16, scale = 3): CSSProperties {
 export type PanelStyle = '01A' | '01B' | '01C' | '02A' | '02B' | '03A'
   | '04A' | '04B' | '04C' | '05A' | '06A' | '07A' | '08A';
 
+/**
+ * ⚠️ Kısa TUTULDU (160 ms). Panel bir geçiş değil bir ARAÇ: oyuncu Forge'a
+ * 20 kez giriyor, uzun bir animasyon 20 kez bekleme demek olurdu.
+ * `both` şart — animasyon bitince son kareye kilitlenmezse panel titrer.
+ */
+const PANEL_ANIM = `@keyframes gb-panel-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}`;
+
 export function Panel({
   children, variant = '07A', scale = 3, pad = 14, style, onClick,
 }: {
@@ -101,12 +112,30 @@ export function Panel({
   style?: CSSProperties;
   onClick?: (e: React.MouseEvent) => void;
 }) {
+  // ⚠️ AÇILIŞ SESİ BURADA DEĞİL. Denendi ve ÖLÇÜLDÜ: ses hiç çalmadı.
+  // Sebep, `Panel` sekmeler arası geçişte YENİDEN MONTE OLMUYOR — React aynı
+  // elemanı koruyup sadece çocuklarını değiştiriyor, `useEffect([])` bir kez
+  // çalışıp susuyor. Ayrıca doğru yer de burası değildi: `Panel` bir sunum
+  // bileşeni, "şu an açılıyor muyum" onun bilgisi değil. Ses artık panel
+  // DURUMUNUN değiştiği yerde (play/page.tsx içindeki `setPanel` sarmalayıcısı).
+  //
+  // ⚠️ Aşağıdaki AÇILIŞ ANİMASYONU da aynı sebeple sekme geçişlerinde tekrar
+  // ETMEZ ve bu İSTENEN davranış: panel kapanıp yeniden açılınca (o zaman
+  // gerçekten unmount oluyor) animasyon çalışıyor, Forge↔Tavern geçişinde
+  // çalışmıyor. Her sekme değişiminde 160 ms beklemek sinir bozucu olurdu.
   return (
     <div onClick={onClick} style={{
       ...nineSlice(`${KIT}/Background-boxes/BGbox_${variant}.png`, 16, scale),
       position: 'relative',
+      // ⚠️ AÇILIŞ ANİMASYONU BURADA, her panelde ayrı ayrı DEĞİL. Panel
+      // "birden beliriyordu"; 9 kapının hepsine elle animasyon eklemek er ya
+      // da geç eksik kalırdı.
+      // ⚠️ `scale` DEĞİL `translateY` + `opacity` kullanılıyor: 9-slice
+      // kenarlık ölçeklenince piksel ızgarası bozulur ve çerçeve bulanır.
+      animation: 'gb-panel-in 160ms ease-out both',
       ...style,
     }}>
+      <style>{PANEL_ANIM}</style>
       {/* ⚠️ PEMBEYİ KIRAN KATMAN. 07A "koyu şarap kırmızısı" diye seçilmişti
           ama ekranda düpedüz PEMBE duruyor — oyunun geri kalanı geceyken
           panel parlıyordu. CSS `filter` çözüm DEĞİL: panelin çocuklarını da
@@ -166,7 +195,15 @@ export function PixelButton({
     <button
       title={title}
       disabled={disabled}
-      onClick={onClick}
+      onClick={() => {
+        // ⚠️ SES BURADA, çağıranda DEĞİL. Arayüzde 60+ düğme var; her birine
+        // elle ses eklemek er ya da geç eksik kalırdı ve "bazı düğmeler ses
+        // çıkarıyor" en kötü hâl olurdu — ya hepsi ya hiçbiri.
+        // ⚠️ `disabled` düğme zaten `onClick` almıyor (tarayıcı engelliyor),
+        // o yüzden ayrı bir kontrol gerekmiyor.
+        play('click');
+        onClick?.();
+      }}
       onPointerDown={() => setDown(true)}
       onPointerUp={() => setDown(false)}
       onPointerLeave={() => { setDown(false); setHover(false); }}

@@ -7,7 +7,12 @@
 // = 200 oscillator = ses çamuru + CPU patlaması. Her sesin kendi minimum aralığı var.
 
 type Voice = 'hit' | 'kill' | 'gem' | 'levelup' | 'evolve' | 'boss' | 'hurt' | 'chest'
-  | 'coin' | 'depth' | 'eshot' | 'charge' | 'chain' | 'crit';
+  | 'coin' | 'depth' | 'eshot' | 'charge' | 'chain' | 'crit'
+  // ── ARAYÜZ ──
+  // ⚠️ Bunlar SAVAŞ SESLERİNDEN AYRI TUTULMALI: köyde gezerken duyulan bir
+  // ses, dövüşte duyulan bir sesle aynı olursa oyuncu ikisini karıştırır ve
+  // ikisi de anlamını kaybeder. Hepsi kuru, kısa ve ALÇAK sesli.
+  | 'click' | 'open' | 'close' | 'deny' | 'equip' | 'buy';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
@@ -28,6 +33,10 @@ const THROTTLE: Record<Voice, number> = {
   eshot: 110,
   charge: 140,
   chain: 90,
+  // ⚠️ Arayüz seslerinde kısma ŞART ama SIFIR OLAMAZ: hızlı tıklayan oyuncu
+  // (ya da yanlışlıkla çift tıklama) aynı sesi üst üste bindirirse çamur olur.
+  // 40 ms bir insanın ayırt edemeyeceği kadar kısa, ama bindirmeyi keser.
+  click: 40, open: 60, close: 60, deny: 120, equip: 60, buy: 60,
 };
 
 function ensure(): AudioContext | null {
@@ -52,6 +61,37 @@ export function unlockAudio() {
   if (!c) return;
   if (c.state === 'suspended') c.resume().catch(() => {});
   unlocked = true;
+}
+
+/**
+ * Ses kilidini açan dinleyicileri kur — ÇALIŞANA KADAR bırakmadan.
+ *
+ * ⚠️ `{ once: true }` KULLANMA. İlk sürüm öyleydi ve ÖLÇÜLDÜ: eğer o ilk
+ * olay bağlamı gerçekten çalıştıramazsa (tarayıcı henüz sayfayı "etkin"
+ * saymamışsa, ya da `resume()` reddedilirse) dinleyici çoktan silinmiş
+ * oluyor ve ses O SEKMEDE BİR DAHA HİÇ AÇILMIYOR. Sessiz, kalıcı ölüm.
+ *
+ * Doğrusu: bağlam GERÇEKTEN `running` olana kadar dinlemeye devam et.
+ * Bu ayrıca sekme arka plana atılıp bağlam askıya alınırsa da kurtarıyor.
+ *
+ * ⚠️ Tek bir yerde durmalı: aynı kurulum hem hub'da hem koşuda gerekiyor ve
+ * iki kopya er ya da geç ayrışırdı.
+ */
+export function installAudioUnlock(): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const dene = () => {
+    unlockAudio();
+    if (ctx && ctx.state === 'running') kaldir();
+  };
+  const kaldir = () => {
+    window.removeEventListener('pointerdown', dene);
+    window.removeEventListener('keydown', dene);
+    window.removeEventListener('touchstart', dene);
+  };
+  window.addEventListener('pointerdown', dene);
+  window.addEventListener('keydown', dene);
+  window.addEventListener('touchstart', dene);
+  return kaldir;
 }
 
 export function setSoundEnabled(on: boolean) { enabled = on; }
@@ -146,6 +186,20 @@ export function play(v: Voice) {
     case 'charge': tone(120, 0.3, 'sawtooth', 0.12, 340); break;
     // Zincir: kısa çıtırtı + yükselen cızırtı — elektrik hissi
     case 'chain': noise(0.06, 0.09, 6000); tone(880, 0.09, 'square', 0.05, 1760); break;
+    // ── ARAYÜZ SESLERİ ──
+    // Tıklama: tek, kuru, çok kısa. Uzun olursa arayüz ağırlaşır.
+    case 'click': tone(1100, 0.028, 'square', 0.045, 2200); break;
+    // Panel açılışı: yukarı çıkan iki nota — "bir şey açıldı"
+    case 'open':  [520, 700].forEach((f, i) => tone(f, 0.07, 'sine', 0.055, undefined, i * 0.035)); break;
+    // Kapanış: aynı iki nota TERS — açılışın aynadaki hâli
+    case 'close': [700, 520].forEach((f, i) => tone(f, 0.06, 'sine', 0.045, undefined, i * 0.03)); break;
+    // Reddedildi: alçak, kısa, hoş OLMAYAN. Oyuncu "olmadı"yı duymalı.
+    case 'deny':  tone(180, 0.11, 'square', 0.075, 150); break;
+    // Takma: yumuşak bir tık + üst nota — "yerine oturdu"
+    case 'equip': tone(660, 0.05, 'triangle', 0.05); tone(990, 0.06, 'sine', 0.04, undefined, 0.04); break;
+    // Satın alma: `chest`in KISA hâli. Aynı aileden ama daha az kutlama —
+    // Forge'da 20 kez üst üste alım yapılıyor, her seferinde şenlik olmaz.
+    case 'buy':   [880, 1320].forEach((f, i) => tone(f, 0.09, 'sine', 0.085, undefined, i * 0.045)); break;
     case 'evolve':
       // yükselen akor + parlama: run'ın en büyük anı, ses de öyle olmalı
       [392, 494, 587, 784, 988].forEach((f, i) => tone(f, 0.6, 'triangle', 0.13, undefined, i * 0.07));

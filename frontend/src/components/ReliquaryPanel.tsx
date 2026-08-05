@@ -19,6 +19,7 @@ import {
 } from '@/game/cosmetics';
 import type { Progress } from '@/game/progress';
 import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSession';
+import { play } from '@/game/sfx';
 import { Card, CardSection, Tag } from '@/components/ui/cards';
 import { pixel } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
@@ -159,6 +160,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
     setBusy(true);
     try {
       onChange(await equipCosmetic(slot, id, progress));
+      play('equip');
     } catch (e) {
       onError(e instanceof Error ? e.message : 'Could not equip that.');
     } finally { setBusy(false); }
