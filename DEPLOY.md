@@ -90,9 +90,6 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ## ⚠️ Yayına çıkmadan önce kapatılacaklar
 
-- [ ] **Font lisansı** — `frontend/public/fonts/NOTICE-Pixellari.txt`
-      içinde yazarın şartları YOK. Depo herkese açık.
 - [ ] **Depo herkese açık** → `reward.ts` ve `worldBoss.ts` içindeki
       anti-hile tavanları OKUNABİLİR. Tavanlar yapısal (okumak onları
       aşmaya yetmez) ama bilerek yayınlandığı unutulmasın.
-- [ ] Lisansı belirsiz sanat klasörleri netleştirilmeli.

@@ -39,10 +39,7 @@ export const viewport: Viewport = {
  *   · VT323 — bold yüzü yok VE ince/soluk; okunurluk düştü.
  *   · Silkscreen — düz ve gerçek bold'u var ama küçük harfleri küçük-kapital
  *     gibi duruyor, her şey bağırıyormuş gibi okunuyordu.
- *
- * ⚠️ LİSANS: font dosyasının name tablosunda yalnızca yazar adı var, lisans
- * metni YOK. Depo herkese açık ve ileride token çıkacak — yazarın şartları
- * `public/fonts/NOTICE-Pixellari.txt` içine yazılmalı (bkz. o dosya).
+
  *
  * `font-display: swap` — font gelmezse arayüz görünmez kalmaz, yedeğe düşer.
  */
