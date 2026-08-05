@@ -10,6 +10,7 @@
 
 import crypto from 'node:crypto';
 import { prisma, YarisHatasi } from './db.js';
+import { contributeToVault } from './crypt.js';
 
 /** Defter kalemi türü. Yeni bir gold yolu açan HER uç buraya bir tür eklemeli. */
 export type LedgerKind =
@@ -21,7 +22,10 @@ export type LedgerKind =
   | 'ossuary'        // anıt seviyesi
   | 'wager'          // bahis yatırımı (koşu açılırken yanar)
   | 'market_list'    // ilana kilitlenen gold (escrow)
-  | 'market_cancel'; // escrow'dan geri dönen gold
+  | 'market_cancel'  // escrow'dan geri dönen gold
+  | 'crypt'          // Crypt Vault'tan haftalık çekim (YENİ GOLD DEĞİL — bkz. crypt.ts)
+  | 'crypt_deed';    // deed alımı. ⚠️ SINK_KINDS'ta YOK: kasaya katkı yapmaz,
+                     // yoksa oyuncu kendi alımından pay alırdı. Tamamen imha.
 
 export interface LedgerEntry {
   wallet: string;
@@ -79,6 +83,12 @@ export async function withLedger(
     // ⚠️ ÖNCE BU. Sayı 0 ise atıp çıkıyoruz; defter kaydı sonra geldiği için
     // "para gitti ama defterde yok" durumu oluşamaz.
     if (hit.count === 0) throw new YarisHatasi();
+
+    // ⚠️ CRYPT VAULT KATKISI BURADA — her gold sink'i zaten bu fonksiyondan
+    // geçiyor. Uçlara tek tek eklemek denenmedi ve denenmemeli: yeni bir sink
+    // açan kişi eklemeyi unutur, kasa sessizce eksik dolar. Aynı transaction
+    // içinde olması da şart, yoksa kasa ile defter ayrışır.
+    await contributeToVault(tx, entry.kind, entry.gold);
     await tx.ledger.create({
       data: {
         id: crypto.randomUUID(), wallet,

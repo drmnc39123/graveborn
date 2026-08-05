@@ -520,3 +520,28 @@ export async function finishRun(
     paidRange: after > before ? { from: before, to: after } : null,
   };
 }
+
+// ── THE CRYPT DEED ────────────────────────────────────────────────────
+// ⚠️ DEMO MODUNDA YOK. Kasa ORTAK bir bakiye ve sunucuda yaşıyor; demo
+// oyuncusunun ilerlemesi hiç sunucuya yazılmıyor. Sahte bir kasa uydurmak
+// "gerçek sanacağı bir sicil göstermek" olurdu — market ve koşu geçmişinde
+// verilen kararın aynısı.
+
+export interface CryptState {
+  tiers: { tier: number; name: string; cost: number; weight: number; blurb: string }[];
+  vault: { balance: number; owners: number; totalWeight: number };
+  me: { tier: number; claimedWeek: number } | null;
+  week: number;
+}
+
+export async function fetchCrypt(): Promise<CryptState> {
+  return api<CryptState>('/crypt');
+}
+
+export async function buyCryptDeed(): Promise<{ progress: Progress; tier: number; spent: number }> {
+  return api('/crypt/buy', { method: 'POST', body: {} });
+}
+
+export async function claimCrypt(): Promise<{ progress: Progress; amount: number; week: number }> {
+  return api('/crypt/claim', { method: 'POST', body: {} });
+}

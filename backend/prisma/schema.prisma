@@ -50,8 +50,13 @@ model Player {
   wager        Json?
   /// alınmış başarımlar (achievements.ts id'leri)
   achievements Json  @default("[]")
+
+  /// Crypt Deed kademesi (0 = yok). ⚠️ Kasa payı BUNA göre ağırlıklanıyor.
+  cryptTier        Int  @default(0)
+  /// kasadan en son çekilen hafta — aynı hafta iki kez çekilemez
+  cryptClaimedWeek Int  @default(0)
   /// günlük seri: { days, last }  — `last` SUNUCUNUN UTC günü
-  streak       Json  @default("{}")
+  streak           Json @default("{}")
 
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
@@ -287,4 +292,25 @@ model SeasonAward {
   /// Bir oyuncu bir haftadan EN FAZLA BİR ödül alır — dağıtım tekrarlansa bile
   @@unique([week, wallet])
   @@index([wallet, week])
+}
+
+// CRYPT VAULT — deed sahiplerinin paylaştığı ortak kasa.
+//
+// ⚠️ TEK SATIR (`id` sabit 1). Kasa bir BAKİYE: her gold sink'inin %10'u
+// buraya düşüyor, deed sahipleri buradan çekiyor. Yapısal garanti bu
+// tablodadır — içine girmemiş gold çıkamaz. Yani oyun yeni gold BASMIYOR,
+// harcayandan deed sahibine AKTARIYOR.
+//
+// ⚠️ `filled`/`paid` sadece denetim için: `paid <= filled` HER ZAMAN doğru
+// olmalı. Eşitsizlik bozulursa bir yerde gold basılmış demektir.
+model CryptVault {
+  id      Int @id @default(1)
+  /// kasadaki çekilebilir bakiye
+  balance Int @default(0)
+  /// ömür boyu kasaya giren toplam (denetim)
+  filled  Int @default(0)
+  /// ömür boyu kasadan ödenen toplam (denetim) — ASLA filled'ı geçemez
+  paid    Int @default(0)
+
+  updatedAt DateTime @updatedAt
 }

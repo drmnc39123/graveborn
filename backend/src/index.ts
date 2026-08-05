@@ -15,6 +15,9 @@ import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifyS
 import { canStart, resolveAscension, resolveStartDepth, settleRun } from './reward.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
+import { claimCrypt, deedList, vaultState } from './crypt.js';
+import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
+import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
 import {
@@ -746,6 +749,62 @@ app.get('/leaderboard/season', wrap(async (req, res) => {
     wallet ? awardsOf(wallet) : Promise.resolve([]),
   ]);
   res.json({ ...board, me, awards });
+}));
+
+// ── THE CRYPT DEED ──
+//
+// ⚠️ BU BİR MUSLUK DEĞİL. Deed pasif gold ÜRETMİYOR; her gold sink'inin %10'u
+// ortak bir kasaya düşüyor ve sahipler oradan çekiyor (bkz. game/crypt.ts).
+// Kasa gerçek bir bakiye — içine girmemiş gold çıkamaz.
+app.get('/crypt', wrap(async (req, res) => {
+  const wallet = auth(req);
+  const [vault, me] = await Promise.all([
+    vaultState(),
+    wallet ? prisma.player.findUnique({
+      where: { wallet }, select: { cryptTier: true, cryptClaimedWeek: true },
+    }) : Promise.resolve(null),
+  ]);
+  res.json({
+    tiers: deedList(),
+    vault: { balance: vault.balance, owners: vault.owners, totalWeight: vault.totalWeight },
+    me: me ? { tier: me.cryptTier, claimedWeek: me.cryptClaimedWeek } : null,
+    week: seasonWeek(new Date()),
+  });
+}));
+
+app.post('/crypt/buy', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+
+  const next = nextCryptTier(player.cryptTier);
+  if (!next) { res.status(400).json({ error: 'zaten_max' }); return; }
+  // ⚠️ FİYAT SUNUCUDA. İstemci hangi kademeyi istediğini bile göndermiyor:
+  // tek geçerli hamle "bir sonraki kademe", o yüzden seçime yer yok.
+  const cost = cryptUpgradeCost(player.cryptTier);
+  const p = toProgress(player);
+  if (p.gold < cost) { res.status(400).json({ error: 'yetersiz_gold' }); return; }
+
+  p.gold -= cost;
+  // ⚠️ Deed'in KENDİSİ de bir sink ve kasaya katkı yapar — `withLedger`
+  // içindeki kanca `crypt_deed` türünü de sayıyor olsaydı oyuncu kendi
+  // alımından pay alırdı. O yüzden tür `forge` ailesinde DEĞİL: aşağıdaki
+  // `crypt_deed` SINK_KINDS'ta yok, yani alım bedeli TAMAMEN imha ediliyor.
+  const saved = await withLedger(wallet, {
+    ...fromProgress(p), cryptTier: next.tier,
+  }, { kind: 'crypt_deed', gold: -cost, detail: `T${next.tier} ${next.name}` }, player.rev);
+
+  res.json({ progress: toProgress(saved), tier: next.tier, spent: cost });
+}));
+
+app.post('/crypt/claim', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const out = await claimCrypt(wallet);
+  if (!out.ok) { res.status(400).json({ error: out.reason }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  res.json({ progress: toProgress(player), amount: out.amount, week: out.week });
 }));
 
 // ── MARKETPLACE ──

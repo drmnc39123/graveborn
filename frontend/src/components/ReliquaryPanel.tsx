@@ -20,6 +20,7 @@ import {
 import type { Progress } from '@/game/progress';
 import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
+import { CryptSection } from '@/components/CryptSection';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { pixel } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
@@ -107,7 +108,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
   onError: (msg: string) => void;
 }) {
   /** hangi sink görünüyor — üçü de gold'u ekonomiden çıkarır */
-  const [view, setView] = useState<'relics' | 'monument' | 'wager'>('relics');
+  const [view, setView] = useState<'relics' | 'monument' | 'wager' | 'crypt'>('relics');
   const [tab, setTab] = useState<CosmeticSlot>('trophy');
   const [busy, setBusy] = useState(false);
   /** son çekilişin sonucu — açılış animasyonu bunu gösterir */
@@ -182,7 +183,8 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
       <PanelHead
         kicker="THE RELIQUARY" accent={C.candleSoft}
         title={view === 'relics' ? 'What the dead left behind'
-          : view === 'monument' ? 'Your monument' : 'A bet with the dead'}
+          : view === 'monument' ? 'Your monument'
+          : view === 'crypt' ? 'Ground of your own' : 'A bet with the dead'}
       />
 
       {/* ⚠️ ÜÇÜ AYNI BİNADA. Hepsi aynı işi yapıyor — gold'u ekonomiden
@@ -194,6 +196,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
           { id: 'relics', label: 'RELICS' },
           { id: 'monument', label: 'MONUMENT' },
           { id: 'wager', label: 'THE WAGER' },
+          { id: 'crypt', label: 'THE DEED' },
         ] as const).map((v) => {
           const on = view === v.id;
           return (
@@ -217,6 +220,9 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
       )}
       {view === 'wager' && (
         <WagerSection progress={progress} onChange={onChange} onError={onError} />
+      )}
+      {view === 'crypt' && (
+        <CryptSection progress={progress} onChange={onChange} onError={onError} />
       )}
       {view === 'relics' && <>
       {/* ⚠️ Bu cümle KALDIRILAMAZ — oyuncu neye para verdiğini bilmeli */}
