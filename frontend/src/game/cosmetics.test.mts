@@ -16,6 +16,7 @@ import {
 import {
   buyWithDust, emptyProgress, equipCosmetic, pullReliquary, type Progress,
 } from './progress.js';
+import { SEASON_REWARDS } from './season.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -238,6 +239,26 @@ console.log('\n[9] Kayıt temizliği (elle düzenlenmiş kayıt)');
   check('toz negatife düşmüyor', buyWithDust(p, COSMETICS[0].id).progress.dust === 0);
   check('bilinmeyen id sahiplikten sayılmıyor', cosmeticById('yok-boyle-bir-sey') === undefined);
   void kirli;
+}
+
+
+// ── SEZON ÖDÜLLERİ ────────────────────────────────────────────────────
+// ⚠️ Sezon ödülü olarak yazılan her kozmetik GERÇEKTEN var olmalı ve
+// çekilişten ÇIKMAMALI. `season.ts` yalnızca id yazıyor; id'nin karşılığı
+// yoksa oyuncu ödülü "alır" ama envanterinde hiçbir şey görünmez ve hiçbir
+// hata da üretilmez. Sessiz kaybın tam tarifi.
+console.log('\n[10] Sezon ödülleri');
+{
+  const havuz = new Set(rollableCosmetics().map((c) => c.id));
+  for (const r of SEASON_REWARDS) {
+    if (!r.cosmetic) continue;
+    check(`${r.cosmetic} tanımlı`, cosmeticById(r.cosmetic) !== undefined);
+    check(`${r.cosmetic} çekilişten ÇIKMIYOR`, !havuz.has(r.cosmetic));
+  }
+  // Her kademe farklı bir kozmetik vermeli — aynısını vermek kademeyi siler
+  const idler = SEASON_REWARDS.map((r) => r.cosmetic).filter(Boolean);
+  check('her sıra kademesi farklı kozmetik veriyor', new Set(idler).size === idler.length,
+    idler.join(', '));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ KOZMETİK SİSTEMİ SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

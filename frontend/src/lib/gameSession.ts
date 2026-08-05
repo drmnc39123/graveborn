@@ -124,6 +124,23 @@ export async function fetchLeaderboard(): Promise<{ rows: LeaderRow[]; me: { ran
   return api<{ rows: LeaderRow[]; me: { rank: number; row: LeaderRow } | null }>('/leaderboard');
 }
 
+export interface SeasonAwardRow { week: number; rank: number; cosmetic: string | null; dust: number }
+
+/**
+ * HAFTALIK SEZON TABLOSU.
+ *
+ * ⚠️ Bu istek YAN ETKİLİ: sunucu kapanmış haftaları burada ödüllendiriyor
+ * (bkz. backend/season.ts — cron yok, uyuyan sunucuda arka plan işi çalışmaz).
+ * Yani "tabloyu aç" aynı zamanda "geçen haftayı kapat" demek. Tekrarlanabilir
+ * ve zararsız, ama bilinsin diye yazıldı.
+ */
+export async function fetchSeasonBoard(): Promise<{
+  week: number; endsAt: number; rows: LeaderRow[];
+  me: { rank: number; row: LeaderRow } | null; awards: SeasonAwardRow[];
+}> {
+  return api('/leaderboard/season');
+}
+
 // ── OYUNCU DOSYASI ────────────────────────────────────────────────────
 // ⚠️ Bu veri SADECE sunucuda var (Run tablosu). Demo modunda koşu geçmişi
 // tutulmuyor — orada `fetchProfile` hata verir ve Tavern açıklayıcı bir

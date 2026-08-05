@@ -13,6 +13,7 @@ import { prisma, toProgress, fromProgress, getOrCreatePlayer } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { canStart, resolveStartDepth, settleRun } from './reward.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
+import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { paidDepth } from '@game/progress';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
 import {
@@ -586,7 +587,9 @@ app.post('/run/finish', wrap(async (req, res) => {
   // ⚠️ KIRPILAN KOŞU REKOR YAZMAZ. Gold tarafında kırpılmış bir iddiadan
   // kalanı ödemek zararsız (miktar küçülür), ama sıralamada tek bir yalan
   // tepeyi kalıcı kilitler. Şüpheliyse tabloya hiç girmesin.
+  // Aynı kırpma kuralı sezon tablosunda da geçerli — iki tablo, tek karar.
   const record = s.capped ? false : await recordDescent(wallet, run.mode, run.stageId, ulasilan);
+  if (!s.capped) await recordSeason(wallet, run.mode, run.stageId, ulasilan);
 
   res.json({
     progress: toProgress(saved),
@@ -613,6 +616,27 @@ app.get('/leaderboard', wrap(async (req, res) => {
     wallet ? rankOf(wallet) : Promise.resolve(null),
   ]);
   res.json({ rows, me });
+}));
+
+/**
+ * HAFTALIK SEZON TABLOSU.
+ *
+ * ⚠️ Kapanmış haftaların ödülü BURADA dağıtılıyor (`settleSeasons`). Arka
+ * plan işi yok; tabloyu açan ilk kişi geçen haftayı da kapatmış oluyor.
+ * Bu bilinçli bir seçim: uyuyan bir sunucuda cron çalışmaz, ödül kaybolur.
+ * Dağıtım hafta numarasına bağlı olduğu için GECİKEBİLİR ama BOZULMAZ.
+ */
+app.get('/leaderboard/season', wrap(async (req, res) => {
+  await settleSeasons();
+
+  const limit = Number(req.query.limit ?? 50);
+  const wallet = auth(req);
+  const [board, me, awards] = await Promise.all([
+    topSeason(Number.isFinite(limit) ? limit : 50),
+    wallet ? seasonRankOf(wallet) : Promise.resolve(null),
+    wallet ? awardsOf(wallet) : Promise.resolve([]),
+  ]);
+  res.json({ ...board, me, awards });
 }));
 
 // ── MARKETPLACE ──

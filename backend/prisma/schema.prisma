@@ -25,33 +25,33 @@ model Player {
   hero          String @default("knight")
 
   /// bölüm id → tamamlandı mı
-  cleared Json @default("{}")
+  cleared    Json @default("{}")
   /// bölüm id → ilk-geçiş ödülü ödendi mi
   firstClear Json @default("{}")
   /// bölüm id → ödemesi yapılmış en derin seviye
-  depthPaid Json @default("{}")
+  depthPaid  Json @default("{}")
   /// Forge yükseltmeleri: id → seviye
-  upgrades Json @default("{}")
+  upgrades   Json @default("{}")
   /// Pedlar's Stall'dan alınmış, koşuya taşınan tılsımlar (charms.ts id'leri)
   /// ⚠️ Koşu AÇILDIĞINDA tüketilir — koşuyu başlatıp çıkmak tılsımı kurtarmaz
-  charms Json @default("[]")
+  charms     Json @default("[]")
 
   /// The Reliquary'den çıkmış kozmetikler (cosmetics.ts id'leri)
   /// ⚠️ SADECE GÖRÜNÜR — hiçbiri stat/güç vermez. Gold'un sonsuz talebi bu
   /// koldan geliyor; güç satan ikinci bir sink P2W sarmalını ikiye katlardı.
-  cosmetics Json @default("[]")
+  cosmetics    Json  @default("[]")
   /// yuva → takılı kozmetik id'si
-  equipped Json @default("{}")
+  equipped     Json  @default("{}")
   /// tekrar çıkan kozmetiklerden biriken toz
-  dust Int @default(0)
+  dust         Int   @default(0)
   /// anıt seviyesi — TAVANI YOK, ekonominin dipsiz kovası (bkz. ossuary.ts)
-  ossuary Int @default(0)
+  ossuary      Int   @default(0)
   /// KURULMUŞ bahis (henüz yanmadı). Koşu AÇILIRKEN Run satırına taşınır.
-  wager Json?
+  wager        Json?
   /// alınmış başarımlar (achievements.ts id'leri)
-  achievements Json @default("[]")
+  achievements Json  @default("[]")
   /// günlük seri: { days, last }  — `last` SUNUCUNUN UTC günü
-  streak Json @default("{}")
+  streak       Json  @default("{}")
 
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
@@ -67,10 +67,27 @@ model Player {
   /// challengeRating(bestStage, bestDepth) — sıralama bunun üzerinden
   bestRating Float @default(0)
 
+  // ── Haftalık sezon (bkz. season.ts) ──
+  // ⚠️ AYRI ALANLAR, `best*`'in kopyası değil. Sezon her Pazartesi sıfırlanır,
+  // `best*` asla. İkisini tek alanda tutmaya çalışmak "rekorumu kaybettim"
+  // şikâyetinin garantili yolu.
+  //
+  // ⚠️ SIFIRLAMA CRON İLE DEĞİL, TEMBEL: `seasonWeek` bu haftadan küçükse
+  // puan geçen haftaya aittir ve yok sayılır. Böylece hafta dönüşünde
+  // milyonlarca satır güncellemek gerekmiyor; oynamayan oyuncu zaten
+  // tablodan kendiliğinden düşüyor.
+  /// puanın ait olduğu hafta (bossWeek) — bu haftadan küçükse puan ölüdür
+  seasonWeek   Int   @default(0)
+  seasonStage  Int   @default(0)
+  seasonDepth  Int   @default(0)
+  seasonRating Float @default(0)
+
   runs     Run[]
   listings Listing[]
+  awards   SeasonAward[]
 
   @@index([bestRating])
+  @@index([seasonWeek, seasonRating])
 }
 
 // Bir koşu. POST /run/start ile AÇILIR, /run/finish ile KAPANIR.
@@ -88,23 +105,23 @@ model Run {
   /// ⚠️ BigInt ŞART. seedFromString uint32 döndürüyor (0 … 4.294.967.295) ama
   /// Postgres Int (INT4) 2.147.483.647'de taşıyor — seed'lerin YARISI koşuyu
   /// 500 ile düşürüyordu. Aralıklı olduğu için üretimde teşhisi çok zor olurdu.
-  seed    BigInt
+  seed       BigInt
   /// 'campaign' | 'descent'
-  mode    String
-  stageId Int
-  hero    String
+  mode       String
+  stageId    Int
+  hero       String
   /// ⚠️ Descent'in başladığı derinlik (checkpoint). SUNUCU yazar, istemci
   /// seçemez: kapanışta süre tabanı buradan sayılıyor ve "d400'den başladım,
   /// d401'i geçtim" iddiası ancak burada tutulan gerçek değerle çürütülebilir.
   /// Eski koşularda 1 (varsayılan) zaten doğru değer.
-  startDepth Int @default(1)
+  startDepth Int    @default(1)
 
   /// ⚠️ Bahis koşu AÇILIRKEN buraya YAZILIR ve oyuncudan düşülür. Progress'te
   /// bırakılsaydı oyuncu koşu sırasında bahsi değiştirebilirdi.
-  wagerStake  Int @default(0)
-  wagerTarget Int @default(0)
+  wagerStake  Int     @default(0)
+  wagerTarget Int     @default(0)
   /// kapanışta: bahis kazanıldı mı (admin panelinde okunur)
-  wagerWon Boolean @default(false)
+  wagerWon    Boolean @default(false)
 
   startedAt DateTime  @default(now())
   claimedAt DateTime?
@@ -113,13 +130,13 @@ model Run {
   claimedDepth Int?
   claimedGold  Int?
   /// sunucunun verdiği
-  awarded Int?
+  awarded      Int?
   /// ⚠️ sunucunun KABUL ETTİĞİ derinlik — `claimedDepth` ham iddia, bu ise
   /// kırpma sonrası. Olmadan yanlış yazılmış bir leaderboard rekoru geri
   /// hesaplanamıyordu (bkz. leaderboard.recomputeAll).
   awardedDepth Int?
   /// sunucu iddiayı kırptıysa işaretlenir — admin panelinde şüpheli listesi
-  capped Boolean @default(false)
+  capped       Boolean @default(false)
 
   @@index([wallet, startedAt])
 }
@@ -147,12 +164,12 @@ model Listing {
   /// 'active' | 'sold' | 'cancelled'
   status String @default("active")
 
-  createdAt DateTime  @default(now())
-  closedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  closedAt   DateTime?
   /// satıldıysa alıcının cüzdanı
-  buyer     String?
+  buyer      String?
   /// ödemenin zincir üstü imzası — tek kullanımlık, tekrar kullanılamaz
-  paymentSig String? @unique
+  paymentSig String?   @unique
 
   @@index([status, createdAt])
   @@index([seller, status])
@@ -176,9 +193,9 @@ model Ledger {
 
   /// nereye/nereden: 'run' | 'forge' | 'charm' | 'reliquary' | 'dust' |
   /// 'ossuary' | 'wager' | 'market_list' | 'market_cancel'
-  kind String
+  kind   String
   /// gold değişimi — POZİTİF kazanç (musluk), NEGATİF harcama (sink)
-  gold Int
+  gold   Int
   /// serbest ayrıntı: yükseltme id'si, kozmetik id'si, derinlik…
   detail String?
 
@@ -219,4 +236,37 @@ model AuthNonce {
   wallet    String   @id
   nonce     String
   expiresAt DateTime
+}
+
+// Kapanmış bir haftanın sonucu — sezon tablosunun defteri.
+//
+// ⚠️ TEK SATIR = TEK HAFTA (`@id`). Ödül dağıtımı bu satırın YARATILMASIYLA
+// aynı transaction'da yapılıyor: satır zaten varsa dağıtım da yapılmıştır.
+// Eşzamanlı iki istek aynı haftayı kapatmaya kalkarsa ikincisi birincil
+// anahtara çarpar ve sessizce düşer — çift ödül imkânsız.
+model SeasonClose {
+  /// kapatılan hafta
+  week      Int      @id
+  settledAt DateTime @default(now())
+  /// kaç oyuncu ödül aldı
+  winners   Int      @default(0)
+}
+
+// Bir oyuncunun bir haftadan aldığı ödül. Oyuncuya "geçen hafta 3. oldun"
+// diyebilmek için tutuluyor — yoksa ödül sessizce envantere düşerdi.
+model SeasonAward {
+  id        String   @id
+  week      Int
+  wallet    String
+  rank      Int
+  /// verilen kozmetik id'si (yoksa sadece toz verilmiştir)
+  cosmetic  String?
+  dust      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  player Player @relation(fields: [wallet], references: [wallet], onDelete: Cascade)
+
+  /// Bir oyuncu bir haftadan EN FAZLA BİR ödül alır — dağıtım tekrarlansa bile
+  @@unique([week, wallet])
+  @@index([wallet, week])
 }

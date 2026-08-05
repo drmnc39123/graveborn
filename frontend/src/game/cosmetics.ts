@@ -150,6 +150,18 @@ export const COSMETICS: readonly CosmeticDef[] = [
   { ...T('t_hollow', 'Hollow-Handed', 'epic', 'Earned by clearing every road the campaign offers.'), source: 'earned' },
   { ...P('p_relic', 'Reliquary Gold', 'legendary', '#ffe9a8', '#efa72e', 'Earned by emptying the reliquary of every relic it holds.'), source: 'earned' },
   { ...A('a_stone', 'Monument Light', 'epic', '#b8ae98', 52, 'Earned by raising the monument twenty stones high.'), source: 'earned' },
+
+  // ── HAFTALIK SEZON ÖDÜLLERİ (bkz. season.ts) ──────────────────────
+  // ⚠️ Tekrar kazanılabilirler — her hafta yeni bir ilk üç var. Bir kez
+  // kazanmak kalıcı; bu bilinçli. "Bir hafta en derine inendim" cümlesi
+  // sonradan yalan olmuyor, o yüzden geri alınmıyor.
+  //
+  // ⚠️ GOLD ÖDÜLÜ YOK. Sıralama ödülü gold verirse en iyi oyuncu en çok
+  // gold basan olur ve musluk beceriyle birlikte üssel büyür. Ödül tozla
+  // ödeniyor: toz sadece kozmetik alır, ekonomiye sızmaz.
+  { ...T('t_deepest', 'Deepest of the Week', 'legendary', 'For one week, no one went further down.'), source: 'earned' },
+  { ...P('p_season', 'Vigil Silver', 'epic', '#d8e0e8', '#6d7a86', 'Second and third place still had to walk down there.'), source: 'earned' },
+  { ...R('r_wreath', 'Barrow Wreath', 'rare', 'spr_crown_strip5', 5, 'Cut for the top ten of a week that has since ended.'), source: 'earned' },
 ] as const;
 
 export function cosmeticById(id: string): CosmeticDef | undefined {

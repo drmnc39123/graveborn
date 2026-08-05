@@ -12,9 +12,11 @@ import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton } from '@/components/ui/kit';
 import { Card, Tag } from '@/components/ui/cards';
 import {
-  fetchLeaderboard, fetchProfile,
-  type LeaderRow, type ProfileData, type ProfileRun,
+  fetchLeaderboard, fetchProfile, fetchSeasonBoard,
+  type LeaderRow, type ProfileData, type ProfileRun, type SeasonAwardRow,
 } from '@/lib/gameSession';
+import { SEASON_REWARDS, rewardForRank } from '@/game/season';
+import { cosmeticById } from '@/game/cosmetics';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
 import { AchievementsTab } from '@/components/AchievementsTab';
 import { achievementStates } from '@/game/achievements';
@@ -175,28 +177,63 @@ function MyRecord({ progress }: { progress: Progress }) {
  * 12'nin neden üstte olduğu anlaşılmaz.
  */
 function Leaderboard() {
+  // ⚠️ BEŞİNCİ BİR ÜST SEKME DEĞİL. İkisi de aynı soruyu soruyor ("kim en
+  // derine indi"), sadece pencere farklı. Üstte ayrı bir düğme olsaydı oyuncu
+  // ikisini rakip iki tablo sanardı.
+  const [scope, setScope] = useState<'all' | 'season'>('all');
   const [rows, setRows] = useState<LeaderRow[] | null>(null);
   const [me, setMe] = useState<{ rank: number; row: LeaderRow } | null>(null);
+  const [season, setSeason] = useState<{ endsAt: number; awards: SeasonAwardRow[] } | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    fetchLeaderboard()
-      .then((r) => { setRows(r.rows); setMe(r.me); })
-      .catch(() => setErr(true));
-  }, []);
+    let iptal = false;
+    setRows(null); setErr(false);
+    const istek = scope === 'season'
+      ? fetchSeasonBoard().then((r) => {
+        if (iptal) return;
+        setRows(r.rows); setMe(r.me); setSeason({ endsAt: r.endsAt, awards: r.awards });
+      })
+      : fetchLeaderboard().then((r) => {
+        if (iptal) return;
+        setRows(r.rows); setMe(r.me); setSeason(null);
+      });
+    istek.catch(() => { if (!iptal) setErr(true); });
+    // ⚠️ İPTAL BAYRAĞI ŞART: sekmeler arasında hızlı geçişte geç dönen istek
+    // yeni sekmenin satırlarını ezerdi.
+    return () => { iptal = true; };
+  }, [scope]);
+
+  const secici = (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+      <PixelButton variant="02A" scale={2} active={scope === 'all'} onClick={() => setScope('all')}
+        style={{ flex: 1, fontSize: 10.5, fontWeight: 900, letterSpacing: 1.1 }}>
+        ALL-TIME
+      </PixelButton>
+      <PixelButton variant="02A" scale={2} active={scope === 'season'} onClick={() => setScope('season')}
+        style={{ flex: 1, fontSize: 10.5, fontWeight: 900, letterSpacing: 1.1 }}>
+        THIS WEEK
+      </PixelButton>
+    </div>
+  );
 
   if (err) {
-    return <Note>Could not reach the hall of records.</Note>;
+    return <>{secici}<Note>Could not reach the hall of records.</Note></>;
   }
   if (rows === null) {
-    return <Note>Reading the ledger…</Note>;
+    return <>{secici}<Note>Reading the ledger…</Note></>;
   }
   if (rows.length === 0) {
     return (
-      <Note>
-        No one has descended yet. Clear a stage, take the stairs down, and the
-        first name on this board is yours.
-      </Note>
+      <>
+        {secici}
+        <Note>
+          {scope === 'season'
+            ? 'No one has taken the stairs this week. The board is empty, and the first name on it can be yours.'
+            : 'No one has descended yet. Clear a stage, take the stairs down, and the first name on this board is yours.'}
+        </Note>
+        {scope === 'season' && <SeasonRewards />}
+      </>
     );
   }
 
@@ -206,9 +243,16 @@ function Leaderboard() {
 
   return (
     <>
+      {secici}
       <p style={{ margin: '0 0 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
         Ranked by how hard the descent was, not how deep it counted. Depth 12 on
         a late road beats depth 40 on the first one.
+        {scope === 'season' && season && (
+          <>
+            {' '}This board clears every Monday.{' '}
+            <b style={{ color: C.candle }}>{kalanSure(season.endsAt)}</b> left.
+          </>
+        )}
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -233,7 +277,86 @@ function Leaderboard() {
           You have no place here yet. Clear a road, then take the stairs down.
         </div>
       )}
+
+      {scope === 'season' && (
+        <>
+          <SeasonRewards />
+          {season && season.awards.length > 0 && <PastAwards awards={season.awards} />}
+        </>
+      )}
     </>
+  );
+}
+
+/**
+ * "3d 4h" — hafta bitişine kalan süre.
+ * Saniye GÖSTERMİYORUZ: geri sayan bir saat oyuncuya yapacak bir şey vermiyor,
+ * sadece her saniye yeniden çizim maliyeti getiriyordu.
+ */
+function kalanSure(endsAt: number): string {
+  const ms = Math.max(0, endsAt - Date.now());
+  const sa = Math.floor(ms / 3_600_000);
+  const g = Math.floor(sa / 24);
+  return g > 0 ? `${g}d ${sa % 24}h` : `${sa}h ${Math.floor((ms % 3_600_000) / 60_000)}m`;
+}
+
+/**
+ * ÖDÜL TABLOSU — oyuncunun neden tırmanacağını görmesi için.
+ *
+ * ⚠️ ÖDÜLLER KOZMETİK + TOZ, GOLD DEĞİL. Sıralama ödülü gold verseydi en iyi
+ * oyuncu aynı zamanda en çok gold basan olurdu (bkz. game/season.ts).
+ */
+function SeasonRewards() {
+  return (
+    <div style={{ ...glass(10), marginTop: 12, padding: '10px 12px', fontFamily: FONT.ui }}>
+      <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2, color: C.candle, marginBottom: 8 }}>
+        WHAT THE WEEK PAYS
+      </div>
+      {SEASON_REWARDS.map((r) => {
+        const kozmetik = r.cosmetic ? cosmeticById(r.cosmetic) : undefined;
+        return (
+          <div key={`${r.from}-${r.to}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+            <span style={{ width: 46, flexShrink: 0, fontSize: 11.5, fontWeight: 900,
+              color: r.from === 1 ? C.candle : C.boneDim }}>
+              {r.from === r.to ? `#${r.from}` : `#${r.from}-${r.to}`}
+            </span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: C.bone,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {kozmetik?.name ?? r.label}
+            </span>
+            <Tag tone="gold">{r.dust} DUST</Tag>
+          </div>
+        );
+      })}
+      <div style={{ marginTop: 7, fontSize: 10.5, color: C.boneFaint, lineHeight: 1.5 }}>
+        These relics cannot be bought or pulled. Only a week&apos;s top ten ever wears one.
+      </div>
+    </div>
+  );
+}
+
+/** Oyuncunun geçmiş sezon ödülleri — kazandığını görmezse ödül yok gibidir */
+function PastAwards({ awards }: { awards: SeasonAwardRow[] }) {
+  return (
+    <div style={{ ...glass(10), marginTop: 10, padding: '10px 12px', fontFamily: FONT.ui }}>
+      <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2, color: C.bone, marginBottom: 8 }}>
+        YOUR PAST WEEKS
+      </div>
+      {awards.map((a) => {
+        const kozmetik = a.cosmetic ? cosmeticById(a.cosmetic) : undefined;
+        return (
+          <div key={a.week} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 11.5 }}>
+            <span style={{ width: 46, flexShrink: 0, fontWeight: 900,
+              color: a.rank === 1 ? C.candle : C.boneDim }}>#{a.rank}</span>
+            <span style={{ flex: 1, minWidth: 0, color: C.boneDim,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {kozmetik?.name ?? rewardForRank(a.rank)?.label ?? '-'}
+            </span>
+            <Tag tone="gold">+{a.dust}</Tag>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
