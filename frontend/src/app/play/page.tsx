@@ -21,7 +21,8 @@ import { Card, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
 import {
-  ASCENSION, STAGES, ascensionDropMul, ascensionHpMul, ascensionUnlockDepth, challengeRating,
+  ASCENSION, STAGES, ascensionDamageMul, ascensionDropMul, ascensionHpMul, ascensionUnlockDepth,
+  challengeRating,
   checkpointFor, depthGold, maxAscensionFor, stageById, startLevelFor,
 } from '@/game/config';
 import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
@@ -544,7 +545,7 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
                 {Array.from({ length: enYuksekKademe + 1 }, (_, i) => (
                   <button key={i} onClick={() => setKademe(i)}
                     title={i === 0 ? 'Standard descent' :
-                      `Enemies x${ascensionHpMul(i).toFixed(1)} health, +${Math.round((ascensionDropMul(i) - 1) * 100)}% drop value`}
+                      `Enemies ×${ascensionHpMul(i).toFixed(1)} health, ×${ascensionDamageMul(i).toFixed(2)} damage, +${Math.round((ascensionDropMul(i) - 1) * 100)}% drop value`}
                     style={{
                       all: 'unset', cursor: 'pointer', minWidth: 20, padding: '2px 7px',
                       borderRadius: 5, textAlign: 'center', fontSize: 11, fontWeight: 900,
@@ -567,12 +568,12 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
               <div style={{ fontSize: 11, color: kademe > 0 ? C.bloodSoft : C.boneFaint, marginTop: 5, lineHeight: 1.45 }}>
                 {kademe === 0
                   ? 'Standard descent. Raise this once the clock, not the enemies, is what stops you.'
-                  : `Enemies \u00d7${ascensionHpMul(kademe).toFixed(1)} health and \u00d7${(1 + 0.07 * kademe).toFixed(2)} in number \u00b7 drops worth +${Math.round((ascensionDropMul(kademe) - 1) * 100)}% \u00b7 counts far higher on the board`}
+                  : `Enemies ×${ascensionHpMul(kademe).toFixed(1)} health, ×${ascensionDamageMul(kademe).toFixed(2)} damage and ×${(1 + ASCENSION.countPer * kademe).toFixed(2)} in number · drops worth +${Math.round((ascensionDropMul(kademe) - 1) * 100)}% · counts far higher on the board`}
               </div>
             </div>
           ) : (
             <div style={{ padding: '8px 13px 0', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.45 }}>
-              Reach depth {ascensionUnlockDepth(1)} to unlock Ascension \u2014 harder descents that count for more.
+              Reach depth {ascensionUnlockDepth(1)} to unlock Ascension — harder descents that count for more.
             </div>
           )}
 
