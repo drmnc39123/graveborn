@@ -111,12 +111,24 @@ export function Panel({
           ama ekranda düpedüz PEMBE duruyor — oyunun geri kalanı geceyken
           panel parlıyordu. CSS `filter` çözüm DEĞİL: panelin çocuklarını da
           (metin, buton, sprite) soldururdu. Onun yerine yalnızca zemine
-          oturan, tıklamaları geçiren ayrı bir katman. */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        background: 'rgba(16,12,18,0.44)',
-      }} />
-      <div style={{ position: 'relative', padding: pad, fontFamily: FONT.ui }}>{children}</div>
+          oturan, tıklamaları geçiren ayrı bir katman.
+
+          ⚠️ KATMAN İÇERİK SARMALAYICISININ İÇİNDE OLMAK ZORUNDA, panelin
+          doğrudan çocuğu olarak DEĞİL. Sebep ölçüldü: panel kaydırılabilir
+          (`overflowY:auto`) ve mutlak konumlu bir çocuk, kaydırma kutusunun
+          GÖRÜNEN alanına göre boyutlanıyor — içeriğe göre değil. Forge
+          panelinde içerik 1779 px'ken katman 794 px kalıyordu: **985 px
+          koyulaştırılmadan** açıkta duruyordu ve oyuncu aşağı indikçe
+          kartların altındaki zemin bir yerden sonra ham pembeye dönüyordu.
+          Sarmalayıcı normal akışta olduğu için yüksekliği İÇERİĞİN tamamı;
+          `inset:0` artık gerçekten her yeri kaplıyor. */}
+      <div style={{ position: 'relative', padding: pad, fontFamily: FONT.ui }}>
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: 'rgba(16,12,18,0.44)',
+        }} />
+        <div style={{ position: 'relative' }}>{children}</div>
+      </div>
     </div>
   );
 }
