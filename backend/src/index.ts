@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
 import { z } from 'zod';
-import { prisma, toProgress, fromProgress, getOrCreatePlayer } from './db.js';
+import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { canStart, resolveStartDepth, settleRun } from './reward.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
@@ -41,6 +41,36 @@ app.use(cors({
 /** Koşu bu süreden eski ise kapatılamaz — açık runId biriktirip sonra toplu kullanmayı engeller */
 const RUN_TTL_MS = 45 * 60 * 1000;
 
+/**
+ * ⚠️ AYNI ANDA TEK KOŞU — ekonominin en sert kuralı.
+ *
+ * Bu koruma olmadan koşular PARA BASIYOR. Ölçüldü: checkpoint d20'deki bir
+ * hesap 20 koşuyu aynı anda açıp 48 saniye sonra hepsini kapatınca 81.481
+ * gold alıyordu; saatlik ~6.000.000 gold, dürüst tekrar koşusunun (~122
+ * gold/saat) yaklaşık 49.000 katı — Forge ağacının tamamı 2,5 dakikada.
+ *
+ * Sebep: ilerleme ödülü `depthPaid` sayesinde bir kez ödeniyor ama NADİR
+ * DÜŞÜŞ tavanı KOŞU BAŞINA uygulanıyor. Tavan tek bir koşu için doğru;
+ * yanlış olan sınırsız koşu açılabilmesiydi. Tavanı kısmak dürüst oyuncuyu
+ * cezalandırırdı — doğru yer burası.
+ *
+ * ⚠️ Yeni koşu, açık kalan öncekini REDDETMEZ, İPTAL EDER. Sekmesi çöken
+ * oyuncu 45 dakika kilitli kalmamalı. İptal edilen koşunun `claimedAt`'i
+ * dolduğu için `/run/finish` ona 409 döner ve ödül alamaz.
+ *
+ * ⚠️ Dünya boss'u koşuları da dahil (tek tablo, tek kural): aksi hâlde bir
+ * oyuncu yüzlerce boss koşusunu paralel açıp haftalık boss'u tek başına
+ * devirebilir ve hasar tablosunu uydurabilirdi.
+ */
+async function acikKosulariIptalEt(wallet: string): Promise<number> {
+  const iptal = await prisma.run.updateMany({
+    where: { wallet, claimedAt: null },
+    data: { claimedAt: new Date(), awarded: 0, capped: true },
+  });
+  if (iptal.count > 0) console.warn('[kosu-iptal]', wallet, `${iptal.count} acik kosu kapatildi`);
+  return iptal.count;
+}
+
 // ── yardımcılar ──
 function auth(req: express.Request): string | null {
   const h = req.header('authorization');
@@ -50,6 +80,13 @@ function auth(req: express.Request): string | null {
 const wrap = (fn: (req: express.Request, res: express.Response) => Promise<void>) =>
   (req: express.Request, res: express.Response) => {
     fn(req, res).catch((e) => {
+      // ⚠️ Yarış hatası bir SUNUCU HATASI DEĞİL: araya eşzamanlı bir yazım
+      // girdi, hiçbir şey değişmedi, istek güvenle tekrarlanabilir. 500
+      // dönmek hem log'u kirletir hem istemciye "bozuldu" dedirtirdi.
+      if (e instanceof YarisHatasi) {
+        res.status(409).json({ error: 'es_zamanli_degisim' });
+        return;
+      }
       console.error('[hata]', req.method, req.path, e);
       res.status(500).json({ error: 'internal' });
     });
@@ -138,7 +175,7 @@ app.post('/progress/buy', wrap(async (req, res) => {
   p.gold -= cost;
   p.upgrades = { ...p.upgrades, [u.id]: lv + 1 };
   const saved = await withLedger(wallet, fromProgress(p),
-    { kind: 'forge', gold: -cost, detail: `${u.id} L${lv + 1}` });
+    { kind: 'forge', gold: -cost, detail: `${u.id} L${lv + 1}` }, player.rev);
   res.json({ progress: toProgress(saved), spent: cost });
 }));
 
@@ -166,7 +203,7 @@ app.post('/charm/buy', wrap(async (req, res) => {
   p.gold -= c.cost;
   p.charms = [...p.charms, c.id];
   const saved = await withLedger(wallet, fromProgress(p),
-    { kind: 'charm', gold: -c.cost, detail: c.id });
+    { kind: 'charm', gold: -c.cost, detail: c.id }, player.rev);
   res.json({ progress: toProgress(saved), spent: c.cost });
 }));
 
@@ -194,7 +231,7 @@ app.post('/reliquary/pull', wrap(async (req, res) => {
   const saved = await withLedger(wallet, fromProgress(out.progress), {
     kind: 'reliquary', gold: -PULL_COST,
     detail: out.result!.duplicate ? `${out.result!.cosmetic.id} (dup)` : out.result!.cosmetic.id,
-  });
+  }, player.rev);
   res.json({
     progress: toProgress(saved),
     // Kozmetiğin TANIMI değil sadece id'si dönüyor — tanım zaten istemcide
@@ -219,7 +256,7 @@ app.post('/reliquary/dust-buy', wrap(async (req, res) => {
   // ⚠️ gold: 0 — bu bir TOZ harcaması. Deftere yine de giriyor: kozmetiğin
   // nereden geldiği (çekiliş mi, hedefli alım mı) sonradan sorulabilir olmalı.
   const saved = await withLedger(wallet, fromProgress(out.progress),
-    { kind: 'dust', gold: 0, detail: id.data });
+    { kind: 'dust', gold: 0, detail: id.data }, player.rev);
   res.json({ progress: toProgress(saved) });
 }));
 
@@ -239,7 +276,7 @@ app.post('/cosmetic/equip', wrap(async (req, res) => {
   // yazmak, iki yerde iki kural demekti. Sahip olmadığını takmaya çalışan
   // istek sessizce eskisini korur.
   const next = equipCosmetic(toProgress(player), body.data.slot, body.data.id);
-  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(next) });
+  const saved = await saveProgress(wallet, player.rev, fromProgress(next));
   res.json({ progress: toProgress(saved) });
 }));
 
@@ -282,6 +319,8 @@ app.post('/boss/start', wrap(async (req, res) => {
 
   const st = await bossState(wallet);
   if (st.defeated) { res.status(409).json({ error: 'boss_devrildi' }); return; }
+
+  await acikKosulariIptalEt(wallet);   // paralel boss koşusu = uydurma hasar tablosu
 
   const runId = crypto.randomUUID();
   const seed = seedFromString(`${runId}:${crypto.randomBytes(8).toString('hex')}`);
@@ -347,7 +386,9 @@ app.post('/achievement/claim', wrap(async (req, res) => {
 
   // ⚠️ Deftere GOLD hareketi yazılmıyor çünkü YOK — ödül toz ve kozmetik.
   // Faz 2'de dengelenen musluk/sink oranı bu sayede bozulmuyor.
-  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(out.progress) });
+  // ⚠️ Ama İYİMSER KİLİT ŞART: ödül veren bir yol, korumasız bırakılırsa
+  // eşzamanlı iki istekle iki kez ödenir.
+  const saved = await saveProgress(wallet, player.rev, fromProgress(out.progress));
   res.json({ progress: toProgress(saved) });
 }));
 
@@ -362,7 +403,7 @@ app.post('/streak/claim', wrap(async (req, res) => {
   const out = claimStreak(toProgress(player), utcDay(new Date()));
   if (out.error) { res.status(400).json({ error: 'alinamadi', detay: out.error }); return; }
 
-  const saved = await prisma.player.update({ where: { wallet }, data: fromProgress(out.progress) });
+  const saved = await saveProgress(wallet, player.rev, fromProgress(out.progress));
   res.json({ progress: toProgress(saved), reward: out.reward, days: out.days });
 }));
 
@@ -382,7 +423,7 @@ app.post('/ossuary/raise', wrap(async (req, res) => {
   const saved = await withLedger(wallet, fromProgress(out.progress), {
     kind: 'ossuary', gold: -(before.gold - out.progress.gold),
     detail: `L${out.progress.ossuary}`,
-  });
+  }, player.rev);
   res.json({ progress: toProgress(saved) });
 }));
 
@@ -407,9 +448,7 @@ app.post('/wager/place', wrap(async (req, res) => {
   const out = placeWager(toProgress(player), body.data.stageId, body.data.stake);
   if (out.error) { res.status(400).json({ error: 'bahis_kurulamadi', detay: out.error }); return; }
 
-  const saved = await prisma.player.update({
-    where: { wallet }, data: fromProgress(out.progress),
-  });
+  const saved = await saveProgress(wallet, player.rev, fromProgress(out.progress));
   res.json({ progress: toProgress(saved) });
 }));
 
@@ -418,9 +457,7 @@ app.post('/wager/clear', wrap(async (req, res) => {
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
   const player = await getOrCreatePlayer(wallet);
   const { clearWager } = await import('@game/progress');
-  const saved = await prisma.player.update({
-    where: { wallet }, data: fromProgress(clearWager(toProgress(player))),
-  });
+  const saved = await saveProgress(wallet, player.rev, fromProgress(clearWager(toProgress(player))));
   res.json({ progress: toProgress(saved) });
 }));
 
@@ -488,6 +525,8 @@ app.post('/run/start', wrap(async (req, res) => {
 
   // Checkpoint SUNUCUDA çözülür — istemcinin isteği burada kırpılır
   const startDepth = resolveStartDepth(p, body.data.mode, body.data.stageId, body.data.startDepth);
+
+  await acikKosulariIptalEt(wallet);   // ⚠️ bkz. fonksiyon başlığı — para basma koruması
 
   await prisma.run.create({
     data: {

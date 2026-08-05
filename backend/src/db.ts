@@ -75,3 +75,29 @@ export async function getOrCreatePlayer(wallet: string) {
     create: { wallet, hero: DEFAULT_HERO },
   });
 }
+
+/**
+ * Progress yazımı — İYİMSER KİLİTLİ. Gold hareketi olmayan yollar için.
+ * (Gold hareketi varsa `withLedger(..., rev)` kullan; o da aynı kilidi kurar
+ * ama defter kaydını da aynı transaction'a koyar.)
+ *
+ * ⚠️ NİYE ZORUNLU: `fromProgress` MUTLAK değer yazıyor. Koruma olmadan iki
+ * eşzamanlı istek aynı `before`'u okuyup birbirini eziyor. ÖLÇÜLDÜ: tam
+ * 1 çekilişlik gold'u olan hesaba 5 eşzamanlı istek atınca 5'i de geçti.
+ * Ödül veren yollarda (başarım, seri) bu doğrudan çift ödeme demek.
+ */
+export async function saveProgress(
+  wallet: string, rev: number, data: ReturnType<typeof fromProgress>,
+) {
+  const hit = await prisma.player.updateMany({
+    where: { wallet, rev },
+    data: { ...data, rev: rev + 1 },
+  });
+  if (hit.count === 0) throw new YarisHatasi();
+  return prisma.player.findUniqueOrThrow({ where: { wallet } });
+}
+
+/** Araya eşzamanlı bir yazım girdi — istemci isteği tekrarlamalı (409). */
+export class YarisHatasi extends Error {
+  constructor() { super('es_zamanli_degisim'); this.name = 'YarisHatasi'; }
+}

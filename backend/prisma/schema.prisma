@@ -56,6 +56,18 @@ model Player {
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
 
+  /// ⚠️ İYİMSER KİLİT SAYACI — her Progress yazımında BİR ARTAR.
+  ///
+  /// Olmadan her harcama bir oku-değiştir-yaz yarışıydı ve ÖLÇÜLDÜ: tam
+  /// 1 çekilişlik gold'u (450) olan hesaba 5 eşzamanlı istek atınca 5'i de
+  /// geçiyordu. `fromProgress` MUTLAK değer yazdığı için yazımlar birbirini
+  /// eziyor; oyuncu ya bedavaya iş yaptırıyor ya da ödediği şeyi kaybediyor.
+  ///
+  /// Yazan taraf okuduğu `rev`'i şart koşar (`where: { wallet, rev }`);
+  /// arada başka biri yazdıysa eşleşme olmaz, işlem 409 döner. Bkz.
+  /// `saveProgress` (db.ts) — TÜM Progress yazımları oradan geçmeli.
+  rev Int @default(0)
+
   // ── Leaderboard (denormalize) ──
   // ⚠️ `depthPaid` JSON'ından her istekte türetilebilirdi ama SIRALANAMAZ:
   // tüm oyuncuları belleğe çekip sıralamak oyuncu sayısıyla birlikte çöker.

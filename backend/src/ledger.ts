@@ -9,7 +9,7 @@
 // güncellemesini ve kaydı birlikte yapar; çağıran ikisini ayırmayı seçemez.
 
 import crypto from 'node:crypto';
-import { prisma } from './db.js';
+import { prisma, YarisHatasi } from './db.js';
 
 /** Defter kalemi türü. Yeni bir gold yolu açan HER uç buraya bir tür eklemeli. */
 export type LedgerKind =
@@ -54,13 +54,41 @@ export async function withLedger(
   wallet: string,
   data: Parameters<typeof prisma.player.update>[0]['data'],
   entry: Omit<LedgerEntry, 'wallet'>,
+  /**
+   * ⚠️ OKUNAN `rev`. Verilirse yazma KOŞULLU olur: arada başka bir istek
+   * yazdıysa bu işlem `YarisHatasi` atar ve hiçbir şey değişmez.
+   *
+   * Neden zorunlu değil: koşu kapanışı gibi bazı yollar `increment` ile
+   * yazıyor ve orada yarış zaten yok. Ama GOLD HARCAYAN her yol vermeli —
+   * ölçüldü, vermeyince tek ödemeyle 5 çekiliş geçiyor.
+   */
+  rev?: number,
 ) {
-  const [saved] = await prisma.$transaction([
-    prisma.player.update({ where: { wallet }, data }),
-    ledgerWrite({ ...entry, wallet }),
-  ]);
-  return saved;
+  if (rev === undefined) {
+    const [saved] = await prisma.$transaction([
+      prisma.player.update({ where: { wallet }, data }),
+      ledgerWrite({ ...entry, wallet }),
+    ]);
+    return saved;
+  }
+  return prisma.$transaction(async (tx) => {
+    const hit = await tx.player.updateMany({
+      where: { wallet, rev },
+      data: { ...(data as object), rev: rev + 1 },
+    });
+    // ⚠️ ÖNCE BU. Sayı 0 ise atıp çıkıyoruz; defter kaydı sonra geldiği için
+    // "para gitti ama defterde yok" durumu oluşamaz.
+    if (hit.count === 0) throw new YarisHatasi();
+    await tx.ledger.create({
+      data: {
+        id: crypto.randomUUID(), wallet,
+        kind: entry.kind, gold: Math.round(entry.gold), detail: entry.detail ?? null,
+      },
+    });
+    return tx.player.findUniqueOrThrow({ where: { wallet } });
+  });
 }
+
 
 // ── OKUMA ─────────────────────────────────────────────────────────────
 
