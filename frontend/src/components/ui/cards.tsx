@@ -173,3 +173,56 @@ export const PATTERN_TEXT: Record<string, { label: string; how: string }> = {
 export function prettyId(id: string): string {
   return id.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
+
+/**
+ * PANEL BAŞLIĞI — köyün her kapısına kendi kimliğini veren tek yer.
+ *
+ * ⚠️ NİYE ORTAK BİR BİLEŞEN: ölçüldü, 8 panelin başlığı BİREBİR AYNIYDI —
+ * aynı 11 px kicker, aynı `C.blood`, aynı 24 px başlık, sekiz kopya. Paneller
+ * "hepsi aynı kutu" hissini tam olarak buradan alıyordu. Kopyaları teker teker
+ * renklendirmek de çözüm değildi: dokuzuncu panel eklendiğinde biri unutulur.
+ *
+ * ⚠️ KİMLİK ÇERÇEVEDE DEĞİL BAŞLIKTA. Her panele farklı bir `BGbox` varyantı
+ * vermek denenmedi ve verilmemeli: varyantların orta renkleri ölçüldü
+ * (turuncu 255,174,112 · teal 79,164,184 · şarap 143,77,87 …) ve yan yana
+ * gelince tek bir oyun gibi durmuyorlar. Sanat yönü ortak kalır, kimliği
+ * VURGU RENGİ taşır — hepsi zaten paletin içinden (mor yok).
+ */
+export function PanelHead({ kicker, title, sub, accent = C.blood, right }: {
+  /** küçük üst satır — mekânın adı */
+  kicker: string;
+  /** büyük satır — mekânın ne işe yaradığı */
+  title: ReactNode;
+  /** isteğe bağlı açıklama */
+  sub?: ReactNode;
+  /** mekânın vurgu rengi — paletten */
+  accent?: string;
+  /** sağa hizalı ek (sayaç, rozet…) */
+  right?: ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: accent }}>
+          {kicker}
+        </div>
+        {right && <div style={{ marginLeft: 'auto' }}>{right}</div>}
+      </div>
+      <h2 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 900, color: C.bone, lineHeight: 1.15 }}>
+        {title}
+      </h2>
+      {sub && (
+        <p style={{ margin: '5px 0 0', fontSize: 12, color: C.boneFaint, lineHeight: 1.5 }}>{sub}</p>
+      )}
+      {/* Vurgu çizgisi — kimliği taşıyan asıl işaret.
+          ⚠️ Franuka'nın `Dividers/` varlıkları (48×16) DENENMEDİ: hepsi kendi
+          rengini taşıyor ve panel başına renklendirilemiyorlar; `filter` ile
+          boyamak piksel sanatı bulandırıyor. Düz bir gradyan çizgi hem
+          renklenebiliyor hem ızgarayı bozmuyor. */}
+      <div style={{
+        marginTop: 8, height: 2, borderRadius: 2,
+        background: `linear-gradient(90deg, ${accent}, ${accent}22 70%, transparent)`,
+      }} />
+    </div>
+  );
+}

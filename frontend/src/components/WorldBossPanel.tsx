@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BOSS_RUN_SEC, bossProgress } from '@/game/worldBoss';
 import { fetchWorldBoss, worldBossAvailable, type BossState } from '@/lib/gameSession';
-import { Card, CardSection, Tag } from '@/components/ui/cards';
+import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
 
 const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
@@ -46,10 +46,7 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
   if (err) {
     return (
       <>
-        <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>
-          THE SHARED BARROW
-        </div>
-        <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 900, color: C.bone }}>One grave, everyone</h2>
+        <PanelHead kicker="THE SHARED BARROW" accent={C.blood} title="One grave, everyone" />
         <p style={{ margin: 0, fontSize: 12, color: C.boneFaint, lineHeight: 1.6 }}>{err}</p>
       </>
     );
@@ -62,10 +59,7 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
 
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>
-        THE SHARED BARROW
-      </div>
-      <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>{state.name}</h2>
+      <PanelHead kicker="THE SHARED BARROW" accent={C.blood} title={state.name} />
       <p style={{ margin: '0 0 14px', fontSize: 12, color: C.boneDim, lineHeight: 1.55, fontStyle: 'italic' }}>
         {state.epithet}
       </p>

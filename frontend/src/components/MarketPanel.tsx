@@ -14,7 +14,7 @@ import {
   marketAvailable, type Listing,
 } from '@/lib/gameSession';
 import type { Progress } from '@/game/progress';
-import { Card, Tag } from '@/components/ui/cards';
+import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import { play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
 
@@ -163,12 +163,10 @@ export function MarketPanel({
 
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>
-        THE MARKETPLACE
-      </div>
-      <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>
-        Player to player
-      </h2>
+      <PanelHead
+        kicker="THE MARKETPLACE" accent={C.ice}
+        title="Player to player"
+      />
       <p style={{ margin: '0 0 10px', fontSize: 12, color: C.boneFaint, lineHeight: 1.5 }}>
         Sell your gold to another player for $GRAVE. The game never mints the token — every coin
         comes out of someone else’s wallet.

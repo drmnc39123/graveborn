@@ -15,7 +15,7 @@ import { applyFxSettings } from '@/game/fx';
 import { loadSettings, saveSettings, type Settings } from '@/game/settings';
 import { setVolume } from '@/game/sfx';
 import { resetHints } from '@/game/tutorial';
-import { Card, CardSection } from '@/components/ui/cards';
+import { Card, CardSection, PanelHead } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
 
 /** Ayarları yükle ve motora/ses zincirine uygula — açılışta bir kez çağrılır */
@@ -81,13 +81,11 @@ export function SettingsPanel() {
 
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>
-        SETTINGS
-      </div>
-      <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>How it plays</h2>
-      <p style={{ margin: '0 0 14px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
-        None of these change a single number in a fight — they change what you see and hear.
-      </p>
+      <PanelHead
+        kicker="SETTINGS" accent={C.boneFaint}
+        title="How it plays"
+        sub="None of these change a single number in a fight — they change what you see and hear."
+      />
 
       {/* ── SES ── */}
       <Card>

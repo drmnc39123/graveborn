@@ -20,7 +20,7 @@ import {
 import type { Progress } from '@/game/progress';
 import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
-import { Card, CardSection, Tag } from '@/components/ui/cards';
+import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { pixel } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 import { OssuarySection } from '@/components/OssuarySection';
@@ -179,13 +179,11 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
         @keyframes gb-pop { 0% { transform: scale(0.72); opacity: 0; } 60% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
       `}</style>
 
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>
-        THE RELIQUARY
-      </div>
-      <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 900, color: C.bone }}>
-        {view === 'relics' ? 'What the dead left behind'
+      <PanelHead
+        kicker="THE RELIQUARY" accent={C.candleSoft}
+        title={view === 'relics' ? 'What the dead left behind'
           : view === 'monument' ? 'Your monument' : 'A bet with the dead'}
-      </h2>
+      />
 
       {/* ⚠️ ÜÇÜ AYNI BİNADA. Hepsi aynı işi yapıyor — gold'u ekonomiden
           ÇIKARMAK — ve dock zaten 7 kapıya ulaşmıştı. Ayrı binalar açmak

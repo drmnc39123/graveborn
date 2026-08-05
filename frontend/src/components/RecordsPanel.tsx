@@ -10,7 +10,7 @@ import { STAGES, depthGold } from '@/game/config';
 import { FORGE, costOf, spentOn } from '@/game/forge';
 import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton } from '@/components/ui/kit';
-import { Card, Tag } from '@/components/ui/cards';
+import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import {
   fetchLeaderboard, fetchProfile, fetchSeasonBoard,
   type LeaderRow, type ProfileData, type ProfileRun, type SeasonAwardRow,
@@ -39,12 +39,12 @@ export function RecordsPanel({ progress, onChange, onError }: {
 
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>THE TAVERN</div>
-      <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 900, color: C.bone }}>
-        {tab === 'record' ? 'Your record'
+      <PanelHead
+        kicker="THE TAVERN" accent={C.boneDim}
+        title={tab === 'record' ? 'Your record'
           : tab === 'deeds' ? 'Deeds and vigil'
           : tab === 'history' ? 'Every road walked' : 'Deepest descents'}
-      </h2>
+      />
 
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         <PixelButton variant="02A" scale={2} active={tab ==='record'} onClick={() => setTab('record')}

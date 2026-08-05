@@ -6,7 +6,7 @@
 
 import { useMemo } from 'react';
 import { FORGE, costOf, effectText, spentOn, spentOnOne, type ForgeUpgrade } from '@/game/forge';
-import { Card, Tag } from '@/components/ui/cards';
+import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import type { Progress } from '@/game/progress';
 import { buyUpgrade } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
@@ -41,11 +41,11 @@ export function ForgePanel({
 
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>THE FORGE</div>
-      <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>Permanent power</h2>
-      <p style={{ margin: '0 0 10px', fontSize: 12, color: C.boneFaint, lineHeight: 1.5 }}>
-        Bought once, kept forever. Every run after this starts stronger — even the ones you lose.
-      </p>
+      <PanelHead
+        kicker="THE FORGE" accent={C.candle}
+        title="Permanent power"
+        sub="Bought once, kept forever. Every run after this starts stronger — even the ones you lose."
+      />
 
       {/* Cüzdan + ilerleme. Artık "bütçe" yok — gold sonsuz akıyor, ağaç doymuyor. */}
       <div style={{ ...glass(10), padding: '9px 12px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

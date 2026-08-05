@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import { CHARMS, CHARM_SLOTS, charmById, type CharmDef } from '@/game/charms';
 import type { Progress } from '@/game/progress';
-import { Card, Tag } from '@/components/ui/cards';
+import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import { buyCharm } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
 import { C, FONT, glass } from '@/lib/theme';
@@ -36,14 +36,12 @@ export function StallPanel({ progress, onChange }: {
 
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>
-        THE PEDLAR&apos;S STALL
-      </div>
-      <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>Carried, not kept</h2>
-      <p style={{ margin: '0 0 10px', fontSize: 12, color: C.boneFaint, lineHeight: 1.5 }}>
-        Charms burn on the run you take them into — win or lose. Permanent power is the
-        Forge&apos;s business; this is what you carry down with you.
-      </p>
+      <PanelHead
+        kicker="THE PEDLAR'S STALL" accent={C.ok}
+        title="Carried, not kept"
+        sub={<>Charms burn on the run you take them into — win or lose. Permanent power is the
+          Forge&apos;s business; this is what you carry down with you.</>}
+      />
 
       {/* Cüzdan + taşınan tılsımlar */}
       <div style={{

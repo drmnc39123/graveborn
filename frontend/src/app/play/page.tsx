@@ -17,7 +17,7 @@ import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { Panel, PixelButton } from '@/components/ui/kit';
-import { Card, Pips, Tag, prettyId } from '@/components/ui/cards';
+import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
 import {
@@ -429,12 +429,12 @@ function StageSelect({ progress, onPick, onHero }: {
   const p = progress ?? loadProgress();
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>THE WARDEN&apos;S POST</div>
-      <h2 style={{ margin: '0 0 4px', fontSize: 24, fontWeight: 900, color: C.bone }}>Choose your road</h2>
-      <p style={{ margin: '0 0 16px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
-        Clear a stage once for its reward. Then the Descent opens beneath it — an endless
-        ladder where every new depth pays, and no depth pays twice.
-      </p>
+      <PanelHead
+        kicker="THE WARDEN'S POST" accent={C.blood}
+        title="Choose your road"
+        sub={<>Clear a stage once for its reward. Then the Descent opens beneath it — an endless
+          ladder where every new depth pays, and no depth pays twice.</>}
+      />
 
       <HeroPicker selected={p.hero} onSelect={onHero} />
 
@@ -677,12 +677,12 @@ function DescentStart({ label, hint, primary, onClick }: {
 // burada NE olacağı ve NİYE kapalı olduğu yazıyor.
 // ⚠️ Hiçbir yerde "swap gold for $GRAVE" DEMİYORUZ: hazine sabit kurdan alım
 // yaparsa oyun token BASMIŞ olur ve sıfır-emisyon sözü çöker. İkisi de P2P.
-const LOCKED: Record<string, { kicker: string; title: string; body: string; bullets: string[]; gate: string }> = {
+const LOCKED: Record<string, { kicker: string; title: string; body: string; bullets: string[]; gate: string; accent?: string }> = {
   // ⚠️ `shop` ARTIK BURADA DEĞİL — StallPanel canlı.
   // ⚠️ `market` ARTIK BURADA DEĞİL — MarketPanel canlı (listeleme + escrow +
   // iptal çalışıyor, sadece satın alma tarafı token bekliyor).
   exchange: {
-    kicker: 'THE EXCHANGE', title: 'Not yet trading',
+    kicker: 'THE EXCHANGE', title: 'Not yet trading', accent: C.ice,
     body: 'Standing bids: post what you would pay for gold and let sellers come to you. The Marketplace next door already takes listings.',
     bullets: [
       'Player-to-player only, no house counterparty',
@@ -700,9 +700,7 @@ function ComingSoon({ id }: { id: BuildingId }) {
   }
   return (
     <>
-      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 4 }}>{l.kicker}</div>
-      <h2 style={{ margin: '0 0 8px', fontSize: 24, fontWeight: 900, color: C.bone }}>{l.title}</h2>
-      <p style={{ margin: '0 0 14px', fontSize: 12.5, color: C.boneDim, lineHeight: 1.6 }}>{l.body}</p>
+      <PanelHead kicker={l.kicker} accent={l.accent ?? C.blood} title={l.title} sub={l.body} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {l.bullets.map((b) => (
           <div key={b} style={{ ...glass(9), padding: '9px 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.45 }}>
