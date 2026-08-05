@@ -40,11 +40,12 @@ export const C = {
  * Yazı tipi yığını. Dosyalar `public/fonts/` altında, REPODA — CDN yok
  * (Phantom uygulama-içi tarayıcısında dış istekler güvenilmez).
  *
- * • `GBTitle`  = Jacquard 12 — pikselleştirilmiş blackletter, SADECE başlık.
- *   ⚠️ Küçük puntoda okunmuyor; 18 px altında KULLANMA.
- * • `GBText`   = Pixelify Sans — değişken ağırlıklı piksel gövde fontu.
- *   Katı bitmap font yerine bu seçildi: arayüzdeki puntoların çoğu 8'in katı
- *   değil (10,5 · 11,5 · 12,5) ve katı bir bitmap orada kırık görünürdü.
+ * İKİSİ DE SILKSCREEN. Düz, süssüz bir piksel font; Regular + gerçek Bold.
+ * `GBTitle` ayrı bir aile olarak duruyor çünkü başlıklar ileride yeniden
+ * ayrışabilir — çağıran taraf tek bir isim kullanmaya devam etsin.
+ *
+ * ⚠️ Başlıkta 18 px ALTINA İNME. Silkscreen 8 px için çizilmiş; büyük
+ * puntoda karakterli, küçükte gövde fontundan ayırt edilemiyor.
  *
  * Dosya yoksa tarayıcı sessizce yedeğe düşer — kırılmaz.
  */

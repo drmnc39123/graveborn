@@ -19,28 +19,43 @@ export const viewport: Viewport = {
  *
  * ⚠️ CDN'DEN ÇEKİLMİYOR. Ne `next/font/google` (derlemede ağ ister) ne de
  * Google Fonts bağlantısı: oyun Phantom'un uygulama-içi tarayıcısında da
- * açılıyor ve orada dış istekler güvenilmez. Dosyalar repoda duruyor.
+ * açılıyor ve orada dış istekler güvenilmez. Dosya repoda duruyor.
  *
- * • Jacquard 12 — pikselleştirilmiş blackletter, BAŞLIKLAR için. Büyük
- *   puntoda (20-64 px) karakterini gösteriyor, küçükte okunmaz.
- * • Pixelify Sans — okunabilir piksel gövde fontu. Değişken ağırlıklı
- *   olduğu için 10,5 / 11,5 gibi TAM SAYI OLMAYAN puntolarda da dağılmıyor;
- *   katı bitmap fontlar (Silkscreen vb.) bu arayüzde kırık görünürdü çünkü
- *   punto değerlerinin çoğu 8'in katı değil.
+ * • Pixellari (Zacchary Dempsey-Plante) — hem gövde hem başlık. Düz, süssüz,
+ *   gerçek küçük harfli bir piksel font. Kullanıcının kendi seçimi.
+ *
+ * ⚠️ TEK AĞIRLIK — KALIN YÜZÜ YOK ve tarayıcı SENTETİK de üretmiyor.
+ * Ölçüldü: 400 / 700 / 900 aynı genişliği veriyor (131 px). Yani arayüzdeki
+ * `fontWeight: 900` kullanımları ETKİSİZ; hiyerarşi punto ve renkten geliyor.
+ * Bunları temizlemeye gerek yok (zararsız) ama "kalın yapayım" diye ağırlık
+ * artırmak da işe yaramaz — vurgu isteniyorsa punto ya da renk değişmeli.
+ *
+ * ⚠️ İkinci bir aileyi kalın olarak eşleştirme denemesi YAPILMADI: Silkscreen
+ * ve Pixellari'nin oranları farklı, karışım tutarsız görünürdü.
+ *
+ * Elenenler (aynı hataya tekrar düşülmesin diye):
+ *   · Pixelify Sans — yuvarlak hatları "süslü" bulundu.
+ *   · Jacquard 12 (blackletter) — en süslü parçaydı, başlıklardan kaldırıldı.
+ *   · VT323 — bold yüzü yok VE ince/soluk; okunurluk düştü.
+ *   · Silkscreen — düz ve gerçek bold'u var ama küçük harfleri küçük-kapital
+ *     gibi duruyor, her şey bağırıyormuş gibi okunuyordu.
+ *
+ * ⚠️ LİSANS: font dosyasının name tablosunda yalnızca yazar adı var, lisans
+ * metni YOK. Depo herkese açık ve ileride token çıkacak — yazarın şartları
+ * `public/fonts/NOTICE-Pixellari.txt` içine yazılmalı (bkz. o dosya).
  *
  * `font-display: swap` — font gelmezse arayüz görünmez kalmaz, yedeğe düşer.
- * Lisans: ikisi de SIL OFL 1.1; metinleri aynı klasörde (OFL-*.txt).
  */
 const FONT_FACE = `
+/* Tek aile, tek dosya, tek ağırlık. */
 @font-face {
   font-family: 'GBText';
-  src: url('/fonts/PixelifySans-Variable.ttf') format('truetype');
-  font-weight: 400 700;
+  src: url('/fonts/Pixellari.ttf') format('truetype');
   font-display: swap;
 }
 @font-face {
   font-family: 'GBTitle';
-  src: url('/fonts/Jacquard12-Regular.ttf') format('truetype');
+  src: url('/fonts/Pixellari.ttf') format('truetype');
   font-display: swap;
 }
 /* Piksel sanat her yerde net kalsın */
