@@ -54,10 +54,15 @@ function wornOf(raw: unknown): Row['equipped'] {
  */
 export async function recordDescent(
   wallet: string, mode: string, stageId: number, depth: number,
+  /**
+   * ⚠️ Ascension kademesi — Run kaydından. Puanın asıl ödülü bu: "aynı
+   * derinlik ama daha zor" tabloda üstte çıkmalı, yoksa kimse zoru seçmez.
+   */
+  ascension = 0,
 ): Promise<boolean> {
   if (mode !== 'descent' || depth < 1) return false;
 
-  const rating = challengeRating(stageId, depth);
+  const rating = challengeRating(stageId, depth, ascension);
   if (!Number.isFinite(rating) || rating <= 0) return false;
 
   const hit = await prisma.player.updateMany({

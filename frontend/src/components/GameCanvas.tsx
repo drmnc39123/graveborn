@@ -42,7 +42,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, aura = null, timeLimitSec, livePresence = false, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -61,6 +61,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * sunucunun doğruladığı koşu ayrışır.
    */
   startDepth?: number;
+  /** ⚠️ SUNUCUNUN onayladığı kademe — istemcinin isteği değil */
+  ascension?: number;
   /**
    * Takılı kozmetik hale (cosmetics.ts id). SADECE GÖRÜNÜR — motora hiç
    * girmez, `render`'a ayrı parametre olarak veriliyor. Denge etkisi yok.
@@ -153,7 +155,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
 
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth);
+    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth, ascension);
     gameRef.current = game;
     // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
     // üretimini kıstığı için oyunu gerçek zamanda oynayıp level-up/ölüm gibi

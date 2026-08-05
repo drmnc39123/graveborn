@@ -9,7 +9,10 @@
 // para basar. `progress.ts` en baştan bu yüzden saf fonksiyon yazıldı.
 
 import { allowedStartDepth, applyRunResult, type Progress, type RunResult } from '@game/progress';
-import { GOLD, PASSIVES, STAGES, descentStage, rareDropChance, stageById } from '@game/config';
+import {
+  ASCENSION, GOLD, PASSIVES, STAGES, ascensionDropMul, descentStage, maxAscensionFor,
+  rareDropChance, stageById,
+} from '@game/config';
 import { CHARMS, CHARM_SLOTS } from '@game/charms';
 import { permanentBonus } from '@game/forge';
 
@@ -66,11 +69,22 @@ export function maxRareGold(
   mode: string, stageId: number, deepestCleared: number,
   /** oyuncunun düşüş çarpanı tavanı — bkz. greedCeiling. 1 = greed yok. */
   greedMul = 1,
+  /**
+   * ⚠️ ASCENSION KADEMESİ — Run kaydından, istemciden DEĞİL.
+   *
+   * Tavan bunu saymak ZORUNDA: ascension düşüş MİKTARINI çarpıyor, saymazsak
+   * zoru seçen DÜRÜST oyuncu kırpılır. Bu sessiz bir hatadır — kimse "gold'um
+   * eksik geldi" diye şikâyet etmez, oyun sadece cimri hissettirir.
+   *
+   * ⚠️ Sunucu bunu Run'dan okuduğu için yalancıya kapı açmıyor: iddia edilen
+   * kademe değil, `/run/start`'ta doğrulanıp kaydedilen kademe kullanılıyor.
+   */
+  ascension = 0,
 ): number {
   const st = stageById(stageId);
   if (!st) return 0;
 
-  const g = Math.max(1, greedMul);
+  const g = Math.max(1, greedMul) * ascensionDropMul(ascension);
   const dropMax = (depth: number) =>
     Math.max(1, Math.round(GOLD.dropMax * (1 + GOLD.dropAmountPerDepth * depth) * g));
 
@@ -88,7 +102,8 @@ export function maxRareGold(
   let bosses = 0;
   const top = Math.max(0, Math.floor(deepestCleared)) + 1;
   for (let d = 1; d <= top; d++) {
-    const def = descentStage(stageId, d);
+    // ⚠️ Ascension düşman SAYISINI da artırıyor; tavan onu da saymalı.
+    const def = descentStage(stageId, d, ascension);
     const kills = def.enemyCount + (def.boss ? 1 : 0);
     expected += kills * rareDropChance(d);
     if (def.boss) bosses += 1;
@@ -226,6 +241,11 @@ export function settleRun(
    * `/run/start` bunu `allowedStartDepth`'e göre kendisi yazmıştı.
    */
   startDepth = 1,
+  /**
+   * Ascension kademesi. ⚠️ Run kaydından gelir, istemciden değil.
+   * Hem düşüş tavanını hem sıralama puanını etkiliyor.
+   */
+  ascension = 0,
 ): Settlement {
   const reason: string[] = [];
   let capped = false;
@@ -254,7 +274,7 @@ export function settleRun(
 
   // 2) Nadir düşüş iddiası — yapısal tavana kırp
   const rawGold = Math.max(0, Math.floor(Number(claim.rareGold) || 0));
-  const goldCap = maxRareGold(mode, stageId, depth, greedCeiling(before));
+  const goldCap = maxRareGold(mode, stageId, depth, greedCeiling(before), ascension);
   let rareGold = rawGold;
   if (rareGold > goldCap) {
     rareGold = goldCap;
@@ -304,6 +324,24 @@ export function resolveStartDepth(
   if (mode !== 'descent') return 0;
   const w = Math.max(1, Math.floor(Number(wanted) || 1));
   return Math.min(w, allowedStartDepth(p, stageId));
+}
+
+/**
+ * İzin verilen ascension kademesi — istemcinin isteği BURADA kırpılır.
+ *
+ * ⚠️ Kilidi oyuncunun ULAŞTIĞI derinlik açıyor (`paidDepth`), iddia ettiği
+ * değil: `paidDepth` sunucunun ödediği, yani zaten doğrulanmış derinlik.
+ * Kırpma sessiz — hata dönmek yerine en yüksek izinli kademeye indiriyoruz;
+ * arayüz zaten sadece açık kademeleri gösteriyor, buraya gelen bir fazlalık
+ * ya eski bir sekme ya da elle atılmış bir istek.
+ */
+export function resolveAscension(p: Progress, mode: string, stageId: number, wanted: unknown): number {
+  if (mode !== 'descent') return 0;
+  const w = Math.max(0, Math.min(ASCENSION.max, Math.floor(Number(wanted) || 0)));
+  // Oyuncunun HERHANGİ bir bölümde ulaştığı en derin nokta kilidi açar:
+  // kademe bölüme değil oyuncunun becerisine bağlı bir seçim.
+  const enDerin = STAGES.reduce((m, st) => Math.max(m, Number(p.depthPaid[st.id] ?? 0)), 0);
+  return Math.min(w, maxAscensionFor(enDerin));
 }
 
 /** Koşu başlatılabilir mi (bölüm açık mı, descent için bölüm geçilmiş mi) */

@@ -12,7 +12,7 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
-import { canStart, resolveStartDepth, settleRun } from './reward.js';
+import { canStart, resolveAscension, resolveStartDepth, settleRun } from './reward.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { paidDepth } from '@game/progress';
@@ -533,6 +533,8 @@ const startSchema = z.object({
    * `resolveStartDepth` bunu oyuncunun hak ettiği checkpoint'e kırpar.
    */
   startDepth: z.number().int().min(1).max(100000).optional(),
+  /** İstenen ascension kademesi — `resolveAscension` hak edilene kırpar */
+  ascension: z.number().int().min(0).max(50).optional(),
 });
 
 app.post('/run/start', wrap(async (req, res) => {
@@ -588,6 +590,8 @@ app.post('/run/start', wrap(async (req, res) => {
 
   // Checkpoint SUNUCUDA çözülür — istemcinin isteği burada kırpılır
   const startDepth = resolveStartDepth(p, body.data.mode, body.data.stageId, body.data.startDepth);
+  // Ascension da öyle: kilidi oyuncunun ULAŞTIĞI derinlik açıyor
+  const ascension = resolveAscension(p, body.data.mode, body.data.stageId, body.data.ascension);
 
   await acikKosulariIptalEt(wallet);   // ⚠️ bkz. fonksiyon başlığı — para basma koruması
 
@@ -596,6 +600,7 @@ app.post('/run/start', wrap(async (req, res) => {
       id: runId, wallet, seed: BigInt(seed), hero: p.hero,
       mode: body.data.mode, stageId: body.data.stageId,
       startDepth: Math.max(1, startDepth),
+      ascension,
       wagerStake: bahisGecerli ? bahis!.stake : 0,
       wagerTarget: bahisGecerli ? bahis!.target : 0,
     },
@@ -604,7 +609,9 @@ app.post('/run/start', wrap(async (req, res) => {
   // `charms` geri dönüyor: istemci koşuyu bu tılsımlarla kuracak.
   // `startDepth` de dönüyor: istemci motoru BU değerle kurmak ZORUNDA, yoksa
   // oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
-  res.json({ runId, seed, hero: p.hero, charms, startDepth });
+  // `ascension` geri dönüyor: istemci motoru BU değerle kurmak ZORUNDA,
+  // yoksa oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
+  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension });
 }));
 
 const finishSchema = z.object({
@@ -634,7 +641,7 @@ app.post('/run/finish', wrap(async (req, res) => {
   const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
   const s = settleRun(
     before, run.mode as 'campaign' | 'descent', run.stageId, body.data, elapsedSec,
-    run.startDepth,
+    run.startDepth, run.ascension,
   );
 
   // ── BAHİS ──
@@ -690,8 +697,8 @@ app.post('/run/finish', wrap(async (req, res) => {
   // kalanı ödemek zararsız (miktar küçülür), ama sıralamada tek bir yalan
   // tepeyi kalıcı kilitler. Şüpheliyse tabloya hiç girmesin.
   // Aynı kırpma kuralı sezon tablosunda da geçerli — iki tablo, tek karar.
-  const record = s.capped ? false : await recordDescent(wallet, run.mode, run.stageId, ulasilan);
-  if (!s.capped) await recordSeason(wallet, run.mode, run.stageId, ulasilan);
+  const record = s.capped ? false : await recordDescent(wallet, run.mode, run.stageId, ulasilan, run.ascension);
+  if (!s.capped) await recordSeason(wallet, run.mode, run.stageId, ulasilan, run.ascension);
 
   res.json({
     progress: toProgress(saved),

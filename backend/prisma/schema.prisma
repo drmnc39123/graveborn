@@ -128,6 +128,12 @@ model Run {
   /// Eski koşularda 1 (varsayılan) zaten doğru değer.
   startDepth Int    @default(1)
 
+  /// ⚠️ ASCENSION kademesi — SUNUCU yazar, istemci seçemez (bkz.
+  /// `resolveAscension`). Kapanışta hem düşüş tavanı hem sıralama puanı
+  /// buradan okunuyor; istemcinin gönderdiği kademeye bakılsaydı herkes
+  /// 10. kademeyi iddia edip tabloyu kilitlerdi.
+  ascension Int @default(0)
+
   /// ⚠️ Bahis koşu AÇILIRKEN buraya YAZILIR ve oyuncudan düşülür. Progress'te
   /// bırakılsaydı oyuncu koşu sırasında bahsi değiştirebilirdi.
   wagerStake  Int     @default(0)

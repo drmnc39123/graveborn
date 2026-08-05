@@ -10,7 +10,8 @@ import { SpatialHash } from './spatial';
 import {
   BOSS, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
-  WEAPONS, BEHAVIOR, descentStage, rareDropAmount, rareDropChance, startLevelFor, weaponById,
+  WEAPONS, ASCENSION, BEHAVIOR, ascensionDropMul, descentStage, rareDropAmount, rareDropChance,
+  startLevelFor, weaponById,
   weaponCooldownAt, weaponCountAt, weaponDamageAt, xpForLevel,
   type Behavior, type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
 } from './config';
@@ -167,6 +168,8 @@ export class Game {
   xp = 0;
   /** koşu boyunca toplanan toplam XP (seviye atlayınca SIFIRLANMAZ) */
   xpEarned = 0;
+  /** seçilen ascension kademesi — 0 = kapalı (bkz. config.ASCENSION) */
+  readonly ascension: number;
   xpNext: number = xpForLevel(1);
 
   /** descent'in başladığı derinlik (checkpoint); campaign'de 0 */
@@ -292,6 +295,18 @@ export class Game {
      * 401'i temizledim" tek koşuda servet basardı.
      */
     startDepth = 1,
+    /**
+     * ASCENSION kademesi (0 = kapalı). Descent'te zorluk ve sıralama puanını
+     * ölçekler.
+     *
+     * ⚠️ İSTEMCİ BUNU SEÇEBİLİR AMA SUNUCU DOĞRULAR. `/run/start` oyuncunun
+     * ulaştığı derinliğe bakıp izin verilen kademeyi kendi belirler ve Run
+     * kaydına yazar; kapanışta da istemcinin gönderdiğini değil o kaydı
+     * kullanır. Aksi hâlde herkes 10. kademeyi seçip puan uydururdu.
+     *
+     * ⚠️ 0'da HİÇBİR ÇARPAN uygulanmaz — eski seed'ler bit bit aynı.
+     */
+    ascension = 0,
   ) {
     this.seed = seed;
     this.rng = createRng(seed);
@@ -302,8 +317,9 @@ export class Game {
     this.permanent = mergeStats(hero.stats, permanent);
     // Verilen stageDef sadece "hangi bölümün merdiveni" bilgisini taşır,
     // descent'te asıl tanım descentStage()'ten gelir
+    this.ascension = Math.max(0, Math.min(ASCENSION.max, Math.floor(ascension)));
     const start = mode === 'descent' ? Math.max(1, Math.floor(startDepth)) : 0;
-    const startDef = mode === 'descent' ? descentStage(stageDef.id, start) : stageDef;
+    const startDef = mode === 'descent' ? descentStage(stageDef.id, start, this.ascension) : stageDef;
     this.baseStageId = stageDef.id;
     this.startDepth = start;
     this.stage = {
@@ -468,7 +484,7 @@ export class Game {
   private advanceDepth() {
     this.stage.deepestCleared = this.stage.depth;
     const next = this.stage.depth + 1;
-    const def = descentStage(this.baseStageId, next);
+    const def = descentStage(this.baseStageId, next, this.ascension);
     this.stage.def = def;
     this.stage.depth = next;
     this.stage.toSpawn = def.enemyCount;
@@ -524,6 +540,10 @@ export class Game {
     const types = this.availableTypes();
     const hpScale = st.def.hpMul * curse;
     const spScale = st.def.speedMul * curse;
+    // ⚠️ Hasar çarpanı `curse` ile ÇARPILMIYOR. Curse zaten can+hız+sıklık
+    // artırıyor; hasarı da eklemek onu tek başına ölümcül yapardı ve Forge
+    // satırı "alma" tuzağına dönerdi.
+    const dmgScale = st.def.damageMul ?? 1;
 
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
@@ -539,7 +559,7 @@ export class Game {
         x: this.px + Math.cos(ang) * rx,
         y: this.py + Math.sin(ang) * ry,
         hp: t.hp * hpScale, maxHp: t.hp * hpScale,
-        speed: t.speed * spScale, damage: t.damage, radius: t.radius,
+        speed: t.speed * spScale, damage: t.damage * dmgScale, radius: t.radius,
         xp: t.xp, color: t.color, hitFlash: 0,
         // animT KOZMETİK → rng'den ALINMAZ. Aksi hâlde bir görsel değişiklik
         // RNG akışını kaydırır ve aynı günlük seed başka bir run üretir.
@@ -1359,7 +1379,11 @@ export class Game {
       // ⚠️ `greed` MİKTARI çarpar, İHTİMALİ değil (bkz. rareDropChance başlığı).
       // Zar zaten atıldı — çarpma RNG tüketmiyor, yani mühür kaymıyor.
       // greed tabanı 1.0 olduğu için yükseltmesiz oyuncuda etkisi yok.
-      this.rareGold += rareDropAmount(depth, roll) * Math.max(1, this.stats.greed);
+      // ⚠️ Ascension da MİKTARI çarpar, İHTİMALİ değil — greed'le aynı kanal.
+      // Zar zaten atıldı, çarpma RNG tüketmiyor, mühür kaymıyor.
+      this.rareGold += rareDropAmount(depth, roll)
+        * Math.max(1, this.stats.greed)
+        * ascensionDropMul(this.ascension);
       this.events.add('coin');
     }
   }

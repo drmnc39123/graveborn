@@ -20,12 +20,15 @@ import { Panel, PixelButton } from '@/components/ui/kit';
 import { Card, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
-import { STAGES, challengeRating, checkpointFor, depthGold, stageById, startLevelFor } from '@/game/config';
+import {
+  ASCENSION, STAGES, ascensionDropMul, ascensionHpMul, ascensionUnlockDepth, challengeRating,
+  checkpointFor, depthGold, maxAscensionFor, stageById, startLevelFor,
+} from '@/game/config';
 import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
 import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
-import { C, glass, ctaButton } from '@/lib/theme';
+import { C, FONT, glass, ctaButton } from '@/lib/theme';
 import { getMode, getWallet } from '@/lib/session';
 import {
   buyUpgrade, finishBossRun, finishRun as settleRun, loadSessionProgress, setHero as saveHero, startBossRun,
@@ -113,9 +116,9 @@ export default function PlayPage() {
   }, [screen, progress]);
 
   /** Bölüm başlat: cüzdan modunda seed'i, koşu kimliğini ve checkpoint'i SUNUCU verir */
-  const beginStage = useCallback((stageId: number, mode: RunMode, wantStartDepth = 1) => {
+  const beginStage = useCallback((stageId: number, mode: RunMode, wantStartDepth = 1, wantAscension = 0) => {
     setPanel(null);
-    startRun(mode, stageId, wantStartDepth)
+    startRun(mode, stageId, wantStartDepth, wantAscension)
       .then((ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }))
       .catch(() => setNote('Koşu başlatılamadı.'));
   }, []);
@@ -196,6 +199,7 @@ export default function PlayPage() {
           hero={p.hero}
           seed={screen.ticket.seed}
           startDepth={screen.ticket.startDepth}
+          ascension={screen.ticket.ascension}
           aura={p.equipped.aura ?? null}
           permanent={mergeBonus(permanentBonus(p.upgrades), charmBonus(screen.ticket.charms))}
           onFinish={finishRun}
@@ -374,7 +378,7 @@ function Row({ label, value, hint }: { label: string; value: number; hint?: stri
 
 function StageSelect({ progress, onPick, onHero }: {
   progress: Progress | null;
-  onPick: (id: number, mode: RunMode, startDepth?: number) => void;
+  onPick: (id: number, mode: RunMode, startDepth?: number, ascension?: number) => void;
   onHero: (id: string) => void;
 }) {
   const p = progress ?? loadProgress();
@@ -421,7 +425,7 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
   cleared: boolean;
   claimed: boolean;
   bestDepth: number;
-  onPick: (id: number, mode: RunMode, startDepth?: number) => void;
+  onPick: (id: number, mode: RunMode, startDepth?: number, ascension?: number) => void;
 }) {
   // Taban süre: düşmanlar spawn hızından çabuk sahneye çıkamaz, hepsi ölmeden
   // bölüm bitmez. Gerçek koşu bundan uzun sürer — "en az" diyoruz.
@@ -434,6 +438,11 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
   const kontrolNoktasi = checkpointFor(bestDepth);
   const devamDerinligi = kontrolNoktasi + 1;
   const baslangicSeviyesi = startLevelFor(devamDerinligi);
+  // ⚠️ Kilit oyuncunun ULAŞTIĞI derinlikten türüyor, seçtiğinden değil.
+  // Sunucu da aynı fonksiyonu çalıştırıyor (`resolveAscension`) — kural iki
+  // yerde YAZILMADI, iki yerde ÇAĞRILDI.
+  const enYuksekKademe = maxAscensionFor(bestDepth);
+  const [kademe, setKademe] = useState(0);
 
   return (
     <Card accent={cleared} dim={locked}>
@@ -519,6 +528,54 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
             </div>
           </div>
 
+          {/* ── ASCENSION ──
+              Ölçüldü: Forge yarıya geldiği anda 21 koşunun 21'i 30 dakika
+              tavanına çarpıyor — koşuyu bitiren ölüm değil SAAT. Bu seçici
+              o duvarı kaldırıyor: zorluk Forge'un satın alabildiğinin
+              ötesine çıkabiliyor.
+              ⚠️ Kilitli kademe GÖSTERİLMİYOR ama kaç kaldığı yazıyor —
+              görünmeyen bir sistem hedef olamaz. */}
+          {enYuksekKademe > 0 ? (
+            <div style={{ padding: '8px 13px 0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.6, color: C.ice }}>
+                  ASCENSION
+                </span>
+                {Array.from({ length: enYuksekKademe + 1 }, (_, i) => (
+                  <button key={i} onClick={() => setKademe(i)}
+                    title={i === 0 ? 'Standard descent' :
+                      `Enemies x${ascensionHpMul(i).toFixed(1)} health, +${Math.round((ascensionDropMul(i) - 1) * 100)}% drop value`}
+                    style={{
+                      all: 'unset', cursor: 'pointer', minWidth: 20, padding: '2px 7px',
+                      borderRadius: 5, textAlign: 'center', fontSize: 11, fontWeight: 900,
+                      fontFamily: FONT.ui,
+                      color: kademe === i ? '#1a0508' : C.boneDim,
+                      background: kademe === i
+                        ? `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`
+                        : 'rgba(227,216,192,0.07)',
+                      border: `1px solid ${kademe === i ? C.candle : 'rgba(227,216,192,0.14)'}`,
+                    }}>
+                    {i}
+                  </button>
+                ))}
+                {enYuksekKademe < ASCENSION.max && (
+                  <span style={{ fontSize: 10, color: C.boneFaint }}>
+                    next at depth {ascensionUnlockDepth(enYuksekKademe + 1)}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: kademe > 0 ? C.bloodSoft : C.boneFaint, marginTop: 5, lineHeight: 1.45 }}>
+                {kademe === 0
+                  ? 'Standard descent. Raise this once the clock, not the enemies, is what stops you.'
+                  : `Enemies \u00d7${ascensionHpMul(kademe).toFixed(1)} health and \u00d7${(1 + 0.07 * kademe).toFixed(2)} in number \u00b7 drops worth +${Math.round((ascensionDropMul(kademe) - 1) * 100)}% \u00b7 counts far higher on the board`}
+              </div>
+            </div>
+          ) : (
+            <div style={{ padding: '8px 13px 0', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.45 }}>
+              Reach depth {ascensionUnlockDepth(1)} to unlock Ascension \u2014 harder descents that count for more.
+            </div>
+          )}
+
           {/* ── Nereden başlanacak ──
               Checkpoint yoksa (hiç boss derinliği geçilmemişse) tek düğme
               kalır — ortada seçim yokken iki düğme göstermek kullanıcıya
@@ -530,13 +587,13 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
                 ? `Start at the last checkpoint with level ${baslangicSeviyesi} to draft`
                 : 'Clear a boss depth to unlock a checkpoint'}
               primary
-              onClick={() => onPick(s.id, 'descent', devamDerinligi)}
+              onClick={() => onPick(s.id, 'descent', devamDerinligi, kademe)}
             />
             {kontrolNoktasi > 0 && (
               <DescentStart
                 label="FROM THE TOP"
                 hint="Depth 1 · build from nothing"
-                onClick={() => onPick(s.id, 'descent', 1)}
+                onClick={() => onPick(s.id, 'descent', 1, kademe)}
               />
             )}
           </div>

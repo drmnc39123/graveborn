@@ -22,6 +22,7 @@ import {
   utcDay,
   type Progress, type RunResult,
 } from '@/game/progress';
+import { STAGES, maxAscensionFor } from '@/game/config';
 import type { CosmeticSlot } from '@/game/cosmetics';
 import { wagerPayout, wagerWon } from '@/game/wager';
 import { CHARM_SLOTS } from '@/game/charms';
@@ -49,6 +50,8 @@ export interface RunTicket {
    * kurulmalı, yoksa oynanan koşu ile doğrulanan koşu ayrışır.
    */
   startDepth: number;
+  /** sunucunun onayladığı ascension kademesi — motor BUNUNLA kurulur */
+  ascension: number;
   /**
    * Demoda koşuya taşınan bahis (sunucu yok, istemci çözecek).
    * Cüzdan modunda null — orada bahsi Run satırı taşıyor.
@@ -411,6 +414,12 @@ export async function startRun(
   mode: 'campaign' | 'descent', stageId: number,
   /** oyuncunun seçtiği checkpoint — SUNUCU kırpar, burada gönderilen sadece bir istek */
   wantStartDepth = 1,
+  /**
+   * Oyuncunun seçtiği ascension kademesi. ⚠️ Bir İSTEK, bir izin değil:
+   * sunucu `resolveAscension` ile hak edilene kırpar ve motor SUNUCUNUN
+   * döndürdüğü değerle kurulur.
+   */
+  wantAscension = 0,
 ): Promise<RunTicket> {
   if (!isWallet()) {
     // ⚠️ Demoda da tılsımlar VE BAHİS koşu AÇILIRKEN yanar — cüzdan
@@ -435,11 +444,19 @@ export async function startRun(
     }
     return {
       runId: null, seed: demoSeed(mode, stageId), charms, startDepth: start,
+      // Demoda da aynı saf fonksiyon kırpıyor — kural tek yerde kalsın
+      ascension: mode === 'descent'
+        ? Math.min(Math.max(0, wantAscension), maxAscensionFor(
+          STAGES.reduce((m, st) => Math.max(m, paidDepth(p, st.id)), 0)))
+        : 0,
       wager: wagerLive ? w! : null,
     };
   }
-  const out = await api<{ runId: string; seed: number; charms?: string[]; startDepth?: number }>(
-    '/run/start', { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth } },
+  const out = await api<{
+    runId: string; seed: number; charms?: string[]; startDepth?: number; ascension?: number;
+  }>(
+    '/run/start',
+    { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth, ascension: wantAscension } },
   );
   // ⚠️ SUNUCUNUN döndürdüğü değer kullanılır, istenen değil. Motoru başka bir
   // derinlikte kurmak koşuyu doğrulanamaz hale getirirdi.
@@ -447,7 +464,11 @@ export async function startRun(
   // taşımaya gerek yok, kapanış yanıtı sonucu bildiriyor.
   return {
     runId: out.runId, seed: out.seed, charms: out.charms ?? [],
-    startDepth: Math.max(1, out.startDepth ?? 1), wager: null,
+    startDepth: Math.max(1, out.startDepth ?? 1),
+    // ⚠️ SUNUCUNUN döndürdüğü kademe — istenen değil. Motoru başka bir
+    // kademede kurmak koşuyu doğrulanamaz hâle getirirdi.
+    ascension: Math.max(0, out.ascension ?? 0),
+    wager: null,
   };
 }
 

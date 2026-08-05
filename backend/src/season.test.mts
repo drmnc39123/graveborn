@@ -82,17 +82,17 @@ console.log('\n[2] Ödül tablosu');
 // ── 3) Puan yazımı ──
 console.log('\n[3] Puan yazımı');
 {
-  await recordSeason(w(0), 'descent', 3, 20, NOW);
+  await recordSeason(w(0), 'descent', 3, 20, 0, NOW);
   check('sezon puanı yazıldı', (await get(0)).seasonRating > 0);
 
   // Daha kötü koşu AYNI hafta içinde rekoru düşürmemeli
   const once = (await get(0)).seasonRating;
-  await recordSeason(w(0), 'descent', 1, 2, NOW);
+  await recordSeason(w(0), 'descent', 1, 2, 0, NOW);
   check('aynı hafta içinde KÖTÜ koşu puanı düşürmüyor', (await get(0)).seasonRating === once,
     `${once}`);
 
   // Kampanya koşusu sezona girmemeli
-  await recordSeason(w(1), 'campaign', 5, 30, NOW);
+  await recordSeason(w(1), 'campaign', 5, 30, 0, NOW);
   check('kampanya koşusu sezon puanı yazmıyor', (await get(1)).seasonRating === 0);
 
   // ⭐ SEZON MANTIĞI: geçen haftaya ait puan, bu haftanın KÖTÜ koşusuyla EZİLİR.
@@ -102,7 +102,7 @@ console.log('\n[3] Puan yazımı');
     where: { wallet: w(2) },
     data: { seasonWeek: WEEK - 1, seasonStage: 10, seasonDepth: 60, seasonRating: 9e12 },
   });
-  await recordSeason(w(2), 'descent', 1, 3, NOW);
+  await recordSeason(w(2), 'descent', 1, 3, 0, NOW);
   const p2 = await get(2);
   check('GEÇEN haftanın puanı bu haftanın koşusuyla sıfırlanıyor',
     p2.seasonWeek === WEEK && yaklasik(p2.seasonRating, challengeRating(1, 3)),

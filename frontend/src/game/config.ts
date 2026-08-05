@@ -60,6 +60,19 @@ export interface StageDef {
   /** Düşman can/hız çarpanı (bölüm zorluğu) */
   hpMul: number;
   speedMul: number;
+  /**
+   * Düşman HASAR çarpanı — YOKSA 1.
+   *
+   * ⚠️ NİYE SONRADAN EKLENDİ: ölçüldü, derinlik hasarı hiç ölçeklemiyordu.
+   * Can ve hız büyüyor, hasar sabit kalıyordu; oyuncunun canı ve zırhı ise
+   * Forge'la büyüdüğü için DERİNE İNDİKÇE DAHA GÜVENLİ oluyordu. Sonuç:
+   * 21 koşunun 21'i ölümle değil 30 dakika tavanıyla bitiyordu — "duvar HP
+   * değil takvim" sorunu tam olarak buradan geliyordu.
+   *
+   * ⚠️ Kampanya bölümleri bu alanı YAZMIYOR (1 kalıyor) — eski dengeleri ve
+   * SIM_SEAL mührü bit bit korunuyor.
+   */
+  damageMul?: number;
   /** Bölüm sonunda boss gelir mi (kalan düşman 0'a inince) */
   boss?: { hp: number; speed: number; damage: number; radius: number; art: string; label: string };
 }
@@ -173,6 +186,13 @@ export const DESCENT = {
   enemyPerDepth: 10,
   /** düşman canı derinlik başına bu kadar katlanır (üssel — beceri kapısı budur) */
   hpGrowth: 1.16,
+  /**
+   * Derinlik başına HASAR büyümesi.
+   * ⚠️ Candan BELİRGİN YAVAŞ (1.16 vs 1.055) ve bu kasıtlı: can "ne kadar
+   * sürer", hasar "ne kadar tehlikeli" eksenidir. İkisini aynı hızda
+   * büyütmek koşuyu birkaç derinlikte bitirirdi.
+   */
+  damageGrowth: 1.05,
   speedPerDepth: 0.012,
   speedMax: 1.9,
   spawnPerDepth: 0.12,
@@ -236,27 +256,120 @@ export function startLevelFor(startDepth: number): number {
 }
 
 /**
- * Derinlik d için bölüm tanımı üretir. SAF FONKSİYON — motor bunu çağırır,
- * kendi sayısı yoktur. Aynı (stageId, depth) her zaman aynı tanımı verir.
+ * ASCENSION — Forge doyduktan sonra ne yapacağın.
+ *
+ * NİYE VAR: ölçüldü — Forge yarıya geldiği anda 21 koşunun 21'i 30 dakika
+ * tavanına çarpıyor. Yani koşuyu bitiren şey ÖLÜM DEĞİL SAAT. Oyuncu artık
+ * ölmüyor, sadece sıkılana kadar iniyor. Zorluk, Forge'un satın alabildiğinin
+ * ÖTESİNE ölçeklenmek zorunda.
+ *
+ * ⚠️ KAMPANYAYI "HARD MOD"DA TEKRAR OYNATMAK DEĞİL. Descent zaten sonsuz
+ * zorluk merdiveni; ikinci bir merdiven aynı işi iki kez yapmak olurdu.
+ * Ayrıca "ilerleme öder, tekrar ödemez" kuralı gereği tekrar edilen kampanya
+ * ya sıfır öder (anlamsız) ya da öder (ikinci musluk = Faz 2'de kapatılan şey).
+ *
+ * ⚠️ ÖDÜLÜ GOLD'A BAĞLAMA. Zorluk katmanı asıl olarak SIRALAMA ödülü:
+ * `challengeRating` ascension'ı sayıyor, yani "aynı derinlik ama daha zor"
+ * tabloda üstte çıkıyor. Gold tarafında sadece ılımlı bir düşüş çarpanı var
+ * ve zorluk çarpanının çok altında — yoksa yeni bir musluk açardık.
+ *
+ * ⚠️ 0. KADEME TAM OLARAK ESKİ OYUN. Hiçbir çarpan uygulanmıyor, tek bir
+ * `rng` çağrısı bile değişmiyor; eski seed'ler ve SIM_SEAL geçerli kalıyor.
  */
-export function descentStage(stageId: number, depth: number): StageDef {
+export const ASCENSION = {
+  /** en yüksek kademe */
+  max: 10,
+  /** kademe başına düşman canı çarpanı (bileşik) */
+  hpPer: 1.32,
+  /** kademe başına hız çarpanı — cana göre çok daha yumuşak, kaçış ölmesin */
+  speedPer: 1.025,
+  /** kademe başına düşman sayısı artışı */
+  countPer: 0.07,
+  /**
+   * Kademe başına HASAR çarpanı.
+   * ⚠️ Katmanın ASIL dişi bu. İlk sürümde sadece can/sayı ölçekleniyordu ve
+   * ölçüm gösterdi: 10. kademede bile 9 koşunun 9'u yine SÜRE TAVANINA
+   * çarpıyordu — oyuncu ölmüyor, sadece yavaşlıyordu. Zorluk katmanı
+   * yavaşlatmamalı, ÖLDÜRMELİ.
+   */
+  damagePer: 1.08,
+  /** kademe başına düşüş MİKTARI artışı (ihtimal DEĞİL) */
+  dropPer: 0.19,
+  /**
+   * A kademesini açmak için gereken en derin iniş.
+   * ⚠️ Kademe atlatma yok: 1. kademe d15'te, 10. kademe d60'ta açılır.
+   * Amaç yeni oyuncunun "zoru seçip hızlı zenginleşmesini" engellemek değil
+   * (zaten ölür) — seçeneğin ANLAMLI olduğu anda görünmesi.
+   */
+  unlockBase: 10,
+  unlockPer: 5,
+} as const;
+
+/** A kademesi için gereken derinlik */
+export function ascensionUnlockDepth(a: number): number {
+  return ASCENSION.unlockBase + ASCENSION.unlockPer * Math.max(1, Math.floor(a));
+}
+
+/**
+ * Oyuncunun ulaştığı derinlikle açılmış EN YÜKSEK kademe.
+ * ⚠️ Sunucu bunu `/run/start`'ta doğruluyor — istemcinin gönderdiği kademe
+ * bunun üstündeyse kırpılır, yoksa herkes 10. kademeyi seçerdi.
+ */
+export function maxAscensionFor(deepestDepth: number): number {
+  const d = Math.max(0, Math.floor(deepestDepth));
+  if (d < ascensionUnlockDepth(1)) return 0;
+  return Math.min(ASCENSION.max, Math.floor((d - ASCENSION.unlockBase) / ASCENSION.unlockPer));
+}
+
+/** Kademenin zorluk çarpanı (düşman canı) — arayüzde de gösterilir */
+export function ascensionHpMul(a: number): number {
+  return Math.pow(ASCENSION.hpPer, Math.max(0, Math.floor(a)));
+}
+
+/** Kademenin düşman HASAR çarpanı */
+export function ascensionDamageMul(a: number): number {
+  return Math.pow(ASCENSION.damagePer, Math.max(0, Math.floor(a)));
+}
+
+/** Kademenin düşüş MİKTARI çarpanı */
+export function ascensionDropMul(a: number): number {
+  return 1 + ASCENSION.dropPer * Math.max(0, Math.floor(a));
+}
+
+/**
+ * Derinlik d için bölüm tanımı üretir. SAF FONKSİYON — motor bunu çağırır,
+ * kendi sayısı yoktur. Aynı (stageId, depth, asc) her zaman aynı tanımı verir.
+ *
+ * ⚠️ `asc` VARSAYILAN 0 ve 0'da hiçbir çarpan uygulanmıyor — eski çağrılar
+ * ve eski seed'ler bit bit aynı sonucu üretmeye devam ediyor.
+ */
+export function descentStage(stageId: number, depth: number, asc = 0): StageDef {
   const base = stageById(stageId) ?? STAGES[0];
   const d = Math.max(1, Math.floor(depth));
+  const a = Math.max(0, Math.min(ASCENSION.max, Math.floor(asc)));
   const isBoss = d % DESCENT.bossEvery === 0;
   const poolSize = Math.min(base.enemies.length, 1 + Math.floor(d / DESCENT.poolEvery));
 
   const def: StageDef = {
     id: base.id,
     name: `${base.name} — Depth ${d}`,
-    enemyCount: DESCENT.enemyBase + DESCENT.enemyPerDepth * d,
+    enemyCount: Math.round((DESCENT.enemyBase + DESCENT.enemyPerDepth * d) * (1 + ASCENSION.countPer * a)),
     // Descent ödülü kill'den değil DERİNLİKTEN gelir (bkz. depthGold) — bu alan
     // sadece arayüz metni için taşınıyor, ödeme progress.ts'te hesaplanır.
     firstClearGold: depthGold(stageId, d),
     spawnRate: Math.min(DESCENT.spawnMax, base.spawnRate + DESCENT.spawnPerDepth * d),
     maxAlive: Math.min(DESCENT.aliveMax, base.maxAlive + DESCENT.alivePerDepth * d),
     enemies: base.enemies.slice(0, poolSize),
-    hpMul: base.hpMul * Math.pow(DESCENT.hpGrowth, d),
-    speedMul: Math.min(DESCENT.speedMax, base.speedMul * (1 + DESCENT.speedPerDepth * d)),
+    hpMul: base.hpMul * Math.pow(DESCENT.hpGrowth, d) * ascensionHpMul(a),
+    // ⚠️ HIZ TAVANI ASCENSION'DA DA GEÇERLİ. Tavanı aşan düşman oyuncudan
+    // hızlı olur ve kaçış tamamen ölür — zorluk "kaçamıyorsun" değil
+    // "daha çok vurman gerekiyor" olmalı.
+    speedMul: Math.min(DESCENT.speedMax, base.speedMul * (1 + DESCENT.speedPerDepth * d)
+      * Math.pow(ASCENSION.speedPer, a)),
+    // ⚠️ Hasarın TAVANI YOK — hıza tavan koymak zorunlu (kaçış ölmesin) ama
+    // hasar tam da koşuyu bitirmesi istenen şey. Tavan koymak "duvar takvim"
+    // sorununu geri getirirdi.
+    damageMul: Math.pow(DESCENT.damageGrowth, d) * ascensionDamageMul(a),
   };
 
   if (isBoss) {
@@ -290,10 +403,14 @@ export function descentStage(stageId: number, depth: number): StageDef {
  * ⚠️ Boss canı KATILMIYOR: `hpMul` bir çarpan, `boss.hp` ham can — ikisini
  * toplamak birim karıştırmak olurdu.
  */
-export function challengeRating(stageId: number, depth: number): number {
+export function challengeRating(stageId: number, depth: number, asc = 0): number {
   const d = Math.floor(depth);
   if (d < 1) return 0;
-  const def = descentStage(stageId, d);
+  // ⚠️ Ascension BURADA sayılıyor ve asıl ödülü bu. "Aynı derinlik ama daha
+  // zor" tabloda üstte çıkmalı; yoksa kimse zoru seçmez ve katman ölü doğar.
+  // Ayrıca `descentStage` zaten hem sayıyı hem canı ölçekliyor, o yüzden
+  // ayrı bir ascension terimi EKLENMİYOR — iki kez saymak olurdu.
+  const def = descentStage(stageId, d, asc);
   return def.enemyCount * def.hpMul;
 }
 

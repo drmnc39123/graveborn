@@ -34,11 +34,14 @@ export interface SeasonRow {
  * yükseği ezmesini engelleyen şey `where`; okuyup-yazmak yarış açardı.
  */
 export async function recordSeason(
-  wallet: string, mode: string, stageId: number, depth: number, now = new Date(),
+  wallet: string, mode: string, stageId: number, depth: number,
+  /** ⚠️ Run kaydından gelen ascension — tüm-zamanlar tablosuyla aynı eksen */
+  ascension = 0,
+  now = new Date(),
 ): Promise<boolean> {
   if (mode !== 'descent' || depth < 1) return false;
 
-  const rating = challengeRating(stageId, depth);
+  const rating = challengeRating(stageId, depth, ascension);
   if (!Number.isFinite(rating) || rating <= 0) return false;
 
   const week = seasonWeek(now);
