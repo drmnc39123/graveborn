@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Game } from './engine.js';
 import {
-  COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES, MAX_WEAPONS, PASSIVES,
+  BEHAVIOR, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES, MAX_WEAPONS, PASSIVES,
   SIM_VERSION, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
   descentStage, rareDropChance,
 } from './config.js';
@@ -135,7 +135,10 @@ check('farklı seed farklı sonuç', diff.kills !== a.kills, `${diff.kills} vs $
 //      motoru çalıştırıyor, eski seed'ler geçersiz olur.
 // v1 → v2: kritik vuruş eklendi, `damageEnemy` her çağrıda rng tüketiyor.
 // Eski mühür 3adcd88b idi; kırılma KASITLI ve SIM_VERSION 2'ye çıkarıldı.
-const SIM_SEAL = '1f8be03c';
+// SIM_VERSION 3: 12 düşmana gerçek davranış verildi (swarm/circler eklendi,
+// rogue·crab weave, horned·warrior charger, bird·fiend circler,
+// wretch·dire_rat·bone_thrall swarm). Hareket değişti → sonuç değişti.
+const SIM_SEAL = '1d204abe';
 
 function fnv1a(s: string): string {
   let h = 0x811c9dc5;
@@ -201,7 +204,11 @@ console.log('\n[2] Çekirdek döngü (60 sn)');
 check('düşman doğuyor', a.enemies.length > 0, `${a.enemies.length} canlı`);
 check('düşman ölüyor', a.kills > 0, `${a.kills} kill`);
 check('mermi uçuyor', a.projectiles.length > 0, `${a.projectiles.length} mermi`);
-check('XP/level ilerliyor', a.level > 1, `LV${a.level}`);
+// ⚠️ SEVİYEYE BAKMA. Önce `level > 1` yazıyordu ve düşman davranışları
+// eklenince 8/10 XP ile kaldı → test kırmızı yandı, oysa XP pekâlâ akıyordu.
+// Sürücü kör bir daire çiziyor (mücevher toplamayı hedeflemiyor), o yüzden
+// seviye eşiği bıçak sırtı. Ölçülmesi gereken AKIŞ, eşik değil.
+check('XP akıyor', a.xpEarned > 0 && a.level >= 1, `${a.xpEarned.toFixed(0)} XP, LV${a.level}`);
 // Gold artık kill başına MAAŞ değil, nadir düşüş (Kintara modeli). Sadece
 // "birikiyor mu" bakılır; oran testi [3C]'de ihtimalle doğrulanıyor.
 check('nadir düşüş gold birikiyor', a.rareGold >= 0 && a.rareGold < a.kills,
@@ -270,6 +277,9 @@ console.log('\n[2C] Düşman davranışları');
       // ⚠️ Canı BURADA doldurma: ilk sürümde her tick doldurulunca menzillinin
       // verdiği hasar silindi ve test "ok atmıyor" sandı. Temas hasarı zaten
       // çalışmıyor (collidePlayer çağrılmıyor), tek hasar kaynağı ok.
+      // ⚠️ rebuildGrid ŞART: `swarm` komşularını grid'den sayıyor. Grid boş
+      // kalırsa sürü düşmanı sonsuza kadar "yalnız" görünür ve test yalan söyler.
+      (g as any).rebuildGrid();
       (g as any).moveEnemies(TICK);
       (g as any).updateEnemyShots(TICK);
       (g as any).time += TICK;
@@ -306,6 +316,75 @@ console.log('\n[2C] Düşman davranışları');
   console.log(`     weave   : ortalama yanal sapma ${w.lateral.toFixed(1)} px (düz kovalayan ${straight.lateral.toFixed(1)})`);
   check('weave yanal salınım yapıyor', w.lateral > straight.lateral + 5,
     `${w.lateral.toFixed(1)} > ${straight.lateral.toFixed(1)}`);
+
+  // SÜRÜ: kalabalıkken hızlanmalı, yalnızken taban hızın ALTINDA kalmalı.
+  // Tek düşmanla ölçmek yetmez — bu davranışın tamamı komşu sayısına bağlı.
+  {
+    const mkSwarm = (count: number) => {
+      const g = new Game(seedFromString('bh-swarm'), STAGES[0]);
+      g.setViewport(1280, 720);
+      g.setInput(0, 0);
+      const e = ENEMIES.find((x) => x.behavior === 'swarm')!;
+      (g as any).stage.toSpawn = 999;
+      for (let k = 0; k < count; k++) {
+        // Hepsi aynı hücre kümesinde toplansın — 3×3 grid kutusu ≈ ±96 px
+        (g as any).enemies.push({
+          x: g.px + 420 + (k % 5) * 14, y: g.py + Math.floor(k / 5) * 14 - 20,
+          hp: 1e9, maxHp: 1e9,
+          speed: e.speed, damage: 0, radius: e.radius, xp: 1,
+          color: e.color, hitFlash: 0, art: e.art, animT: 0, facingRight: true,
+          contactCd: 0, behavior: 'swarm', atkCd: 0, cState: 0, cdx: 0, cdy: 0, phase: 0,
+        });
+      }
+      const en = (g as any).enemies[0];
+      let x0 = en.x, y0 = en.y;
+      const steps = Math.round(1.5 / TICK);
+      for (let i = 0; i < steps; i++) {
+        (g as any).rebuildGrid();
+        (g as any).moveEnemies(TICK);
+        (g as any).time += TICK;
+      }
+      const dist = Math.hypot(en.x - x0, en.y - y0);
+      return { vel: dist / 1.5, base: e.speed };
+    };
+    const alone = mkSwarm(1);
+    const pack = mkSwarm(12);
+    console.log(`     swarm   : yalnız ${alone.vel.toFixed(0)} px/sn · 12'li sürü ${pack.vel.toFixed(0)} px/sn (taban ${alone.base})`);
+    check('sürü yalnızken taban hızın ALTINDA', alone.vel < alone.base,
+      `${alone.vel.toFixed(0)} < ${alone.base}`);
+    check('sürü kalabalıkken belirgin hızlanıyor', pack.vel > alone.vel * 1.25,
+      `${pack.vel.toFixed(0)} > ${(alone.vel * 1.25).toFixed(0)}`);
+    // ⚠️ TAVAN: bu kontrol kalkarsa yoğun sahnede sürü oyuncudan hızlı olur.
+    check('sürü hızı tavanlı (oyuncuyu geçmiyor)', pack.vel <= alone.base * BEHAVIOR.swarm.maxMul + 2,
+      `${pack.vel.toFixed(0)} ≤ ${(alone.base * BEHAVIOR.swarm.maxMul).toFixed(0)}`);
+  }
+
+  // ÇEMBERCİ: teğet hareket YAPMALI ama sonunda YAKINSAMALI.
+  // İkinci koşul birincisinden önemli — sabit yörüngede dönen düşman bölümü kilitler.
+  {
+    const ci = probe('circler', 420, 14);
+    console.log(`     circler : mesafe ${ci.minD.toFixed(0)}–${ci.maxD.toFixed(0)} px, yanal ${ci.lateral.toFixed(0)} px`);
+    const straightC = probe('chase', 420, 14);
+    check('çemberci teğet hareket ediyor (düz gelmiyor)', ci.lateral > straightC.lateral + 30,
+      `${ci.lateral.toFixed(0)} > ${straightC.lateral.toFixed(0)}`);
+    check('çemberci İÇERİ kapanıyor (bölüm kilitlenmez)', ci.minD < 90,
+      `en yakın ${ci.minD.toFixed(0)} px`);
+  }
+
+  // KAPSAM: `Behavior` birliğindeki her kalıp en az bir düşmana bağlı olmalı.
+  // Ölü config, oyunda karşılığı olmayan tasarım demek — sessizce birikir.
+  {
+    const used = new Set(ENEMIES.map((e) => e.behavior ?? 'chase'));
+    const all = ['chase', 'weave', 'ranged', 'charger', 'swarm', 'circler'];
+    const unused = all.filter((b) => !used.has(b as any));
+    console.log(`     kapsam  : ${used.size}/${all.length} kalıp kullanımda`);
+    check('her davranış kalıbının bir düşmanı var', unused.length === 0, unused.join(', ') || 'tamam');
+    // Taban gerekli ama çoğunluk olmamalı: düz kovalayan oranı yarıyı geçmesin
+    const plain = ENEMIES.filter((e) => (e.behavior ?? 'chase') === 'chase').length;
+    console.log(`     ayrışma : ${ENEMIES.length - plain}/${ENEMIES.length} düşmanın özel davranışı var`);
+    check('düz kovalayanlar azınlıkta', plain * 2 < ENEMIES.length,
+      `${plain}/${ENEMIES.length}`);
+  }
 
   // YAKINSAMA GARANTİSİ: son düşmanlar kaldığında davranış EZİLİR ve kovalar.
   // Bu olmadan menzilli bir düşman bölümü sonsuza kadar kilitleyebilir.

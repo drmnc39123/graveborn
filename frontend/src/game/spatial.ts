@@ -32,6 +32,32 @@ export class SpatialHash<T> {
     arr.push(item);
   }
 
+  /**
+   * (x,y) çevresindeki 3×3 hücrede kaç öğe olduğunu SAYAR — diziye yazmaz.
+   *
+   * NEDEN AYRI BİR METOT: `swarm` davranışı her düşman için her tick komşu
+   * sayısına ihtiyaç duyuyor. Bunu `query()` ile yapmak 420 düşmanlık sahnede
+   * saniyede on binlerce dizi push'u demek — tick bütçesini tek başına yer.
+   * Burada sadece 9 Map araması + 9 `length` okuması var, tahsis SIFIR.
+   *
+   * ⚠️ Yaklaşıktır: yarıçap değil KUTU sayar (3×3 hücre = 3·cell kenar) ve
+   * öğenin kendisi de sayıya dahildir. `swarm` için doğru olan da bu —
+   * mesele kesin mesafe değil "kalabalık mıyım".
+   */
+  countNear(x: number, y: number): number {
+    const c = this.cell;
+    const cx = Math.floor(x / c);
+    const cy = Math.floor(y / c);
+    let n = 0;
+    for (let i = cx - 1; i <= cx + 1; i++) {
+      for (let j = cy - 1; j <= cy + 1; j++) {
+        const arr = this.buckets.get(this.key(i, j));
+        if (arr) n += arr.length;
+      }
+    }
+    return n;
+  }
+
   /** (x,y) merkezli r yarıçapındaki adayları out dizisine yazar (tahsis yok) */
   query(x: number, y: number, r: number, out: T[]): T[] {
     out.length = 0;

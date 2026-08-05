@@ -17,7 +17,10 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
  */
 // v2: kritik vuruş eklendi — `damageEnemy` her çağrıda `rng.next()` tüketiyor.
 // Bu TÜM eski seed'leri geçersiz kıldı (bilinçli; oyun henüz canlı değildi).
-export const SIM_VERSION = 2;
+// v3: 16 düşmanın 12'sine gerçek davranış verildi (+`swarm` +`circler`).
+// Bu bir rng değişikliği DEĞİL — düşmanlar farklı yürüdüğü için farklı
+// zamanlarda ölüyor, akış aynı kalsa da sonuç kayıyor. Mühür yine de yenilendi.
+export const SIM_VERSION = 3;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -666,7 +669,7 @@ export const CONTACT_HIT_CD = 0.42;
  * mesafe tutup bölümü kilitleyebilir (bu tuzağa bir kez düşüldü: Ossuary
  * Halls 14 düşmanla 25 dakika sürdü ve hiç bitmedi).
  */
-export type Behavior = 'chase' | 'weave' | 'ranged' | 'charger';
+export type Behavior = 'chase' | 'weave' | 'ranged' | 'charger' | 'swarm' | 'circler';
 
 export interface EnemyType {
   id: string;
@@ -718,6 +721,51 @@ export const BEHAVIOR = {
     recoverSec: 0.95,
     recoverMul: 0.45,
   },
+  /**
+   * SÜRÜ — yanında müttefik varken hızlanır, yalnızken yavaşlar.
+   *
+   * Oyuncuya YENİ BİR KARAR verir: "sürüyü dağıt, toplanmasına izin verme".
+   * Kaçmak artık tek başına yetmiyor; kaçarken onları arkanda TOPLUYORSAN
+   * geri döndüğünde daha hızlı bir duvarla karşılaşıyorsun.
+   */
+  swarm: {
+    /**
+     * Komşu sayımı grid'in 3×3 hücresinden gelir (≈ ±96 px kutu) — ayrı bir
+     * yarıçap sabiti YOK. Gerçek yarıçap ölçmek düşman başına mesafe döngüsü
+     * demekti; "kalabalık mıyım" sorusunun cevabı için kutu yeterli.
+     * Sayıya düşmanın KENDİSİ de dahil, bu yüzden eşik 1'den başlıyor.
+     */
+    /** komşu başına hız çarpanı artışı (kendisi hariç) */
+    perAlly: 0.085,
+    /** ⚠️ TAVAN ŞART: tavansız bir sürü 40 kişilik yığında oyuncuyu geçerdi */
+    maxMul: 1.5,
+    /** yalnızken cezalı — ayrı düşen sürü düşmanı zayıf olmalı ki dağıtmak ÖDÜLLENSİN */
+    aloneMul: 0.78,
+  },
+  /**
+   * ÇEMBERCİ — üstüne gelmez, ETRAFINDA döner ve yavaşça içeri kapanır.
+   *
+   * Oyuncuya farklı bir baskı: kuşatılıyorsun. Durursan halka daralır;
+   * hareket edersen halka bozulur. "Bir yöne kaç" refleksini kıran tek davranış.
+   *
+   * ⚠️ SPİRAL İÇERİ KAPANIR (`closeIn`), sabit yarıçapta dönmez. Sabit
+   * yarıçap bölümü kilitlerdi: kimse temas etmez, kimse ölmez. Yakınsama
+   * garantisi (son 8 düşman) zaten var ama davranışın KENDİSİ de yakınsamalı.
+   */
+  circler: {
+    /** korumaya çalıştığı yarıçap */
+    prefer: 175,
+    /** teğet hız çarpanı — dönme hızı */
+    tangentMul: 0.95,
+    /**
+     * Saniyede bu kadar içeri kapanır (px/sn) — spiralin daralma hızı.
+     * ⚠️ Radyal DIŞARI itme YOK. İlk sürümde yarıçapın içine girince
+     * `-0.35 × hız` ile dışarı itiliyordu; bu `closeIn`'i katbekat yeniyor,
+     * düşman 175 px'te asılı kalıyor ve ölçüm bunu yakaladı (minD 174).
+     * Yörünge sadece daralabilir.
+     */
+    closeIn: 24,
+  },
 } as const;
 
 // Renkler theme.ts paletinden — MOR YOK
@@ -727,16 +775,25 @@ export const ENEMIES: readonly EnemyType[] = [
   // HIZ DENGESİ (oyun testi: "bir tık hızlılar") — hepsi ~%14 düşürüldü.
   // Referans: oyuncu 165 px/sn. En hızlı düşman artık oyuncunun ~%41'i (önce %47),
   // yani kaçış her zaman mümkün ama rahat değil.
+  // ⚠️ HERKESE ÖZEL DAVRANIŞ VERİLMEDİ ve bu bir eksik değil, TASARIM.
+  // Her düşman özelse hiçbiri özel değildir: oyuncunun "normal"i okuyabilmesi
+  // için bir taban gerekiyor. `chase` kalanlar (imp · skeleton · brute · hulk)
+  // o taban — sürünün duvarı. Geri kalan 12'si ondan AYRIŞARAK anlam kazanıyor.
   { id: 'imp', hp: 10, speed: 39, damage: 6, radius: 10, xp: 1, color: '#8a97a3', fromMinute: 0, art: 'mon_imp' },
-  { id: 'rogue', hp: 14, speed: 50, damage: 7, radius: 10, xp: 1, color: '#b8ae98', fromMinute: 0, art: 'mon_rogue' },
+  // Hırsız çevik: yanal salınır, nişanlı mermiler ıskalar
+  { id: 'rogue', hp: 14, speed: 50, damage: 7, radius: 10, xp: 1, color: '#b8ae98', fromMinute: 0, art: 'mon_rogue', behavior: 'weave' },
   { id: 'skeleton', hp: 18, speed: 38, damage: 8, radius: 11, xp: 2, color: '#ddd3bb', fromMinute: 1.5, art: 'skeleton' },
-  { id: 'wretch', hp: 22, speed: 53, damage: 8, radius: 11, xp: 2, color: '#8a97a3', fromMinute: 2, art: 'mon_wretch' },
-  { id: 'horned', hp: 30, speed: 41, damage: 10, radius: 12, xp: 3, color: '#5f9e4a', fromMinute: 3, art: 'mon_horned' },
-  { id: 'bird', hp: 26, speed: 67, damage: 9, radius: 11, xp: 3, color: '#efa72e', fromMinute: 4, art: 'mon_bird' },
+  // Sefiller kalabalıkken cesaretlenir — oyuncuya "dağıt" kararı verir
+  { id: 'wretch', hp: 22, speed: 53, damage: 8, radius: 11, xp: 2, color: '#8a97a3', fromMinute: 2, art: 'mon_wretch', behavior: 'swarm' },
+  // Boynuz = tos: telegrafla yüklenir, yandan kaçmak gerekir
+  { id: 'horned', hp: 30, speed: 41, damage: 10, radius: 12, xp: 3, color: '#5f9e4a', fromMinute: 3, art: 'mon_horned', behavior: 'charger' },
+  // Kuş çember çizer — kuşatma hissi, "tek yöne kaç" refleksini kırar
+  { id: 'bird', hp: 26, speed: 67, damage: 9, radius: 11, xp: 3, color: '#efa72e', fromMinute: 4, art: 'mon_bird', behavior: 'circler' },
   { id: 'brute', hp: 62, speed: 29, damage: 14, radius: 16, xp: 5, color: '#a01226', fromMinute: 5, art: 'mon_brute' },
-  { id: 'fiend', hp: 48, speed: 57, damage: 12, radius: 13, xp: 5, color: '#c8324a', fromMinute: 6, art: 'mon_fiend' },
-  { id: 'crab', hp: 90, speed: 33, damage: 16, radius: 17, xp: 7, color: '#efa72e', fromMinute: 8, art: 'mon_crab' },
-  { id: 'warrior', hp: 110, speed: 45, damage: 18, radius: 15, xp: 9, color: '#a01226', fromMinute: 10, art: 'mon_warrior' },
+  { id: 'fiend', hp: 48, speed: 57, damage: 12, radius: 13, xp: 5, color: '#c8324a', fromMinute: 6, art: 'mon_fiend', behavior: 'circler' },
+  // Yengeç yanlamasına yürür — salınım tam onun hareketi
+  { id: 'crab', hp: 90, speed: 33, damage: 16, radius: 17, xp: 7, color: '#efa72e', fromMinute: 8, art: 'mon_crab', behavior: 'weave' },
+  { id: 'warrior', hp: 110, speed: 45, damage: 18, radius: 15, xp: 9, color: '#a01226', fromMinute: 10, art: 'mon_warrior', behavior: 'charger' },
   { id: 'hulk', hp: 210, speed: 26, damage: 22, radius: 22, xp: 14, color: '#5f9e4a', fromMinute: 12, art: 'mon_hulk' },
 
   // ── GEÇ KAMPANYA / DERİN İNİŞ SÜRÜSÜ ──
@@ -744,8 +801,11 @@ export const ENEMIES: readonly EnemyType[] = [
   // bunlar yandan. Silüet farkı, geç bölümlerin "aynı sürü" hissini kırıyor.
   // Fareler kıvrılarak koşar: nişanlı mermiler ıskalar, sürü "duvar" olmaz.
   { id: 'rat', hp: 34, speed: 74, damage: 8, radius: 9, xp: 3, color: '#b8ae98', fromMinute: 3, art: 'rat_small', behavior: 'weave' },
-  { id: 'dire_rat', hp: 70, speed: 62, damage: 13, radius: 12, xp: 6, color: '#8a97a3', fromMinute: 6, art: 'rat_large', behavior: 'weave' },
-  { id: 'bone_thrall', hp: 130, speed: 43, damage: 16, radius: 13, xp: 10, color: '#ddd3bb', fromMinute: 9, art: 'skel_basic' },
+  // İri fare artık salınmıyor: küçüğüyle aynı hareket ikisini de siliyordu.
+  // Sürüde cesaretlenir — kendi yavruları onun yakıtı olur.
+  { id: 'dire_rat', hp: 70, speed: 62, damage: 13, radius: 12, xp: 6, color: '#8a97a3', fromMinute: 6, art: 'rat_large', behavior: 'swarm' },
+  // Köleler kalabalıkta hızlanır: geç bölümlerin yoğunluğu artık tehdit ÜRETİYOR
+  { id: 'bone_thrall', hp: 130, speed: 43, damage: 16, radius: 13, xp: 10, color: '#ddd3bb', fromMinute: 9, art: 'skel_basic', behavior: 'swarm' },
   // MENZİLLİ: mesafe tutar ve ok atar. Oyuncuyu "sürüden kaç" yerine
   // "atışı da savuştur" kararına zorlayan ilk düşman.
   { id: 'bone_archer', hp: 150, speed: 40, damage: 19, radius: 13, xp: 12, color: '#e3d8c0', fromMinute: 11, art: 'bone_archer', behavior: 'ranged' },

@@ -165,6 +165,8 @@ export class Game {
   hurtT = 0;
   level = 1;
   xp = 0;
+  /** koşu boyunca toplanan toplam XP (seviye atlayınca SIFIRLANMAZ) */
+  xpEarned = 0;
   xpNext: number = xpForLevel(1);
 
   /** descent'in başladığı derinlik (checkpoint); campaign'de 0 */
@@ -686,6 +688,8 @@ export class Game {
       switch (bh) {
         case 'ranged': this.moveRanged(e, dt, nx, ny, d, sp); break;
         case 'charger': this.moveCharger(e, dt, nx, ny, d, sp); break;
+        case 'swarm': this.moveSwarm(e, dt, nx, ny, sp); break;
+        case 'circler': this.moveCircler(e, dt, nx, ny, d, sp); break;
         case 'weave': {
           // İleri gitmeye devam eder ama yanal salınır → nişanlı mermiler ıskalar
           const s = Math.sin(this.time * BEHAVIOR.weave.freq + e.phase);
@@ -834,6 +838,50 @@ export class Game {
         e.atkCd -= dt;
         if (e.atkCd <= 0) e.cState = 0;
     }
+  }
+
+  /**
+   * Sürü: yanındaki müttefik sayısına göre hızlanır, yalnızken yavaşlar.
+   *
+   * Komşu sayısı grid'den (3×3 hücre) okunur — düşman başına mesafe döngüsü YOK.
+   * Grid `moveEnemies`'ten hemen önce yeniden inşa edildiği için bir tick
+   * gecikmeli değil, güncel.
+   *
+   * ⚠️ TAVANI KALDIRMA. Tavansız hâlde 40 kişilik yığın oyuncudan hızlı olur ve
+   * kaçış imkânsızlaşır — hız garantisi (`huntFloor`) zaten ayrı bir sistem.
+   */
+  private moveSwarm(e: Enemy, dt: number, nx: number, ny: number, sp: number) {
+    const S = BEHAVIOR.swarm;
+    const near = this.grid.countNear(e.x, e.y) - 1;  // kendisi hariç
+    const mul = near <= 0
+      ? S.aloneMul
+      : Math.min(S.maxMul, 1 + near * S.perAlly);
+    const v = sp * mul;
+    e.x += nx * v * dt;
+    e.y += ny * v * dt;
+  }
+
+  /**
+   * Çemberci: oyuncunun etrafında döner ve spiral hâlinde içeri kapanır.
+   *
+   * Radyal bileşen her zaman İÇERİ bakar (`closeIn`), teğet bileşen yörüngeyi
+   * çizer. Dönüş yönü `phase`'ten türer — rng harcamaz, spawn sayacından gelir,
+   * yani aynı seed aynı yönü verir.
+   *
+   * ⚠️ SABİT YARIÇAPTA DÖNDÜRME. Denendiği anda bölüm kilitlenir: kimse temas
+   * etmez, kimse ölmez, süre tavanına kadar sürer (Ossuary Halls dersi).
+   * `closeIn` bu davranışın kendi yakınsama garantisi.
+   */
+  private moveCircler(e: Enemy, dt: number, nx: number, ny: number, d: number, sp: number) {
+    const R = BEHAVIOR.circler;
+    // Uzaktaysa tam hızla yaklaş; yörüngeye girince radyal hız SIFIRLANIR ve
+    // geriye sadece teğet + `closeIn` kalır. Dışarı itme YOK (bkz. config).
+    const radial = d > R.prefer ? 1 : 0;
+    const spin = (Math.floor(e.phase * 4) & 1) ? 1 : -1;
+    // Teğet vektör = normalin 90° döndürülmüşü
+    const tx = -ny * spin, ty = nx * spin;
+    e.x += (nx * radial * sp + tx * sp * R.tangentMul + nx * R.closeIn) * dt;
+    e.y += (ny * radial * sp + ty * sp * R.tangentMul + ny * R.closeIn) * dt;
   }
 
   /** Düşman mermileri — uçur, oyuncuya çarpanı işle, süresi dolanı at */
@@ -1373,6 +1421,10 @@ export class Game {
 
   private addXp(amount: number) {
     this.xp += amount * this.stats.growth; // Grave Crown
+    // Ömür boyu toplanan XP — seviye atlayınca sıfırlanan `xp`'nin aksine
+    // MONOTON. Profil sayfası bunu kullanacak; testler de "XP akıyor mu"
+    // sorusunu seviye EŞİĞİNE takılmadan sorabiliyor.
+    this.xpEarned += amount * this.stats.growth;
     if (this.xp >= this.xpNext) {
       this.xp -= this.xpNext;
       this.levelUp();
