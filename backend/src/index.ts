@@ -8,6 +8,7 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
@@ -37,6 +38,68 @@ app.use(cors({
   origin: (process.env.CORS_ORIGIN ?? 'http://localhost:3200').split(',').map((s) => s.trim()),
   credentials: false,
 }));
+
+// ── HIZ SINIRI ────────────────────────────────────────────────────────
+//
+// ⚠️ Bu katman ekonomi korumalarının YERİNE GEÇMEZ, onların ALTINA girer.
+// Tek koşu kuralı ve iyimser kilit "ne kadar kazanabilirsin"i sınırlıyor;
+// hız sınırı "saniyede kaç kez deneyebilirsin"i. İkisi farklı sorular:
+// kilitli bir uca saniyede bin istek atmak yine de veritabanını yatırır.
+//
+// ⚠️ Anahtar CÜZDAN, IP DEĞİL (varsa). Web3'te bir kullanıcı VPN'le IP
+// değiştirir ama cüzdanını değiştiremez — ve aynı kafedeki iki dürüst
+// oyuncu tek IP'yi paylaştığı için IP anahtarı onları birbirine bağlardı.
+// Oturumu olmayan istekler IP'ye düşer; orada başka bir kimlik yok.
+app.set('trust proxy', 1);   // Railway/Vercel arkasında gerçek IP X-Forwarded-For'da
+
+const kimlik = (req: express.Request) =>
+  readToken(req.headers.authorization?.replace(/^Bearer /, '')) ?? ipKeyGenerator(req.ip ?? '');
+
+/** Genel tavan — normal oyun bunun çok altında kalır */
+app.use(rateLimit({
+  windowMs: 60_000,
+  limit: 300,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: kimlik,
+  message: { error: 'cok_fazla_istek' },
+}));
+
+/**
+ * PARA HAREKETİ OLAN UÇLAR — dar tavan.
+ *
+ * Dürüst oyuncu dakikada birkaç kez satın alma yapar; 30 rahat bir üst
+ * sınır. Bot için ise anlamlı bir duvar: iyimser kilit zaten eşzamanlıyı
+ * teke indiriyor, bu da SIRAYLA denemeyi yavaşlatıyor.
+ */
+const paraLimiti = rateLimit({
+  windowMs: 60_000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: kimlik,
+  message: { error: 'cok_fazla_istek' },
+});
+for (const yol of [
+  '/forge/buy', '/charm/buy', '/reliquary/pull', '/reliquary/dust-buy',
+  '/ossuary/raise', '/wager/set', '/wager/clear',
+  '/run/start', '/run/finish', '/boss/start', '/boss/finish',
+  '/market/list', '/market/cancel', '/market/buy',
+  '/achievement/claim', '/streak/claim', '/cosmetic/equip',
+]) app.use(yol, paraLimiti);
+
+/**
+ * KİMLİK UÇLARI — en dar tavan.
+ *
+ * ⚠️ Nonce üretimi ucuz görünür ama her çağrı bir DB yazımı; kimliksiz
+ * olduğu için de tek savunma burası.
+ */
+const kimlikLimiti = rateLimit({
+  windowMs: 60_000, limit: 12, standardHeaders: 'draft-7', legacyHeaders: false,
+  keyGenerator: (req: express.Request) => ipKeyGenerator(req.ip ?? ''),
+  message: { error: 'cok_fazla_istek' },
+});
+for (const yol of ['/auth/nonce', '/auth/verify']) app.use(yol, kimlikLimiti);
 
 /** Koşu bu süreden eski ise kapatılamaz — açık runId biriktirip sonra toplu kullanmayı engeller */
 const RUN_TTL_MS = 45 * 60 * 1000;
