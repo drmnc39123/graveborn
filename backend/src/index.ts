@@ -23,6 +23,7 @@ import { wagerPayout } from '@game/wager';
 import { PULL_COST } from '@game/cosmetics';
 import { profileOf } from './profile.js';
 import { bossState, contribute } from './worldBoss.js';
+import { attachPresence, presenceCount } from './presence.js';
 import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
@@ -728,7 +729,16 @@ app.post('/admin/ban', adminOnly, wrap(async (req, res) => {
   res.json(await setBanned(wallet, banned));
 }));
 
+/** Canlı boss odası — o an kaç kişi bağlı (admin/izleme) */
+app.get('/admin/presence', adminOnly, wrap(async (_req, res) => {
+  res.json(presenceCount());
+}));
+
 const port = Number(process.env.PORT ?? 4100);
-app.listen(port, () => {
+// ⚠️ `app.listen`'in DÖNDÜRDÜĞÜ sunucu WebSocket'e veriliyor. Ayrı bir port
+// açmak reverse proxy ve CORS tarafında ikinci bir yapılandırma demekti;
+// aynı sunucuda `/presence` yolu tek kapı olarak kalıyor.
+const server = app.listen(port, () => {
   console.log(`GRAVEBORN backend :${port}`);
 });
+attachPresence(server);

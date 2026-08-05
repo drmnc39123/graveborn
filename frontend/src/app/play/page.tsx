@@ -174,6 +174,7 @@ export default function PlayPage() {
           seed={screen.seed}
           aura={p.equipped.aura ?? null}
           timeLimitSec={BOSS_RUN_SEC}
+          livePresence
           permanent={permanentBonus(p.upgrades)}
           onFinish={finishBoss}
         />

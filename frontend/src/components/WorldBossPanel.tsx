@@ -190,10 +190,14 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
         </span>
       </CardSection>
 
-      <CardSection label="COMING">
+      {/* ⚠️ Burada eskiden "yapılıyor" yazıyordu — söz verilmişti, tutuldu.
+          Oyuncuya olmayan bir şeyi var göstermek kadar, olanı gizlemek de
+          yanlış: canlı görünürlük artık çalışıyor ve sınırı da yazılı. */}
+      <CardSection label="WHO ELSE IS IN THERE">
         <span style={{ fontSize: 11, color: C.boneFaint, lineHeight: 1.5 }}>
-          Right now you fight it alone and share the wound. Seeing each other in the
-          same room, at the same moment, is the next thing being built.
+          You will see the others moving in the room with you, in real time. They cannot
+          touch you and you cannot touch them — everyone fights the same wound alone,
+          together. If the connection drops, the run carries on as normal.
         </span>
       </CardSection>
     </>

@@ -116,8 +116,10 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Can I see other players in the boss room?',
-    // ⚠️ "Evet" DEMİYORUZ. Aşama 2 yapılıyor; söz verip tutmamak en kolay güven kaybı.
-    a: 'Not yet. Right now everyone fights it in their own run and shares the wound — the damage board is live. Being in the same room at the same moment is the next thing being built.',
+    // ⚠️ Bu cevap "hayır"dan "evet"e döndü çünkü ÖZELLİK GELDİ. Sınırı da
+    // yazıyoruz: hayaletler dokunmuyor — bu bir eksiklik değil, ödül
+    // doğrulamasının dayandığı determinizmi korumanın şartı.
+    a: 'Yes. You see everyone else moving in the room with you, in real time. They cannot touch you and you cannot touch them — the run stays yours, the wound is shared.',
   },
 ];
 

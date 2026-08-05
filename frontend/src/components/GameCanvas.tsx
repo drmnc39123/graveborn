@@ -23,6 +23,7 @@ import { Banner, Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
+import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
@@ -41,7 +42,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, aura = null, timeLimitSec, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, aura = null, timeLimitSec, livePresence = false, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -73,6 +74,12 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * güvenlik tavanını moda göre değiştirmek olurdu.
    */
   timeLimitSec?: number;
+  /**
+   * Canlı boss odası: diğer oyuncular görünsün mü.
+   * ⚠️ SADECE ÇİZİM — hayaletler motora hiç girmiyor (bkz. lib/presence.ts).
+   * Bağlantı kurulamazsa oyun normal devam eder.
+   */
+  livePresence?: boolean;
   onFinish: (result: RunResult) => void;
 }) {
   // ⚠️ Seed'i istemcide türetmek "en kârlı günü bul, sistem saatini ona kur"
@@ -94,6 +101,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   auraRef.current = aura;
   const limitRef = useRef(timeLimitSec);
   limitRef.current = timeLimitSec;
+  /** canlı oda tutamağı — koşu boyunca yaşar, koşu bitince kapanır */
+  const roomRef = useRef<PresenceHandle | null>(null);
   /** görünen ipucu — ref'te, çünkü döngü her karede okuyor */
   const hintRef = useRef<{ def: HintDef; at: number } | null>(null);
   const seenRef = useRef<string[]>([]);
@@ -158,6 +167,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     seenRef.current = loadSeenHints();
     hintRef.current = null;
     setHint(null);
+
+    // ⚠️ SADECE boss odasında bağlanılıyor. Descent/kampanya koşusunda başka
+    // oyuncuları göstermek anlamsız: herkes kendi bölümünde, aynı yerde
+    // değiller — hayaletler yanıltıcı olurdu.
+    roomRef.current = livePresence ? joinBossRoom() : null;
 
     let dpr = 1;
     let cssW = 0;
@@ -255,7 +269,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       if (pausedRef.current) {
         game.setInput(0, 0);
         acc = 0;
-        render(ctx, game, cssW, cssH, dpr, 0, auraRef.current);
+        render(ctx, game, cssW, cssH, dpr, 0, auraRef.current, roomRef.current?.ghosts ?? []);
         return;
       }
       game.setInput(ix, iy);
@@ -265,7 +279,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       // doğrulamasıyla ayrışır); burada sadece `step()` çağrılmaz.
       if (freeze > 0) {
         freeze = Math.max(0, freeze - dt);
-        render(ctx, game, cssW, cssH, dpr, dt, auraRef.current);
+        render(ctx, game, cssW, cssH, dpr, dt, auraRef.current, roomRef.current?.ghosts ?? []);
         acc = 0;   // ⚠️ birikeni at, yoksa donma bitince tick patlaması gelir
         return;
       }
@@ -284,7 +298,10 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       }
       if (acc > TICK * MAX_CATCHUP) acc = 0; // birikmiş açığı at
 
-      render(ctx, game, cssW, cssH, dpr, dt, auraRef.current);
+      // Konumu bildir — kısma `push` içinde, burada her kare çağrılabilir
+      roomRef.current?.push(game.px, game.py, game.facingRight, auraRef.current);
+
+      render(ctx, game, cssW, cssH, dpr, dt, auraRef.current, roomRef.current?.ghosts ?? []);
       // render efekt kuyruklarını işledi; biriken donma isteğini şimdi al
       freeze = Math.max(freeze, takeFreeze());
 
@@ -357,6 +374,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       canvas.removeEventListener('touchmove', onTouchMove);
       canvas.removeEventListener('touchend', onTouchEnd);
       canvas.removeEventListener('touchcancel', onTouchEnd);
+      // ⚠️ SOKET MUTLAKA KAPANIR. Kapanmazsa oyuncu köye dönse bile odada
+      // hayaleti kalır ve herkes "orada duran ama hareket etmeyen" birini
+      // görür — sunucu 20 sn sonra düşürür ama o 20 saniye yanlış bilgi.
+      roomRef.current?.close();
+      roomRef.current = null;
     };
     // `hero` dep listesinde: karakter değişince oyun yeniden kurulmalı,
     // yoksa yeni karakterin başlangıç silahı/istatistiği devreye girmez.

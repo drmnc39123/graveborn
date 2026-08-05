@@ -85,10 +85,62 @@ function drawCosmeticAura(ctx: CanvasRenderingContext2D, g: Game, auraId: string
   ctx.restore();
 }
 
+/**
+ * CANLI BOSS ODASI — başka oyuncular.
+ *
+ * ⚠️ TAMAMEN KOZMETİK. Motorun ne durumuna ne rng'sine dokunuyor; bunlar
+ * `Game`'in içinde YOK, ayrı bir listeden geliyor. Ödül doğrulaması "aynı
+ * seed → aynı koşu" varsayımına dayanıyor; başka bir oyuncu simülasyona
+ * girseydi o varsayım çökerdi.
+ *
+ * ⚠️ Sprite ÇİZİLMİYOR, silüet çiziliyor. Sebep tasarım: hayalet kendi
+ * karakterinden AYIRT EDİLEBİLİR olmalı, yoksa oyuncu kalabalıkta hangisinin
+ * kendisi olduğunu kaybeder — ve bu, dövüşen bir oyunda en can sıkıcı hata.
+ */
+function drawGhosts(
+  ctx: CanvasRenderingContext2D,
+  ghosts: readonly { n: string; x: number; y: number; f: number; a?: string }[],
+) {
+  if (!ghosts.length) return;
+  ctx.save();
+  for (const p of ghosts) {
+    const aura = p.a ? cosmeticById(p.a)?.aura : undefined;
+    const renk = aura?.color ?? C.ice;
+
+    // gövde — içi boş, ince: "burada biri var" der, dikkat çalmaz
+    ctx.globalAlpha = 0.30;
+    ctx.fillStyle = renk;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + 4, PLAYER.radius * 0.9, PLAYER.radius * 1.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = renk;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // bakış yönü — küçük bir çentik, kimin nereye gittiği okunsun
+    ctx.beginPath();
+    ctx.moveTo(p.x + (p.f ? 6 : -6), p.y - 2);
+    ctx.lineTo(p.x + (p.f ? 13 : -13), p.y + 1);
+    ctx.stroke();
+
+    // isim — küçük ve soluk; okunabilir ama sahneyi doldurmuyor
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = C.bone;
+    ctx.font = '600 10px ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.n, p.x, p.y - PLAYER.radius - 8);
+  }
+  ctx.restore();
+}
+
 export function render(
   ctx: CanvasRenderingContext2D, g: Game, w: number, h: number, dpr: number, dt = 1 / 60,
   /** takılı kozmetik hale (cosmetics.ts id) — yoksa hiçbir şey çizilmez */
   auraId: string | null = null,
+  /** canlı boss odasındaki diğer oyuncular — SADECE ÇİZİLİR (bkz. drawGhosts) */
+  ghosts: readonly { n: string; x: number; y: number; f: number; a?: string }[] = [],
 ) {
   const cx = w / 2;
   const cy = h / 2;
@@ -127,6 +179,9 @@ export function render(
   drawProjectiles(ctx, g);
   drawArcs(ctx, g);         // zincir yayları mermilerin üstünde parlar
   drawEnemyShots(ctx, g);   // oyuncunun ÜSTÜNDE değil altında: karakteri örtmesin
+  // ⚠️ Hayaletler OYUNCUNUN ALTINDA: kendi karakterin her zaman en üstte
+  // kalmalı, kalabalıkta seni örten bir hayalet oyunu oynanamaz yapardı.
+  drawGhosts(ctx, ghosts);
   drawCosmeticAura(ctx, g, auraId);  // halenin ALTINDA kalması gereken tek şey oyuncu
   drawPlayer(ctx, g);
   // Kıvılcım ve hasar sayıları EN ÜSTTE — oyuncunun altında kalırlarsa
