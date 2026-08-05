@@ -37,16 +37,20 @@ export const C = {
 } as const;
 
 /**
- * Yazı tipi yığını.
- * `FantasyRPGtext` / `FantasyRPGtitle` Franuka paketinden gelir ve
- * `public/fonts/` altına konunca KENDİLİĞİNDEN devreye girer (layout.tsx'teki
- * @font-face). Dosya yoksa tarayıcı sessizce yedeğe düşer — kırılmaz.
- * ⚠️ Bu fontlar bitmap türevi: metin 8'in katı, başlık 11'in katı boyutta
- * kullanılmalı, yoksa piksel ızgarası bozulur.
+ * Yazı tipi yığını. Dosyalar `public/fonts/` altında, REPODA — CDN yok
+ * (Phantom uygulama-içi tarayıcısında dış istekler güvenilmez).
+ *
+ * • `GBTitle`  = Jacquard 12 — pikselleştirilmiş blackletter, SADECE başlık.
+ *   ⚠️ Küçük puntoda okunmuyor; 18 px altında KULLANMA.
+ * • `GBText`   = Pixelify Sans — değişken ağırlıklı piksel gövde fontu.
+ *   Katı bitmap font yerine bu seçildi: arayüzdeki puntoların çoğu 8'in katı
+ *   değil (10,5 · 11,5 · 12,5) ve katı bir bitmap orada kırık görünürdü.
+ *
+ * Dosya yoksa tarayıcı sessizce yedeğe düşer — kırılmaz.
  */
 export const FONT = {
-  ui: '"FantasyRPGtext", ui-monospace, "Cascadia Mono", "Courier New", monospace',
-  title: '"FantasyRPGtitle", "FantasyRPGtext", ui-monospace, "Courier New", monospace',
+  ui: '"GBText", ui-monospace, "Cascadia Mono", "Courier New", monospace',
+  title: '"GBTitle", "GBText", ui-monospace, "Courier New", monospace',
 } as const;
 
 /** Cam panel — BOMB Miner'daki glass() deseni, GRAVEBORN paletiyle */

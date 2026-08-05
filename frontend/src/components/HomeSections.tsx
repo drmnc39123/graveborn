@@ -40,8 +40,13 @@ function Section({ kicker, title, children }: {
       <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.4, color: C.blood, fontFamily: FONT.ui }}>
         {kicker}
       </div>
+      {/* ⚠️ Başlık fontu (Jacquard, blackletter) BURADA KULLANILMIYOR ve bu
+          bilinçli: blackletter kısa ve büyük yazılar için bir DAMGA fontu.
+          Bu başlıklar cümle uzunluğunda ("Clear, descend, spend, go deeper")
+          ve 28 px'te blackletter onları belirgin şekilde yavaşlatır. Marka
+          adı (64 px, tek kelime) Jacquard'da kalıyor — gotik kimlik orada. */}
       <h2 style={{
-        margin: '5px 0 16px', fontFamily: FONT.title, fontWeight: 900, color: C.bone,
+        margin: '5px 0 16px', fontFamily: FONT.ui, fontWeight: 700, color: C.bone,
         fontSize: 'clamp(20px, 4vw, 28px)', letterSpacing: 0.5,
       }}>{title}</h2>
       {children}

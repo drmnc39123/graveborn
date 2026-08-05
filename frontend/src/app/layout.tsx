@@ -15,19 +15,32 @@ export const viewport: Viewport = {
 };
 
 /**
- * Franuka bitmap fontları. Dosyalar `public/fonts/` altına konunca
- * KENDİLİĞİNDEN devreye girer; yoksa tarayıcı sessizce yedeğe düşer.
- * `font-display: block` yerine `swap`: font gelmezse arayüz görünmez kalmaz.
+ * OYUN FONTLARI — dosyalar `public/fonts/` altında, PROJEYLE BİRLİKTE geliyor.
+ *
+ * ⚠️ CDN'DEN ÇEKİLMİYOR. Ne `next/font/google` (derlemede ağ ister) ne de
+ * Google Fonts bağlantısı: oyun Phantom'un uygulama-içi tarayıcısında da
+ * açılıyor ve orada dış istekler güvenilmez. Dosyalar repoda duruyor.
+ *
+ * • Jacquard 12 — pikselleştirilmiş blackletter, BAŞLIKLAR için. Büyük
+ *   puntoda (20-64 px) karakterini gösteriyor, küçükte okunmaz.
+ * • Pixelify Sans — okunabilir piksel gövde fontu. Değişken ağırlıklı
+ *   olduğu için 10,5 / 11,5 gibi TAM SAYI OLMAYAN puntolarda da dağılmıyor;
+ *   katı bitmap fontlar (Silkscreen vb.) bu arayüzde kırık görünürdü çünkü
+ *   punto değerlerinin çoğu 8'in katı değil.
+ *
+ * `font-display: swap` — font gelmezse arayüz görünmez kalmaz, yedeğe düşer.
+ * Lisans: ikisi de SIL OFL 1.1; metinleri aynı klasörde (OFL-*.txt).
  */
 const FONT_FACE = `
 @font-face {
-  font-family: 'FantasyRPGtext';
-  src: url('/fonts/FantasyRPGtext.ttf') format('truetype');
+  font-family: 'GBText';
+  src: url('/fonts/PixelifySans-Variable.ttf') format('truetype');
+  font-weight: 400 700;
   font-display: swap;
 }
 @font-face {
-  font-family: 'FantasyRPGtitle';
-  src: url('/fonts/FantasyRPGtitle.ttf') format('truetype');
+  font-family: 'GBTitle';
+  src: url('/fonts/Jacquard12-Regular.ttf') format('truetype');
   font-display: swap;
 }
 /* Piksel sanat her yerde net kalsın */
