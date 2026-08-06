@@ -14,14 +14,23 @@ import { C } from '@/lib/theme';
  * `overflow:hidden` yapıp görseli ÖLÇÜLMÜŞ içerik kutusuna göre kaydırıp
  * büyütüyoruz — böylece her karakter kutuyu aynı şekilde dolduruyor.
  */
-function Portrait({ hero, size = 56 }: { hero: HeroDef; size?: number }) {
+export function Portrait({ hero, size = 56, flip = false, frame = true }: {
+  hero: HeroDef; size?: number;
+  /** ⚠️ Yüz yüze duruş için: düelloda rakip SOLA bakmalı, yoksa ikisi de
+   *  aynı yöne bakıp "karşı karşıya" hissi kaybolur. */
+  flip?: boolean;
+  /** çerçeve/zemin — büyük vitrin kullanımında kapatılıyor */
+  frame?: boolean;
+}) {
   const c = hero.crop;
   const scale = size / Math.max(c.w, c.h);
   return (
     <div style={{
       width: size, height: size, flexShrink: 0, overflow: 'hidden',
       position: 'relative', borderRadius: 6,
-      background: 'rgba(0,0,0,0.35)', border: `1px solid ${C.border}`,
+      background: frame ? 'rgba(0,0,0,0.35)' : 'transparent',
+      border: frame ? `1px solid ${C.border}` : 'none',
+      transform: flip ? 'scaleX(-1)' : undefined,
     }}>
       <img
         src={`/art/heroes/${hero.dir}/${hero.idle.replace('{i}', '1')}`}

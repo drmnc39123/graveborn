@@ -18,7 +18,10 @@
 import { useState } from 'react';
 import { DUEL, duelTier } from '@/game/duel';
 import { stageById } from '@/game/config';
-import { HEROES, heroById } from '@/game/heroes';
+import { HEROES, heroById, type HeroDef } from '@/game/heroes';
+import { Portrait } from '@/components/HeroPicker';
+import { weaponById } from '@/game/config';
+import { PATTERN_TEXT } from '@/components/ui/cards';
 import type { DuelRow } from '@/lib/gameSession';
 import { C, FONT, glass } from '@/lib/theme';
 
@@ -70,7 +73,7 @@ export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, o
             label="Your standing"
             rating={myRating}
             tier={benTier}
-            sub={hero.name}
+            hero={hero}
             accent={C.candle}
           />
           {/* ⚠️ VS ayracı sadece süs değil: iki kartı ayırmadan yan yana
@@ -85,8 +88,9 @@ export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, o
             label="Their standing"
             rating={row.duelRating}
             tier={rakipTier}
-            sub={heroById(row.hero).name}
+            hero={heroById(row.hero)}
             accent={C.blood}
+            flip
           />
         </div>
 
@@ -110,30 +114,41 @@ export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, o
         </div>
 
         {/* ── KAHRAMAN SEÇİMİ ── */}
+        {/* ── KAHRAMAN SEÇİMİ ──
+            ⚠️ DÖRDÜ DE YAN YANA VE PORTRELİ. İlk sürüm düz metin kartıydı ve
+            oyuncu kimi seçtiğini GÖREMİYORDU. Bir dövüş oyununda karakter
+            seçimi okunacak bir liste değil, BAKILACAK bir vitrindir. */}
         <Section label="Who walks in">
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 6,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
             {HEROES.map((h) => {
               const on = h.id === myHero;
               return (
-                <button key={h.id} onClick={() => onHero(h.id)}
+                <button key={h.id} onClick={() => onHero(h.id)} title={h.blurb}
                   style={{
                     all: 'unset', cursor: 'pointer', boxSizing: 'border-box',
-                    flex: '1 1 118px', padding: '8px 10px', borderRadius: 8,
-                    border: `1px solid ${on ? `${C.candle}88` : 'rgba(255,255,255,0.10)'}`,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center',
+                    padding: '9px 7px', borderRadius: 9, textAlign: 'center',
+                    border: `1px solid ${on ? `${C.candle}99` : 'rgba(255,255,255,0.10)'}`,
                     background: on
-                      ? 'linear-gradient(180deg, rgba(239,167,46,0.15), rgba(0,0,0,0.30))'
+                      ? 'linear-gradient(180deg, rgba(239,167,46,0.18), rgba(0,0,0,0.30))'
                       : 'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.26))',
+                    boxShadow: on ? `0 0 0 1px ${C.candle}33, 0 6px 16px rgba(0,0,0,0.42)` : 'none',
                   }}>
-                  <div style={{ fontSize: 11.5, fontWeight: 900, color: on ? C.candle : C.bone }}>
+                  <Portrait hero={h} size={70} frame={false} />
+                  <div style={{ fontSize: 11.5, fontWeight: 900, marginTop: 2,
+                    color: on ? C.candle : C.bone }}>
                     {h.name}
                   </div>
-                  <div style={{ fontSize: 10, color: C.boneFaint, lineHeight: 1.35, marginTop: 2 }}>
-                    {h.blurb}
+                  <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1,
+                    color: on ? C.candleSoft : C.boneFaint }}>
+                    {h.title.toUpperCase()}
                   </div>
                 </button>
               );
             })}
           </div>
+          <HeroDetail hero={hero} />
         </Section>
 
         {/* ── KURALLAR ── */}
@@ -185,29 +200,65 @@ export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, o
   );
 }
 
-function Side({ kicker, name, label, rating, tier, sub, accent }: {
+function Side({ kicker, name, label, rating, tier, hero, accent, flip }: {
   kicker: string; name: string; label: string;
-  rating: number; tier: { name: string; color: string }; sub: string; accent: string;
+  rating: number; tier: { name: string; color: string };
+  hero: HeroDef; accent: string;
+  /** ⚠️ Rakip SOLA bakmalı — ikisi de aynı yöne bakarsa "karşı karşıya"
+   *  hissi hiç doğmuyor, iki ayrı kart gibi duruyorlar. */
+  flip?: boolean;
 }) {
   return (
     <div style={{
       flex: 1, minWidth: 0, padding: '11px 12px', borderRadius: 10,
       border: `1px solid ${accent}44`,
       background: `linear-gradient(180deg, ${accent}18, rgba(0,0,0,0.30))`,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
     }}>
       <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1.8, color: C.boneFaint }}>
         {kicker}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 900, color: C.bone, marginTop: 2,
+      {/* ⚠️ DÖVÜŞÇÜNÜN KENDİSİ. İsim ve sayı yeterli değil — kimin kime karşı
+          çıktığı OKUNARAK değil GÖRÜLEREK anlaşılmalı. */}
+      <Portrait hero={hero} size={76} flip={flip} frame={false} />
+      <div style={{ fontSize: 12, fontWeight: 900, color: C.bone, maxWidth: '100%',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {name}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 900, color: tier.color, marginTop: 5 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 900, color: accent }}>{hero.name}</div>
+      <div style={{ fontSize: 14, fontWeight: 900, color: tier.color, marginTop: 4 }}>
         {tier.name}
       </div>
-      <div style={{ fontSize: 11, color: C.boneFaint }} title={label}>
-        {rating} · {sub}
-      </div>
+      <div style={{ fontSize: 11, color: C.boneFaint }} title={label}>{rating}</div>
+    </div>
+  );
+}
+
+/**
+ * Seçilen kahramanın künyesi — asıl mesele SİLAHININ NE YAPTIĞI.
+ *
+ * ⚠️ Silahın ADI ne yaptığını söylemiyor. Oyun testinde Water Priestess için
+ * "bu hero ateş etmiyor" şikâyeti gelmişti: silahı yörüngeydi, gerçekten
+ * hiçbir şey fırlatmıyordu. Desen metni o yüzden burada da duruyor.
+ */
+function HeroDetail({ hero }: { hero: HeroDef }) {
+  const w = weaponById(hero.weapon);
+  return (
+    <div style={{
+      marginTop: 8, padding: '9px 11px', borderRadius: 8,
+      border: `1px solid ${C.candle}33`,
+      background: 'linear-gradient(180deg, rgba(239,167,46,0.08), rgba(0,0,0,0.26))',
+    }}>
+      <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.5 }}>{hero.blurb}</div>
+      {w && (
+        <div style={{ fontSize: 11, color: C.boneFaint, marginTop: 5, lineHeight: 1.45 }}>
+          <b style={{ color: C.candle }}>{w.name}</b>
+          {' · '}
+          <span style={{ color: C.ice, fontWeight: 900 }}>{PATTERN_TEXT[w.pattern]?.label}</span>
+          {' — '}
+          {PATTERN_TEXT[w.pattern]?.how}
+        </div>
+      )}
     </div>
   );
 }
