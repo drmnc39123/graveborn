@@ -91,6 +91,14 @@ export interface RunTicket {
    */
   skills: Partial<Record<StatKey, number>>;
   /**
+   * Düello koşusuysa rakip ve HEDEF derinlik.
+   *
+   * ⚠️ HEDEF HUD'DA GÖRÜNMEK ZORUNDA — bilette taşınmasının sebebi bu.
+   * İlk sürümde yoktu ve oyun oynanabilir hâldeyken fark edildi: oyuncu
+   * "kaçı geçmem lazım" sorusunu akılda tutmak zorundaydı.
+   */
+  duel?: { defender: string; target: number; stageId: number };
+  /**
    * Demoda koşuya taşınan bahis (sunucu yok, istemci çözecek).
    * Cüzdan modunda null — orada bahsi Run satırı taşıyor.
    */

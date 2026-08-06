@@ -276,6 +276,7 @@ export default function PlayPage() {
           ascension={screen.ticket.ascension}
           aura={p.equipped.aura ?? null}
           permanent={runBonus(p.upgrades, screen.ticket)}
+          duelTarget={screen.mode === 'duel' ? screen.ticket.duel?.target : undefined}
           onFinish={finishRun}
         />
       </div>

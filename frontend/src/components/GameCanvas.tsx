@@ -42,7 +42,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, duelTarget, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -76,6 +76,15 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * güvenlik tavanını moda göre değiştirmek olurdu.
    */
   timeLimitSec?: number;
+  /**
+   * Düello hedefi — GEÇİLMESİ gereken derinlik.
+   *
+   * ⚠️ HUD'DA GÖRÜNMESİ ŞART. İlk sürümde yoktu ve oyun oynanabilir hâldeyken
+   * fark edildi: düellodayken ekranda hedefin izi bile yoktu, oyuncu "kaçı
+   * geçmem lazım" sorusunu akılda tutmak zorundaydı. Bir düellonun TEK
+   * anlamlı sayısı bu.
+   */
+  duelTarget?: number;
   /**
    * Canlı boss odası: diğer oyuncular görünsün mü.
    * ⚠️ SADECE ÇİZİM — hayaletler motora hiç girmiyor (bkz. lib/presence.ts).
@@ -408,6 +417,15 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                   color: hud.mode === 'descent' ? C.candle : C.boneFaint, fontWeight: 900 }}>
                   {hud.mode === 'descent' ? `DEPTH ${hud.depth}` : hud.stageName.toUpperCase()}
                 </span>
+                {/* ⚠️ DÜELLO HEDEFİ — geçildiği an renk değişiyor. Sadece sayı
+                    yazmak yetmez: oyuncunun "geçtim mi?" diye hesap yapması
+                    gerekirdi; renk o hesabı ortadan kaldırıyor. */}
+                {duelTarget !== undefined && (
+                  <span style={{ display: 'block', fontSize: 10, fontWeight: 900, letterSpacing: 1.1,
+                    color: hud.depth > duelTarget ? C.ok : C.bloodSoft }}>
+                    {hud.depth > duelTarget ? `AHEAD OF ${duelTarget}` : `BEAT ${duelTarget}`}
+                  </span>
+                )}
                 <span style={{ display: 'block', fontSize: 19, color: C.bone, fontVariantNumeric: 'tabular-nums' }}>
                   {hud.remaining} <span style={{ fontSize: 11, color: C.boneDim }}>left</span>
                 </span>
