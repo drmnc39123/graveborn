@@ -215,6 +215,43 @@ export function maxDepthInTime(stageId: number, elapsedSec: number, startDepth =
   return MAX_DEPTH_CLAIM;
 }
 
+/**
+ * DERİNLİK İDDİASINI KABUL EDİLEBİLİR HÂLE KIRP.
+ *
+ * `settleRun`'ın içinden çıkarıldı çünkü ikinci bir çağıran doğdu:
+ * The Wilderness gold ödemiyor ama ekipmanı DERİNLİĞE göre veriyor, yani
+ * aynı kırpmaya ihtiyacı var. İki yerde iki kırpma yazmak, er ya da geç
+ * birinin gevşemesi demekti — ve gevşeyen taraf bedava ekipman basardı.
+ */
+export function acceptDepth(
+  mode: string, stageId: number, claimed: unknown, elapsedSec: number, startDepth: number,
+): { depth: number; capped: boolean; reason: string[] } {
+  const reason: string[] = [];
+  let capped = false;
+  let depth = Math.max(0, Math.floor(Number(claimed) || 0));
+  if (depth > MAX_DEPTH_CLAIM) {
+    depth = MAX_DEPTH_CLAIM;
+    capped = true;
+    reason.push(`derinlik iddiası ${claimed} → ${MAX_DEPTH_CLAIM}`);
+  }
+  // Süre tabanı — mutlak tavandan çok daha keskin bir sınır.
+  // ⚠️ Wilderness de derinliğe dayanıyor, o yüzden burada da geçerli.
+  if (mode !== 'campaign' && depth > 0) {
+    // Checkpoint'ten başlayan koşu d1..d(start−1)'i oynamadı; taban oradan sayılır
+    const fizik = maxDepthInTime(stageId, elapsedSec, startDepth);
+    if (depth > fizik) {
+      reason.push(`derinlik ${depth} → süreye sığan ${fizik} (${Math.round(elapsedSec)} sn)`);
+      depth = Math.max(0, fizik);
+      capped = true;
+    }
+  }
+  if (mode === 'campaign' && depth !== 0) {
+    depth = 0;
+    reason.push('kampanyada derinlik iddiası yok sayıldı');
+  }
+  return { depth, capped, reason };
+}
+
 export interface Settlement {
   progress: Progress;
   awarded: number;
@@ -250,27 +287,11 @@ export function settleRun(
   const reason: string[] = [];
   let capped = false;
 
-  // 1) Derinlik iddiası
-  let depth = Math.max(0, Math.floor(Number(claim.deepestCleared) || 0));
-  if (depth > MAX_DEPTH_CLAIM) {
-    depth = MAX_DEPTH_CLAIM;
-    capped = true;
-    reason.push(`derinlik iddiası ${claim.deepestCleared} → ${MAX_DEPTH_CLAIM}`);
-  }
-  // Süre tabanı — mutlak tavandan çok daha keskin bir sınır
-  if (mode === 'descent' && depth > 0) {
-    // Checkpoint'ten başlayan koşu d1..d(start−1)'i oynamadı; taban oradan sayılır
-    const fizik = maxDepthInTime(stageId, elapsedSec, startDepth);
-    if (depth > fizik) {
-      reason.push(`derinlik ${depth} → süreye sığan ${fizik} (${Math.round(elapsedSec)} sn)`);
-      depth = Math.max(0, fizik);
-      capped = true;
-    }
-  }
-  if (mode === 'campaign' && depth !== 0) {
-    depth = 0;
-    reason.push('kampanyada derinlik iddiası yok sayıldı');
-  }
+  // 1) Derinlik iddiası — kırpma `acceptDepth`'te (Wilderness de onu kullanıyor)
+  const kabul = acceptDepth(mode, stageId, claim.deepestCleared, elapsedSec, startDepth);
+  const depth = kabul.depth;
+  if (kabul.capped) capped = true;
+  reason.push(...kabul.reason);
 
   // 2) Nadir düşüş iddiası — yapısal tavana kırp
   const rawGold = Math.max(0, Math.floor(Number(claim.rareGold) || 0));
@@ -344,12 +365,14 @@ export function resolveAscension(p: Progress, mode: string, stageId: number, wan
   return Math.min(w, maxAscensionFor(enDerin));
 }
 
-/** Koşu başlatılabilir mi (bölüm açık mı, descent için bölüm geçilmiş mi) */
+/** Koşu başlatılabilir mi (bölüm açık mı, descent/wilderness için bölüm geçilmiş mi) */
 export function canStart(p: Progress, mode: string, stageId: number): string | null {
   if (!stageById(stageId)) return 'bilinmeyen bölüm';
   if (stageId > p.unlockedStage) return 'bölüm kilitli';
-  if (mode === 'descent' && !p.cleared[stageId]) return 'önce bölümü temizle';
-  if (mode !== 'campaign' && mode !== 'descent') return 'bilinmeyen mod';
+  // ⚠️ Wilderness motoru DESCENT olarak çalıştırıyor (bkz. gear.ts başlığı) —
+  // giriş şartı da descent'in aynısı.
+  if (mode !== 'campaign' && !p.cleared[stageId]) return 'önce bölümü temizle';
+  if (mode !== 'campaign' && mode !== 'descent' && mode !== 'wilderness') return 'bilinmeyen mod';
   return null;
 }
 

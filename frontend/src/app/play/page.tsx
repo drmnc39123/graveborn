@@ -14,6 +14,7 @@ import { StallPanel } from '@/components/StallPanel';
 import { ReliquaryPanel } from '@/components/ReliquaryPanel';
 import { WorldBossPanel } from '@/components/WorldBossPanel';
 import { GuildPanel } from '@/components/GuildPanel';
+import { GearPanel } from '@/components/GearPanel';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -28,6 +29,7 @@ import {
   checkpointFor, depthGold, maxAscensionFor, stageById, startLevelFor,
 } from '@/game/config';
 import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
+import { GEAR, SLOT_NAME, affixText, rarityOf } from '@/game/gear';
 import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
@@ -35,19 +37,20 @@ import { C, FONT, glass, ctaButton } from '@/lib/theme';
 import { installAudioUnlock, play } from '@/game/sfx';
 import { getMode, getWallet } from '@/lib/session';
 import {
-  buyUpgrade, finishBossRun, finishRun as settleRun, loadSessionProgress, setHero as saveHero, startBossRun,
-  startRun, type RunTicket,
+  buyUpgrade, engineModeOf, finishBossRun, finishRun as settleRun, loadSessionProgress,
+  setHero as saveHero, startBossRun, startRun,
+  type RunKind, type RunTicket, type Settled,
 } from '@/lib/gameSession';
 
 type Screen =
   | { kind: 'hub' }
-  | { kind: 'stage'; stageId: number; mode: RunMode; ticket: RunTicket }
+  | { kind: 'stage'; stageId: number; mode: RunKind; ticket: RunTicket }
   /** ⚠️ Boss odası AYRI bir ekran: `settleRun`'a hiç uğramıyor, gold ödemiyor */
   | { kind: 'boss'; runId: string; seed: number };
 
 /** Koşu sonu bildirimi — ödülün nereden geldiği oyuncuya AÇIKÇA gösterilir */
 type Payout = {
-  mode: RunMode;
+  mode: RunKind;
   /** bu koşuda temizlenen en derin seviye — "hiç inemedin" ile "buraya zaten
    *  inmiştin" ayrımı için gerekli; ikisi de 0 öder ama sebepleri farklı */
   deepestCleared: number;
@@ -56,6 +59,8 @@ type Payout = {
   paidRange: { from: number; to: number } | null;
   /** bahis vardıysa sonucu — gold değil TOZ öder (bkz. game/wager.ts) */
   wager: { stake: number; target: number; won: boolean; dust: number } | null;
+  /** Wilderness koşusuysa: çıkabildi mi ve ne buldu */
+  wilderness: Settled['wilderness'];
 };
 
 export default function PlayPage() {
@@ -148,22 +153,26 @@ export default function PlayPage() {
   /** Koşu bitti — ödülü demo'da progress.ts, cüzdanda SUNUCU hesaplar */
   const finishRun = useCallback((run: RunResult) => {
     const ticket = screen.kind === 'stage' ? screen.ticket : null;
+    const kind: RunKind = screen.kind === 'stage' ? screen.mode : run.mode;
     setScreen({ kind: 'hub' });
     const base = progress ?? loadProgress();
     settleRun(ticket, run, base)
       .then((r) => {
         setProgress(r.progress);
         setPayout({
-          mode: run.mode, deepestCleared: run.deepestCleared,
+          // ⚠️ Çeşit BİLETTEN okunur, `run.mode`'dan DEĞİL: motor Wilderness'ı
+          // descent olarak çalıştırıyor, yani `run.mode` her zaman 'descent'
+          // döner ve döküm yanlış ekranı gösterirdi.
+          mode: kind, deepestCleared: run.deepestCleared,
           progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
-          wager: r.wager,
+          wager: r.wager, wilderness: r.wilderness ?? null,
         });
       })
       .catch(() => setNote('Koşu kaydedilemedi — ödül işlenmedi.'));
   }, [screen, progress]);
 
   /** Bölüm başlat: cüzdan modunda seed'i, koşu kimliğini ve checkpoint'i SUNUCU verir */
-  const beginStage = useCallback((stageId: number, mode: RunMode, wantStartDepth = 1, wantAscension = 0) => {
+  const beginStage = useCallback((stageId: number, mode: RunKind, wantStartDepth = 1, wantAscension = 0) => {
     setPanel(null);
     startRun(mode, stageId, wantStartDepth, wantAscension)
       .then((ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }))
@@ -242,7 +251,7 @@ export default function PlayPage() {
             koşuyu tılsımsız başlatırdı. */}
         <GameCanvas
           stage={def}
-          mode={screen.mode}
+          mode={engineModeOf(screen.mode)}
           hero={p.hero}
           seed={screen.ticket.seed}
           startDepth={screen.ticket.startDepth}
@@ -288,7 +297,77 @@ export default function PlayPage() {
 
       {/* Koşu sonu ödül dökümü — ödülün NEREDEN geldiği görünür olmalı,
           yoksa "tekrar oynadım ama gold gelmedi" haklı şikâyeti doğar */}
-      {payout && (
+      {/* ⚠️ WILDERNESS'IN KENDİ DÖKÜMÜ. Gold dökümünü göstermek "+0 GOLD"
+          yazan bir ekran olurdu — oyuncu ödülünü aldığı hâlde başarısız
+          olduğunu sanırdı. Farklı ödeyen mod, farklı ekran. */}
+      {payout?.wilderness && (
+        <div onClick={() => setPayout(null)}
+          style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.86)', zIndex: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: `${dockH + 20}px 20px 20px` }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 22, width: '100%', maxWidth: 460, maxHeight: '100%', overflowY: 'auto' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.4, color: C.ice, marginBottom: 5 }}>
+              THE WILDERNESS
+            </div>
+            <div style={{ fontSize: 26, fontWeight: 900, marginBottom: 4,
+              color: payout.wilderness.extracted ? C.bone : '#e4657a' }}>
+              {payout.wilderness.extracted ? 'You walked out' : 'You did not come back'}
+            </div>
+            <div style={{ fontSize: 12, color: C.boneFaint, marginBottom: 14, lineHeight: 1.5 }}>
+              {payout.wilderness.extracted
+                ? `Depth ${payout.wilderness.depth}. Everything below is yours.`
+                : 'Whatever you were carrying stayed down there. That was the deal.'}
+            </div>
+
+            {payout.wilderness.items.length === 0 ? (
+              <div style={{ fontSize: 12, color: C.boneDim, lineHeight: 1.6 }}>
+                {payout.wilderness.extracted
+                  ? `You came back empty — gear only drops every ${GEAR.everyDepths} depths.`
+                  : 'Nothing to show for it.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {payout.wilderness.items.map((it) => {
+                  const r = rarityOf(it.rarity);
+                  return (
+                    <div key={it.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 9, padding: '8px 11px',
+                      borderRadius: 8, border: `1px solid ${r.color}55`,
+                      background: `linear-gradient(180deg, ${r.color}1c, rgba(0,0,0,0.3))`,
+                      textAlign: 'left',
+                    }}>
+                      <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: r.color }} />
+                      <span style={{ minWidth: 0, flex: 1 }}>
+                        <span style={{ display: 'block', fontSize: 12, fontWeight: 900, color: r.color }}>
+                          {r.name} {SLOT_NAME[it.slot]}
+                        </span>
+                        <span style={{ display: 'block', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.4 }}>
+                          {it.affixes.map(affixText).join(' · ')}
+                        </span>
+                      </span>
+                      <span style={{ fontSize: 10, color: C.boneFaint, whiteSpace: 'nowrap' }}>d{it.depth}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ⚠️ Çantaya sığmayanlar SESSİZ KALMAZ. "Bulmuştum ama yok"
+                şikâyetinin tek panzehiri bunu koşunun hemen sonunda söylemek. */}
+            {payout.wilderness.dropped > 0 && (
+              <div style={{ marginTop: 10, padding: '9px 11px', borderRadius: 8,
+                background: 'rgba(160,18,38,0.14)', border: `1px solid ${C.bad}55`,
+                fontSize: 11.5, color: '#e4657a', lineHeight: 1.5 }}>
+                {payout.wilderness.dropped} more piece{payout.wilderness.dropped > 1 ? 's were' : ' was'} left
+                behind — your vault is full. Break something down before you go out again.
+              </div>
+            )}
+
+            <button onClick={() => setPayout(null)}
+              style={{ ...ctaButton(true), marginTop: 16, width: '100%' }}>Back to the village</button>
+          </div>
+        </div>
+      )}
+
+      {payout && !payout.wilderness && (
         <div onClick={() => setPayout(null)}
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
@@ -369,6 +448,7 @@ export default function PlayPage() {
                 progress={progress}
                 onHero={pickHero}
                 onPick={beginStage}
+                wilderness={!!wallet}
               />
             ) : panel === 'upgrade' ? (
               <ForgePanel
@@ -382,6 +462,12 @@ export default function PlayPage() {
               <WorldBossPanel onEnter={beginBoss} />
             ) : panel === 'reliquary' ? (
               <ReliquaryPanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
+              />
+            ) : panel === 'gear' ? (
+              <GearPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
@@ -429,10 +515,11 @@ export default function PlayPage() {
  * BAŞLADIĞI andaki bonus olmalı — ve o anı sunucu mühürledi.
  */
 function runBonus(upgrades: Record<string, number>, ticket: RunTicket) {
-  const base = mergeBonus(permanentBonus(upgrades), charmBonus(ticket.charms));
-  return ticket.guildGrowth > 0
-    ? mergeBonus(base, { growth: ticket.guildGrowth })
-    : base;
+  let b = mergeBonus(permanentBonus(upgrades), charmBonus(ticket.charms));
+  // ⚠️ Ekipman da AYNI kanaldan giriyor — motor ekipmanı bilmiyor bile.
+  // Motorda tek satır değişmediği için determinizm mührü de bozulmuyor.
+  b = mergeBonus(b, ticket.gear);
+  return ticket.guildGrowth > 0 ? mergeBonus(b, { growth: ticket.guildGrowth }) : b;
 }
 
 function Row({ label, value, hint }: { label: string; value: number; hint?: string }) {
@@ -449,10 +536,17 @@ function Row({ label, value, hint }: { label: string; value: number; hint?: stri
   );
 }
 
-function StageSelect({ progress, onPick, onHero }: {
+function StageSelect({ progress, onPick, onHero, wilderness }: {
   progress: Progress | null;
-  onPick: (id: number, mode: RunMode, startDepth?: number, ascension?: number) => void;
+  onPick: (id: number, mode: RunKind, startDepth?: number, ascension?: number) => void;
   onHero: (id: string) => void;
+  /**
+   * ⚠️ The Wilderness DEMO'DA KAPALI ve bu bir süsleme kararı değil:
+   * ekipman SUNUCUDA üretiliyor, demoda hiç üretilmiyor. Kapı açık kalsaydı
+   * demo koşusu `applyRunResult`'a düşer ve wilderness GOLD ÖDERDİ — yani
+   * modun tek kuralı ("gold ödemez") demoda tersine dönerdi.
+   */
+  wilderness: boolean;
 }) {
   const p = progress ?? loadProgress();
   return (
@@ -475,7 +569,7 @@ function StageSelect({ progress, onPick, onHero }: {
           return (
             <StageCard
               key={s.id} stage={s} locked={locked} cleared={cleared} claimed={claimed}
-              bestDepth={best} onPick={onPick}
+              bestDepth={best} onPick={onPick} wilderness={wilderness}
             />
           );
         })}
@@ -492,13 +586,14 @@ function StageSelect({ progress, onPick, onHero }: {
  * yapıyordu — hangi yaratıklar var, boss var mı, ne kadar sürer, bir sonraki
  * derinlik ne öder, hiçbiri yazmıyordu. Veri zaten `StageDef`'te duruyordu.
  */
-function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
+function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick, wilderness }: {
   stage: (typeof STAGES)[number];
   locked: boolean;
   cleared: boolean;
   claimed: boolean;
   bestDepth: number;
-  onPick: (id: number, mode: RunMode, startDepth?: number, ascension?: number) => void;
+  onPick: (id: number, mode: RunKind, startDepth?: number, ascension?: number) => void;
+  wilderness: boolean;
 }) {
   // Taban süre: düşmanlar spawn hızından çabuk sahneye çıkamaz, hepsi ölmeden
   // bölüm bitmez. Gerçek koşu bundan uzun sürer — "en az" diyoruz.
@@ -670,6 +765,42 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick }: {
               />
             )}
           </div>
+
+          {wilderness && (
+          <>
+          {/* ── THE WILDERNESS ──
+              ⚠️ AYRI BİR KUTU, üçüncü bir düğme DEĞİL. Descent'in yanına
+              sıradan bir düğme koymak onu "başka bir başlangıç derinliği"
+              gibi gösterirdi; oysa kuralları tamamen farklı: gold ödemez,
+              checkpoint yoktur, ve ÖLÜRSEN HİÇBİR ŞEY ALAMAZSIN. Farklı
+              kurallar farklı bir kapıdan girilmeli. */}
+          <div style={{
+            margin: '0 13px 13px', padding: '10px 12px', borderRadius: 9,
+            border: '1px solid rgba(138,151,163,0.34)',
+            background: 'linear-gradient(180deg, rgba(138,151,163,0.10), rgba(0,0,0,0.30))',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.5, color: C.ice }}>
+                THE WILDERNESS
+              </span>
+              <span style={{ fontSize: 10.5, color: C.boneFaint }}>no gold · no checkpoint</span>
+            </div>
+            <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.5, margin: '5px 0 8px' }}>
+              Gear drops every {GEAR.everyDepths} depths. Nothing you find is
+              yours until you walk out — <b style={{ color: '#e4657a' }}>die down
+              there and you come back with nothing</b>.
+            </div>
+            <button onClick={() => onPick(s.id, 'wilderness', 1, 0)}
+              style={{ all: 'unset', boxSizing: 'border-box', cursor: 'pointer', width: '100%',
+                padding: '8px 11px', borderRadius: 7, textAlign: 'center',
+                background: 'linear-gradient(180deg, rgba(138,151,163,0.30), rgba(60,70,80,0.24))',
+                border: '1px solid rgba(138,151,163,0.5)',
+                fontSize: 11.5, fontWeight: 900, letterSpacing: 1, color: C.bone }}>
+              GO OUT
+            </button>
+          </div>
+          </>
+          )}
         </div>
       )}
     </Card>

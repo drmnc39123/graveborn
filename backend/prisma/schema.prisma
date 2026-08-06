@@ -109,6 +109,7 @@ model Player {
   runs     Run[]
   listings Listing[]
   awards   SeasonAward[]
+  gear     GearItem[]
 
   @@index([bestRating])
   @@index([guildId])
@@ -357,4 +358,32 @@ model Guild {
   members Player[]
 
   @@index([level])
+}
+
+// EKİPMAN — yatay ilerleme (bkz. game/gear.ts).
+//
+// ⚠️ `id` DETERMİNİSTİK: `seed-depth-index`, seed de koşuya özel. Rastgele
+// bir uuid yerine bunu seçmek grant'i fiilen idempotent yapıyor — aynı koşu
+// bir şekilde iki kez kapanırsa `skipDuplicates` ikinci seferi yutuyor.
+//
+// ⚠️ `affixes` JSON: ek sayısı ve istatistikleri nadirliğe göre değişiyor,
+// sabit sütunlara açmak 5 boş sütun ve her denge değişiminde bir migration
+// demekti. Şema burada esnek olmalı; DOĞRULAMA `@game/gear`'de.
+model GearItem {
+  id     String @id
+  wallet String
+  player Player @relation(fields: [wallet], references: [wallet], onDelete: Cascade)
+
+  slot    String
+  rarity  Int
+  affixes Json
+  /// hangi derinlikte düştü — parçanın hikâyesi, dengeye etkisi YOK
+  depth   Int
+
+  /// ⚠️ Yuva başına TEK true olmalı; kural `equipGear`'ın koşullu yazmasında
+  equipped Boolean  @default(false)
+  foundAt  DateTime @default(now())
+
+  @@index([wallet])
+  @@index([wallet, equipped])
 }

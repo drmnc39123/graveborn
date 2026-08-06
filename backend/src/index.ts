@@ -12,7 +12,7 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
-import { canStart, resolveAscension, resolveStartDepth, settleRun } from './reward.js';
+import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun } from './reward.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, deedList, vaultState } from './crypt.js';
@@ -20,6 +20,9 @@ import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
   upgradeGuild,
 } from './guild.js';
+import {
+  GearError, equipGear, equippedBonus, grantRunGear, listGear, salvageGear, unequipSlot,
+} from './gear.js';
 import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
@@ -95,6 +98,7 @@ for (const yol of [
   '/market/list', '/market/cancel', '/market/buy',
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
+  '/gear/equip', '/gear/unequip', '/gear/salvage',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -535,7 +539,9 @@ app.post('/wager/clear', wrap(async (req, res) => {
 
 // ── KOŞU ──
 const startSchema = z.object({
-  mode: z.enum(['campaign', 'descent']),
+  // ⚠️ 'wilderness' motorda BİR MOD DEĞİL — motor onu descent olarak
+  // çalıştırıyor (bkz. gear.ts başlığı). Fark tamamen sunucunun ne ödediğinde.
+  mode: z.enum(['campaign', 'descent', 'wilderness']),
   stageId: z.number().int().min(1).max(99),
   /**
    * İstemcinin başlamak İSTEDİĞİ derinlik. Bir istek, bir izin değil —
@@ -607,6 +613,10 @@ app.post('/run/start', wrap(async (req, res) => {
   // (Ödül güvenliği buna dayanmıyor — o yapısal tavanlarda — ama bir bonusun
   // kaynağı hiçbir zaman istemci olmamalı, kural sızıntı bırakmasın diye.)
   const guildGrowth = await growthOf(wallet);
+  // ⚠️ EKİPMAN BONUSU DA SUNUCUDAN. Aynı gerekçe: bir bonusun kaynağı
+  // hiçbir zaman istemci olmamalı. İstemci takılı parçalarını zaten biliyor
+  // ama BEYAN etmemeli — beyan ettiği an "5 Graveborn takılıyım" diyebilir.
+  const gear = await equippedBonus(wallet);
 
   await acikKosulariIptalEt(wallet);   // ⚠️ bkz. fonksiyon başlığı — para basma koruması
 
@@ -627,7 +637,8 @@ app.post('/run/start', wrap(async (req, res) => {
   // `ascension` geri dönüyor: istemci motoru BU değerle kurmak ZORUNDA,
   // yoksa oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
   // `guildGrowth`: loncanın verdiği XP bonusu (0 = loncasız)
-  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth });
+  // `gear`: takılı ekipmanın toplam bonusu — motor bunu `permanent` kanalında okur
+  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth, gear });
 }));
 
 const finishSchema = z.object({
@@ -655,6 +666,47 @@ app.post('/run/finish', wrap(async (req, res) => {
   const player = await getOrCreatePlayer(wallet);
   const before = toProgress(player);
   const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
+
+  // ── THE WILDERNESS ──
+  // ⚠️ AYRI YOL, `settleRun`'a HİÇ UĞRAMIYOR. Sebep tek cümle: Wilderness
+  // sınırsız tekrarlanabilir, dolayısıyla tek kuruş gold ödeyemez. Aynı
+  // gerekçeyle `depthPaid` de ilerlemiyor ve leaderboard'a hiç yazmıyor —
+  // tekrarlanabilir bir mod rekor tablosunu anlamsız kılardı.
+  if (run.mode === 'wilderness') {
+    const kabul = acceptDepth('wilderness', run.stageId, body.data.deepestCleared,
+      elapsedSec, run.startDepth);
+    // ⚠️ ÇIKIŞ ŞARTI: ölen hiçbir şey almaz. `cleared` istemcinin sözü ve
+    // doğrulanamıyor (bkz. gear.ts başlığı) — ama yalancı, dürüst bir
+    // oyuncunun başarıyla çıktığında alacağından FAZLASINI alamıyor:
+    // parça sayısı kabul edilen derinlikten türüyor.
+    const cikti = !!body.data.cleared;
+    const odul = cikti && !kabul.capped
+      ? await grantRunGear(wallet, Number(run.seed), kabul.depth)
+      : { items: [], dropped: 0 };
+
+    await prisma.run.update({
+      where: { id: run.id },
+      data: {
+        claimedAt: new Date(), claimedDepth: body.data.deepestCleared,
+        claimedGold: 0, awarded: 0, awardedDepth: kabul.depth, capped: kabul.capped,
+      },
+    });
+    if (kabul.capped) console.warn('[kirpildi:wilderness]', wallet, run.id, kabul.reason.join(' | '));
+
+    res.json({
+      progress: toProgress(await getOrCreatePlayer(wallet)),
+      awarded: 0, progressGold: 0, dropGold: 0, record: false, wager: null,
+      wilderness: {
+        extracted: cikti,
+        depth: kabul.depth,
+        items: odul.items,
+        /** çanta dolu olduğu için verilemeyen parça sayısı */
+        dropped: odul.dropped,
+      },
+    });
+    return;
+  }
+
   const s = settleRun(
     before, run.mode as 'campaign' | 'descent', run.stageId, body.data, elapsedSec,
     run.startDepth, run.ascension,
@@ -894,6 +946,50 @@ app.post('/guild/upgrade', wrap(async (req, res) => {
     res.json({ guild: await upgradeGuild(wallet) });
   } catch (e) {
     if (e instanceof GuildError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+// ── EKİPMAN ──
+//
+// ⚠️ HİÇBİRİ GOLD'A DOKUNMUYOR. Parçalama TOZ veriyor (kozmetik parası);
+// gold verseydi The Wilderness sınırsız tekrarlanabilir bir musluk olurdu.
+app.get('/gear', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json(await listGear(wallet));
+}));
+
+app.post('/gear/equip', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    res.json(await equipGear(wallet, req.body?.id));
+  } catch (e) {
+    if (e instanceof GearError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/gear/unequip', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    res.json(await unequipSlot(wallet, req.body?.slot));
+  } catch (e) {
+    if (e instanceof GearError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/gear/salvage', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    const out = await salvageGear(wallet, req.body?.ids);
+    res.json({ ...out, progress: toProgress(await getOrCreatePlayer(wallet)), gear: await listGear(wallet) });
+  } catch (e) {
+    if (e instanceof GearError) { res.status(e.status).json({ error: e.code }); return; }
     throw e;
   }
 }));

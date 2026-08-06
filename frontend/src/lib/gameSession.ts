@@ -26,6 +26,8 @@ import { STAGES, maxAscensionFor } from '@/game/config';
 import type { CosmeticSlot } from '@/game/cosmetics';
 import { wagerPayout, wagerWon } from '@/game/wager';
 import { CHARM_SLOTS } from '@/game/charms';
+import type { GearItem, GearSlot } from '@/game/gear';
+import type { StatKey } from '@/game/config';
 import { seedFromString } from '@/game/rng';
 import { api, getMode, getWallet } from '@/lib/session';
 
@@ -37,6 +39,18 @@ export interface Settled {
   paidRange: { from: number; to: number } | null;
   /** koşuda bahis vardıysa sonucu — koşu sonu dökümünde gösterilir */
   wager: { stake: number; target: number; won: boolean; dust: number } | null;
+  /**
+   * The Wilderness koşusuysa sonucu. ⚠️ `awarded` HER ZAMAN 0 olur — bu mod
+   * gold ödemiyor (bkz. backend/gear.ts başlığı).
+   */
+  wilderness?: {
+    /** canlı çıktı mı — ölen hiçbir şey almaz */
+    extracted: boolean;
+    depth: number;
+    items: GearItem[];
+    /** çanta dolu olduğu için verilemeyen parça sayısı */
+    dropped: number;
+  } | null;
 }
 
 export interface RunTicket {
@@ -57,6 +71,11 @@ export interface RunTicket {
    * çünkü demo oyuncusunun loncası yok.
    */
   guildGrowth: number;
+  /**
+   * Takılı ekipmanın toplam bonusu. ⚠️ SUNUCUDAN gelir; demoda boş, çünkü
+   * demo oyuncusunun ekipmanı sunucuda yok.
+   */
+  gear: Partial<Record<StatKey, number>>;
   /**
    * Demoda koşuya taşınan bahis (sunucu yok, istemci çözecek).
    * Cüzdan modunda null — orada bahsi Run satırı taşıyor.
@@ -415,8 +434,22 @@ export async function cancelWager(current: Progress): Promise<Progress> {
   return progress;
 }
 
+/**
+ * Koşu ÇEŞİDİ — motorun modu DEĞİL.
+ *
+ * ⚠️ Motor hâlâ yalnızca 'campaign' | 'descent' biliyor ve `engine.ts`'te
+ * tek satır değişmedi (determinizm mührü bozulmasın diye). The Wilderness
+ * motoru DESCENT olarak çalıştırıyor; farkı sunucunun ne ödediğinde ve
+ * arayüzde. Bu ayrımı tek yerde tutuyoruz: `engineModeOf`.
+ */
+export type RunKind = 'campaign' | 'descent' | 'wilderness';
+
+export function engineModeOf(kind: RunKind): 'campaign' | 'descent' {
+  return kind === 'campaign' ? 'campaign' : 'descent';
+}
+
 export async function startRun(
-  mode: 'campaign' | 'descent', stageId: number,
+  mode: RunKind, stageId: number,
   /** oyuncunun seçtiği checkpoint — SUNUCU kırpar, burada gönderilen sadece bir istek */
   wantStartDepth = 1,
   /**
@@ -456,12 +489,14 @@ export async function startRun(
         : 0,
       // Demoda lonca yok — sunucu kaydı gerektiriyor
       guildGrowth: 0,
+      // Demoda ekipman da yok — sunucuda üretiliyor
+      gear: {},
       wager: wagerLive ? w! : null,
     };
   }
   const out = await api<{
     runId: string; seed: number; charms?: string[]; startDepth?: number; ascension?: number;
-    guildGrowth?: number;
+    guildGrowth?: number; gear?: Partial<Record<string, number>>;
   }>(
     '/run/start',
     { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth, ascension: wantAscension } },
@@ -480,6 +515,9 @@ export async function startRun(
     // mümkündü ama o, istemcinin beyan ettiği bir bonus olurdu — bir bonusun
     // kaynağı hiçbir zaman istemci olmamalı.
     guildGrowth: Math.max(0, out.guildGrowth ?? 0),
+    // ⚠️ Takılı ekipmanın bonusu da SUNUCUDAN. İstemci parçalarını biliyor
+    // ama beyan etmemeli — beyan ettiği an "5 Graveborn takılıyım" diyebilir.
+    gear: (out.gear ?? {}) as RunTicket['gear'],
     wager: null,
   };
 }
@@ -513,7 +551,7 @@ export async function finishRun(
 
   const out = await api<{
     progress: Progress; awarded: number; progressGold: number; dropGold: number;
-    wager: Settled['wager'];
+    wager: Settled['wager']; wilderness?: Settled['wilderness'];
   }>('/run/finish', {
     method: 'POST',
     body: {
@@ -529,6 +567,7 @@ export async function finishRun(
   const after = paidDepth(out.progress, run.stageId);
   return {
     ...out,
+    wilderness: out.wilderness ?? null,
     paidRange: after > before ? { from: before, to: after } : null,
   };
 }
@@ -607,6 +646,34 @@ export async function leaveGuild(): Promise<{ dagildi: boolean }> {
 
 export async function donateGuild(amount: number): Promise<{ guild: MyGuild; progress: Progress }> {
   return api('/guild/donate', { method: 'POST', body: { amount } });
+}
+
+// ── EKİPMAN ───────────────────────────────────────────────────────────
+// ⚠️ DEMO MODUNDA YOK. Ekipman sunucuda üretiliyor (bkz. game/gear.ts):
+// istemcinin ürettiği bir parça, istemcinin verdiği bir güç olurdu.
+
+export interface GearView {
+  items: (GearItem & { equipped: boolean })[];
+  equipped: Partial<Record<GearSlot, string>>;
+  vaultSize: number;
+}
+
+export async function fetchGear(): Promise<GearView> {
+  return api<GearView>('/gear');
+}
+
+export async function equipGear(id: string): Promise<GearView> {
+  return api('/gear/equip', { method: 'POST', body: { id } });
+}
+
+export async function unequipGear(slot: GearSlot): Promise<GearView> {
+  return api('/gear/unequip', { method: 'POST', body: { slot } });
+}
+
+export async function salvageGear(ids: string[]): Promise<{
+  dust: number; removed: number; progress: Progress; gear: GearView;
+}> {
+  return api('/gear/salvage', { method: 'POST', body: { ids } });
 }
 
 export async function buyGuildUpgrade(): Promise<MyGuild> {
