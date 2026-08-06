@@ -201,9 +201,11 @@ export class Hero {
   orbitAngle = 0;
   /** levelup fazında sunulan 3 seçenek */
   offers: Offer[] = [];
-  /** girdi (birim vektör) — 1v1'de telden geçen TEK şey bu olacak */
+  /** girdi (birim vektör) — 1v1'de telden geçen TEK şey bu */
   inx = 0;
   iny = 0;
+  /** ⚠️ Ölü dövüşçü simülasyona KATILMAZ (hareket/ateş/hasar/toplama yok) */
+  alive = true;
 
   constructor(heroId: string, permanent: Partial<Record<StatKey, number>>) {
     this.heroId = heroId;
@@ -507,25 +509,33 @@ export class Game {
     // Güvenlik tavanı — bölüm bir şekilde bitmezse run sonsuza kadar sürmesin
     if (this.time >= RUN.durationSec) { this.phase = 'dead'; return; }
 
+    // ⚠️ RAKİP SIRASI SABİT: önce birinci dövüşçü, sonra rakip. Sıra
+    // değişkense aynı seed aynı koşuyu üretmez.
+    const r = this.rival;
     this.moveHero(this.hero, dt);
+    if (r && r.alive) this.moveHero(r, dt);
     this.rebuildGrid();
     this.spawnBoss();
     this.spawn(dt);
     this.moveEnemies(dt);
     this.fire(this.hero, dt);            // 4 desen: aimed / sweep / orbit / aura
+    if (r && r.alive) this.fire(r, dt);
     this.updateHitZones(dt);  // sweep hitbox'ları
     this.moveProjectiles(dt);
     this.collideProjectiles();
     this.reapDead();          // TÜM hasar kaynaklarından sonra tek temizlik
     this.collideHero(this.hero, dt);
+    if (r && r.alive) this.collideHero(r, dt);
     this.updateEnemyShots(dt);
     this.updateGems(this.hero, dt);
+    // ⚠️ MÜCEVHER SIRASI ÖNEMLİ: birinci dövüşçü önce topluyor. Aynı
+    // mücevheri iki kişi alamaz (toplanan diziden çıkıyor); sıra sabit
+    // olmasa aynı seed iki farklı sonuç verirdi.
+    if (r && r.alive) this.updateGems(r, dt);
     this.updateChests();
 
-    if (this.stats.recovery > 0 && this.hp > 0) {
-      this.hp = Math.min(this.stats.maxHp, this.hp + this.stats.recovery * dt);
-    }
-    if (this.iframe > 0) this.iframe -= dt;
+    this.regen(this.hero, dt);
+    if (r && r.alive) this.regen(r, dt);
 
     // BÖLÜM TAMAMLANDI: havuz boş, sahne temiz, boss (varsa) devrilmiş.
     // Sandık bekleyen varsa bitirme — oyuncu evrim sandığını kaçırmasın.
@@ -557,6 +567,60 @@ export class Game {
     this.stage.bossSpawned = false;
     this.spawnAcc = 0;
     this.events.add('depth');
+  }
+
+  /** Yenilenme + dokunulmazlık sayacı — dövüşçü başına */
+  private regen(h: Hero, dt: number) {
+    if (h.stats.recovery > 0 && h.hp > 0) {
+      h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.recovery * dt);
+    }
+    if (h.iframe > 0) h.iframe -= dt;
+  }
+
+  /**
+   * İKİNCİ DÖVÜŞÇÜYÜ SAHNEYE KOY — gerçek zamanlı 1v1.
+   *
+   * ⚠️ KOŞU BAŞLAMADAN ÖNCE çağrılmalı. Ortada çağırmak, iki istemcinin
+   * simülasyonlarını ayrıştırır: lockstep'te herkes AYNI tick'te AYNI
+   * dünyayı görmek zorunda.
+   *
+   * ⚠️ Rakip arenanın öbür yanında doğuyor — üst üste doğsalar ilk saniyede
+   * birbirlerinin düşmanlarını çekip maçı adaletsiz açarlardı.
+   */
+  addRival(heroId: string, permanent: Partial<Record<StatKey, number>> = {}): Hero {
+    const def = heroById(heroId);
+    const r = new Hero(def.id, mergeStats(def.stats, permanent));
+    r.px = RUN.arenaRadius * 0.25;
+    r.py = 0;
+    this.hero.px = -RUN.arenaRadius * 0.25;
+    this.rival = r;
+    this.recomputeStats(r);
+    r.hp = r.stats.maxHp;
+    this.giveWeapon(r, def.weapon);
+    return r;
+  }
+
+  /** Rakibin girdisi — 1v1'de ağdan gelir */
+  setRivalInput(x: number, y: number) {
+    const r = this.rival;
+    if (!r) return;
+    const m = Math.hypot(x, y);
+    if (m > 1e-4) { r.inx = x / m; r.iny = y / m; } else { r.inx = 0; r.iny = 0; }
+  }
+
+  /**
+   * Düşmanın hedefi — YAŞAYAN en yakın dövüşçü.
+   *
+   * ⚠️ `rival` yokken birinci dövüşçüyü döndürüyor, yani solo davranış
+   * birebir aynı ve hiç RNG tüketmiyor.
+   */
+  private target(x: number, y: number): Hero {
+    const r = this.rival;
+    if (!r || !r.alive) return this.hero;
+    if (!this.hero.alive) return r;
+    const a = (this.hero.px - x) ** 2 + (this.hero.py - y) ** 2;
+    const b = (r.px - x) ** 2 + (r.py - y) ** 2;
+    return b < a ? r : this.hero;
   }
 
   private moveHero(h: Hero, dt: number) {
@@ -620,9 +684,19 @@ export class Game {
       const ang = this.rng.range(0, Math.PI * 2);
       const rx = this.viewW / 2 + SPAWN.ringMargin;
       const ry = this.viewH / 2 + SPAWN.ringMargin;
+      // `rival` yokken her zaman birinci dövüşçü — solo davranış birebir aynı
+      const r = this.rival;
+      const anchor = r && r.alive && this.hero.alive
+        ? (this.spawnCount % 2 === 0 ? this.hero : r)
+        : (this.hero.alive ? this.hero : (r ?? this.hero));
       this.enemies.push({
-        x: this.px + Math.cos(ang) * rx,
-        y: this.py + Math.sin(ang) * ry,
+        // ⚠️ DOĞUM MERKEZİ SIRAYLA. Halka birinci dövüşçüye sabitliyken
+        // ölçüldü: rakip 25 saniyede SIFIR düşman gördü, sürünün tamamı bir
+        // tarafa yığıldı (6 / 0). Paylaşılan arena, paylaşılan sürü demek —
+        // yoksa iki oyuncu aynı haritada iki ayrı oyun oynuyor.
+        // Sıra `spawnCount` paritesinden geliyor: deterministik, RNG yemiyor.
+        x: anchor.px + Math.cos(ang) * rx,
+        y: anchor.py + Math.sin(ang) * ry,
         hp: t.hp * hpScale, maxHp: t.hp * hpScale,
         speed: t.speed * spScale, damage: t.damage * dmgScale, radius: t.radius,
         xp: t.xp, color: t.color, hitFlash: 0,
@@ -698,7 +772,7 @@ export class Game {
 
       this.swapRemove(this.chests, i);
       this.events.add('chest');
-      const evolved = c.evolution ? this.tryEvolve() : false;
+      const evolved = c.evolution ? this.tryEvolve(this.hero) : false;
       if (!evolved) {
         // Evrim yoksa sandık boşa gitmesin (VS: sandık altın/XP verir)
         this.rareGold += 200 * this.stats.greed;
@@ -711,11 +785,11 @@ export class Game {
    * VS evrim kuralı: taban silah MAX + gereken pasif MAX + evrim sandığı.
    * Uygun ilk eşleşme evrimleşir (VS'te de sandık başına bir evrim).
    */
-  private tryEvolve(): boolean {
+  private tryEvolve(h: Hero): boolean {
     for (const ev of EVOLUTIONS) {
-      const w = this.weapons.find((x) => x.def.id === ev.weapon);
+      const w = h.weapons.find((x) => x.def.id === ev.weapon);
       if (!w || w.level < w.def.maxLevel) continue;
-      const p = this.passives.find((x) => x.def.id === ev.passive);
+      const p = h.passives.find((x) => x.def.id === ev.passive);
       if (!p || p.level < p.def.maxLevel) continue;
 
       const to = weaponById(ev.to);
@@ -755,8 +829,11 @@ export class Game {
 
     for (let i = 0; i < this.enemies.length; i++) {
       const e = this.enemies[i];
-      const dx = this.px - e.x;
-      const dy = this.py - e.y;
+      // ⚠️ HEDEF DÜŞMAN BAŞINA: en yakın YAŞAYAN dövüşçü. `rival` yokken
+      // her zaman birinci dövüşçü — solo davranış birebir aynı.
+      const tg = this.target(e.x, e.y);
+      const dx = tg.px - e.x;
+      const dy = tg.py - e.y;
       const d = Math.hypot(dx, dy) || 1;
       const nx = dx / d, ny = dy / d;
       const sp = e.boss ? e.speed : Math.max(e.speed, huntFloor);
@@ -831,13 +908,16 @@ export class Game {
       b.telegraph -= dt;
       e.animT += dt;
       if (b.telegraph <= 0) {
-        const dist = Math.hypot(this.px - e.x, this.py - e.y);
-        if (dist <= b.slamR && this.iframe <= 0) {
-          const taken = Math.max(1, Math.round(e.damage * BOSS.slamDamageMul) - this.stats.armor);
-          this.hp -= taken;
-          this.iframe = PLAYER.iframeSec;
+        // ⚠️ DARBE EN YAKIN DÖVÜŞÇÜYE. Solo'da bu her zaman birinci
+        // dövüşçü; 1v1'de boss kimin yanındaysa onu vurur.
+        const tg = this.target(e.x, e.y);
+        const dist = Math.hypot(tg.px - e.x, tg.py - e.y);
+        if (dist <= b.slamR && tg.iframe <= 0) {
+          const taken = Math.max(1, Math.round(e.damage * BOSS.slamDamageMul) - tg.stats.armor);
+          tg.hp -= taken;
+          tg.iframe = PLAYER.iframeSec;
           this.events.add('hurt');
-          this.hurtT = 0.32;
+          tg.hurtT = 0.32;
           if (this.hurts.length < 4) this.hurts.push({ amount: taken });
         }
         b.atkCd = BOSS.atkCd * (b.phase === 1 ? BOSS.phase2Cd : 1);
@@ -1300,7 +1380,7 @@ export class Game {
     if (this.hits.length < 96) {
       this.hits.push({ x: e.x, y: e.y, dmg: out, crit, wid, killed });
     }
-    if (killed) this.killEnemy(e);
+    if (killed) this.killEnemy(h, e);
   }
 
   /** Sweep hitbox'larını ilerlet ve temas edenlere vur */
@@ -1408,8 +1488,12 @@ export class Game {
     }
   }
 
-  private killEnemy(e: Enemy) {
-    this.kills += 1;
+  private killEnemy(h: Hero, e: Enemy) {
+    // ⚠️ ÖLDÜRME KREDİSİ VURANA. Bu satır `this.kills` idi ve ölçüldü:
+    // rakip 25 saniye dövüştü, XP topladı ama SIFIR kill göründü — bütün
+    // öldürmeler birinci oyuncuya yazılıyordu. 1v1'de skor tablosunun
+    // tamamı bu tek satıra bakıyor.
+    h.kills += 1;
     this.stage.killed += 1;
     this.rollRareGold();
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
@@ -1478,7 +1562,11 @@ export class Game {
           h.revives += 1;
         } else {
           h.hp = 0;
-          this.phase = 'dead';
+          h.alive = false;
+          // ⚠️ 1v1'DE ÖLÜM MAÇI BİTİRİR AMA KİMİN ÖLDÜĞÜNE GÖRE.
+          // Solo'da `rival` null ve davranış birebir eski: phase='dead'.
+          if (!this.rival) this.phase = 'dead';
+          else this.phase = h === this.hero ? 'dead' : 'won';
         }
       }
       return; // tek tick'te tek vuruş
@@ -1529,8 +1617,8 @@ export class Game {
    * aynı akışı görüyor ve SIM_VERSION artmıyor.
    */
   private levelUp(h: Hero) {
-    this.level += 1;
-    this.xpNext = xpForLevel(this.level);
+    h.level += 1;
+    h.xpNext = xpForLevel(h.level);
     this.rollOffers(h);
     this.events.add('levelup');
     this.phase = 'levelup';
@@ -1544,7 +1632,7 @@ export class Game {
     const pool: Offer[] = [];
 
     // sahip olunan ve max'a ulaşmamış silahlar
-    for (const w of this.weapons) {
+    for (const w of h.weapons) {
       if (w.level >= w.def.maxLevel) continue;
       pool.push({
         kind: 'weapon-up', id: `w:${w.def.id}`, name: w.def.name,
@@ -1552,14 +1640,14 @@ export class Game {
       });
     }
     // slot varsa henüz alınmamış silahlar
-    if (this.weapons.length < MAX_WEAPONS) {
+    if (h.weapons.length < MAX_WEAPONS) {
       for (const def of WEAPONS) {
-        if (this.weapons.some((w) => w.def.id === def.id)) continue;
+        if (h.weapons.some((w) => w.def.id === def.id)) continue;
         pool.push({ kind: 'weapon-new', id: `w:${def.id}`, name: def.name, desc: def.desc });
       }
     }
     // sahip olunan ve max'a ulaşmamış pasifler
-    for (const p of this.passives) {
+    for (const p of h.passives) {
       if (p.level >= p.def.maxLevel) continue;
       pool.push({
         kind: 'passive-up', id: `p:${p.def.id}`, name: p.def.name,
@@ -1567,9 +1655,9 @@ export class Game {
       });
     }
     // slot varsa henüz alınmamış pasifler
-    if (this.passives.length < MAX_PASSIVES) {
+    if (h.passives.length < MAX_PASSIVES) {
       for (const def of PASSIVES) {
-        if (this.passives.some((p) => p.def.id === def.id)) continue;
+        if (h.passives.some((p) => p.def.id === def.id)) continue;
         pool.push({ kind: 'passive-new', id: `p:${def.id}`, name: def.name, desc: def.desc });
       }
     }
@@ -1587,7 +1675,7 @@ export class Game {
     }
     // KONUM YANLILIĞINI KIR: garantili silah hep 0. sırada kalırsa "hep ilkine
     // basan" oyuncu ömür boyu pasif görmez. Garanti listede OLMAK, sırada değil.
-    this.offers = this.rng.shuffle(picked);
+    h.offers = this.rng.shuffle(picked);
   }
 
   /** levelup fazında seçim uygula */
@@ -1595,7 +1683,7 @@ export class Game {
     const h = this.hero;   // ⚠️ dışarıdan gelen seçim BİRİNCİ dövüşçünün
 
     if (this.phase !== 'levelup') return;
-    const o = this.offers.find((x) => x.id === id);
+    const o = h.offers.find((x) => x.id === id);
     if (!o) return;
     const key = id.slice(2); // "w:" / "p:" önekini at
 
@@ -1604,7 +1692,7 @@ export class Game {
         this.giveWeapon(h, key);
         break;
       case 'weapon-up': {
-        const w = this.weapons.find((x) => x.def.id === key);
+        const w = h.weapons.find((x) => x.def.id === key);
         if (w && w.level < w.def.maxLevel) w.level += 1;
         break;
       }
@@ -1612,18 +1700,18 @@ export class Game {
         this.givePassive(h, key);
         break;
       case 'passive-up': {
-        const p = this.passives.find((x) => x.def.id === key);
+        const p = h.passives.find((x) => x.def.id === key);
         if (p && p.level < p.def.maxLevel) {
           p.level += 1;
           // Max HP artışı anında iyileştirir (VS: Hollow Heart aldığında canın artar)
-          const before = this.stats.maxHp;
+          const before = h.stats.maxHp;
           this.recomputeStats(this.hero);
-          if (this.stats.maxHp > before) this.hp += this.stats.maxHp - before;
+          if (h.stats.maxHp > before) h.hp += h.stats.maxHp - before;
         }
         break;
       }
     }
-    this.offers = [];
+    h.offers = [];
     this.phase = 'running';
   }
 
