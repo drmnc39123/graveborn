@@ -50,7 +50,18 @@ export const TILESET = {
 // ── BİNALAR ───────────────────────────────────────────────────────────
 // Hepsi 128×128. Izgarada 4 karo; aralarında EN AZ 6 karo boşluk bırakıldı
 // (önceki sürümde dip dibeydiler).
-export type BuildingId = 'quests' | 'upgrade' | 'shop' | 'market' | 'exchange' | 'tavern';
+/**
+ * Kapısı olan binalar.
+ *
+ * ⚠️ Bu liste PANEL KİMLİKLERİYLE aynı olmak zorunda (`BuildingDock`
+ * girdileri). Köyde bir kapı açıp panelde karşılığı olmayan bir kimlik
+ * yazmak, oyuncuyu boş bir panele sokar.
+ */
+export type BuildingId =
+  | 'quests' | 'upgrade' | 'shop' | 'market' | 'exchange' | 'tavern'
+  // ⚠️ Bunların köyde HİÇ kapısı yoktu; yalnızca navbar'dan açılıyorlardı.
+  // Oyuncu kocaman binaların önünde durup hiçbir şey olmadığını görüyordu.
+  | 'duel' | 'gear' | 'guild' | 'reliquary';
 
 export interface Building {
   id: BuildingId; name: string; hint: string; src: string;
@@ -79,6 +90,23 @@ export const BUILDINGS: readonly Building[] = [
   // BASMIŞ olur. Her iki bina da oyuncudan oyuncuya.
   b128('exchange', 'The Exchange', 'Standing bids from other players', 'Spr_Alchemy_Laboratory', 54, 40),
   b128('quests', 'The Old Church', 'The Fight Portal stands before it', 'Church', 42, 6),
+
+  // ── ⚠️ ALTI PANELİN KÖYDE HİÇ KAPISI YOKTU ──
+  // Navbar'dan açılabiliyorlardı ama köyde karşılıkları yoktu: oyuncu
+  // kocaman binaların önünde durup hiçbir şey olmadığını görüyordu. Bir
+  // köyde durduğun her bina bir yere açılmalı, yoksa köy bir kulis olur.
+  //
+  // Eşleştirmeler tematik: muhafız kulübesi meydan okumanın kapısı,
+  // marangoz atölyesi ekipmanın, gözlemevi becerilerin (neye yatırım
+  // yaptığını orada okuyorsun), tüccar evi kalıntıların.
+  b128('duel', 'The Guard House', "Answer another hunter's run", 'Guard_House', 42, 16),
+  b128('gear', "The Carpenter's", 'What you carried out of the Wilderness', 'Carpenter_Workshop', 46, 47),
+  // ⚠️ 16,30 DEĞİL. Orada denendi ve ölçüldü: haritadaki `spr_cozy_barn`
+  // (509,1047) tam kapının üstüne düşüyordu — bina görünür, kapı
+  // ULAŞILAMAZ olurdu. Kapı yerleri göz kararı seçilemez; harita
+  // nesneleriyle çakışıp çakışmadığı kontrol edilmeli.
+  b128('guild', 'The Longhouse', 'Stand with others', 'Stone_House', 10, 30),
+  b128('reliquary', 'The Reliquary', 'Relics, titles and auras', 'Merchant_House', 62, 30),
 ] as const;
 
 /** Dekoratif binalar — rol yok, köyü dolduruyor. Yine ELLE konumlandırıldı. */
@@ -90,13 +118,14 @@ const d = (file: string, tx: number, ty: number, w = 128, h = 128, solid = 42): 
 export const DECOR: readonly Decor[] = [
   // kale duvarı + muhafız kapısı — mezarlığı köyden ayırır
   d('spr_castle_wall_1', 30, 16), d('spr_castle_wall_1', 34, 16),
-  d('Guard_House', 42, 16),
   d('spr_castle_wall_1', 50, 16), d('spr_castle_wall_1', 54, 16),
   d('spr_castle_tower', 26, 16), d('spr_castle_tower', 58, 16),
 
   // köy dolgu evleri — meydanın çevresinde, aralıklı
-  d('Bakery', 30, 40), d('Merchant_House', 62, 30), d('Stone_House', 16, 30),
-  d('Carpenter_Workshop', 46, 47), d('Small_Cottage', 30, 51), d('Farmhouse', 60, 47),
+  // ⚠️ Guard_House / Merchant_House / Stone_House / Carpenter_Workshop
+  // buradan ÇIKARILDI — artık gerçek bina (BUILDINGS). İkisinde birden
+  // kalsalardı üst üste çizilir ve çarpışma kutusu iki kez eklenirdi.
+  d('Bakery', 30, 40), d('Small_Cottage', 30, 51), d('Farmhouse', 60, 47),
   d('spr_cozy_barn', 68, 40), d('spr_store_house', 16, 47),
 
   // nehir kıyısında su değirmeni — nehre bakması mantıklı
