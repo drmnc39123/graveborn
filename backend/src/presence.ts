@@ -41,6 +41,15 @@ interface Peer {
   /** takılı hale — hayaletin rengi ondan geliyor */
   aura: string | null;
   lastSeen: number;
+  /**
+   * ⚠️ HAYALET OLARAK YAYINLANIR MI. Sohbet aynı soketi kullanıyor ve köyde
+   * duran oyuncu da bağlı; bu bayrak olmasaydı köydeki herkes boss odasında
+   * (0,0) noktasında bir hayalet olarak belirirdi.
+   *
+   * Yalnızca KONUM GÖNDEREN bağlantı görünür olur — yani gerçekten boss
+   * odasında koşan biri.
+   */
+  gorunur: boolean;
 }
 
 const peers = new Map<WebSocket, Peer>();
@@ -75,6 +84,7 @@ function broadcast() {
       const others = [];
       for (const o of list) {
         if (o === me) continue;
+        if (!o.gorunur) continue;   // köyde duran bağlantı hayalet değildir
         if (others.length >= MAX_GHOSTS) break;
         others.push({
           n: short(o.wallet),
@@ -106,6 +116,7 @@ export function attachPresence(server: Server) {
     peers.set(ws, {
       ws, wallet, week, x: 0, y: 0, facingRight: true, aura: null,
       lastSeen: Date.now(),
+      gorunur: false,   // konum gelene kadar hayalet DEĞİL (bkz. alan başlığı)
     });
 
     // ⚠️ Sohbet geçmişi BAĞLANIRKEN gönderiliyor. Yoksa odaya giren kişi boş
@@ -139,6 +150,7 @@ export function attachPresence(server: Server) {
           if (!metin) return;
           // ⚠️ Hız sınırı BURADA. Express ara katmanı bu trafiği hiç görmüyor.
           if (!konusabilir(p.wallet)) return;
+          p.lastSeen = Date.now();   // konuşmak da canlılık işareti
           const msg = kaydet(short(p.wallet), metin);
           // Odadaki HERKESE — gönderen dahil (kendi mesajını görmeli)
           for (const [sock] of peers) {
@@ -158,6 +170,7 @@ export function attachPresence(server: Server) {
         p.facingRight = !!m.f;
         p.aura = typeof m.a === 'string' && m.a.length <= 24 ? m.a : null;
         p.lastSeen = Date.now();
+        p.gorunur = true;   // konum gönderdi → boss odasında koşuyor
       } catch { /* bozuk mesaj — yok say */ }
     });
 

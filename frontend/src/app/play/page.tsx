@@ -16,6 +16,7 @@ import { WorldBossPanel } from '@/components/WorldBossPanel';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
+import { ChatPanel } from '@/components/ChatPanel';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
@@ -266,6 +267,12 @@ export default function PlayPage() {
       {/* Cüzdan + bina rıhtımı — yürümek seçenek, zorunluluk değil */}
       <BuildingDock open={panel} onOpen={setPanel} gold={progress?.gold ?? 0} wallet={wallet}
         onHeight={setDockH} />
+
+      {/* ⚠️ SOHBET PANEL DEĞİL, KÖŞEDE DURUYOR. Panele koymak onu "gidip
+          bakılan bir yer" yapardı; insanların orada olduğunu görmeyen oyuncu
+          sohbet olduğunu da bilmez. Panel açıkken gizleniyor — üst üste
+          binmesin ve panelin içindeki alanları kapatmasın. */}
+      {!panel && <ChatPanel />}
 
       {/* Sunucu hatası oyuncudan GİZLENMEZ: cüzdan modunda ilerleme sunucuda,
           sessizce yerel kayda düşmek iki gerçeklik yaratırdı. */}

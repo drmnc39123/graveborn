@@ -25,8 +25,17 @@ export const HISTORY = 40;
  * ara katmanına uğramıyor. Spam koruması unutulursa oda ilk günde ölür.
  */
 const MIN_ARALIK_MS = 1200;
-/** Pencere içinde bu kadar mesajdan sonra susturulur */
-const PENCERE_MS = 10_000;
+/**
+ * Pencere içinde bu kadar mesajdan sonra susturulur.
+ *
+ * ⚠️ PENCERE, MİNİMUM ARALIĞIN İZİN VERDİĞİ HIZDAN GENİŞ OLMAK ZORUNDA.
+ * İlk sürüm 10 sn / 8 mesajdı ve ÖLÇÜLDÜ: tam 1,3 saniyede bir gönderen biri
+ * 10 saniyeye 7,7 mesaj sığdırıp tavana hiç değmiyordu — yani ikinci kademe
+ * hiçbir zaman devreye girmiyor, tek kademe varmış gibi davranıyordu.
+ * 20 sn / 8 mesaj: kısa bir patlama serbest, SÜRDÜRÜLEN spam kesiliyor
+ * (uzun vadede ~1 mesaj / 2,5 sn).
+ */
+const PENCERE_MS = 20_000;
 const PENCERE_TAVANI = 8;
 
 export const MAX_UZUNLUK = 180;
