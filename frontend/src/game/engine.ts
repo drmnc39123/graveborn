@@ -143,11 +143,25 @@ export type Stats = Record<StatKey, number>;
 /** Sahip olunan pasif item */
 export interface OwnedPassive { def: PassiveDef; level: number }
 
-export class Game {
-  readonly seed: number;
-  private rng: Rng;
+/**
+ * BİR DÖVÜŞÇÜNÜN DURUMU.
+ *
+ * ⚠️ NİYE AYRI SINIF: gerçek zamanlı 1v1 için iki oyuncunun AYNI
+ * simülasyonda olması gerekiyor (ortak harita, ortak düşman dalgaları). Bu
+ * alanlar `Game` üzerinde düz duruyordu; ikinci bir dövüşçü eklemenin tek
+ * temiz yolu onları bir nesneye toplamak.
+ *
+ * ⚠️ BU ADIM SAF BİR YENİDEN DÜZENLEME. `Game` alanların hepsi için erişimci
+ * taşıyor, yani motorun 1591 satırı da render/HUD de eskisi gibi `this.px`,
+ * `g.hp`, `g.stats` yazmaya devam ediyor. `SIM_SEAL` mührü DEĞİŞMEMELİ —
+ * testi tam olarak bunu kanıtlıyor.
+ */
+export class Hero {
+  /** oynanan karakter — SADECE VERİ, motor görsel bilmez */
+  readonly heroId: string;
+  /** Forge + karakter eğilimi, tek kanalda birleşmiş */
+  readonly permanent: Partial<Record<StatKey, number>>;
 
-  // oyuncu
   // NOT: config'deki `as const` yüzünden açık `: number` şart —
   // yoksa TS `hp`'yi literal `100` olarak çıkarır ve atamalar patlar.
   px = 0; py = 0;
@@ -168,23 +182,85 @@ export class Game {
   xp = 0;
   /** koşu boyunca toplanan toplam XP (seviye atlayınca SIFIRLANMAZ) */
   xpEarned = 0;
+  xpNext: number = xpForLevel(1);
+  /** başlangıç draft'ında seçilmeyi bekleyen seviye sayısı */
+  pendingLevels = 0;
+  kills = 0;
+  /** kaç kez dirilindi (Second Burial) */
+  revives = 0;
+  /** VS istatistikleri — pasiflerden TÜRETİLİR, doğrudan yazılmaz */
+  stats: Stats = { ...STAT_BASE };
+  weapons: OwnedWeapon[] = [];
+  passives: OwnedPassive[] = [];
+  /** yörünge silahlarının ortak açısı */
+  orbitAngle = 0;
+  /** levelup fazında sunulan 3 seçenek */
+  offers: Offer[] = [];
+  /** girdi (birim vektör) — 1v1'de telden geçen TEK şey bu olacak */
+  inx = 0;
+  iny = 0;
+
+  constructor(heroId: string, permanent: Partial<Record<StatKey, number>>) {
+    this.heroId = heroId;
+    this.permanent = permanent;
+  }
+}
+
+export class Game {
+  readonly seed: number;
+  private rng: Rng;
+
+  /** birinci dövüşçü — per-oyuncu durumun tamamı burada */
+  readonly hero: Hero;
+  /**
+   * İkinci dövüşçü — SADECE gerçek zamanlı 1v1'de dolu.
+   * ⚠️ `null` olduğu sürece motor tek satır fazladan iş yapmıyor ve hiç
+   * ekstra RNG tüketmiyor; solo koşular bit bit aynı kalıyor.
+   */
+  rival: Hero | null = null;
+
+  // ── ERİŞİMCİLER ──
+  // ⚠️ SİLİNMEZLER. Hem motorun kendi kodu hem render/HUD bu isimleri okuyup
+  // yazıyor (`g.px`, `g.hp`, `g.stats`, `g.weapons`…). Alanları `hero`'ya
+  // taşırken API'yi korumanın bedeli bu; alternatifi 200+ çağrı yerini
+  // mekanik olarak yeniden yazmaktı — her biri ayrı bir hata şansı.
+  get heroId() { return this.hero.heroId; }
+  get permanent() { return this.hero.permanent; }
+  get px() { return this.hero.px; } set px(v: number) { this.hero.px = v; }
+  get py() { return this.hero.py; } set py(v: number) { this.hero.py = v; }
+  get hp() { return this.hero.hp; } set hp(v: number) { this.hero.hp = v; }
+  get iframe() { return this.hero.iframe; } set iframe(v: number) { this.hero.iframe = v; }
+  get animT() { return this.hero.animT; } set animT(v: number) { this.hero.animT = v; }
+  get moving() { return this.hero.moving; } set moving(v: boolean) { this.hero.moving = v; }
+  get facingRight() { return this.hero.facingRight; } set facingRight(v: boolean) { this.hero.facingRight = v; }
+  get atkT() { return this.hero.atkT; } set atkT(v: number) { this.hero.atkT = v; }
+  get hurtT() { return this.hero.hurtT; } set hurtT(v: number) { this.hero.hurtT = v; }
+  get level() { return this.hero.level; } set level(v: number) { this.hero.level = v; }
+  get xp() { return this.hero.xp; } set xp(v: number) { this.hero.xp = v; }
+  get xpEarned() { return this.hero.xpEarned; } set xpEarned(v: number) { this.hero.xpEarned = v; }
+  get xpNext() { return this.hero.xpNext; } set xpNext(v: number) { this.hero.xpNext = v; }
+  get pendingLevels() { return this.hero.pendingLevels; } set pendingLevels(v: number) { this.hero.pendingLevels = v; }
+  get kills() { return this.hero.kills; } set kills(v: number) { this.hero.kills = v; }
+  get revives() { return this.hero.revives; } set revives(v: number) { this.hero.revives = v; }
+  get stats() { return this.hero.stats; } set stats(v: Stats) { this.hero.stats = v; }
+  get weapons() { return this.hero.weapons; } set weapons(v: OwnedWeapon[]) { this.hero.weapons = v; }
+  get passives() { return this.hero.passives; } set passives(v: OwnedPassive[]) { this.hero.passives = v; }
+  get orbitAngle() { return this.hero.orbitAngle; } set orbitAngle(v: number) { this.hero.orbitAngle = v; }
+  get offers() { return this.hero.offers; } set offers(v: Offer[]) { this.hero.offers = v; }
+
   /** seçilen ascension kademesi — 0 = kapalı (bkz. config.ASCENSION) */
   readonly ascension: number;
-  xpNext: number = xpForLevel(1);
 
   /** descent'in başladığı derinlik (checkpoint); campaign'de 0 */
   readonly startDepth: number;
-  /**
-   * Başlangıç draft'ında oyuncunun SEÇMESİ gereken kalan seviye sayısı.
-   * Koşu saati bunlar bitene kadar İŞLEMEZ — yoksa süre tabanı doğrulaması
-   * draft ekranında geçen saniyeleri oynanmış sanardı.
-   */
-  pendingLevels = 0;
 
-  // run durumu
+  // ⚠️ Per-dövüşçü alanlar (pendingLevels, kills, revives, stats, weapons,
+  // passives, orbitAngle, offers) artık `Hero`'da — yukarıdaki erişimciler
+  // eski isimleri koruyor.
+
+  // run durumu — KOŞUYA ait, dövüşçüye değil
   time = 0;
   phase: Phase = 'running';
-  kills = 0;
   /**
    * Bu koşuda NADİR DÜŞÜŞTEN toplanan gold. Kill başına maaş DEĞİL —
    * ilerleme ödülü (derinlik/ilk geçiş) buraya girmez, onu progress.ts hesaplar.
@@ -196,21 +272,6 @@ export class Game {
    * buradan okunur (bkz. worldBoss.ts). Sürü hasarı DAHİL DEĞİL.
    */
   bossDamage = 0;
-  /** kaç kez dirilindi (Second Burial) — run özetinde raporlanır */
-  revives = 0;
-
-  /** VS istatistikleri — pasif item'lardan türetilir, doğrudan yazılmaz */
-  stats: Stats = { ...STAT_BASE };
-
-  /** Taşınan silahlar. Run başında Bone Shard ile başlanır. */
-  weapons: OwnedWeapon[] = [];
-  /** Taşınan pasif item'lar — istatistikleri besler, evrimin ön koşulu */
-  passives: OwnedPassive[] = [];
-  /** Yörünge silahlarının ortak açısı — tüm orb'lar birlikte döner */
-  orbitAngle = 0;
-
-  /** levelup fazında sunulan 3 seçenek (silah veya istatistik) */
-  offers: Offer[] = [];
 
   // varlıklar
   enemies: Enemy[] = [];
@@ -227,9 +288,6 @@ export class Game {
   stage: StageState;
   /** merdivenin ait olduğu kampanya bölümü (descent tanımı bundan üretilir) */
   readonly baseStageId: number;
-  /** oynanan karakter — SADECE VERİ. Render bununla doğru sprite'ı seçer;
-   *  motor görsel bilmez, DOM'suz kalır. */
-  readonly heroId: string;
   /** son evrim (HUD duyurusu için); render/HUD okur, simülasyonu etkilemez */
   lastEvolution: { name: string; at: number } | null = null;
 
@@ -263,9 +321,12 @@ export class Game {
    */
   events = new Set<string>();
 
-  // girdi (birim vektör)
-  private inx = 0;
-  private iny = 0;
+  // ⚠️ Girdi de `Hero`'da (`hero.inx/iny`) — 1v1'de iki ayrı girdi olacak.
+  // Bu erişimciler motorun eski `this.inx` yazımını olduğu gibi çalıştırıyor.
+  private get inx() { return this.hero.inx; }
+  private set inx(v: number) { this.hero.inx = v; }
+  private get iny() { return this.hero.iny; }
+  private set iny(v: number) { this.hero.iny = v; }
 
   // dahili
   private spawnAcc = 0;
@@ -276,8 +337,8 @@ export class Game {
   private viewW = 800;
   private viewH = 600;
 
-  /** The Forge'dan gelen kalıcı bonuslar — run boyunca sabit, tabana eklenir */
-  private permanent: Partial<Record<StatKey, number>>;
+  // ⚠️ `permanent` de `Hero`'da — 1v1'de iki dövüşçünün Forge ağacı,
+  // ekipmanı ve becerileri AYRI. Yukarıdaki erişimci eski okumayı koruyor.
 
   constructor(
     seed: number,
@@ -311,10 +372,9 @@ export class Game {
     this.seed = seed;
     this.rng = createRng(seed);
     const hero = heroById(heroId);
-    this.heroId = hero.id;
     // Karakter eğilimi Forge bonuslarıyla AYNI kanaldan geçer — ayrı bir kod
     // yolu yok, ikisi toplanır. Sunucu da aynı fonksiyonu çalıştırabilir.
-    this.permanent = mergeStats(hero.stats, permanent);
+    this.hero = new Hero(hero.id, mergeStats(hero.stats, permanent));
     // Verilen stageDef sadece "hangi bölümün merdiveni" bilgisini taşır,
     // descent'te asıl tanım descentStage()'ten gelir
     this.ascension = Math.max(0, Math.min(ASCENSION.max, Math.floor(ascension)));
