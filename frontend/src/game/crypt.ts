@@ -35,19 +35,21 @@ export interface CryptTier {
  * Üç kademe. Fiyatlar BİLEREK ağır: Forge ağacının tamamı 255.694 gold ve
  * bu GEÇ oyun içeriği.
  *
- * ⚠️ İlk deneme 60.000'di ve ÖLÇÜM düşürdü: tekrar koşusu geliri 6.124
- * gold/saat, yani 60.000 ≈ 10 saat — Forge'un ORTA oyunuyla doğrudan yarışan
- * bir fiyat. Deed geri ödeme yaptığı için oyuncu Forge'u bırakıp önce onu
- * alırdı ve güç ilerlemesi dururdu. 90.000 ≈ 15 saat: Forge'un çekirdek
- * satırları bittikten sonra gelen bir karar.
+ * ⚠️ Fiyat İKİ KEZ ölçümle düzeltildi. İlki 60.000'di: tekrar koşusu geliri
+ * 6.124 gold/saat, yani ≈10 saat — Forge'un ORTA oyunuyla yarışan bir fiyat.
+ * Deed geri ödeme yaptığı için oyuncu Forge'u bırakıp önce onu alır, güç
+ * ilerlemesi dururdu.
+ * İkincisi kampanya 25 bölüme çıkarken geldi: Forge ağacı 255.694'ten
+ * 615.533'e büyüdü, 90.000 artık "geç oyun" değil orta oyun olmuştu.
+ * 220.000 ≈ 36 saat — ağacın çekirdeği bittikten sonra gelen bir karar.
  *
  * ⚠️ Ağırlık fiyattan YAVAŞ büyüyor (×3 fiyat → ×2,5 ağırlık). Aksi hâlde
  * en pahalı kademe her zaman en kârlı olur ve alt kademeler ölü doğardı.
  */
 export const CRYPT_TIERS: readonly CryptTier[] = [
-  { tier: 1, name: 'Pauper\'s Plot', cost: 90_000, weight: 1, blurb: 'A stone, a name, and a share of what the village spends.' },
-  { tier: 2, name: 'Sexton\'s Vault', cost: 240_000, weight: 2.5, blurb: 'Deeper ground. The dead here paid for the privilege.' },
-  { tier: 3, name: 'The Barrow Deed', cost: 640_000, weight: 6, blurb: 'You own a hill. Everything under it is yours by writ.' },
+  { tier: 1, name: 'Pauper\'s Plot', cost: 220_000, weight: 1, blurb: 'A stone, a name, and a share of what the village spends.' },
+  { tier: 2, name: 'Sexton\'s Vault', cost: 590_000, weight: 2.5, blurb: 'Deeper ground. The dead here paid for the privilege.' },
+  { tier: 3, name: 'The Barrow Deed', cost: 1_580_000, weight: 6, blurb: 'You own a hill. Everything under it is yours by writ.' },
 ] as const;
 
 export function cryptTier(t: number): CryptTier | undefined {

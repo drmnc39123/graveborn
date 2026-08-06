@@ -14,7 +14,7 @@ import { Game } from './engine.js';
 import {
   BEHAVIOR, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES, MAX_WEAPONS, PASSIVES,
   SIM_VERSION, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
-  descentStage, rareDropChance,
+  descentStage, rareDropChance, stageById,
 } from './config.js';
 import { ENEMY_ART } from './sprites.js';
 import { HEROES } from './heroes.js';
@@ -241,9 +241,29 @@ console.log('\n[2B] Veri bütünlüğü');
   let mono = true;
   for (let i = 1; i < STAGES.length; i++) {
     if (STAGES[i].firstClearGold <= STAGES[i - 1].firstClearGold) mono = false;
-    if (STAGES[i].enemyCount <= STAGES[i - 1].enemyCount) mono = false;
   }
   check('bölümler zorlaştıkça daha çok ödüyor', mono);
+
+  // ⚠️ ZORLUK ÖLÇÜSÜ DÜŞMAN SAYISI DEĞİL. Eskiden `enemyCount` monotonluğu
+  // aranıyordu; ikinci kitapta (11-25) sayı BİLEREK büyütülmüyor çünkü
+  // bölüm 10 zaten 3.400 düşman / spawnRate 8 = HAM minimum 7 dakika ve
+  // sayıyı büyütmek "daha çok içerik" değil "daha uzun bekleme" olurdu.
+  // Ayrıca `maxAlive` 420'de bir PERF tavanı. Zorluk artık candan ve
+  // hasardan geliyor — ölçülen değişmez bu olmalı.
+  let zorluk = true;
+  for (let i = 1; i < STAGES.length; i++) {
+    const a = STAGES[i - 1], b = STAGES[i];
+    if (b.hpMul * (b.damageMul ?? 1) <= a.hpMul * (a.damageMul ?? 1)) zorluk = false;
+  }
+  check('bölümler gerçekten zorlaşıyor (can × hasar)', zorluk,
+    `d1 ${(STAGES[0].hpMul * (STAGES[0].damageMul ?? 1)).toFixed(1)} → son ${(STAGES[STAGES.length - 1].hpMul * (STAGES[STAGES.length - 1].damageMul ?? 1)).toFixed(0)}`);
+
+  // ⚠️ Koşu SÜRESİ patlamamalı: ham minimum = enemyCount / spawnRate.
+  // Bir bölümün 12 dakikadan uzun sürmesi, oyuncuyu içerikle değil
+  // BEKLEMEYLE tutmak demektir.
+  const enUzun = Math.max(...STAGES.map((x) => x.enemyCount / x.spawnRate));
+  check('hiçbir bölüm 12 dakikayı geçmiyor (ham minimum)', enUzun < 12 * 60,
+    `en uzun ${(enUzun / 60).toFixed(1)} dk`);
   check('sahne tavanı perf sınırında', STAGES.every((s) => s.maxAlive <= 420));
 }
 
@@ -540,7 +560,23 @@ console.log('\n[4] Ölüm');
 // orada hareketsiz oyuncu ölmeyebilir — bu tasarım. Baskı testi ZOR bölümde
 // yapılmalı, yoksa test "kolay bölüm kolay" demekten ibaret kalır.
 const AFK_LIMIT_SEC = 300;
-const still = new Game(seedFromString('afk'), STAGES[STAGES.length - 1]);
+/**
+ * MEKANİK ÖLÇÜMLERİN BÖLÜMÜ — bilerek "son bölüm" DEĞİL.
+ *
+ * ⚠️ Bu ölçümler eskiden `STAGES[STAGES.length - 1]` kullanıyordu ve ikinci
+ * kitap (11-25) eklenince ÜÇÜ BİRDEN kırmızı yandı. Sebep testlerde değil
+ * seçimdeydi: 25. bölümün hasar çarpanı 7,0 ve tek temas oyuncuyu aynı tick
+ * içinde öldürüyor — `hp` her tick doldurulsa bile, çünkü `collidePlayer`
+ * hasarı verip ölümü AYNI tick'te işliyor. Sahne dolmadan koşu bitiyordu.
+ *
+ * Bu ölçümlerin niyeti "en zor bölümü ölç" değil, "YOĞUN ve TEMSİLİ bir
+ * sahnede mekanik çalışıyor mu". Kampanyanın birinci kitabının sonu (10)
+ * tam olarak o: `maxAlive` yine 420 (perf tavanı aynı), ama hasar ölçümü
+ * imkânsız kılmıyor.
+ */
+const OLCUM_BOLUMU = stageById(10) ?? STAGES[STAGES.length - 1];
+
+const still = new Game(seedFromString('afk'), OLCUM_BOLUMU);
 still.setViewport(1280, 720);
 still.setInput(0, 0);
 let deadAt = -1;
@@ -579,7 +615,7 @@ check('1. bölüm makul sürede bitiyor (3 dk altı)', fl.time < 180, `${fl.time
 console.log('\n[7] Performans');
 // En kalabalık bölümde, sahne DOLUYKEN ölç. Bölüm bitmiş boş sahnede ölçmek
 // 0.000 ms verir ve test hiçbir şey ölçmeden "geçer" (bu tuzağa bir kez düşüldü).
-const heavy = STAGES[STAGES.length - 1];
+const heavy = OLCUM_BOLUMU;
 const perf = new Game(seedFromString('perf'), heavy);
 perf.setViewport(1280, 720);
 for (let i = 0; i < Math.round(25 * 60 / TICK); i++) {
@@ -911,7 +947,7 @@ console.log('\n[8C] Evrim tablosu tutarlı');
 // Silahlar level-up'ta toplanabiliyor mu — SİLAH TERCİH EDEN seçiciyle.
 // Körlemesine offers[0] seçmek yanlış olurdu: seçenek sırası kasıtlı karışık,
 // o yüzden kör seçici bazen hep pasif alır ve test sistemi değil şansı ölçer.
-const acq = new Game(seedFromString('acquire'), STAGES[STAGES.length - 1]);
+const acq = new Game(seedFromString('acquire'), OLCUM_BOLUMU);
 acq.setViewport(1280, 720);
 for (let i = 0; i < Math.round(900 / TICK); i++) {
   if (acq.phase === 'levelup') {
@@ -977,7 +1013,7 @@ console.log('\n[9] Pasifler ve istatistikler');
 // Second Burial gerçekten diriltiyor mu — ölümü engellemeli
 {
   // ZOR bölümde test edilmeli — kolay bölümde oyuncu ölmüyor, diriliş tetiklenmiyor
-  const g = new Game(seedFromString('revive'), STAGES[STAGES.length - 1]);
+  const g = new Game(seedFromString('revive'), OLCUM_BOLUMU);
   g.setViewport(1280, 720);
   (g as any).givePassive('burial');
   g.setInput(0, 0);
@@ -993,7 +1029,7 @@ console.log('\n[9] Pasifler ve istatistikler');
 
 // Level-up gerçekten pasif de sunuyor mu (sadece silah döndürmüyor)
 {
-  const g = run(seedFromString('offers'), { seconds: 900, driver: 'flee', invincible: true, stage: STAGES[STAGES.length - 1] });
+  const g = run(seedFromString('offers'), { seconds: 900, driver: 'flee', invincible: true, stage: OLCUM_BOLUMU });
   console.log(`     ${g.stage.def.name}: ${g.weapons.length} silah, ${g.passives.length} pasif (LV${g.level})`);
   console.log(`     pasifler: ${g.passives.map((p) => `${p.def.name} L${p.level}`).join(', ') || '(yok)'}`);
   check('pasif item toplanıyor', g.passives.length > 0, `${g.passives.length} pasif`);

@@ -22,6 +22,7 @@ import type { Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { readToken } from './auth.js';
 import { bossWeek } from '@game/worldBoss';
+import { kaydet, konusabilir, son as sonMesajlar, temizle } from './chat.js';
 
 /** Sunucunun yayın hızı — istemci daha sık gönderse bile bu hızda dağıtılır */
 const TICK_MS = 125;              // 8 Hz
@@ -107,14 +108,22 @@ export function attachPresence(server: Server) {
       lastSeen: Date.now(),
     });
 
+    // ⚠️ Sohbet geçmişi BAĞLANIRKEN gönderiliyor. Yoksa odaya giren kişi boş
+    // bir pencere görür ve "kimse yok" sanır — oysa iki dakika önce konuşma
+    // vardı. Sosyal katmanın ilk izlenimi budur.
+    try { ws.send(JSON.stringify({ t: 'chat_history', msgs: sonMesajlar() })); } catch { /* yok */ }
+
     ws.on('message', (raw) => {
       const p = peers.get(ws);
       if (!p) return;
       // ⚠️ Mesaj boyutu sınırlı: 512 bayt bir konum güncellemesi için fazlasıyla
       // yeterli, daha büyüğü ayrıştırmaya bile değmez.
+      // 512 bayt: konum güncellemesi için fazlasıyla yeterli, sohbette de
+      // 180 karakterlik metin + JSON zarfı rahat sığıyor.
       if (raw.toString().length > 512) return;
       try {
         const m = JSON.parse(raw.toString()) as {
+          t?: unknown; c?: unknown;
           x?: unknown; y?: unknown; f?: unknown; a?: unknown;
         };
         // ⚠️ `Number(...)` İLE ZORLAMA YAPMA. `Number(null)` = 0 ve 0 sonlu
@@ -122,6 +131,23 @@ export function attachPresence(server: Server) {
         // BAŞLANGIÇ NOKTASINA ışınlıyordu. Üstelik bu kolayca oluşuyor:
         // `JSON.stringify({x: Infinity})` çıktısı `{"x":null}`, çünkü JSON'da
         // Infinity/NaN yok. Tip KONTROL edilmeli, çevrilmemeli.
+        // ── SOHBET ──
+        // ⚠️ Aynı soket, farklı mesaj tipi. `t` yoksa eski konum mesajıdır
+        // (geriye uyum) — istemcinin eski sürümü kırılmasın.
+        if (m.t === 'say') {
+          const metin = temizle(m.c);
+          if (!metin) return;
+          // ⚠️ Hız sınırı BURADA. Express ara katmanı bu trafiği hiç görmüyor.
+          if (!konusabilir(p.wallet)) return;
+          const msg = kaydet(short(p.wallet), metin);
+          // Odadaki HERKESE — gönderen dahil (kendi mesajını görmeli)
+          for (const [sock] of peers) {
+            if (sock.readyState !== WebSocket.OPEN) continue;
+            try { sock.send(JSON.stringify({ t: 'chat', msg })); } catch { /* yok */ }
+          }
+          return;
+        }
+
         if (typeof m.x !== 'number' || typeof m.y !== 'number') return;
         const x = m.x, y = m.y;
         if (!Number.isFinite(x) || !Number.isFinite(y)) return;

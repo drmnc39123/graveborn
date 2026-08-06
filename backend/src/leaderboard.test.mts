@@ -94,7 +94,13 @@ console.log('\n[3] Eş zamanlılık');
 // ── 4) Tablo ──
 console.log('\n[4] Tablo');
 {
-  await recordDescent(w(3), 'descent', 10, 20); // zor bölüm — en tepede olmalı
+  // ⚠️ AYNI DERİNLİK. Eskiden `(10, 20)` yazıyordu ve w(2) bölüm 1'de
+  // derinlik 30'daydı — yani test İKİ değişkeni birden karıştırıyordu
+  // (bölüm zorluğu VE derinlik). Kampanya dengesi değişince ikisi neredeyse
+  // eşitlendi (127.539 vs 133.574) ve test yazı-tura oldu.
+  // Ölçmek istediği değişmez şu: AYNI DERİNLİKTE zor bölüm daha çok puan
+  // verir. Derinliği eşitleyince test tam onu ölçüyor.
+  await recordDescent(w(3), 'descent', 10, 30); // zor bölüm, AYNI derinlik
   const rows = await top(100);
   const mine = rows.filter((r) => r.wallet.startsWith(P));
 

@@ -110,34 +110,149 @@ export const STAGES: readonly StageDef[] = [
   // "daha çok düşman" değil, her seferinde bir final. Düşman havuzu da
   // undead/vermin'e kayıyor — sürü görsel olarak da değişiyor.
   {
-    id: 6, name: 'The Sunken Ossuary', enemyCount: 1100, firstClearGold: 6200,
+    id: 6, name: 'The Sunken Ossuary', enemyCount: 900, firstClearGold: 4200,
     spawnRate: 5.4, maxAlive: 220, enemies: ['fiend', 'crab', 'rat', 'dire_rat', 'warrior'],
-    hpMul: 5.2, speedMul: 1.2,
-    boss: { hp: 62000, speed: 50, damage: 44, radius: 54, art: 'boss_mega', label: 'The Drowned Choir' },
+    hpMul: 4.2, speedMul: 1.2, damageMul: 1.2,
+    boss: { hp: 107_000, speed: 50, damage: 44, radius: 54, art: 'boss_mega', label: 'The Drowned Choir' },
   },
   {
-    id: 7, name: 'Gallows Reach', enemyCount: 1500, firstClearGold: 9000,
+    id: 7, name: 'Gallows Reach', enemyCount: 950, firstClearGold: 4500,
     spawnRate: 6.0, maxAlive: 260, enemies: ['dire_rat', 'warrior', 'hulk', 'bone_thrall'],
-    hpMul: 7.0, speedMul: 1.24,
-    boss: { hp: 105000, speed: 52, damage: 50, radius: 56, art: 'boss_nightmare', label: 'The Hanged Warden' },
+    hpMul: 4.4, speedMul: 1.24, damageMul: 1.35,
+    boss: { hp: 113_000, speed: 52, damage: 50, radius: 56, art: 'boss_nightmare', label: 'The Hanged Warden' },
   },
   {
-    id: 8, name: 'The Bone Choir', enemyCount: 2000, firstClearGold: 13000,
+    id: 8, name: 'The Bone Choir', enemyCount: 1000, firstClearGold: 4900,
     spawnRate: 6.7, maxAlive: 300, enemies: ['bone_thrall', 'bone_archer', 'hulk', 'crab'],
-    hpMul: 9.2, speedMul: 1.28,
-    boss: { hp: 170000, speed: 54, damage: 58, radius: 58, art: 'boss_mega', label: 'The Choirmaster' },
+    hpMul: 4.6, speedMul: 1.28, damageMul: 1.5,
+    boss: { hp: 119_000, speed: 54, damage: 58, radius: 58, art: 'boss_mega', label: 'The Choirmaster' },
   },
   {
-    id: 9, name: 'The Iron Vigil', enemyCount: 2600, firstClearGold: 18500,
+    id: 9, name: 'The Iron Vigil', enemyCount: 1000, firstClearGold: 5300,
     spawnRate: 7.4, maxAlive: 350, enemies: ['grave_knight', 'bone_archer', 'warrior', 'hulk'],
-    hpMul: 11.5, speedMul: 1.32,
-    boss: { hp: 270000, speed: 56, damage: 66, radius: 60, art: 'boss_nightmare', label: 'The Iron Vigil' },
+    hpMul: 4.8, speedMul: 1.32, damageMul: 1.7,
+    boss: { hp: 125_000, speed: 56, damage: 66, radius: 60, art: 'boss_nightmare', label: 'The Iron Vigil' },
   },
   {
-    id: 10, name: 'The Last Barrow', enemyCount: 3400, firstClearGold: 26000,
+    id: 10, name: 'The Last Barrow', enemyCount: 1050, firstClearGold: 5700,
     spawnRate: 8.0, maxAlive: 420, enemies: ['grave_knight', 'bone_archer', 'bone_thrall', 'hulk', 'fiend'],
-    hpMul: 14, speedMul: 1.36,
-    boss: { hp: 440000, speed: 58, damage: 76, radius: 66, art: 'boss_nightmare', label: 'The First Graveborn' },
+    hpMul: 5.0, speedMul: 1.36, damageMul: 1.9,
+    boss: { hp: 130_000, speed: 58, damage: 76, radius: 66, art: 'boss_nightmare', label: 'The First Graveborn' },
+  },
+
+  // ══ İKİNCİ KİTAP: 11-25 ═══════════════════════════════════════════════
+  //
+  // ⚠️ DÜŞMAN SAYISI BÜYÜTÜLMÜYOR — tercih değil, ÖLÇÜM SONUCU.
+  //
+  // Sürdürülebilir öldürme hızı ölçüldü: ~2,0-2,7 düşman/sn. Bölüm 10'un
+  // ESKİ 3.400 düşmanı bu hızda 28 DAKİKA demekti. `campaign.test.mts`
+  // bunu yakaladı: bölüm 6'dan itibaren HİÇBİRİ bitmiyordu — yani sorun
+  // yeni bölümlerden ÖNCE de vardı ve hiç fark edilmemişti (eski testler
+  // yalnızca ilk 3 bölümü kontrol ediyordu).
+  // Sayılar bitirilebilir olacak şekilde yeniden hesaplandı: ~5-11 dakika.
+  //
+  // ⚠️ CAN ÇARPANI DA KIRPILDI. İlk denemede 25. bölüm hpMul 330'du; ölçüm
+  // oyuncunun SANİYEDE 0,1 düşman öldürdüğünü gösterdi. Bu duvar değil
+  // İMKÂNSIZLIK: Forge tavanlı, oyuncunun hasarı 330 kat büyüyemiyor.
+  // Aynı ders bugün Descent'te de öğrenildi — koşuyu bitiren şey canı değil
+  // HASARI büyütmek. Zorluk artık `damageMul`'da taşınıyor (1,5 → 7,0).
+  //
+  // ⚠️ `maxAlive` 420'de SABİT — bu bir perf tavanı, tercih değil
+  // (sim.test.mts tick bütçesini orada ölçüyor). Zorluk sahnedeki düşman
+  // SAYISINDAN değil, canından ve HASARINDAN geliyor.
+  //
+  // Yani ikinci kitabın bölümleri KISA ve SERT: 4-8 dakika, her biri kendi
+  // sürüsü ve kendi boss'uyla. Amaç kampanyayı ~1,5 saatten ~5 saate çıkarmak.
+  {
+    id: 11, name: 'The Weeping Steps', enemyCount: 1050, firstClearGold: 6200,
+    spawnRate: 7.0, maxAlive: 300, enemies: ['bone_archer', 'grave_knight', 'rat', 'dire_rat'],
+    hpMul: 5.2, speedMul: 1.38, damageMul: 2.2,
+    boss: { hp: 136_000, speed: 56, damage: 84, radius: 60, art: 'boss_mega', label: 'The Stair Widow' },
+  },
+  {
+    id: 12, name: 'Ashfall Reach', enemyCount: 1100, firstClearGold: 6700,
+    spawnRate: 7.2, maxAlive: 320, enemies: ['brute', 'hulk', 'horned', 'warrior'],
+    hpMul: 5.4, speedMul: 1.40, damageMul: 2.5,
+    boss: { hp: 142_000, speed: 54, damage: 92, radius: 68, art: 'boss_nightmare', label: 'Cinder Warden' },
+  },
+  {
+    id: 13, name: 'The Drowned Gate', enemyCount: 1100, firstClearGold: 7200,
+    spawnRate: 7.4, maxAlive: 340, enemies: ['crab', 'fiend', 'bone_thrall', 'wretch'],
+    hpMul: 5.5, speedMul: 1.42, damageMul: 2.8,
+    boss: { hp: 148_000, speed: 58, damage: 100, radius: 62, art: 'boss_mega', label: 'The Gatekeeper' },
+  },
+  {
+    id: 14, name: 'Hollow King\'s Court', enemyCount: 1150, firstClearGold: 7800,
+    spawnRate: 7.6, maxAlive: 350, enemies: ['grave_knight', 'warrior', 'bone_archer', 'skeleton'],
+    hpMul: 5.7, speedMul: 1.44, damageMul: 3.1,
+    boss: { hp: 154_000, speed: 60, damage: 110, radius: 70, art: 'boss_nightmare', label: 'The Hollow King' },
+  },
+  {
+    id: 15, name: 'The Rat Cathedral', enemyCount: 1150, firstClearGold: 8400,
+    spawnRate: 8.0, maxAlive: 380, enemies: ['rat', 'dire_rat', 'wretch', 'imp'],
+    hpMul: 5.8, speedMul: 1.46, damageMul: 3.4,
+    boss: { hp: 160_000, speed: 64, damage: 118, radius: 58, art: 'boss_mini', label: 'The Litter Mother' },
+  },
+  {
+    id: 16, name: 'Emberglass Wastes', enemyCount: 1200, firstClearGold: 9100,
+    spawnRate: 8.0, maxAlive: 390, enemies: ['fiend', 'horned', 'bird', 'brute'],
+    hpMul: 6.0, speedMul: 1.48, damageMul: 3.8,
+    boss: { hp: 166_000, speed: 62, damage: 128, radius: 66, art: 'boss_mega', label: 'Glasswalker' },
+  },
+  {
+    id: 17, name: 'The Sunless Vault', enemyCount: 1200, firstClearGold: 9800,
+    spawnRate: 8.0, maxAlive: 400, enemies: ['bone_thrall', 'bone_archer', 'grave_knight', 'hulk'],
+    hpMul: 6.1, speedMul: 1.50, damageMul: 4.2,
+    boss: { hp: 171_000, speed: 60, damage: 140, radius: 72, art: 'boss_nightmare', label: 'The Vaultkeeper' },
+  },
+  {
+    id: 18, name: 'Carrionfield', enemyCount: 1250, firstClearGold: 10600,
+    spawnRate: 8.0, maxAlive: 410, enemies: ['bird', 'crab', 'rogue', 'wretch', 'rat'],
+    hpMul: 6.3, speedMul: 1.52, damageMul: 4.6,
+    boss: { hp: 177_000, speed: 66, damage: 152, radius: 60, art: 'boss_mini', label: 'The Carrion Choir' },
+  },
+  {
+    id: 19, name: 'The Iron Throat', enemyCount: 1250, firstClearGold: 11400,
+    spawnRate: 8.0, maxAlive: 420, enemies: ['warrior', 'grave_knight', 'hulk', 'brute'],
+    hpMul: 6.4, speedMul: 1.54, damageMul: 5.0,
+    boss: { hp: 183_000, speed: 62, damage: 166, radius: 74, art: 'boss_nightmare', label: 'Throat of Iron' },
+  },
+  {
+    id: 20, name: 'The Pale Procession', enemyCount: 1300, firstClearGold: 12300,
+    spawnRate: 8.0, maxAlive: 420, enemies: ['skeleton', 'bone_thrall', 'bone_archer', 'grave_knight'],
+    hpMul: 6.6, speedMul: 1.56, damageMul: 5.4,
+    boss: { hp: 189_000, speed: 64, damage: 182, radius: 68, art: 'boss_mega', label: 'The Pale Marshal' },
+  },
+  {
+    id: 21, name: 'Where the Wood Ends', enemyCount: 1300, firstClearGold: 13300,
+    spawnRate: 8.0, maxAlive: 420, enemies: ['imp', 'rogue', 'bird', 'fiend', 'dire_rat'],
+    hpMul: 6.7, speedMul: 1.58, damageMul: 5.8,
+    boss: { hp: 195_000, speed: 68, damage: 200, radius: 64, art: 'boss_mini', label: 'The Last Root' },
+  },
+  {
+    id: 22, name: 'The Ossuary Deep', enemyCount: 1350, firstClearGold: 14400,
+    spawnRate: 8.0, maxAlive: 420, enemies: ['bone_thrall', 'skeleton', 'grave_knight', 'bone_archer', 'hulk'],
+    hpMul: 6.9, speedMul: 1.60, damageMul: 6.2,
+    boss: { hp: 201_000, speed: 66, damage: 220, radius: 76, art: 'boss_nightmare', label: 'Marrowmind' },
+  },
+  {
+    id: 23, name: 'The Furnace Below', enemyCount: 1350, firstClearGold: 15500,
+    spawnRate: 8.0, maxAlive: 420, enemies: ['brute', 'hulk', 'horned', 'crab', 'warrior'],
+    hpMul: 7.0, speedMul: 1.62, damageMul: 6.5,
+    boss: { hp: 207_000, speed: 64, damage: 242, radius: 78, art: 'boss_mega', label: 'The Bellows' },
+  },
+  {
+    id: 24, name: 'The Widow\'s Vigil', enemyCount: 1400, firstClearGold: 16800,
+    spawnRate: 8.0, maxAlive: 420, enemies: ['grave_knight', 'bone_archer', 'warrior', 'fiend', 'bone_thrall'],
+    hpMul: 7.2, speedMul: 1.64, damageMul: 6.8,
+    boss: { hp: 212_000, speed: 68, damage: 266, radius: 72, art: 'boss_nightmare', label: 'She Who Waited' },
+  },
+  {
+    id: 25, name: 'The Grave of Graves', enemyCount: 1400, firstClearGold: 18100,
+    spawnRate: 8.0, maxAlive: 420,
+    enemies: ['grave_knight', 'hulk', 'bone_archer', 'bone_thrall', 'fiend', 'warrior'],
+    hpMul: 7.4, speedMul: 1.66, damageMul: 7.2,
+    boss: { hp: 218_000, speed: 70, damage: 292, radius: 84, art: 'boss_nightmare', label: 'GRAVEBORN' },
   },
 ] as const;
 
@@ -369,7 +484,13 @@ export function descentStage(stageId: number, depth: number, asc = 0): StageDef 
     // ⚠️ Hasarın TAVANI YOK — hıza tavan koymak zorunlu (kaçış ölmesin) ama
     // hasar tam da koşuyu bitirmesi istenen şey. Tavan koymak "duvar takvim"
     // sorununu geri getirirdi.
-    damageMul: Math.pow(DESCENT.damageGrowth, d) * ascensionDamageMul(a),
+    //
+    // ⚠️ `base.damageMul` DE ÇARPILIYOR. Bu unutulmuştu ve zincirin kopuk
+    // halkasıydı: bölüm 10'un merdiveni ile bölüm 1'in merdiveni hasar
+    // açısından AYNI oluyordu. Kampanyada zorluk candan hasara taşınınca
+    // sıralama ekseni de bozuldu (kolay bölümü farmlamak öne geçti).
+    // Zor bir bölümün altındaki iniş her iki eksende de daha zor olmalı.
+    damageMul: (base.damageMul ?? 1) * Math.pow(DESCENT.damageGrowth, d) * ascensionDamageMul(a),
   };
 
   if (isBoss) {
@@ -411,7 +532,14 @@ export function challengeRating(stageId: number, depth: number, asc = 0): number
   // Ayrıca `descentStage` zaten hem sayıyı hem canı ölçekliyor, o yüzden
   // ayrı bir ascension terimi EKLENMİYOR — iki kez saymak olurdu.
   const def = descentStage(stageId, d, asc);
-  return def.enemyCount * def.hpMul;
+  // ⚠️ HASAR ÇARPANI DA SAYILIYOR. Eskiden yalnızca `enemyCount × hpMul`
+  // vardı ve o zaman doğruydu: zorluğun tamamı candaydı. Kampanya 25 bölüme
+  // çıkarken zorluk CANDAN HASARA taşındı (can büyütmek bölümü uzatıyor,
+  // zorlaştırmıyor) ve ölçüm bunu yakaladı: bölüm 1'in derinliği bölüm 10'un
+  // derinliğini geçmeye başladı, yani tablo kolay bölümü farmlamayı
+  // ödüllendiriyordu. Sıralama ekseni "yere serilmesi gereken toplam iş"tir;
+  // hayatta kalmak da o işin parçası.
+  return def.enemyCount * def.hpMul * (def.damageMul ?? 1);
 }
 
 // ── GOLD MUSLUĞU ──────────────────────────────────────────────────────

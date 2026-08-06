@@ -20,7 +20,7 @@
 //
 // Çalıştır:  npx tsx src/game/forge.test.mts
 
-import { STAGES, STAT_BASE, STAT_CAP, depthGold, descentStage, type StatKey } from './config.js';
+import { STAGES, STAT_BASE, STAT_CAP, depthGold, descentStage, stageById, type StatKey } from './config.js';
 import { FORGE, costOf, permanentBonus, spentOn, totalCost, treeTotalCost } from './forge.js';
 
 const FAIL: string[] = [];
@@ -214,7 +214,11 @@ console.log('\n[8] Motora yansıma');
   // darboğaz DPS değil düşmanın sahaya çıkma hızı — ölçüm gürültüye boğulur.
   // (Bu tuzağa bir kez düşüldü: yükseltmeli oyuncu "daha yavaş" çıktı.)
   // Bu yüzden ölçüm EN ZOR bölümde, SABİT pencerede, kill sayısıyla yapılıyor.
-  const heavy = STAGES[STAGES.length - 1];
+  // ⚠️ ÖLÇÜM BÖLÜMÜ "SON BÖLÜM" DEĞİL. Kampanya 25 bölüme çıkınca burası
+  // kırmızı yandı: 25. bölümün hasar çarpanı 7,2 ve tek temas oyuncuyu
+  // öldürüyor, sahne dolmadan koşu bitiyordu. Bu ölçümün niyeti "en zoru
+  // ölç" değil, "YOĞUN ve temsili bir sahnede yükseltme fark yaratıyor mu".
+  const heavy = stageById(10) ?? STAGES[STAGES.length - 1];
   const killsIn = (g: InstanceType<typeof Game>, seconds: number) => {
     g.setViewport(1280, 720);
     let peakAlive = 0;
