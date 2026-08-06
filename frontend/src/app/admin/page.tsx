@@ -42,6 +42,9 @@ interface Economy {
   slices: { kind: string; gold: number; count: number }[];
   faucet: number;
   sink: number;
+  /** el değiştiren ama YARATILMAYAN gold — musluğa dahil DEĞİL */
+  redistributed: number;
+  vault: { balance: number; filled: number; paid: number; saglikli: boolean };
 }
 interface Detail {
   player: PlayerRow & { cosmetics?: unknown; ossuary?: number; dust?: number };
@@ -194,6 +197,23 @@ export default function AdminPage() {
             />
             <Stat label="Net birikim" value={(eco.faucet - eco.sink).toLocaleString('en-US')}
               tone={eco.faucet - eco.sink > 0 ? 'warn' : undefined} />
+            {/* ⚠️ AYRI KUTU, MUSLUĞA EKLİ DEĞİL. Crypt çekimi pozitif gold
+                yazar ama yeni gold değildir; musluğa saymak panoyu yalancı
+                yapardı (bkz. ledger.ts REDISTRIBUTION). */}
+            <Stat label="El değiştiren (dağıtım)" value={eco.redistributed.toLocaleString('en-US')} />
+          </div>
+
+          {/* CRYPT VAULT — kasanın sağlığı.
+              ⚠️ `ödenen ≤ giren` bozulursa bir yerde GOLD BASILMIŞ demektir.
+              Bu yüzden ayrı bir satır değil, KIRMIZI YANAN bir uyarı. */}
+          <div style={{ display: 'grid', gap: 8, marginTop: 8,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+            <Stat label="Kasa bakiyesi" value={eco.vault.balance.toLocaleString('en-US')} />
+            <Stat label="Kasaya giren" value={eco.vault.filled.toLocaleString('en-US')} />
+            <Stat label="Kasadan ödenen" value={eco.vault.paid.toLocaleString('en-US')} />
+            <Stat label="Kasa bütünlüğü"
+              value={eco.vault.saglikli ? 'SAĞLAM' : 'BOZUK — GOLD BASILMIŞ'}
+              tone={eco.vault.saglikli ? undefined : 'warn'} />
           </div>
           {eco.slices.length > 0 && (
             <Table head={['Kalem', 'Gold', 'İşlem']}>

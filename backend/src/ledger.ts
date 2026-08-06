@@ -117,11 +117,29 @@ export interface EconomySlice {
  * değersizleşir; tersi olursa oyuncu hiçbir şey alamaz. Faz 2'nin bütün
  * sink çalışması bu oranı dengelemek içindi, artık ölçülebiliyor.
  */
+/**
+ * ⚠️ YENİDEN DAĞITIM MUSLUK DEĞİLDİR — ve işaretine bakarak ayırt EDİLEMEZ.
+ *
+ * `crypt` (Crypt Vault haftalık çekimi) POZİTİF gold yazıyor ama yeni gold
+ * DEĞİL: daha önce bir sink'ten kesilip kasada bekleyen paranın el
+ * değiştirmesi. İşaretine bakan bir pano onu musluk sayar ve "musluk büyüdü"
+ * der — panonun tek işi "ekonomi sağlıklı mı" sorusuna cevap vermekken
+ * yalan söylemiş olur.
+ *
+ * Aynı gerekçe `market_cancel` için de geçerli: escrow'dan geri dönen gold
+ * kazanç değil, oyuncunun kendi parasının iadesi.
+ */
+const REDISTRIBUTION: ReadonlySet<string> = new Set<LedgerKind>(['crypt', 'market_cancel']);
+
 export async function economy(sinceHours = 24 * 7): Promise<{
   since: string;
   slices: EconomySlice[];
   faucet: number;
   sink: number;
+  /** el değiştiren ama YARATILMAYAN gold — musluğa dahil DEĞİL */
+  redistributed: number;
+  /** Crypt Vault'un anlık hâli — `paid <= filled` bozulursa gold basılmış demektir */
+  vault: { balance: number; filled: number; paid: number; saglikli: boolean };
 }> {
   const since = new Date(Date.now() - sinceHours * 3600_000);
   const rows = await prisma.ledger.groupBy({
@@ -135,13 +153,23 @@ export async function economy(sinceHours = 24 * 7): Promise<{
     .map((r) => ({ kind: r.kind, gold: r._sum.gold ?? 0, count: r._count }))
     .sort((a, b) => a.gold - b.gold);
 
-  // Musluk = pozitif toplamlar, sink = negatiflerin mutlak değeri
+  // Musluk = YARATILAN gold, sink = YOK EDİLEN gold, dağıtım = el değiştiren
   let faucet = 0;
   let sink = 0;
+  let redistributed = 0;
   for (const s of slices) {
+    if (REDISTRIBUTION.has(s.kind)) { redistributed += Math.abs(s.gold); continue; }
     if (s.gold > 0) faucet += s.gold; else sink += -s.gold;
   }
-  return { since: since.toISOString(), slices, faucet, sink };
+
+  const v = await prisma.cryptVault.findUnique({ where: { id: 1 } });
+  const vault = {
+    balance: v?.balance ?? 0, filled: v?.filled ?? 0, paid: v?.paid ?? 0,
+    // ⚠️ Bu bayrak panoda KIRMIZI yanmalı: bozulursa bir yerde gold basılmış.
+    saglikli: (v?.paid ?? 0) <= (v?.filled ?? 0) && (v?.balance ?? 0) >= 0,
+  };
+
+  return { since: since.toISOString(), slices, faucet, sink, redistributed, vault };
 }
 
 /** Bir oyuncunun son hareketleri — kendi Tavern geçmişi ve admin dosyası için */

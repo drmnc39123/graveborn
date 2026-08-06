@@ -126,5 +126,27 @@ console.log('\n[6] ledgerWrite tek başına transaction dizisine giriyor');
 await temizle();
 await prisma.$disconnect();
 
+
+console.log('\n[7] ⭐ Yeniden dağıtım MUSLUK sayılmıyor');
+{
+  // ⚠️ Crypt çekimi POZİTİF gold yazıyor ama yeni gold DEĞİL: daha önce bir
+  // sink'ten kesilip kasada bekleyen paranın el değiştirmesi. İşaretine bakan
+  // bir pano onu musluk sayar ve "musluk büyüdü" der — panonun tek işi
+  // "ekonomi sağlıklı mı" sorusuna cevap vermekken YALAN SÖYLEMİŞ olur.
+  const once = await economy(24);
+  await ledgerWrite({ wallet: W, kind: 'crypt', gold: 5_000, detail: 'test cekim' });
+  const sonra = await economy(24);
+
+  const dMusluk = sonra.faucet - once.faucet;
+  const dDagitim = sonra.redistributed - once.redistributed;
+  console.log(`     +5.000 crypt → musluk +${dMusluk} · dağıtım +${dDagitim}`);
+  check('crypt çekimi MUSLUĞA yazılmıyor', dMusluk === 0, `musluk +${dMusluk}`);
+  check('crypt çekimi DAĞITIMA yazılıyor', dDagitim === 5_000, `dağıtım +${dDagitim}`);
+
+  check('kasa sağlık bayrağı raporlanıyor', typeof sonra.vault.saglikli === 'boolean');
+  check('kasa sağlıklı (ödenen ≤ giren)', sonra.vault.saglikli,
+    `giren ${sonra.vault.filled} · ödenen ${sonra.vault.paid}`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ DEFTER SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
