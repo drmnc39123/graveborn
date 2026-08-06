@@ -26,6 +26,9 @@ export type LedgerKind =
   | 'crypt'          // Crypt Vault'tan haftalık çekim (YENİ GOLD DEĞİL — bkz. crypt.ts)
   | 'crypt_deed'     // deed alımı. ⚠️ SINK_KINDS'ta YOK: kasaya katkı yapmaz,
                      // yoksa oyuncu kendi alımından pay alırdı. Tamamen imha.
+  | 'skill'          // beceri ağacı respec'i. ⚠️ GÜÇ SATMIYOR — oyuncu zaten
+                     // sahip olduğu gücü yeniden diziyor; sonsuz, tekrarlanabilir
+                     // ve hiçbir şey ÜRETMEYEN bir sink.
   | 'guild';         // lonca kurma + hazine bağışı. ⚠️ GERİ ÇEKİLEMEZ —
                      // çekilebilseydi lonca oyuncular arası transfer kanalı olurdu.
 

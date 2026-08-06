@@ -170,6 +170,46 @@ console.log('\n[6] Backfill');
   check('backfill mevcut rekoru düşürmüyor', (await get(0)).bestRating === yuksek);
 }
 
+console.log('\n[6b] ⭐ DERİN puanlarda kayan nokta — "sahte yeni rekor"');
+{
+  // ⚠️ BU TEST BİR HATA YAKALADI ve DERİNLİK BURADA ŞART.
+  //
+  // `bestRating` Postgres'te `double precision`; Prisma üzerinden geri
+  // okunurken son bit kayıyor. Küçük puanlarda (yukarıdaki testlerin
+  // kullandığı derinlikler) fark hiç ortaya çıkmıyordu; derin bir inişte puan
+  // yüz milyonlara çıkınca bir ULP yetti — ölçülen:
+  //   yazılan 262.018.579,60558873 → okunan 262.018.579,60558870
+  //
+  // İki görünür sonucu vardı: `backfill` aynı satırı sonsuza kadar yeniden
+  // yazıyordu ve AYNI derinliği tekrar geçen oyuncuya her koşuda "YENİ REKOR"
+  // deniyordu.
+  const derin = 65;
+  const rating = challengeRating(1, derin);
+  console.log(`     bölüm 1 · derinlik ${derin} → puan ${rating.toPrecision(18)}`);
+
+  await prisma.player.update({
+    where: { wallet: w(2) },
+    data: { depthPaid: { 1: derin }, bestStage: 0, bestDepth: 0, bestRating: 0 },
+  });
+
+  check('ilk kez REKOR', await recordDescent(w(2), 'descent', 1, derin));
+  check('AYNI derinlik ikinci kez rekor DEĞİL', !(await recordDescent(w(2), 'descent', 1, derin)));
+  check('üçüncü kez de rekor değil', !(await recordDescent(w(2), 'descent', 1, derin)));
+
+  // ⚠️ Eşik fazla geniş olmamalı: gerçek bir ilerleme HÂLÂ rekor sayılmalı
+  check('bir derinlik DAHA inmek yine rekor',
+    await recordDescent(w(2), 'descent', 1, derin + 1));
+
+  await prisma.player.update({
+    where: { wallet: w(2) },
+    data: { depthPaid: { 1: derin + 1 }, bestStage: 0, bestDepth: 0, bestRating: 0 },
+  });
+  const b1 = await backfill();
+  const b2 = await backfill();
+  check('derin puanda backfill İDEMPOTENT', b2.updated === 0,
+    `1. geçiş ${b1.updated}, 2. geçiş ${b2.updated}`);
+}
+
 // ── 7) Yeniden kurma (kaçış valfi) ──
 // Rekor "sadece artar" olduğu için yanlış yazılmış bir satır kendiliğinden
 // DÜZELMEZ. Süre tabanı eklenmeden önce yazılmış "derinlik 500" kaydı tam

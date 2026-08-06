@@ -404,12 +404,26 @@ export function salvageValue(it: GearItem): number {
 /** Yüzde mi düz sayı mı — arayüz ve testler tek yerden okusun */
 const FLAT: ReadonlySet<StatKey> = new Set<StatKey>(['armor', 'amount', 'revival', 'recovery']);
 
+/**
+ * TERS İSTATİSTİKLER — küçük olanın iyi olduğu alanlar.
+ *
+ * ⚠️ Bunlarda işaret `kind`'dan DEĞİL ham değerden okunur. İlk sürüm
+ * hepsinde `kind`'ı kullanıyordu ve ölçüldü: cooldown laneti ekranda
+ * "−%4 cooldown" yazıyordu — kırmızıydı ama metin "daha az bekleme", yani
+ * İYİ bir şey gibi okunuyordu. Renk ile metin birbiriyle çelişiyordu.
+ *
+ * Ham işaret gösterilince cümle her iki yönde de doğru oluyor:
+ * "−%4 cooldown" gerçekten daha az bekleme (iyi), "+%4 cooldown" daha çok
+ * bekleme (kötü). Renk yalnızca DOĞRULUYOR, tek başına anlam taşımıyor.
+ */
+const INVERSE: ReadonlySet<StatKey> = new Set<StatKey>(['cooldown']);
+
 /** "+%12 damage" / "−1 armor" gibi tek satırlık okunuş */
 export function affixText(a: Affix): string {
   const isim = STAT_NAME[a.stat] ?? a.stat;
-  // ⚠️ İŞARET `kind`'DAN OKUNUR, `value`'dan DEĞİL. cooldown'da iyi olan eksi;
-  // ham işareti göstermek oyuncuya "−%8 cooldown kötü" dedirtirdi.
-  const art = a.kind === 'boon' ? '+' : '−';
+  const art = INVERSE.has(a.stat)
+    ? (a.value < 0 ? '−' : '+')          // ham işaret — bkz. INVERSE
+    : (a.kind === 'boon' ? '+' : '−');
   const m = Math.abs(a.value);
   if (!FLAT.has(a.stat)) return `${art}${Math.round(m * 100)}% ${isim}`;
   // ⚠️ Düz sayılar okunabilir olmalı: `recovery` kesirli kalabiliyor

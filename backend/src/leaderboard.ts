@@ -66,11 +66,29 @@ export async function recordDescent(
   if (!Number.isFinite(rating) || rating <= 0) return false;
 
   const hit = await prisma.player.updateMany({
-    where: { wallet, bestRating: { lt: rating } },
+    // ⚠️ Ham `lt: rating` YETMEZ — bkz. RATING_EPS.
+    where: { wallet, bestRating: { lt: rating * (1 - RATING_EPS) } },
     data: { bestStage: stageId, bestDepth: depth, bestRating: rating },
   });
   return hit.count > 0;
 }
+
+/**
+ * PUAN KARŞILAŞTIRMA TOLERANSI — bir ULP'yi yutar, gerçek ilerlemeyi yutmaz.
+ *
+ * ⚠️ `bestRating` Postgres'te `double precision` ve Prisma üzerinden geri
+ * okunurken son bit kayabiliyor. ÖLÇÜLDÜ: 262.018.579,60558873 yazılıp
+ * 262.018.579,60558870 okundu — bağıl fark 1,1e-16, yani tek ULP.
+ *
+ * Ham `>` / `lt` ile bunun iki görünür sonucu vardı:
+ *   • `backfill()` aynı satırı SONSUZA KADAR yeniden yazıyordu (ikinci
+ *     geçiş hâlâ "1 güncelleme" raporluyordu — testi bu düşürdü)
+ *   • aynı derinliği tekrar geçen oyuncuya her koşuda "YENİ REKOR" denirdi
+ *
+ * Eşik BAĞIL çünkü puan büyüklüğü derinlikle uçuyor (binlerden yüz
+ * milyonlara); sabit bir epsilon sığ oyuncuda kaba, derinde etkisiz kalırdı.
+ */
+const RATING_EPS = 1e-12;
 
 /** Top N — banlılar dışarıda, hiç inmemişler dışarıda */
 export async function top(limit = 50): Promise<Row[]> {
@@ -193,7 +211,9 @@ export async function backfill(): Promise<{ scanned: number; updated: number }> 
       if (r > bestRating) { bestRating = r; bestStage = stageId; bestDepth = depth; }
     }
 
-    if (bestRating > p.bestRating) {
+    // ⚠️ Ham `>` YETMEZ — bkz. RATING_EPS. Bu satır olmadan backfill
+    // idempotent değildi ve her çağrıda aynı satırları yeniden yazıyordu.
+    if (bestRating > p.bestRating * (1 + RATING_EPS) + RATING_EPS) {
       await prisma.player.update({
         where: { wallet: p.wallet },
         data: { bestStage, bestDepth, bestRating },

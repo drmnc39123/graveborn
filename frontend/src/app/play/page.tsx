@@ -15,6 +15,7 @@ import { ReliquaryPanel } from '@/components/ReliquaryPanel';
 import { WorldBossPanel } from '@/components/WorldBossPanel';
 import { GuildPanel } from '@/components/GuildPanel';
 import { GearPanel } from '@/components/GearPanel';
+import { SkillPanel } from '@/components/SkillPanel';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -472,6 +473,12 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : panel === 'paths' ? (
+              <SkillPanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
+              />
             ) : panel === 'guild' ? (
               <GuildPanel
                 progress={progress ?? loadProgress()}
@@ -519,6 +526,8 @@ function runBonus(upgrades: Record<string, number>, ticket: RunTicket) {
   // ⚠️ Ekipman da AYNI kanaldan giriyor — motor ekipmanı bilmiyor bile.
   // Motorda tek satır değişmediği için determinizm mührü de bozulmuyor.
   b = mergeBonus(b, ticket.gear);
+  // ⚠️ Beceri ağacı da aynı kanaldan — dördüncü kaynak, sıfır motor değişikliği.
+  b = mergeBonus(b, ticket.skills);
   return ticket.guildGrowth > 0 ? mergeBonus(b, { growth: ticket.guildGrowth }) : b;
 }
 

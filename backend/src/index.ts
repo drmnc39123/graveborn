@@ -23,6 +23,7 @@ import {
 import {
   GearError, equipGear, equippedBonus, grantRunGear, listGear, salvageGear, unequipSlot,
 } from './gear.js';
+import { SkillError, listSkills, setSkills, skillsBonusOf } from './skills.js';
 import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
@@ -98,7 +99,7 @@ for (const yol of [
   '/market/list', '/market/cancel', '/market/buy',
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
-  '/gear/equip', '/gear/unequip', '/gear/salvage',
+  '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -617,6 +618,9 @@ app.post('/run/start', wrap(async (req, res) => {
   // hiçbir zaman istemci olmamalı. İstemci takılı parçalarını zaten biliyor
   // ama BEYAN etmemeli — beyan ettiği an "5 Graveborn takılıyım" diyebilir.
   const gear = await equippedBonus(wallet);
+  // ⚠️ Beceri bonusu da SUNUCUDAN — üçüncü kez aynı kural: bir bonusun
+  // kaynağı hiçbir zaman istemci olmamalı.
+  const skills = await skillsBonusOf(wallet);
 
   await acikKosulariIptalEt(wallet);   // ⚠️ bkz. fonksiyon başlığı — para basma koruması
 
@@ -638,7 +642,7 @@ app.post('/run/start', wrap(async (req, res) => {
   // yoksa oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
   // `guildGrowth`: loncanın verdiği XP bonusu (0 = loncasız)
   // `gear`: takılı ekipmanın toplam bonusu — motor bunu `permanent` kanalında okur
-  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth, gear });
+  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth, gear, skills });
 }));
 
 const finishSchema = z.object({
@@ -990,6 +994,29 @@ app.post('/gear/salvage', wrap(async (req, res) => {
     res.json({ ...out, progress: toProgress(await getOrCreatePlayer(wallet)), gear: await listGear(wallet) });
   } catch (e) {
     if (e instanceof GearError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+// ── BECERİ AĞACI ──
+//
+// ⚠️ Puan SATIN ALINMIYOR, `depthPaid`'ten TÜRETİLİYOR (bkz. skills.ts).
+// Gold yalnızca RESPEC'te el değiştiriyor ve o da güç satmıyor — oyuncu
+// zaten sahip olduğu gücü yeniden diziyor.
+app.get('/skills', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json(await listSkills(wallet));
+}));
+
+app.post('/skills/set', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    const out = await setSkills(wallet, req.body?.nodes);
+    res.json({ ...out.view, charged: out.charged, progress: toProgress(await getOrCreatePlayer(wallet)) });
+  } catch (e) {
+    if (e instanceof SkillError) { res.status(e.status).json({ error: e.code }); return; }
     throw e;
   }
 }));

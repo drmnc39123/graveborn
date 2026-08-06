@@ -77,6 +77,11 @@ export interface RunTicket {
    */
   gear: Partial<Record<StatKey, number>>;
   /**
+   * Beceri ağacının toplam bonusu. ⚠️ SUNUCUDAN gelir; demoda boş, çünkü
+   * puan sunucunun doğruladığı derinlikten türüyor.
+   */
+  skills: Partial<Record<StatKey, number>>;
+  /**
    * Demoda koşuya taşınan bahis (sunucu yok, istemci çözecek).
    * Cüzdan modunda null — orada bahsi Run satırı taşıyor.
    */
@@ -491,12 +496,15 @@ export async function startRun(
       guildGrowth: 0,
       // Demoda ekipman da yok — sunucuda üretiliyor
       gear: {},
+      // Demoda beceri ağacı da yok — puan sunucuda doğrulanan derinlikten türüyor
+      skills: {},
       wager: wagerLive ? w! : null,
     };
   }
   const out = await api<{
     runId: string; seed: number; charms?: string[]; startDepth?: number; ascension?: number;
     guildGrowth?: number; gear?: Partial<Record<string, number>>;
+    skills?: Partial<Record<string, number>>;
   }>(
     '/run/start',
     { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth, ascension: wantAscension } },
@@ -518,6 +526,8 @@ export async function startRun(
     // ⚠️ Takılı ekipmanın bonusu da SUNUCUDAN. İstemci parçalarını biliyor
     // ama beyan etmemeli — beyan ettiği an "5 Graveborn takılıyım" diyebilir.
     gear: (out.gear ?? {}) as RunTicket['gear'],
+    // ⚠️ Beceri bonusu da SUNUCUDAN — üçüncü kez aynı kural.
+    skills: (out.skills ?? {}) as RunTicket['skills'],
     wager: null,
   };
 }
@@ -674,6 +684,34 @@ export async function salvageGear(ids: string[]): Promise<{
   dust: number; removed: number; progress: Progress; gear: GearView;
 }> {
   return api('/gear/salvage', { method: 'POST', body: { ids } });
+}
+
+// ── BECERİ AĞACI ──────────────────────────────────────────────────────
+// ⚠️ DEMO MODUNDA YOK. Puan `depthPaid`'ten türüyor ve doğrulaması sunucuda;
+// demoda sahte bir ağaç göstermek, olmayan bir gücü varmış gibi göstermek
+// olurdu (ekipmandaki gerekçenin aynısı).
+
+export interface SkillState {
+  nodes: string[];
+  points: number;
+  spent: number;
+  /** dağılımı bozmanın gold bedeli */
+  respec: number;
+}
+
+export async function fetchSkills(): Promise<SkillState> {
+  return api<SkillState>('/skills');
+}
+
+/**
+ * Dağılımı kaydet — TAM LİSTE gönderilir, fark değil.
+ *
+ * ⚠️ Sunucu listeyi `sanitizeSkills`'ten geçirip ÇIKTISINI yazıyor; yani
+ * dönen `nodes` istemcinin istediği değil, sunucunun kabul ettiği.
+ * `charged` > 0 ise bu bir respec'ti ve gold alındı.
+ */
+export async function saveSkills(nodes: string[]): Promise<SkillState & { charged: number; progress: Progress }> {
+  return api('/skills/set', { method: 'POST', body: { nodes } });
 }
 
 export async function buyGuildUpgrade(): Promise<MyGuild> {

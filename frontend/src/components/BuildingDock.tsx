@@ -34,6 +34,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // ilerleme (gold'la satın alınır), ekipman YATAY (bulunur). İkisini yan yana
   // koymak, oyuncunun iki farklı güç eksenini olduğu gibi okumasını sağlıyor.
   { id: 'gear', label: 'GEAR', sub: 'Your gear — what you found in the Wilderness' },
+  // ⚠️ GEAR'ın hemen yanında: ikisi de YATAY ilerleme. Ekipman "ne buldun",
+  // ağaç "neye yatırım yaptın" sorusunu cevaplıyor; yan yana durunca oyuncu
+  // iki eksenin aynı aileden olduğunu okumadan görüyor.
+  { id: 'paths', label: 'PATHS', sub: 'Your paths — skill points from the depths you reached' },
   { id: 'market', label: 'MARKET', sub: 'Marketplace — sell gold for $GRAVE' },
   { id: 'exchange', label: 'EXCHANGE', sub: 'The Exchange — player order book' },
   // ⚠️ Sonda duruyor ama en dikkat çeken yer olmalı — haftalık, kaçırılırsa

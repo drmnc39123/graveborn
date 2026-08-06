@@ -190,11 +190,20 @@ console.log('\n[6] Ters istatistik (cooldown) — işaret doğru mu');
   const forgeCd = permanentBonus({ cooldown: 5 }).cooldown ?? 0;
   check('Forge ile AYNI yön', forgeCd < 0 && cdBoon[0].value < 0, `forge ${forgeCd}`);
 
-  // Okunuş `kind`'dan gelmeli: oyuncu "−%8 cooldown" görüp kötü sanmamalı
-  check('okunuşta cooldown bonusu ARTI görünüyor',
-    affixText(cdBoon[0]).startsWith('+'), affixText(cdBoon[0]));
-  check('okunuşta cooldown laneti EKSİ görünüyor',
-    affixText(cdBane[0]).startsWith('−'), affixText(cdBane[0]));
+  // ⚠️ OKUNUŞ HAM İŞARETİ GÖSTERİR — ve bu bir DÜZELTMENİN sonucu.
+  // Önce `kind`'dan okunuyordu: cooldown laneti ekranda "−%4 cooldown"
+  // yazıyordu. Kırmızıydı ama metin "daha az bekleme", yani İYİ bir şey gibi
+  // okunuyordu — renk ile cümle birbiriyle çelişiyordu. Ham işaretle her iki
+  // yön de doğru bir cümle: az bekleme iyi, çok bekleme kötü.
+  check('cooldown bonusu "−%" okunuyor (daha az bekleme)',
+    affixText(cdBoon[0]).startsWith('−'), affixText(cdBoon[0]));
+  check('cooldown laneti "+%" okunuyor (daha çok bekleme)',
+    affixText(cdBane[0]).startsWith('+'), affixText(cdBane[0]));
+  // Ters OLMAYAN istatistiklerde kural değişmiyor: işaret `kind`'dan
+  const normalBane = ORNEKLER.flatMap((it) => it.affixes)
+    .find((a) => a.kind === 'bane' && a.stat !== 'cooldown')!;
+  check('ters olmayan lanet yine "−" okunuyor',
+    affixText(normalBane).startsWith('−'), affixText(normalBane));
 }
 
 console.log('\n[7] Ölü satır yok — her ek bir şey ifade ediyor mu');

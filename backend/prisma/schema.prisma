@@ -51,6 +51,12 @@ model Player {
   /// alınmış başarımlar (achievements.ts id'leri)
   achievements Json  @default("[]")
 
+  /// Beceri ağacı dağılımı (skills.ts düğüm id'leri).
+  /// ⚠️ Puan BU ALANDA TUTULMUYOR — `depthPaid`'ten türetiliyor (bkz.
+  /// skills.pointsOf). Puanı ayrı bir sütunda tutmak, doğrulanması gereken
+  /// ikinci bir sayı ve senkronizasyon dışı kalabilecek bir kaynak olurdu.
+  skills       Json  @default("[]")
+
   /// Üyesi olduğu lonca (yoksa null). ⚠️ Bir oyuncu TEK loncada olabilir —
   /// alan Player'da tutuluyor, ayrı bir üyelik tablosu YOK. Ayrı tablo
   /// olsaydı "iki loncaya birden üye" durumu bir hataya bakardı; burada
