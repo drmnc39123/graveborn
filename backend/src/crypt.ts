@@ -24,7 +24,7 @@ import type { LedgerKind } from './ledger.js';
  * ⚠️ `run` YOK: o musluk, harcama değil.
  */
 const SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
-  'forge', 'charm', 'reliquary', 'ossuary', 'wager',
+  'forge', 'charm', 'reliquary', 'ossuary', 'wager', 'guild',
 ]);
 
 export function isCryptSink(kind: string, gold: number): boolean {

@@ -100,6 +100,10 @@ export function ChatPanel() {
               </div>
             ) : msgs.map((m, i) => (
               <div key={`${m.at}-${i}`} style={{ fontSize: 11.5, lineHeight: 1.45 }}>
+                {/* ⚠️ Lonca etiketi sohbette görünmezse lonca da görünmez.
+                    İnsanlar bir topluluğa ancak onun VARLIĞINI gördükleri
+                    için katılır — etiket, loncanın reklamıdır. */}
+                {m.g && <span style={{ color: C.ice, fontWeight: 900 }}>[{m.g}] </span>}
                 <span style={{ color: C.candle, fontWeight: 900 }}>{m.n}</span>
                 <span style={{ color: C.boneFaint }}>: </span>
                 <span style={{ color: C.bone, wordBreak: 'break-word' }}>{m.m}</span>

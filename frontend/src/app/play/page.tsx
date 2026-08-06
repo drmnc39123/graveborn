@@ -13,6 +13,7 @@ import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
 import { ReliquaryPanel } from '@/components/ReliquaryPanel';
 import { WorldBossPanel } from '@/components/WorldBossPanel';
+import { GuildPanel } from '@/components/GuildPanel';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -247,7 +248,7 @@ export default function PlayPage() {
           startDepth={screen.ticket.startDepth}
           ascension={screen.ticket.ascension}
           aura={p.equipped.aura ?? null}
-          permanent={mergeBonus(permanentBonus(p.upgrades), charmBonus(screen.ticket.charms))}
+          permanent={runBonus(p.upgrades, screen.ticket)}
           onFinish={finishRun}
         />
       </div>
@@ -385,6 +386,12 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : panel === 'guild' ? (
+              <GuildPanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
+              />
             ) : panel === 'tavern' ? (
               <RecordsPanel progress={progress ?? loadProgress()} onChange={setProgress} onError={setNote} />
             ) : panel === 'market' ? (
@@ -412,6 +419,20 @@ export default function PlayPage() {
       )}
     </div>
   );
+}
+
+/**
+ * Koşuya giren toplam bonus: Forge + tılsımlar + lonca.
+ *
+ * ⚠️ LONCA BONUSU BİLETTEN OKUNUR, kayıttan değil. Kayıttaki lonca koşu
+ * sırasında değişebilir (biri seviye yükseltir, biri ayrılır); koşunun bonusu
+ * BAŞLADIĞI andaki bonus olmalı — ve o anı sunucu mühürledi.
+ */
+function runBonus(upgrades: Record<string, number>, ticket: RunTicket) {
+  const base = mergeBonus(permanentBonus(upgrades), charmBonus(ticket.charms));
+  return ticket.guildGrowth > 0
+    ? mergeBonus(base, { growth: ticket.guildGrowth })
+    : base;
 }
 
 function Row({ label, value, hint }: { label: string; value: number; hint?: string }) {

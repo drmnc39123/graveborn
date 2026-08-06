@@ -51,6 +51,13 @@ model Player {
   /// alınmış başarımlar (achievements.ts id'leri)
   achievements Json  @default("[]")
 
+  /// Üyesi olduğu lonca (yoksa null). ⚠️ Bir oyuncu TEK loncada olabilir —
+  /// alan Player'da tutuluyor, ayrı bir üyelik tablosu YOK. Ayrı tablo
+  /// olsaydı "iki loncaya birden üye" durumu bir hataya bakardı; burada
+  /// şemanın kendisi imkânsız kılıyor.
+  guildId String?
+  guild   Guild?  @relation(fields: [guildId], references: [id], onDelete: SetNull)
+
   /// Crypt Deed kademesi (0 = yok). ⚠️ Kasa payı BUNA göre ağırlıklanıyor.
   cryptTier        Int  @default(0)
   /// kasadan en son çekilen hafta — aynı hafta iki kez çekilemez
@@ -104,6 +111,7 @@ model Player {
   awards   SeasonAward[]
 
   @@index([bestRating])
+  @@index([guildId])
   @@index([seasonWeek, seasonRating])
 }
 
@@ -313,4 +321,40 @@ model CryptVault {
   paid    Int @default(0)
 
   updatedAt DateTime @updatedAt
+}
+
+// LONCA — oyuncuyu oyuna değil BİRBİRİNE bağlayan katman (bkz. game/guild.ts).
+//
+// ⚠️ HAZİNE BİR SİNK, CÜZDAN DEĞİL. `treasury` yalnızca seviye satın almak
+// için harcanır ve GERİ ÇEKİLEMEZ. Çekilebilseydi lonca, oyuncular arası
+// gold transferi için bir kanal olurdu: kur, doldur, dağıt, kapat.
+//
+// ⚠️ Perk GOLD DEĞİL XP veriyor (bkz. GUILD_LEVELS). Gold veren bir lonca
+// perki musluğu üye sayısıyla çarpardı.
+model Guild {
+  id       String @id
+  name     String
+  /// [ETİKET] — sohbette ve tabloda adın yanında
+  tag      String @unique
+  /// kurucunun cüzdanı. Devir YOK: kurucu ayrılırsa lonca dağılır.
+  owner    String
+  level    Int    @default(1)
+  /// seviye almak için biriken gold (harcanınca düşer)
+  treasury Int    @default(0)
+  /// ömür boyu bağış — denetim için
+  donated  Int    @default(0)
+
+  /// ⚠️ ÜYE SAYACI — türetilebilir ama TÜRETİLEMEZ.
+  /// `count(members)` okuyup sonra yazmak Postgres'in varsayılan READ
+  /// COMMITTED izolasyonunda YARIŞ AÇAR: iki istek aynı anda 4 okur, ikisi
+  /// de tavanı geçmediğini sanır, üye 6 olur. ÖLÇÜLDÜ — 5 kişilik loncaya
+  /// 8 eşzamanlı istekten 6'sı girdi.
+  /// Sayaç satırda olunca `where: { memberCount: { lt: cap } }` ile TEK
+  /// SATIRLIK koşullu yazma yapılabiliyor; o atomik.
+  memberCount Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  members Player[]
+
+  @@index([level])
 }

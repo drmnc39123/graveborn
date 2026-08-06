@@ -16,6 +16,11 @@ import { canStart, resolveAscension, resolveStartDepth, settleRun } from './rewa
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, deedList, vaultState } from './crypt.js';
+import {
+  GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
+  upgradeGuild,
+} from './guild.js';
+import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
@@ -89,6 +94,7 @@ for (const yol of [
   '/run/start', '/run/finish', '/boss/start', '/boss/finish',
   '/market/list', '/market/cancel', '/market/buy',
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
+  '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -596,6 +602,12 @@ app.post('/run/start', wrap(async (req, res) => {
   // Ascension da öyle: kilidi oyuncunun ULAŞTIĞI derinlik açıyor
   const ascension = resolveAscension(p, body.data.mode, body.data.stageId, body.data.ascension);
 
+  // ⚠️ LONCA PERKİ SUNUCUDAN GELİR, istemciden gelmez. İstemci "loncam 5.
+  // seviye" diyebilseydi perk beyan edilen bir şey olurdu; burada okunuyor.
+  // (Ödül güvenliği buna dayanmıyor — o yapısal tavanlarda — ama bir bonusun
+  // kaynağı hiçbir zaman istemci olmamalı, kural sızıntı bırakmasın diye.)
+  const guildGrowth = await growthOf(wallet);
+
   await acikKosulariIptalEt(wallet);   // ⚠️ bkz. fonksiyon başlığı — para basma koruması
 
   await prisma.run.create({
@@ -614,7 +626,8 @@ app.post('/run/start', wrap(async (req, res) => {
   // oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
   // `ascension` geri dönüyor: istemci motoru BU değerle kurmak ZORUNDA,
   // yoksa oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
-  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension });
+  // `guildGrowth`: loncanın verdiği XP bonusu (0 = loncasız)
+  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth });
 }));
 
 const finishSchema = z.object({
@@ -805,6 +818,84 @@ app.post('/crypt/claim', wrap(async (req, res) => {
   if (!out.ok) { res.status(400).json({ error: out.reason }); return; }
   const player = await getOrCreatePlayer(wallet);
   res.json({ progress: toProgress(player), amount: out.amount, week: out.week });
+}));
+
+// ── LONCALAR ──
+//
+// ⚠️ Perk GOLD DEĞİL XP veriyor (bkz. game/guild.ts). Gold veren bir lonca
+// perki musluğu üye sayısıyla çarpardı ve bugün kapatılan iki para basma
+// açığının üçüncüsü olurdu.
+app.get('/guild', wrap(async (req, res) => {
+  const wallet = auth(req);
+  const [mine, list] = await Promise.all([
+    wallet ? myGuild(wallet) : Promise.resolve(null),
+    listGuilds(),
+  ]);
+  res.json({ mine, list, cost: GUILD_COST, levels: GUILD_LEVELS });
+}));
+
+app.post('/guild/create', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  try {
+    const guild = await createGuild(wallet, player.rev, req.body?.name, req.body?.tag);
+    // ⚠️ İLERLEME DE DÖNÜYOR. Kurma 25.000 gold düşürüyor; sadece loncayı
+    // döndürseydik navbar eski bakiyeyi göstermeye devam ederdi — ölçüldü,
+    // lonca kuruldu ve gold hiç eksilmemiş gibi durdu.
+    res.json({ guild, progress: toProgress(await getOrCreatePlayer(wallet)) });
+  } catch (e) {
+    if (e instanceof GuildError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/guild/join', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const id = z.string().uuid().safeParse(req.body?.id);
+  if (!id.success) { res.status(400).json({ error: 'gecersiz_lonca' }); return; }
+  try {
+    res.json({ guild: await joinGuild(wallet, id.data) });
+  } catch (e) {
+    if (e instanceof GuildError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/guild/leave', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    res.json(await leaveGuild(wallet));
+  } catch (e) {
+    if (e instanceof GuildError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/guild/donate', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  try {
+    const guild = await donate(wallet, player.rev, req.body?.amount);
+    res.json({ guild, progress: toProgress(await getOrCreatePlayer(wallet)) });
+  } catch (e) {
+    if (e instanceof GuildError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/guild/upgrade', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    res.json({ guild: await upgradeGuild(wallet) });
+  } catch (e) {
+    if (e instanceof GuildError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
 }));
 
 // ── MARKETPLACE ──

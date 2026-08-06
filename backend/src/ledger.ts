@@ -24,8 +24,10 @@ export type LedgerKind =
   | 'market_list'    // ilana kilitlenen gold (escrow)
   | 'market_cancel'  // escrow'dan geri dönen gold
   | 'crypt'          // Crypt Vault'tan haftalık çekim (YENİ GOLD DEĞİL — bkz. crypt.ts)
-  | 'crypt_deed';    // deed alımı. ⚠️ SINK_KINDS'ta YOK: kasaya katkı yapmaz,
+  | 'crypt_deed'     // deed alımı. ⚠️ SINK_KINDS'ta YOK: kasaya katkı yapmaz,
                      // yoksa oyuncu kendi alımından pay alırdı. Tamamen imha.
+  | 'guild';         // lonca kurma + hazine bağışı. ⚠️ GERİ ÇEKİLEMEZ —
+                     // çekilebilseydi lonca oyuncular arası transfer kanalı olurdu.
 
 export interface LedgerEntry {
   wallet: string;

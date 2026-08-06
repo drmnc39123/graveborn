@@ -23,6 +23,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { readToken } from './auth.js';
 import { bossWeek } from '@game/worldBoss';
 import { kaydet, konusabilir, son as sonMesajlar, temizle } from './chat.js';
+import { tagOf } from './guild.js';
 
 /** Sunucunun yayın hızı — istemci daha sık gönderse bile bu hızda dağıtılır */
 const TICK_MS = 125;              // 8 Hz
@@ -40,6 +41,13 @@ interface Peer {
   facingRight: boolean;
   /** takılı hale — hayaletin rengi ondan geliyor */
   aura: string | null;
+  /**
+   * Lonca etiketi. ⚠️ BAĞLANIRKEN BİR KEZ okunuyor, her mesajda değil:
+   * mesaj başına bir veritabanı sorgusu, sohbeti sunucunun en pahalı
+   * işlemi yapardı. Lonca değiştirenin etiketi bir sonraki bağlantıda
+   * güncellenir — kabul edilebilir gecikme.
+   */
+  tag: string | null;
   lastSeen: number;
   /**
    * ⚠️ HAYALET OLARAK YAYINLANIR MI. Sohbet aynı soketi kullanıyor ve köyde
@@ -117,7 +125,14 @@ export function attachPresence(server: Server) {
       ws, wallet, week, x: 0, y: 0, facingRight: true, aura: null,
       lastSeen: Date.now(),
       gorunur: false,   // konum gelene kadar hayalet DEĞİL (bkz. alan başlığı)
+      tag: null,
     });
+
+    // Lonca etiketini bir kez çek — hata olursa sohbet etiketsiz devam eder
+    tagOf(wallet).then((t) => {
+      const p = peers.get(ws);
+      if (p) p.tag = t;
+    }).catch(() => { /* etiket süs, bağlantıyı bozmaz */ });
 
     // ⚠️ Sohbet geçmişi BAĞLANIRKEN gönderiliyor. Yoksa odaya giren kişi boş
     // bir pencere görür ve "kimse yok" sanır — oysa iki dakika önce konuşma
@@ -151,7 +166,7 @@ export function attachPresence(server: Server) {
           // ⚠️ Hız sınırı BURADA. Express ara katmanı bu trafiği hiç görmüyor.
           if (!konusabilir(p.wallet)) return;
           p.lastSeen = Date.now();   // konuşmak da canlılık işareti
-          const msg = kaydet(short(p.wallet), metin);
+          const msg = kaydet(short(p.wallet), metin, Date.now(), p.tag);
           // Odadaki HERKESE — gönderen dahil (kendi mesajını görmeli)
           for (const [sock] of peers) {
             if (sock.readyState !== WebSocket.OPEN) continue;

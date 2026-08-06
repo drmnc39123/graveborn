@@ -36,6 +36,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // bir daha o boss gelmiyor. Rozet/vurgu Faz 5 cilasında eklenecek.
   { id: 'boss', label: 'BARROW', sub: "The Shared Barrow — this week's world boss" },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
+  // ⚠️ TAVERN'in yanında: ikisi de "kim olduğun" ile ilgili. Lonca sohbetin
+  // yanına konsaydı bir araç gibi görünürdü; profilin yanında bir AİDİYET
+  // gibi okunuyor — sekmenin işi tam olarak bu.
+  { id: 'guild', label: 'GUILD', sub: 'The Guilds — stand with others, share experience' },
   // ⚠️ Bir BİNA değil ama buraya konuldu: ayarlar ulaşılabilir olmalı ve
   // köyde onu barındıracak bir kapı yok. Ayrı bir dişli ikonu eklemek
   // rıhtımın dilini bozardı.

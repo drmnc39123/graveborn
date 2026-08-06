@@ -27,7 +27,7 @@ import type { CosmeticSlot } from '@/game/cosmetics';
 import { wagerPayout, wagerWon } from '@/game/wager';
 import { CHARM_SLOTS } from '@/game/charms';
 import { seedFromString } from '@/game/rng';
-import { api, getMode } from '@/lib/session';
+import { api, getMode, getWallet } from '@/lib/session';
 
 export interface Settled {
   progress: Progress;
@@ -52,6 +52,11 @@ export interface RunTicket {
   startDepth: number;
   /** sunucunun onayladığı ascension kademesi — motor BUNUNLA kurulur */
   ascension: number;
+  /**
+   * Loncanın verdiği XP bonusu (0.04 = +%4). ⚠️ SUNUCUDAN gelir; demoda 0,
+   * çünkü demo oyuncusunun loncası yok.
+   */
+  guildGrowth: number;
   /**
    * Demoda koşuya taşınan bahis (sunucu yok, istemci çözecek).
    * Cüzdan modunda null — orada bahsi Run satırı taşıyor.
@@ -449,11 +454,14 @@ export async function startRun(
         ? Math.min(Math.max(0, wantAscension), maxAscensionFor(
           STAGES.reduce((m, st) => Math.max(m, paidDepth(p, st.id)), 0)))
         : 0,
+      // Demoda lonca yok — sunucu kaydı gerektiriyor
+      guildGrowth: 0,
       wager: wagerLive ? w! : null,
     };
   }
   const out = await api<{
     runId: string; seed: number; charms?: string[]; startDepth?: number; ascension?: number;
+    guildGrowth?: number;
   }>(
     '/run/start',
     { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth, ascension: wantAscension } },
@@ -468,6 +476,10 @@ export async function startRun(
     // ⚠️ SUNUCUNUN döndürdüğü kademe — istenen değil. Motoru başka bir
     // kademede kurmak koşuyu doğrulanamaz hâle getirirdi.
     ascension: Math.max(0, out.ascension ?? 0),
+    // ⚠️ Loncanın XP bonusu SUNUCUDAN. `myGuild()` okuyup buradan geçirmek de
+    // mümkündü ama o, istemcinin beyan ettiği bir bonus olurdu — bir bonusun
+    // kaynağı hiçbir zaman istemci olmamalı.
+    guildGrowth: Math.max(0, out.guildGrowth ?? 0),
     wager: null,
   };
 }
@@ -544,4 +556,61 @@ export async function buyCryptDeed(): Promise<{ progress: Progress; tier: number
 
 export async function claimCrypt(): Promise<{ progress: Progress; amount: number; week: number }> {
   return api('/crypt/claim', { method: 'POST', body: {} });
+}
+
+// ── LONCALAR ──────────────────────────────────────────────────────────
+// ⚠️ DEMO MODUNDA YOK — Crypt ile aynı gerekçe: lonca ORTAK bir kayıt.
+// Ayrıca `growth` perkini KOŞUYA sunucu taşıyor (`/run/start`), buradan
+// okunan değer yalnızca gösterim — istemcinin bildirdiği bir bonus, ödül
+// hesabına giren bir bonus olamaz.
+
+export interface GuildSummary {
+  id: string; name: string; tag: string; level: number;
+  members: number; cap: number;
+}
+
+export interface MyGuild {
+  id: string; name: string; tag: string; owner: string;
+  level: number; treasury: number; donated: number;
+  members: { wallet: string; hero: string; bestRating: number }[];
+  cap: number; growth: number; nextCost: number | null;
+}
+
+export interface GuildState {
+  mine: MyGuild | null;
+  list: GuildSummary[];
+  cost: number;
+  /** ⚠️ Sadece "hangi satır benim" içindir — yetki değil, sunucu kendi bakar */
+  wallet: string | null;
+}
+
+export async function fetchGuilds(): Promise<GuildState> {
+  const out = await api<Omit<GuildState, 'wallet'>>('/guild');
+  return { ...out, wallet: getWallet() };
+}
+
+/** ⚠️ `progress` de dönüyor — kurma gold düşürüyor, navbar güncellenmeli */
+export async function createGuild(name: string, tag: string): Promise<{ guild: MyGuild; progress: Progress }> {
+  return api('/guild/create', { method: 'POST', body: { name, tag } });
+}
+
+export async function joinGuild(id: string): Promise<MyGuild> {
+  const { guild } = await api<{ guild: MyGuild }>('/guild/join', {
+    method: 'POST', body: { id },
+  });
+  return guild;
+}
+
+export async function leaveGuild(): Promise<{ dagildi: boolean }> {
+  return api('/guild/leave', { method: 'POST', body: {} });
+}
+
+export async function donateGuild(amount: number): Promise<{ guild: MyGuild; progress: Progress }> {
+  return api('/guild/donate', { method: 'POST', body: { amount } });
+}
+
+export async function buyGuildUpgrade(): Promise<MyGuild> {
+  const { guild } = await api<{ guild: MyGuild }>('/guild/upgrade', {
+    method: 'POST', body: {} });
+  return guild;
 }

@@ -15,6 +15,8 @@ import { getToken } from '@/lib/session';
 export interface ChatMessage {
   /** kısa cüzdan */
   n: string;
+  /** lonca etiketi (yoksa yok) — sohbette [ETİKET] olarak basılır */
+  g?: string;
   /** metin */
   m: string;
   /** sunucu zaman damgası (ms) */

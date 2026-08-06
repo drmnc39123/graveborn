@@ -111,8 +111,10 @@ export function konusabilir(wallet: string, now = Date.now()): boolean {
 }
 
 /** Mesajı geçmişe ekle ve yayınlanacak hâlini döndür */
-export function kaydet(kisaAd: string, metin: string, now = Date.now()): ChatMessage {
-  const msg: ChatMessage = { n: kisaAd, m: metin, at: now };
+export function kaydet(
+  kisaAd: string, metin: string, now = Date.now(), etiket?: string | null,
+): ChatMessage {
+  const msg: ChatMessage = { n: kisaAd, m: metin, at: now, ...(etiket ? { g: etiket } : {}) };
   gecmis.push(msg);
   // ⚠️ Sınırsız büyüyen dizi, uzun ömürlü süreçte sessiz bir bellek
   // sızıntısıdır. Baştan kırp.
