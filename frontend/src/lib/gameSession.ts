@@ -716,6 +716,11 @@ export interface DuelRow {
   blocker: string | null;
 }
 
+export interface DuelLadderRow {
+  rank: number; wallet: string; rating: number;
+  wins: number; losses: number; hero: string;
+}
+
 export interface DuelBoard {
   me: { rating: number; wins: number; losses: number; rewardedToday: number };
   rows: DuelRow[];
@@ -723,6 +728,20 @@ export interface DuelBoard {
     challenger: string; defender: string; stageId: number;
     depth: number; target: number; won: boolean; delta: number; at: string;
   }[];
+  /** düellonun KENDİ sıralaması — koşu tablosundan ayrı */
+  ladder: { rows: DuelLadderRow[]; me: DuelLadderRow | null };
+}
+
+/**
+ * Sunucu sana uygun rakibi bulsun.
+ *
+ * ⚠️ PUAN YAKINLIĞINA göre seçiyor. Listeden seçmek yeterli değildi:
+ * tablo puana göre sıralı olduğu için oyuncu doğal olarak en zayıfı seçiyor
+ * ve ladder "en kolay hedefi bul" oyununa dönüyordu.
+ */
+export async function findDuel(): Promise<DuelRow> {
+  const { match } = await api<{ match: DuelRow }>('/duel/find', { method: 'POST', body: {} });
+  return match;
 }
 
 export async function fetchDuels(): Promise<DuelBoard> {

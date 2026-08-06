@@ -149,6 +149,135 @@ export async function board(wallet: string, cleared: Record<string, boolean>): P
 }
 
 /**
+ * EŞLEŞME BUL — sunucu sana uygun rakibi kendisi seçsin.
+ *
+ * ⚠️ LİSTEDEN SEÇMEK YETMİYOR. Tablo puana göre sıralı; oyuncu doğal olarak
+ * en zayıfı seçiyor ve ladder bir "en kolay hedefi bul" oyununa dönüyordu.
+ * Eşleştirme PUAN YAKINLIĞINA göre yapılıyor: karşına dengi çıkıyor.
+ *
+ * ⚠️ UYGUNLUK KONTROLÜ `duelBlocker` İLE — aynı kural, tek yer. Soğumadaki,
+ * kendi, banlı ve temizlemediğin bölümdeki kayıtlar burada da eleniyor;
+ * "bul" düğmesi doğrulamayı atlayan bir arka kapı OLMAMALI.
+ */
+export async function findMatch(
+  wallet: string, cleared: Record<string, boolean>,
+): Promise<DuelBoardRow> {
+  const me = await prisma.player.findUnique({
+    where: { wallet }, select: { duelRating: true },
+  });
+  if (!me) throw new DuelError('oyuncu_yok', 404);
+
+  // ⚠️ Aday havuzu sınırlı (200): puan yakınlığına göre sıralamayı SQL'de
+  // yapmak `abs()` gerektiriyor, Prisma bunu ifade etmiyor. Havuz büyürse
+  // ham sorguya geçilmeli — şimdilik oyuncu sayısı bunun çok altında.
+  const adaylar = await prisma.duelRecord.findMany({
+    where: { wallet: { not: wallet }, player: { banned: false } },
+    take: 200,
+    include: { player: { select: { duelRating: true, hero: true } } },
+  });
+  if (adaylar.length === 0) throw new DuelError('Nobody has posted a record yet.');
+
+  const rakipler = adaylar.map((r) => r.wallet);
+  const sonMaclar = await prisma.duel.findMany({
+    where: { challenger: wallet, defender: { in: rakipler } },
+    orderBy: { createdAt: 'desc' },
+    select: { defender: true, createdAt: true },
+  });
+  const sonuncu = new Map<string, Date>();
+  for (const d of sonMaclar) if (!sonuncu.has(d.defender)) sonuncu.set(d.defender, d.createdAt);
+
+  const simdi = Date.now();
+  const uygun = adaylar
+    .map((r) => {
+      const son = sonuncu.get(r.wallet);
+      const saat = son ? (simdi - son.getTime()) / 3_600_000 : Infinity;
+      return {
+        r,
+        blocker: duelBlocker({
+          challenger: wallet, defender: r.wallet, hoursSince: saat,
+          stageCleared: !!cleared[String(r.stageId)],
+        }),
+        fark: Math.abs(r.player.duelRating - me.duelRating),
+      };
+    })
+    .filter((x) => x.blocker === null)
+    .sort((a, b) => a.fark - b.fark);
+
+  if (uygun.length === 0) {
+    // ⚠️ SEBEBİ SÖYLE. "Eşleşme bulunamadı" tek başına oyuncuya hiçbir şey
+    // anlatmıyor; hepsi soğumadaysa bekleyeceğini, bölüm yüzündense ne
+    // yapması gerektiğini bilmeli.
+    const sogumada = adaylar.some((r) => {
+      const son = sonuncu.get(r.wallet);
+      return son && (simdi - son.getTime()) / 3_600_000 < DUEL.cooldownHours;
+    });
+    throw new DuelError(sogumada
+      ? 'You have answered everyone recently. Come back in a few hours.'
+      : 'No records on stages you have cleared. Clear another stage first.');
+  }
+
+  const kazanan = uygun[0].r;
+  return {
+    id: kazanan.id, wallet: kazanan.wallet, stageId: kazanan.stageId,
+    depth: kazanan.depth, rating: kazanan.rating,
+    duelRating: kazanan.player.duelRating, hero: kazanan.player.hero,
+    blocker: null,
+  };
+}
+
+export interface DuelLadderRow {
+  rank: number; wallet: string; rating: number;
+  wins: number; losses: number; hero: string;
+}
+
+/**
+ * DÜELLO TABLOSU — sıralamanın kendi kartı.
+ *
+ * ⚠️ HİÇ DÜELLO OYNAMAMIŞLAR DIŞARIDA. Herkes 1000 puanla başlıyor; filtre
+ * olmasa tablo hiç oynamamış yüzlerce 1000'likle dolar ve gerçekten
+ * dövüşenler görünmezdi.
+ */
+export async function ladder(wallet: string, limit = 10): Promise<{
+  rows: DuelLadderRow[];
+  me: DuelLadderRow | null;
+}> {
+  const oynamis = { OR: [{ duelWins: { gt: 0 } }, { duelLosses: { gt: 0 } }] };
+  const rows = await prisma.player.findMany({
+    where: { banned: false, ...oynamis },
+    orderBy: [{ duelRating: 'desc' }, { duelWins: 'desc' }],
+    take: Math.min(Math.max(limit, 1), 50),
+    select: { wallet: true, duelRating: true, duelWins: true, duelLosses: true, hero: true },
+  });
+  const list = rows.map((r, i) => ({
+    rank: i + 1, wallet: r.wallet, rating: r.duelRating,
+    wins: r.duelWins, losses: r.duelLosses, hero: r.hero,
+  }));
+
+  const ben = await prisma.player.findUnique({
+    where: { wallet },
+    select: { duelRating: true, duelWins: true, duelLosses: true, hero: true, banned: true },
+  });
+  if (!ben || ben.banned || (ben.duelWins === 0 && ben.duelLosses === 0)) {
+    return { rows: list, me: null };
+  }
+  const icinde = list.find((r) => r.wallet === wallet);
+  if (icinde) return { rows: list, me: icinde };
+
+  // ⚠️ Tablonun dışındaysam SIRAM YİNE GÖRÜNMELİ — "listede yoksun" demek,
+  // tırmanmak için sebep bırakmaz.
+  const ustum = await prisma.player.count({
+    where: { banned: false, ...oynamis, duelRating: { gt: ben.duelRating } },
+  });
+  return {
+    rows: list,
+    me: {
+      rank: ustum + 1, wallet, rating: ben.duelRating,
+      wins: ben.duelWins, losses: ben.duelLosses, hero: ben.hero,
+    },
+  };
+}
+
+/**
  * Meydan okumayı doğrula ve koşunun kurulacağı bilgileri döndür.
  *
  * ⚠️ ARAYÜZDE GİZLENEN DÜĞME BİR KORUMA DEĞİLDİR — aynı `duelBlocker`

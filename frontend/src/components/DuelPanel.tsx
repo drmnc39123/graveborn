@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DUEL, duelTier } from '@/game/duel';
 import { stageById } from '@/game/config';
 import { heroById } from '@/game/heroes';
-import { fetchDuels, type DuelBoard, type DuelRow } from '@/lib/gameSession';
+import { fetchDuels, findDuel, type DuelBoard, type DuelLadderRow, type DuelRow } from '@/lib/gameSession';
 import { DuelBriefing } from '@/components/DuelBriefing';
 import { getMode, getWallet } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
@@ -39,6 +39,7 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
    */
   const [brifing, setBrifing] = useState<DuelRow | null>(null);
   const [wallet, setWallet] = useState('');
+  const [araniyor, setAraniyor] = useState(false);
   useEffect(() => { setWallet(getWallet() ?? ''); }, []);
 
   const yukle = useCallback(() => {
@@ -84,6 +85,63 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
           record alone.
         </div>
       </div>
+
+      {/* ── EŞLEŞME BUL ──
+          ⚠️ LİSTEDEN SEÇMEK YETMİYORDU. Tablo puana göre sıralı; oyuncu
+          doğal olarak en zayıfı seçiyor ve ladder "en kolay hedefi bul"
+          oyununa dönüyordu. Bu düğme PUAN YAKINLIĞINA göre eşleştiriyor —
+          karşına dengin çıkıyor. Liste yine duruyor: kimi seçtiğini bilmek
+          isteyen seçebilsin. */}
+      <button
+        disabled={araniyor}
+        onClick={() => {
+          setAraniyor(true);
+          findDuel()
+            .then(setBrifing)
+            .catch((e) => onError(e instanceof Error ? e.message : 'No match found.'))
+            .finally(() => setAraniyor(false));
+        }}
+        style={{
+          all: 'unset', boxSizing: 'border-box', width: '100%', marginBottom: 13,
+          cursor: araniyor ? 'default' : 'pointer', textAlign: 'center',
+          padding: '13px 14px', borderRadius: 9,
+          fontSize: 13.5, fontWeight: 900, letterSpacing: 1.6, color: '#ffd9df',
+          background: 'linear-gradient(180deg, rgba(160,18,38,0.55), rgba(120,12,28,0.36))',
+          border: '1px solid rgba(228,101,122,0.6)',
+          opacity: araniyor ? 0.6 : 1,
+        }}>
+        {araniyor ? 'LOOKING FOR SOMEONE…' : 'FIND A MATCH'}
+        <span style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
+          color: 'rgba(255,217,223,0.72)', marginTop: 3 }}>
+          the server picks someone near your standing
+        </span>
+      </button>
+
+      {/* ── SIRALAMA — KENDİ KARTINDA ──
+          ⚠️ Koşu tablosundan AYRI. Düellonun puanı bambaşka bir eksende
+          (derinlik değil, kimi yendiğin); ikisini aynı listede göstermek
+          iki farklı başarıyı tek sayıya indirirdi. */}
+      <CardSection label="Standings" tone={C.candle}>
+        {board.ladder.rows.length === 0 ? (
+          <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.55 }}>
+            Nobody has fought yet. The first duel writes the first name here.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {board.ladder.rows.map((r) => (
+              <Ladder key={r.wallet} row={r} me={r.wallet === wallet} />
+            ))}
+            {/* ⚠️ Tablonun dışındaysam SIRAM YİNE GÖRÜNMELİ — "listede
+                yoksun" demek, tırmanmak için sebep bırakmaz. */}
+            {board.ladder.me && !board.ladder.rows.some((r) => r.wallet === wallet) && (
+              <>
+                <div style={{ textAlign: 'center', fontSize: 11, color: C.boneFaint, padding: '2px 0' }}>···</div>
+                <Ladder row={board.ladder.me} me />
+              </>
+            )}
+          </div>
+        )}
+      </CardSection>
 
       <CardSection label={`Records to answer — ${board.rows.length}`} tone={C.blood}>
         {board.rows.length === 0 ? (
@@ -187,6 +245,34 @@ function Row({ row, onChallenge, onError }: {
         </div>
       )}
     </Card>
+  );
+}
+
+function Ladder({ row, me }: { row: DuelLadderRow; me: boolean }) {
+  const t = duelTier(row.rating);
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 9, padding: '6px 9px', borderRadius: 7,
+      background: me ? 'rgba(239,167,46,0.12)' : 'transparent',
+      border: `1px solid ${me ? `${C.candle}44` : 'transparent'}`,
+    }}>
+      <span style={{ width: 24, textAlign: 'right', fontSize: 12, fontWeight: 900,
+        color: row.rank <= 3 ? C.candle : C.boneFaint }}>
+        {row.rank}
+      </span>
+      <span style={{ minWidth: 0, flex: 1, fontSize: 11.5, fontWeight: me ? 900 : 700,
+        color: me ? C.candle : C.bone, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {me ? 'You' : kisa(row.wallet)}
+      </span>
+      <span style={{ fontSize: 10.5, color: t.color, fontWeight: 900 }}>{t.name}</span>
+      <span style={{ fontSize: 10.5, color: C.boneFaint, minWidth: 52, textAlign: 'right' }}>
+        {row.wins}W {row.losses}L
+      </span>
+      <span style={{ fontSize: 13, fontWeight: 900, color: C.bone, minWidth: 42, textAlign: 'right',
+        fontVariantNumeric: 'tabular-nums' }}>
+        {row.rating}
+      </span>
+    </div>
   );
 }
 

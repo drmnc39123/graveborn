@@ -24,7 +24,7 @@ import {
   GearError, equipGear, equippedBonus, grantRunGear, listGear, salvageGear, unequipSlot,
 } from './gear.js';
 import { SkillError, listSkills, setSkills, skillsBonusOf } from './skills.js';
-import { DuelError, board as duelBoard, publishRecord, resolveChallenge, settleDuel } from './duel.js';
+import { DuelError, board as duelBoard, findMatch, ladder as duelLadder, publishRecord, resolveChallenge, settleDuel } from './duel.js';
 import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
@@ -100,7 +100,7 @@ for (const yol of [
   '/market/list', '/market/cancel', '/market/buy',
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
-  '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start',
+  '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start', '/duel/find',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -1068,7 +1068,31 @@ app.get('/duel', wrap(async (req, res) => {
   const wallet = auth(req);
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
   const p = toProgress(await getOrCreatePlayer(wallet));
-  res.json(await duelBoard(wallet, p.cleared as unknown as Record<string, boolean>));
+  const cleared = p.cleared as unknown as Record<string, boolean>;
+  // ⚠️ Tablo ve sıralama TEK istekte: panel açılışında iki tur atmak,
+  // arayüzün iki ayrı yükleme durumu taşıması demekti.
+  const [b, l] = await Promise.all([duelBoard(wallet, cleared), duelLadder(wallet)]);
+  res.json({ ...b, ladder: l });
+}));
+
+/**
+ * EŞLEŞME BUL — sunucu puan yakınlığına göre rakip seçiyor.
+ *
+ * ⚠️ Doğrulama `resolveChallenge`'takiyle AYNI (`duelBlocker`); bu uç bir
+ * kısayol, bir arka kapı DEĞİL.
+ */
+app.post('/duel/find', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+  const p = toProgress(player);
+  try {
+    res.json({ match: await findMatch(wallet, p.cleared as unknown as Record<string, boolean>) });
+  } catch (e) {
+    if (e instanceof DuelError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
 }));
 
 app.post('/duel/start', wrap(async (req, res) => {

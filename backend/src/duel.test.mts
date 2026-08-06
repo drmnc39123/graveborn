@@ -14,7 +14,7 @@ import { DUEL, nextRatings } from '@game/duel';
 import { challengeRating } from '@game/config';
 import { utcDay } from '@game/progress';
 import { prisma } from './db.js';
-import { board, publishRecord, resolveChallenge, settleDuel } from './duel.js';
+import { board, findMatch, ladder, publishRecord, resolveChallenge, settleDuel } from './duel.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -221,6 +221,88 @@ console.log('\n[9] Tablo');
   const kilitli = await board(w(0), {});
   check('temizlenmemiş bölüm sebebi gösteriliyor',
     kilitli.rows.every((r) => !!r.blocker), kilitli.rows[0]?.blocker ?? '');
+}
+
+console.log('\n[10] ⭐ EŞLEŞME BULMA — puan YAKINLIĞINA göre');
+{
+  // ⚠️ Listeden seçmek yetmiyordu: tablo puana göre sıralı olduğu için
+  // oyuncu doğal olarak EN ZAYIFI seçiyor ve ladder "en kolay hedefi bul"
+  // oyununa dönüyordu. Eşleştirme dengini çıkarmalı.
+  // ⚠️ TEST KENDİ BÖLÜMÜNE KAPALI (bölüm 5) ve bu bir zorunluluk:
+  // `findMatch` veritabanındaki TÜM kayıtlara bakıyor, yani başka
+  // testlerden/oyunculardan kalanlar da aday oluyor. İlk sürüm bölüm 1
+  // kullanıyordu ve "uygun rakip kalmadı" kontrolü, ortamda duran alakasız
+  // bir kayıt yüzünden düştü. Bir testin sonucu başkasının verisine bağlı
+  // olmamalı — `cleared` yalnızca bu bölümü açarak havuzu kapatıyoruz.
+  const YALNIZ = { '5': true };
+  await prisma.duel.deleteMany({ where: { challenger: w(0) } });
+  await prisma.player.update({ where: { wallet: w(0) }, data: { duelRating: 1000 } });
+  // Üç rakip: çok zayıf, DENGİ, çok güçlü
+  await prisma.player.update({ where: { wallet: w(1) }, data: { duelRating: 500 } });
+  await prisma.player.update({ where: { wallet: w(2) }, data: { duelRating: 1010 } });
+  await prisma.player.update({ where: { wallet: w(3) }, data: { duelRating: 1900 } });
+  for (const [i, d] of [[1, 20], [2, 30], [3, 40]] as const) {
+    await publishRecord(w(i), 'descent', 5, 1000 + i, d, 0, false);
+  }
+
+  const m = await findMatch(w(0), YALNIZ);
+  console.log(`     puanım 1000 · adaylar 500 / 1010 / 1900 → seçilen ${m.duelRating}`);
+  check('DENGİ seçildi (en zayıf DEĞİL)', m.duelRating === 1010, `${m.duelRating}`);
+  check('seçilen engelsiz', m.blocker === null);
+  check('kendi kaydım seçilmedi', m.wallet !== w(0));
+
+  // ⚠️ Soğumadaki rakip eşleşmede de ELENMELİ — "bul" düğmesi doğrulamayı
+  // atlayan bir arka kapı OLMAMALI.
+  await settleDuel(w(0), m.wallet, 5, 99, m.depth, m.duelRating);
+  const m2 = await findMatch(w(0), YALNIZ);
+  check('soğumadaki rakip eşleşmede ELENİYOR', m2.wallet !== m.wallet,
+    `${m2.duelRating}`);
+
+  // Hiç uygun kalmayınca SEBEBİ söylemeli
+  for (const i of [1, 2, 3]) {
+    await settleDuel(w(0), w(i), 5, 1, 999, 1000).catch(() => null);
+  }
+  let sebep = '';
+  try { await findMatch(w(0), YALNIZ); } catch (e) { sebep = (e as Error).message; }
+  check('uygun rakip yoksa SEBEBİ söyleniyor', sebep.length > 10, sebep);
+
+  // Temizlenmemiş bölüm de sebebiyle reddedilmeli
+  await prisma.duel.deleteMany({ where: { challenger: w(0) } });
+  let sebep2 = '';
+  try { await findMatch(w(0), {}); } catch (e) { sebep2 = (e as Error).message; }
+  check('temizlenmemiş bölüm sebebi ayrı', /Clear another stage/.test(sebep2), sebep2);
+}
+
+console.log('\n[11] Sıralama tablosu');
+{
+  const l = await ladder(w(0), 10);
+  check('tablo dolu', l.rows.length > 0, `${l.rows.length} satır`);
+  check('puana göre AZALAN sıralı',
+    l.rows.every((r, i) => i === 0 || r.rating <= l.rows[i - 1].rating),
+    l.rows.map((r) => r.rating).join(' ≥ '));
+  check('sıra numaraları 1\'den başlıyor', l.rows[0].rank === 1);
+
+  // ⚠️ HİÇ OYNAMAMIŞLAR DIŞARIDA: herkes 1000'le başlıyor, filtre olmasa
+  // tablo hiç dövüşmemiş yüzlerce 1000'likle dolardı.
+  const bos = `${P}_bos`;
+  await prisma.player.create({ data: { wallet: bos, duelRating: 5000 } });
+  const l2 = await ladder(w(0), 10);
+  check('hiç düello oynamamış tabloda YOK', !l2.rows.some((r) => r.wallet === bos));
+  check('5000 puanlı hayalet tepeye çıkmadı', l2.rows[0].rating !== 5000);
+  await prisma.player.delete({ where: { wallet: bos } });
+
+  // ⚠️ Tablo dışındaysam sıram YİNE görünmeli
+  await prisma.player.update({ where: { wallet: w(0) }, data: { duelRating: 120, duelWins: 1 } });
+  const l3 = await ladder(w(0), 2);
+  check('tablo dışındayken sıram bildiriliyor', !!l3.me, `sıra ${l3.me?.rank}`);
+  check('sıram listenin uzunluğundan büyük', (l3.me?.rank ?? 0) > l3.rows.length,
+    `${l3.me?.rank} > ${l3.rows.length}`);
+
+  // Hiç oynamamış oyuncunun "me" satırı olmamalı
+  const yeni = `${P}_yeni`;
+  await prisma.player.create({ data: { wallet: yeni } });
+  check('hiç oynamamışın kendi sırası da YOK', (await ladder(yeni, 5)).me === null);
+  await prisma.player.delete({ where: { wallet: yeni } });
 }
 
 await prisma.duel.deleteMany({ where: { challenger: { startsWith: P } } });
