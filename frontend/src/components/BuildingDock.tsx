@@ -10,6 +10,7 @@
 // portalıydı. Bu navbar o boşluğu da kapatıyor.
 
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { PixelButton } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
@@ -164,36 +165,33 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
         justifyContent: 'center', padding: '7px 11px', maxWidth: '100%',
         ...thinGlass(12),
       }}>
-        {GROUPS.map((g) => {
-          const acik = acikGrup?.id === g.id;
-          return (
-            <button key={g.id}
-              // Açık gruba tekrar basmak KAPATIR ('none'); başka gruba
-              // basmak ona geçer.
-              onClick={() => setGrup(acik ? 'none' : g.id)}
-              style={{
-                all: 'unset', cursor: 'pointer', boxSizing: 'border-box',
-                padding: '6px 13px', borderRadius: 7,
-                fontSize: 11.5, fontWeight: 900, letterSpacing: 1.3,
-                color: acik ? g.color : C.boneDim,
-                background: acik ? `${g.color}22` : 'transparent',
-                border: `1px solid ${acik ? `${g.color}77` : 'rgba(255,255,255,0.10)'}`,
-              }}>
-              {g.label}
-            </button>
-          );
-        })}
-        <button
+        {/* ⚠️ DÜĞMELER `PixelButton` — köyün geri kalanıyla AYNI dil.
+            Bir ara düz CSS düğmeye çevrilmişti ve navbar oyunun içinden
+            değil, üstüne yapıştırılmış bir web arayüzü gibi duruyordu.
+            Gruplama kalıyor, düğmenin görünümü değişmiyor. */}
+        {GROUPS.map((g) => (
+          <PixelButton
+            key={g.id}
+            variant="01A"
+            scale={2}
+            active={acikGrup?.id === g.id}
+            // Açık gruba tekrar basmak KAPATIR ('none'); başkasına basmak ona geçer
+            onClick={() => setGrup(acikGrup?.id === g.id ? 'none' : g.id)}
+            style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
+          >
+            {g.label}
+          </PixelButton>
+        ))}
+        <PixelButton
+          variant="01A"
+          scale={2}
+          active={open === 'settings'}
           onClick={() => onOpen('settings')}
           title="Sound, motion, graphics"
-          style={{
-            all: 'unset', cursor: 'pointer', padding: '6px 10px', borderRadius: 7,
-            fontSize: 13, lineHeight: 1,
-            color: open === 'settings' ? C.candle : C.boneDim,
-            border: `1px solid ${open === 'settings' ? `${C.candle}77` : 'rgba(255,255,255,0.10)'}`,
-          }}>
+          style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
+        >
           ⚙
-        </button>
+        </PixelButton>
 
         {/* Cüzdan navbar'ın sağ ucunda — ayrı çerçeve tutarsız duruyordu */}
         <span style={{
@@ -235,18 +233,18 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
           {acikGrup.members.map((id) => {
             const b = BUILDINGS.find((x) => x.id === id);
             if (!b) return null;
-            const on = open === id;
             return (
-              <button key={id} onClick={() => onOpen(id)} title={b.sub}
-                style={{
-                  all: 'unset', cursor: 'pointer', padding: '5px 10px', borderRadius: 6,
-                  fontSize: 10.5, fontWeight: 900, letterSpacing: 1,
-                  color: on ? acikGrup.color : C.bone,
-                  background: on ? `${acikGrup.color}26` : 'rgba(255,255,255,0.05)',
-                  border: `1px solid ${on ? `${acikGrup.color}88` : 'rgba(255,255,255,0.10)'}`,
-                }}>
+              <PixelButton
+                key={id}
+                variant="01A"
+                scale={2}
+                active={open === id}
+                onClick={() => onOpen(id)}
+                title={b.sub}
+                style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
+              >
                 {b.label}
-              </button>
+              </PixelButton>
             );
           })}
         </div>
