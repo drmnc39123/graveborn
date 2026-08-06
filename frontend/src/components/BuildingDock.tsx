@@ -9,9 +9,8 @@
 // Ayrıca haritada 'quests' kapısı HİÇ YOK — Warden's Post'a tek giriş dövüş
 // portalıydı. Bu navbar o boşluğu da kapatıyor.
 
-import { useEffect, useRef, type CSSProperties } from 'react';
-import { PixelButton } from '@/components/ui/kit';
-import { C, FONT, glass } from '@/lib/theme';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
   id: string;
@@ -20,6 +19,38 @@ export interface DockEntry {
   /** tam ad + ne işe yaradığı (tooltip) */
   sub: string;
 }
+
+/**
+ * GRUPLAR — 13 sekme bir navbar değil, bir liste.
+ *
+ * ⚠️ Kullanıcının ilk kuralı hâlâ geçerli: "tüm binaların butonu olsun,
+ * oyuncunun gitmesine gerek kalmasın." Ama sekme sayısı 13'e çıkınca navbar
+ * satır sarmaya başladı ve hiçbir şey öne çıkmaz oldu — her şey eşit derecede
+ * önemli olduğunda hiçbir şey önemli değildir.
+ *
+ * ⚠️ AÇILIR MENÜ (dropdown) YAPILMADI. Menü, üzerine gelmeyi/tıklamayı ve
+ * kapanmayı yönetmek demek; mobilde de kötü. Onun yerine seçilen grubun
+ * üyeleri ALTINDA İKİNCİ SATIR olarak açılıyor: hiçbir şey gizlenmiyor,
+ * her yer hâlâ en fazla iki tıklama.
+ *
+ * ⚠️ Açık panelin grubu KENDİLİĞİNDEN AÇIK kalıyor — panel açıkken navbar
+ * kapanırsa oyuncu nerede olduğunu kaybeder.
+ */
+export interface DockGroup {
+  id: string;
+  label: string;
+  /** grubun rengi — hangi ailede olduğun bir bakışta okunsun */
+  color: string;
+  members: readonly string[];
+}
+
+export const GROUPS: readonly DockGroup[] = [
+  // Dövüş önce: oyuncunun oyuna girdiği yer en solda ve en görünür olmalı.
+  { id: 'fight', label: 'FIGHT', color: '#a01226', members: ['quests', 'boss', 'duel'] },
+  { id: 'power', label: 'POWER', color: '#efa72e', members: ['upgrade', 'paths', 'gear', 'shop'] },
+  { id: 'spend', label: 'SPEND', color: '#5f9e4a', members: ['market', 'exchange', 'reliquary'] },
+  { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['guild', 'tavern'] },
+] as const;
 
 /** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */
 export const BUILDINGS: readonly DockEntry[] = [
@@ -84,6 +115,15 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
   onHeight?: (h: number) => void;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
+  /**
+   * Elle yapılan seçim. `null` = seçim yok (açık panelin grubu gösterilir),
+   * `'none'` = oyuncu açıkça KAPATTI.
+   *
+   * ⚠️ ELLE SEÇİM, OTOMATİĞİ EZER. İlk sürümde açık panelin grubu önce
+   * geliyordu ve ölçüldü: DUELS paneli açıkken POWER'a basınca hiçbir şey
+   * olmuyordu — panel açıkken başka bir gruba göz atmak imkânsızdı.
+   */
+  const [grup, setGrup] = useState<string | null>(null);
 
   // Satır sarması ekran genişliğine bağlı; `ResizeObserver` her değişimde
   // haber veriyor — pencere yeniden boyutlandırılınca da doğru kalıyor.
@@ -97,33 +137,63 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
     return () => ro.disconnect();
   }, [onHeight]);
 
+  // ⚠️ SIRA ÖNEMLİ: önce elle seçim, sonra açık panelin grubu.
+  const acikGrup = grup === 'none'
+    ? null
+    : (GROUPS.find((g) => g.id === grup)
+      ?? GROUPS.find((g) => open !== null && g.members.includes(open))
+      ?? null);
+
   return (
     <div style={{
       // zIndex panel katmanının (5) ÜSTÜNDE: navbar her zaman tıklanabilir
       // kalmalı, panel açıkken de doğrudan başka binaya geçilebilsin.
       position: 'absolute', top: 10, left: 0, right: 0, zIndex: 6,
-      display: 'flex', justifyContent: 'center', pointerEvents: 'none', ...style,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      pointerEvents: 'none', ...style,
     }}>
-      {/* Koyu zemin şart: parlak çimenin üstünde metin okunmuyordu.
-          Dar ekranda sarar — mobilde tek satıra sığmıyor. */}
+      {/* ⚠️ ÖLÇÜLEN KUTU İKİ SATIRI DA SARIYOR. Yalnızca üst satırı ölçmek,
+          ikinci satır açıldığında panelin üstünü örtmesine yol açardı —
+          daha önce tam olarak bu hata yaşandı (bkz. fonksiyon başlığı). */}
       <div ref={boxRef} style={{
-        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-        justifyContent: 'center', padding: '8px 12px', maxWidth: 'calc(100vw - 24px)',
-        pointerEvents: 'auto', ...glass(12),
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+        maxWidth: 'calc(100vw - 24px)', pointerEvents: 'auto',
       }}>
-        {BUILDINGS.map((b) => (
-          <PixelButton
-            key={b.id}
-            variant="01A"
-            scale={2}
-            active={open === b.id}
-            onClick={() => onOpen(b.id)}
-            title={b.sub}
-            style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
-          >
-            {b.label}
-          </PixelButton>
-        ))}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        justifyContent: 'center', padding: '7px 11px', maxWidth: '100%',
+        ...thinGlass(12),
+      }}>
+        {GROUPS.map((g) => {
+          const acik = acikGrup?.id === g.id;
+          return (
+            <button key={g.id}
+              // Açık gruba tekrar basmak KAPATIR ('none'); başka gruba
+              // basmak ona geçer.
+              onClick={() => setGrup(acik ? 'none' : g.id)}
+              style={{
+                all: 'unset', cursor: 'pointer', boxSizing: 'border-box',
+                padding: '6px 13px', borderRadius: 7,
+                fontSize: 11.5, fontWeight: 900, letterSpacing: 1.3,
+                color: acik ? g.color : C.boneDim,
+                background: acik ? `${g.color}22` : 'transparent',
+                border: `1px solid ${acik ? `${g.color}77` : 'rgba(255,255,255,0.10)'}`,
+              }}>
+              {g.label}
+            </button>
+          );
+        })}
+        <button
+          onClick={() => onOpen('settings')}
+          title="Sound, motion, graphics"
+          style={{
+            all: 'unset', cursor: 'pointer', padding: '6px 10px', borderRadius: 7,
+            fontSize: 13, lineHeight: 1,
+            color: open === 'settings' ? C.candle : C.boneDim,
+            border: `1px solid ${open === 'settings' ? `${C.candle}77` : 'rgba(255,255,255,0.10)'}`,
+          }}>
+          ⚙
+        </button>
 
         {/* Cüzdan navbar'ın sağ ucunda — ayrı çerçeve tutarsız duruyordu */}
         <span style={{
@@ -149,6 +219,38 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
             {wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'DEMO'}
           </span>
         </span>
+      </div>
+
+      {/* ── İKİNCİ SATIR: seçili grubun üyeleri ──
+          ⚠️ Gizlenmiyor, AÇILIYOR. Açılır menü yapmadım: menü, üzerine
+          gelme/tıklama/kapanma yönetimi demek ve mobilde kötü. Bu hâliyle
+          hiçbir yer iki tıklamadan uzak değil. */}
+      {acikGrup && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          justifyContent: 'center', padding: '6px 10px', maxWidth: '100%',
+          ...thinGlass(10),
+          borderColor: `${acikGrup.color}44`,
+        }}>
+          {acikGrup.members.map((id) => {
+            const b = BUILDINGS.find((x) => x.id === id);
+            if (!b) return null;
+            const on = open === id;
+            return (
+              <button key={id} onClick={() => onOpen(id)} title={b.sub}
+                style={{
+                  all: 'unset', cursor: 'pointer', padding: '5px 10px', borderRadius: 6,
+                  fontSize: 10.5, fontWeight: 900, letterSpacing: 1,
+                  color: on ? acikGrup.color : C.bone,
+                  background: on ? `${acikGrup.color}26` : 'rgba(255,255,255,0.05)',
+                  border: `1px solid ${on ? `${acikGrup.color}88` : 'rgba(255,255,255,0.10)'}`,
+                }}>
+                {b.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       </div>
     </div>
   );

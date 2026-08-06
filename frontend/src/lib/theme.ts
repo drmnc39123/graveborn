@@ -64,6 +64,28 @@ export function glass(radius = 14) {
   } as const;
 }
 
+/**
+ * İNCE CAM — köyün ÜSTÜNDE duran, arkasını göstermesi gereken yüzeyler.
+ *
+ * ⚠️ AYRI FONKSİYON, `glass`'a parametre DEĞİL. `glass` panellerin zemini:
+ * orada metin okunaklılığı her şeyin önünde ve opaklık düşürülemez. Navbar
+ * ile sohbet kutusu ise köyün üstünde duruyor; oradaki amaç arkadaki dünyayı
+ * KAPATMAMAK. İki farklı iş, iki farklı yüzey — tek fonksiyona parametre
+ * eklemek, birini ayarlarken diğerini sessizce bozmak demekti.
+ *
+ * ⚠️ BULANIKLIK ARTIRILDI (10 → 16). Opaklık düşerken bulanıklık sabit
+ * kalsaydı parlak çimenin üstünde metin okunmazdı; şeffaflığın bedeli
+ * buradan ödeniyor.
+ */
+export function thinGlass(radius = 14, alpha = 0.40) {
+  return {
+    background: `linear-gradient(180deg, rgba(43,31,22,${alpha}), rgba(10,8,6,${alpha + 0.1}))`,
+    border: `1px solid ${C.border}`,
+    borderRadius: radius,
+    backdropFilter: 'blur(16px)',
+  } as const;
+}
+
 /** Mum ışığı altın gradyan metin (başlıklar) */
 export const candleGradientText = {
   background: `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`,

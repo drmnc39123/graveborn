@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { joinChat, type ChatHandle, type ChatMessage } from '@/lib/chat';
 import { getMode } from '@/lib/session';
-import { C, FONT, glass } from '@/lib/theme';
+import { C, FONT, thinGlass } from '@/lib/theme';
 
 export function ChatPanel() {
   const handleRef = useRef<ChatHandle | null>(null);
@@ -63,7 +63,10 @@ export function ChatPanel() {
     <div style={{
       position: 'absolute', left: 12, bottom: 12, zIndex: 6,
       width: 300, maxWidth: 'calc(100vw - 24px)',
-      ...glass(10), fontFamily: FONT.ui,
+      // ⚠️ İNCE CAM: sohbet kutusu köyün ÜSTÜNDE duruyor, arkasındaki
+      // dünyayı kapatmamalı. Bulanıklık yüksek tutuluyor ki şeffaflık
+      // okunaklılığı bozmasın (bkz. lib/theme.thinGlass).
+      ...thinGlass(10), fontFamily: FONT.ui,
       // ⚠️ Tıklamalar sohbete gelsin ama KUTU DIŞINDA köye geçsin —
       // yoksa sohbetin bulunduğu köşede karakter hareket ettirilemez.
       pointerEvents: 'auto',
