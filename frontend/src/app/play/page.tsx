@@ -145,11 +145,24 @@ export default function PlayPage() {
 
   const onEnter = useCallback((id: BuildingId) => setPanel(id), []);
 
+  /**
+   * ⚠️ SON KAHRAMAN KAYDI UÇUŞTA MI — düello brifingi bunu BEKLEMEK ZORUNDA.
+   *
+   * Kahraman seçimi iyimser: arayüz anında değişiyor, kayıt arkadan gidiyor.
+   * Düelloda bu bir yarış açıyordu — oyuncu kahramanı seçip hemen "ANSWER
+   * THEM"e basarsa `/duel/start` kayıttaki ESKİ kahramanı okuyup koşuyu
+   * onunla açabilirdi. Brifingde seçilen kahramanla girilmemesi, sessiz ve
+   * çok kızdırıcı bir hata olurdu.
+   */
+  const heroSaveRef = useRef<Promise<unknown>>(Promise.resolve());
+
   /** Karakter seçimi kalıcı — her koşuda yeniden seçtirmek gereksiz sürtünme */
   const pickHero = useCallback((hero: string) => {
     setProgress((prev) => {
       if (!prev) return prev;
-      saveHero(hero, prev).then(setProgress).catch(() => setNote('Karakter kaydedilemedi.'));
+      const p = saveHero(hero, prev).then(setProgress)
+        .catch(() => setNote('Karakter kaydedilemedi.'));
+      heroSaveRef.current = p;
       return { ...prev, hero };            // arayüz beklemesin, iyimser güncelle
     });
   }, []);
@@ -192,7 +205,9 @@ export default function PlayPage() {
    */
   const beginDuel = useCallback((recordId: string) => {
     setPanel(null);
-    startDuel(recordId)
+    // ⚠️ Uçuştaki kahraman kaydını BEKLE — bkz. heroSaveRef
+    heroSaveRef.current
+      .then(() => startDuel(recordId))
       .then((t) => setScreen({ kind: 'stage', stageId: t.duel.stageId, mode: 'duel', ticket: t }))
       .catch((e) => setNote(e instanceof Error ? e.message : 'Meydan okuma açılamadı.'));
   }, []);
@@ -554,7 +569,12 @@ export default function PlayPage() {
                 onError={setNote}
               />
             ) : panel === 'duel' ? (
-              <DuelPanel onChallenge={beginDuel} onError={setNote} />
+              <DuelPanel
+                hero={(progress ?? loadProgress()).hero}
+                onHero={pickHero}
+                onChallenge={beginDuel}
+                onError={setNote}
+              />
             ) : panel === 'paths' ? (
               <SkillPanel
                 progress={progress ?? loadProgress()}

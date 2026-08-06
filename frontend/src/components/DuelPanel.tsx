@@ -13,19 +13,33 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DUEL, duelTier } from '@/game/duel';
 import { stageById } from '@/game/config';
+import { heroById } from '@/game/heroes';
 import { fetchDuels, type DuelBoard, type DuelRow } from '@/lib/gameSession';
-import { getMode } from '@/lib/session';
+import { DuelBriefing } from '@/components/DuelBriefing';
+import { getMode, getWallet } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { C, FONT, glass } from '@/lib/theme';
 
 const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
 
-export function DuelPanel({ onChallenge, onError }: {
+export function DuelPanel({ hero, onHero, onChallenge, onError }: {
+  /** seçili kahraman — brifingde değiştirilebiliyor */
+  hero: string;
+  onHero: (id: string) => void;
   onChallenge: (recordId: string) => void;
   onError: (msg: string) => void;
 }) {
   const [board, setBoard] = useState<DuelBoard | null>(null);
   const [err, setErr] = useState(false);
+  /**
+   * ⚠️ ANSWER ARTIK DOĞRUDAN KOŞU BAŞLATMIYOR, BRİFİNG AÇIYOR.
+   * Eskiden düğmeye basınca oyuncu kime karşı oynadığını, hedefini ve
+   * kuralları göremeden koşuya düşüyordu — bir maçın en önemli kararları
+   * başlamadan önce veriliyor.
+   */
+  const [brifing, setBrifing] = useState<DuelRow | null>(null);
+  const [wallet, setWallet] = useState('');
+  useEffect(() => { setWallet(getWallet() ?? ''); }, []);
 
   const yukle = useCallback(() => {
     fetchDuels().then(setBoard).catch(() => setErr(true));
@@ -80,11 +94,27 @@ export function DuelPanel({ onChallenge, onError }: {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {board.rows.map((r) => (
-              <Row key={r.id} row={r} onChallenge={onChallenge} onError={onError} />
+              <Row key={r.id} row={r} onChallenge={(id) => {
+                const sec = board.rows.find((x) => x.id === id);
+                if (sec) setBrifing(sec);
+              }} onError={onError} />
             ))}
           </div>
         )}
       </CardSection>
+
+      {brifing && (
+        <DuelBriefing
+          row={brifing}
+          myWallet={wallet}
+          myRating={board.me.rating}
+          myHero={hero}
+          rewardedToday={board.me.rewardedToday}
+          onHero={onHero}
+          onEnter={() => onChallenge(brifing.id)}
+          onCancel={() => setBrifing(null)}
+        />
+      )}
 
       {board.recent.length > 0 && (
         <CardSection label="Lately" tone={C.ice}>
@@ -124,7 +154,7 @@ function Row({ row, onChallenge, onError }: {
             <Tag tone="dim">{t.name} {row.duelRating}</Tag>
           </span>
           <span style={{ display: 'block', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.4 }}>
-            {stage?.name ?? `Stage ${row.stageId}`} · {row.hero}
+            {stage?.name ?? `Stage ${row.stageId}`} · {heroById(row.hero).name}
           </span>
         </span>
         {/* ⚠️ HEDEF EN BÜYÜK SAYI. Oyuncunun tek sorusu "kaçı geçmem lazım" —
