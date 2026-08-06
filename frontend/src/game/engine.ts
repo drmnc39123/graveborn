@@ -68,6 +68,9 @@ export interface Chest { x: number; y: number; evolution: boolean }
 export interface Projectile {
   x: number; y: number; vx: number; vy: number;
   damage: number; radius: number; life: number; pierce: number;
+  /** ⚠️ MERMİYİ KİM ATTI. 1v1'de öldürme kredisi ve XP sahibine gitmeli;
+   *  sahipsiz mermi, rakibin öldürdüğü düşmanın XP'sini sana yazardı. */
+  owner: Hero;
   /** boomerang: ömür bu değerin ALTINA inince oyuncuya dönmeye başlar (emniyet) */
   returnAt?: number;
   /** boomerang: oyuncudan bu mesafeyi geçince döner — ASIL koşul bu */
@@ -90,6 +93,8 @@ export interface HitZone {
   x: number; y: number; w: number; h: number;
   life: number; maxLife: number; damage: number;
   facingRight: boolean;
+  /** vuruş alanını kim açtı — bkz. Projectile.owner */
+  owner: Hero;
   /** aynı kesikte aynı düşmana iki kez vurmasın */
   hit: Set<Enemy>;
   /** true ise oyuncuyu TAKİP ETMEZ, bırakıldığı yerde kalır (ground) */
@@ -397,10 +402,10 @@ export class Game {
     // Checkpoint'e kadarki seviyeler bekleyen level-up olarak kuyruğa girer —
     // oyuncu kartları normal ekrandan kendi seçer (bkz. startLevelFor)
     this.pendingLevels = start > 1 ? Math.max(0, startLevelFor(start) - 1) : 0;
-    this.recomputeStats();          // kalıcı bonuslar daha ilk kareden geçerli
+    this.recomputeStats(this.hero);          // kalıcı bonuslar daha ilk kareden geçerli
     this.hp = this.stats.maxHp;     // +max can alındıysa dolu başla
     // Başlangıç silahı KARAKTERDEN gelir (VS'te her karakterin imza silahı var)
-    this.giveWeapon(hero.weapon);
+    this.giveWeapon(this.hero, hero.weapon);
   }
 
   /** Bölümde kalan düşman (salınmamış + sahnedeki). 0 = bölüm bitti. */
@@ -408,19 +413,19 @@ export class Game {
     return this.stage.toSpawn + this.enemies.length;
   }
 
-  private giveWeapon(id: string) {
+  private giveWeapon(h: Hero, id: string) {
     const def = WEAPONS.find((w) => w.id === id);
-    if (!def || this.weapons.length >= MAX_WEAPONS) return;
-    if (this.weapons.some((w) => w.def.id === id)) return;
-    this.weapons.push({ def, level: 1, cd: 0 });
+    if (!def || h.weapons.length >= MAX_WEAPONS) return;
+    if (h.weapons.some((w) => w.def.id === id)) return;
+    h.weapons.push({ def, level: 1, cd: 0 });
   }
 
-  private givePassive(id: string) {
+  private givePassive(h: Hero, id: string) {
     const def = PASSIVES.find((p) => p.id === id);
-    if (!def || this.passives.length >= MAX_PASSIVES) return;
-    if (this.passives.some((p) => p.def.id === id)) return;
-    this.passives.push({ def, level: 1 });
-    this.recomputeStats();
+    if (!def || h.passives.length >= MAX_PASSIVES) return;
+    if (h.passives.some((p) => p.def.id === id)) return;
+    h.passives.push({ def, level: 1 });
+    this.recomputeStats(this.hero);
   }
 
   /**
@@ -428,14 +433,14 @@ export class Game {
    * Artımlı yazmak yerine türetmek kasıtlı: seviye/pasif değişince tek doğru
    * kaynak var, kayan yuvarlama hatası birikmiyor ve tavanlar tek yerde uygulanıyor.
    */
-  private recomputeStats() {
+  private recomputeStats(h: Hero) {
     const s: Stats = { ...STAT_BASE };
 
     // KALICI yükseltmeler (The Forge) tabana eklenir — run boyunca sabit.
     // maxHp yüzde olarak geldiği için ayrı ele alınır; diğerleri toplamsal.
     let permHpPct = 0;
-    for (const k of Object.keys(this.permanent) as StatKey[]) {
-      const v = this.permanent[k] ?? 0;
+    for (const k of Object.keys(h.permanent) as StatKey[]) {
+      const v = h.permanent[k] ?? 0;
       if (!v) continue;
       if (k === 'maxHp') permHpPct += v;
       else s[k] += v;
@@ -444,7 +449,7 @@ export class Game {
 
     // Run içi pasifler bunun ÜSTÜNE biner
     let runHpPct = 0;
-    for (const p of this.passives) {
+    for (const p of h.passives) {
       const add = p.def.perLevel * p.level;
       if (p.def.stat === 'cooldown') s.cooldown -= add;      // bekleme AZALIR
       else if (p.def.stat === 'maxHp') runHpPct += add;
@@ -457,25 +462,25 @@ export class Game {
       if (s[k] > cap) s[k] = cap;
     }
     if (s.cooldown < COOLDOWN_FLOOR) s.cooldown = COOLDOWN_FLOOR;
-    this.stats = s;
-    if (this.hp > s.maxHp) this.hp = s.maxHp;
+    h.stats = s;
+    if (h.hp > s.maxHp) h.hp = s.maxHp;
   }
 
   /** Silahın o seviyedeki hasarı — Might çarpanı uygulanır */
-  private wDamage(w: OwnedWeapon) {
-    return weaponDamageAt(w.def, w.level) * this.stats.might;
+  private wDamage(h: Hero, w: OwnedWeapon) {
+    return weaponDamageAt(w.def, w.level) * h.stats.might;
   }
   /** Silahın o seviyedeki bekleme süresi — Cooldown istatistiği uygulanır */
-  private wCooldown(w: OwnedWeapon) {
-    return weaponCooldownAt(w.def, w.level) * this.stats.cooldown;
+  private wCooldown(h: Hero, w: OwnedWeapon) {
+    return weaponCooldownAt(w.def, w.level) * h.stats.cooldown;
   }
   /** Alan çarpanı (sweep/orbit/aura) — Area istatistiği uygulanır */
-  private wArea(w: OwnedWeapon) {
-    return Math.pow(w.def.areaPerLevel ?? 1, w.level - 1) * this.stats.area;
+  private wArea(h: Hero, w: OwnedWeapon) {
+    return Math.pow(w.def.areaPerLevel ?? 1, w.level - 1) * h.stats.area;
   }
   /** Adet (mermi/orb) — countLevels eşikleri + Amount istatistiği */
-  private wCount(w: OwnedWeapon) {
-    return weaponCountAt(w.def, w.level) + this.stats.amount;
+  private wCount(h: Hero, w: OwnedWeapon) {
+    return weaponCountAt(w.def, w.level) + h.stats.amount;
   }
 
   setInput(x: number, y: number) {
@@ -494,7 +499,7 @@ export class Game {
     // sırayla sunulur. Saat ilerlemeden ÖNCE, çünkü draft oyun süresi değil.
     if (this.pendingLevels > 0) {
       this.pendingLevels -= 1;
-      this.levelUp();
+      this.levelUp(this.hero);
       return;
     }
     const dt = TICK;
@@ -502,19 +507,19 @@ export class Game {
     // Güvenlik tavanı — bölüm bir şekilde bitmezse run sonsuza kadar sürmesin
     if (this.time >= RUN.durationSec) { this.phase = 'dead'; return; }
 
-    this.movePlayer(dt);
+    this.moveHero(this.hero, dt);
     this.rebuildGrid();
     this.spawnBoss();
     this.spawn(dt);
     this.moveEnemies(dt);
-    this.fire(dt);            // 4 desen: aimed / sweep / orbit / aura
+    this.fire(this.hero, dt);            // 4 desen: aimed / sweep / orbit / aura
     this.updateHitZones(dt);  // sweep hitbox'ları
     this.moveProjectiles(dt);
     this.collideProjectiles();
     this.reapDead();          // TÜM hasar kaynaklarından sonra tek temizlik
-    this.collidePlayer(dt);
+    this.collideHero(this.hero, dt);
     this.updateEnemyShots(dt);
-    this.updateGems(dt);
+    this.updateGems(this.hero, dt);
     this.updateChests();
 
     if (this.stats.recovery > 0 && this.hp > 0) {
@@ -554,21 +559,21 @@ export class Game {
     this.events.add('depth');
   }
 
-  private movePlayer(dt: number) {
-    const sp = PLAYER.speed * this.stats.moveSpeed;
-    this.px += this.inx * sp * dt;
-    this.py += this.iny * sp * dt;
-    this.animT += dt;
-    if (this.atkT > 0) this.atkT = Math.max(0, this.atkT - dt);
-    if (this.hurtT > 0) this.hurtT = Math.max(0, this.hurtT - dt);
-    this.moving = this.inx !== 0 || this.iny !== 0;
-    if (this.inx > 0.01) this.facingRight = true;
-    else if (this.inx < -0.01) this.facingRight = false;
+  private moveHero(h: Hero, dt: number) {
+    const sp = PLAYER.speed * h.stats.moveSpeed;
+    h.px += h.inx * sp * dt;
+    h.py += h.iny * sp * dt;
+    h.animT += dt;
+    if (h.atkT > 0) h.atkT = Math.max(0, h.atkT - dt);
+    if (h.hurtT > 0) h.hurtT = Math.max(0, h.hurtT - dt);
+    h.moving = h.inx !== 0 || h.iny !== 0;
+    if (h.inx > 0.01) h.facingRight = true;
+    else if (h.inx < -0.01) h.facingRight = false;
     // arena sınırı
-    const d = Math.hypot(this.px, this.py);
+    const d = Math.hypot(h.px, h.py);
     if (d > RUN.arenaRadius) {
-      this.px = (this.px / d) * RUN.arenaRadius;
-      this.py = (this.py / d) * RUN.arenaRadius;
+      h.px = (h.px / d) * RUN.arenaRadius;
+      h.py = (h.py / d) * RUN.arenaRadius;
     }
   }
 
@@ -697,7 +702,7 @@ export class Game {
       if (!evolved) {
         // Evrim yoksa sandık boşa gitmesin (VS: sandık altın/XP verir)
         this.rareGold += 200 * this.stats.greed;
-        this.addXp(60);
+        this.addXp(this.hero, 60);
       }
     }
   }
@@ -1006,27 +1011,27 @@ export class Game {
   }
 
   /** Tüm silahları ilerlet. Motor tek, desen veri — yeni silah = config kaydı. */
-  private fire(dt: number) {
+  private fire(h: Hero, dt: number) {
     // Yörünge açısı sürekli döner (silah olmasa da; kayıt tutmak ucuz).
     // ⚠️ Hız SİLAHTAN gelir. Önce sabit 2.3 yazılıydı ve `def.orbitSpeed`
     // hiçbir yerde okunmuyordu — Black Vespers'ın 3.1'i ölü veriydi, evrim
     // tasarlandığından yavaş dönüyordu. Açı ortak olduğu için en hızlı
     // yörünge silahı belirler (pratikte oyuncu tek yörünge silahı taşır).
     let os = 2.3;
-    for (let i = 0; i < this.weapons.length; i++) {
-      const d = this.weapons[i].def;
+    for (let i = 0; i < h.weapons.length; i++) {
+      const d = h.weapons[i].def;
       if (d.pattern === 'orbit') os = Math.max(os, d.orbitSpeed ?? 2.3);
     }
-    this.orbitAngle = (this.orbitAngle + os * dt) % (Math.PI * 2);
+    h.orbitAngle = (h.orbitAngle + os * dt) % (Math.PI * 2);
 
-    for (let i = 0; i < this.weapons.length; i++) {
-      const w = this.weapons[i];
+    for (let i = 0; i < h.weapons.length; i++) {
+      const w = h.weapons[i];
       const def = w.def;
 
       // Yörünge sürekli aktif — bekleme sayacı sadece hasar tiki için
       if (def.pattern === 'orbit') {
         w.cd -= dt;
-        if (w.cd <= 0) { w.cd = this.wCooldown(w); this.orbitHit(w); }
+        if (w.cd <= 0) { w.cd = this.wCooldown(h, w); this.orbitHit(h, w); }
         continue;
       }
 
@@ -1036,54 +1041,54 @@ export class Game {
       if (def.pattern === 'aimed') {
         const target = this.nearestEnemy(def.range ?? 600);
         if (!target) continue; // menzilde hedef yoksa bekle, cooldown harcanmaz
-        w.cd = this.wCooldown(w);
-        this.atkT = 0.30;      // sunum: karakter saldırı animasyonu oynatsın
-        this.fireAimed(w, target);
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;      // sunum: karakter saldırı animasyonu oynatsın
+        this.fireAimed(h, w, target);
       } else if (def.pattern === 'sweep') {
-        w.cd = this.wCooldown(w);
-        this.atkT = 0.30;
-        this.fireSweep(w);
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireSweep(h, w);
       } else if (def.pattern === 'aura') {
-        w.cd = this.wCooldown(w);
-        this.fireAura(w);
+        w.cd = this.wCooldown(h, w);
+        this.fireAura(h, w);
       } else if (def.pattern === 'nova') {
-        w.cd = this.wCooldown(w);
-        this.atkT = 0.30;
-        this.fireNova(w);
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireNova(h, w);
       } else if (def.pattern === 'ground') {
-        w.cd = this.wCooldown(w);
-        this.atkT = 0.30;
-        this.fireGround(w);
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireGround(h, w);
       } else if (def.pattern === 'boomerang') {
         // Hedef ARAMAZ: baktığın yöne savrulur ve döner. "Nereye bakıyorsun"
         // sorusunu soran tek silah — aimed'ın otomatik nişanından farkı bu.
-        w.cd = this.wCooldown(w);
-        this.atkT = 0.30;
-        this.fireBoomerang(w);
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireBoomerang(h, w);
       } else if (def.pattern === 'chain') {
         const target = this.nearestEnemy(def.range ?? 460);
         if (!target) continue;
-        w.cd = this.wCooldown(w);
-        this.atkT = 0.30;
-        this.fireChain(w, target);
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireChain(h, w, target);
       }
     }
   }
 
   /** #3 nova — oyuncudan her yöne eşit aralıklı halka */
-  private fireNova(w: OwnedWeapon) {
+  private fireNova(h: Hero, w: OwnedWeapon) {
     const def = w.def;
-    const n = (def.novaCount ?? 8) + this.wCount(w) - 1;
-    const spd = (def.projectileSpeed ?? 300) * this.stats.projSpeed;
-    const dmg = this.wDamage(w);
-    const life = (def.lifeSec ?? 1.1) * this.stats.duration;
+    const n = (def.novaCount ?? 8) + this.wCount(h, w) - 1;
+    const spd = (def.projectileSpeed ?? 300) * h.stats.projSpeed;
+    const dmg = this.wDamage(h, w);
+    const life = (def.lifeSec ?? 1.1) * h.stats.duration;
     // Başlangıç açısı her atışta kayar — üst üste atışlar aynı koridorları
     // taramasın, yoksa halkalar arası kalıcı ölü açılar oluşur.
     const base = (this.time * 0.9) % (Math.PI * 2);
     for (let i = 0; i < n; i++) {
       const a = base + (i * Math.PI * 2) / n;
-      this.projectiles.push({
-        x: this.px, y: this.py,
+      this.projectiles.push({ owner: h,
+        x: h.px, y: h.py,
         vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
         damage: dmg, radius: 6, life, pierce: def.pierce ?? 2,
         wid: def.id,
@@ -1092,19 +1097,19 @@ export class Game {
   }
 
   /** #4 ground — ayağının altına kalıcı alan bırakır (oyuncuyla HAREKET ETMEZ) */
-  private fireGround(w: OwnedWeapon) {
+  private fireGround(h: Hero, w: OwnedWeapon) {
     const def = w.def;
-    const r = (def.groundRadius ?? 62) * this.wArea(w);
-    const life = (def.groundLifeSec ?? 3.4) * this.stats.duration;
-    const n = this.wCount(w) >= 2 ? 2 : 1;
+    const r = (def.groundRadius ?? 62) * this.wArea(h, w);
+    const life = (def.groundLifeSec ?? 3.4) * h.stats.duration;
+    const n = this.wCount(h, w) >= 2 ? 2 : 1;
     for (let i = 0; i < n; i++) {
       // ikinci alan hafif ofsetli — üst üste binip tek alan gibi görünmesin
       const off = n === 1 ? 0 : (i === 0 ? -r * 0.7 : r * 0.7);
-      this.hitZones.push({
-        x: this.px + off, y: this.py,
+      this.hitZones.push({ owner: h,
+        x: h.px + off, y: h.py,
         w: r * 2, h: r * 2,
         life, maxLife: life,
-        damage: this.wDamage(w),
+        damage: this.wDamage(h, w),
         facingRight: true,
         hit: new Set<Enemy>(),
         anchored: true,
@@ -1117,23 +1122,23 @@ export class Game {
   }
 
   /** #5 boomerang — baktığın yöne savrulur, ömrünün yarısında geri döner */
-  private fireBoomerang(w: OwnedWeapon) {
+  private fireBoomerang(h: Hero, w: OwnedWeapon) {
     const def = w.def;
-    const n = this.wCount(w);
-    const spd = (def.projectileSpeed ?? 340) * this.stats.projSpeed;
-    const life = (def.lifeSec ?? 2.2) * this.stats.duration;
-    const baseAng = this.facingRight ? 0 : Math.PI;
+    const n = this.wCount(h, w);
+    const spd = (def.projectileSpeed ?? 340) * h.stats.projSpeed;
+    const life = (def.lifeSec ?? 2.2) * h.stats.duration;
+    const baseAng = h.facingRight ? 0 : Math.PI;
     for (let i = 0; i < n; i++) {
       const off = n === 1 ? 0 : (i - (n - 1) / 2) * (def.spreadRad ?? 0.42);
       const a = baseAng + off;
-      this.projectiles.push({
-        x: this.px, y: this.py,
+      this.projectiles.push({ owner: h,
+        x: h.px, y: h.py,
         vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-        damage: this.wDamage(w), radius: 8,
+        damage: this.wDamage(h, w), radius: 8,
         life, pierce: def.pierce ?? 99,
         // Dönüş mesafesi alan istatistiğiyle büyür (yay genişler); ömür
         // sadece emniyet freni — ekranda sonsuza kadar takılı kalmasın.
-        maxDist: (def.range ?? 620) * 0.5 * this.wArea(w),
+        maxDist: (def.range ?? 620) * 0.5 * this.wArea(h, w),
         returnAt: life * (def.returnAt ?? 0.5),
         speed: spd,
         wid: def.id,
@@ -1146,18 +1151,18 @@ export class Game {
    * Anlık hasar; görsel için `arcs` kuyruğuna yazar (render boşaltır).
    * Aynı düşmana iki kez sıçramaz, yoksa iki düşman arasında hapsolur.
    */
-  private fireChain(w: OwnedWeapon, first: Enemy) {
+  private fireChain(h: Hero, w: OwnedWeapon, first: Enemy) {
     const def = w.def;
     const jumps = def.chainJumps ?? 3;
     const range = def.chainRange ?? 210;
     const falloff = def.chainFalloff ?? 0.8;
-    let dmg = this.wDamage(w);
+    let dmg = this.wDamage(h, w);
     let cur = first;
     const seen = new Set<Enemy>([cur]);
-    let fx = this.px, fy = this.py;
+    let fx = h.px, fy = h.py;
 
     for (let j = 0; j <= jumps; j++) {
-      this.damageEnemy(cur, dmg, def.id);
+      this.damageEnemy(h, cur, dmg, def.id);
       if (this.arcs.length < 64) this.arcs.push({ x1: fx, y1: fy, x2: cur.x, y2: cur.y });
       fx = cur.x; fy = cur.y;
 
@@ -1181,19 +1186,19 @@ export class Game {
   }
 
   /** #1 aimed — en yakın düşmana mermi(ler) */
-  private fireAimed(w: OwnedWeapon, target: Enemy) {
+  private fireAimed(h: Hero, w: OwnedWeapon, target: Enemy) {
     const def = w.def;
-    const baseAng = Math.atan2(target.y - this.py, target.x - this.px);
-    const n = this.wCount(w);
-    const spd = (def.projectileSpeed ?? 450) * this.stats.projSpeed; // Sinew Wrap
+    const baseAng = Math.atan2(target.y - h.py, target.x - h.px);
+    const n = this.wCount(h, w);
+    const spd = (def.projectileSpeed ?? 450) * h.stats.projSpeed; // Sinew Wrap
     for (let i = 0; i < n; i++) {
       const off = n === 1 ? 0 : (i - (n - 1) / 2) * (def.spreadRad ?? 0.16);
       const a = baseAng + off;
-      this.projectiles.push({
-        x: this.px, y: this.py,
+      this.projectiles.push({ owner: h,
+        x: h.px, y: h.py,
         vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
-        damage: this.wDamage(w), radius: 5,
-        life: (def.lifeSec ?? 1.5) * this.stats.duration, // Binding Sigil
+        damage: this.wDamage(h, w), radius: 5,
+        life: (def.lifeSec ?? 1.5) * h.stats.duration, // Binding Sigil
         pierce: def.pierce ?? 0,
         wid: def.id,
       });
@@ -1201,21 +1206,21 @@ export class Game {
   }
 
   /** #2 sweep — oyuncunun baktığı yöne yatay kesik; düşmandan geçer */
-  private fireSweep(w: OwnedWeapon) {
+  private fireSweep(h: Hero, w: OwnedWeapon) {
     const def = w.def;
-    const area = this.wArea(w);
+    const area = this.wArea(h, w);
     const wdt = (def.sweepW ?? 130) * area;
     const hgt = (def.sweepH ?? 45) * area;
-    const n = this.wCount(w); // 2+ olunca her iki yana birden vurur
-    const dirs = n >= 2 ? [true, false] : [this.facingRight];
+    const n = this.wCount(h, w); // 2+ olunca her iki yana birden vurur
+    const dirs = n >= 2 ? [true, false] : [h.facingRight];
     for (const right of dirs) {
-      this.hitZones.push({
-        x: this.px + (right ? wdt / 2 : -wdt / 2),
-        y: this.py,
+      this.hitZones.push({ owner: h,
+        x: h.px + (right ? wdt / 2 : -wdt / 2),
+        y: h.py,
         w: wdt, h: hgt,
-        life: (def.sweepLifeSec ?? 0.18) * this.stats.duration,
-        maxLife: (def.sweepLifeSec ?? 0.18) * this.stats.duration,
-        damage: this.wDamage(w),
+        life: (def.sweepLifeSec ?? 0.18) * h.stats.duration,
+        maxLife: (def.sweepLifeSec ?? 0.18) * h.stats.duration,
+        damage: this.wDamage(h, w),
         facingRight: right,
         hit: new Set<Enemy>(),
         wid: def.id,
@@ -1224,31 +1229,31 @@ export class Game {
   }
 
   /** #8 aura — yakındaki her düşmana tek seferde hasar */
-  private fireAura(w: OwnedWeapon) {
-    const r = (w.def.auraRadius ?? 70) * this.wArea(w);
-    const dmg = this.wDamage(w);
-    const cand = this.grid.query(this.px, this.py, r + 30, this.scratch);
+  private fireAura(h: Hero, w: OwnedWeapon) {
+    const r = (w.def.auraRadius ?? 70) * this.wArea(h, w);
+    const dmg = this.wDamage(h, w);
+    const cand = this.grid.query(h.px, h.py, r + 30, this.scratch);
     for (let i = 0; i < cand.length; i++) {
       const e = cand[i];
       if (e.hp <= 0) continue;
-      const dx = e.x - this.px, dy = e.y - this.py;
+      const dx = e.x - h.px, dy = e.y - h.py;
       const rr = r + e.radius;
       if (dx * dx + dy * dy > rr * rr) continue;
-      this.damageEnemy(e, dmg, w.def.id);
+      this.damageEnemy(h, e, dmg, w.def.id);
     }
   }
 
   /** #6 orbit — dönen orb'lar temas ettiğine vurur (düşman başına bekleme ile) */
-  private orbitHit(w: OwnedWeapon) {
+  private orbitHit(h: Hero, w: OwnedWeapon) {
     const def = w.def;
-    const rad = (def.orbitRadius ?? 78) * this.wArea(w);
-    const orbR = (def.orbRadius ?? 13) * this.wArea(w);
-    const n = this.wCount(w);
-    const dmg = this.wDamage(w);
+    const rad = (def.orbitRadius ?? 78) * this.wArea(h, w);
+    const orbR = (def.orbRadius ?? 13) * this.wArea(h, w);
+    const n = this.wCount(h, w);
+    const dmg = this.wDamage(h, w);
     for (let k = 0; k < n; k++) {
-      const a = this.orbitAngle + (k * Math.PI * 2) / n;
-      const ox = this.px + Math.cos(a) * rad;
-      const oy = this.py + Math.sin(a) * rad;
+      const a = h.orbitAngle + (k * Math.PI * 2) / n;
+      const ox = h.px + Math.cos(a) * rad;
+      const oy = h.py + Math.sin(a) * rad;
       const cand = this.grid.query(ox, oy, orbR + 30, this.scratch);
       for (let i = 0; i < cand.length; i++) {
         const e = cand[i];
@@ -1257,7 +1262,7 @@ export class Game {
         const rr = orbR + e.radius;
         if (dx * dx + dy * dy > rr * rr) continue;
         e.contactCd = CONTACT_HIT_CD;
-        this.damageEnemy(e, dmg, def.id);
+        this.damageEnemy(h, e, dmg, def.id);
       }
     }
   }
@@ -1268,19 +1273,19 @@ export class Game {
    * `wid` vuran silahın id'si: SADECE görsel etiket, hiçbir mantığı beslemez.
    * Render bununla doğru çarpma efektini seçer (bkz. combatArt.ts).
    */
-  private damageEnemy(e: Enemy, dmg: number, wid = '') {
+  private damageEnemy(h: Hero, e: Enemy, dmg: number, wid = '') {
     // ⚠️ ZAR HER VURUŞTA ATILIR — kritik şansı 0 olsa bile, hatta vuruş
     // boşa gidecek olsa bile. `rollRareGold` ile AYNI kural: zarı koşula
     // bağlı atmak RNG akışını duruma göre kaydırır, aynı seed farklı koşu
     // üretir ve sunucu doğrulaması ile istemci sonsuza kadar ayrışır.
     // ⚠️ Bu yüzden aşağıdaki "boss dokunulmaz" kontrolü zardan SONRA geliyor.
-    const crit = this.rng.next() < this.stats.crit;
+    const crit = this.rng.next() < h.stats.crit;
 
     // Boss giriş sekansında DOKUNULMAZ — yoksa oyuncu boss daha belirmeden
     // eritir ve giriş anı (isim kartı, telegrafı öğrenme) hiç yaşanmaz.
     if (e.boss && e.boss.intro > 0) return;
 
-    const out = crit ? dmg * this.stats.critMul : dmg;
+    const out = crit ? dmg * h.stats.critMul : dmg;
 
     e.hp -= out;
     // ⚠️ SUNUM DEĞİL, KOŞU ÇIKTISI: haftalık ortak boss'a katkı bu sayıdan
@@ -1329,7 +1334,7 @@ export class Game {
           if (Math.abs(e.y - z.y) > hh + e.radius) continue;
         }
         z.hit.add(e);
-        this.damageEnemy(e, z.damage, z.wid);
+        this.damageEnemy(z.owner, e, z.damage, z.wid);
       }
 
       z.life -= dt;
@@ -1385,7 +1390,7 @@ export class Game {
         const dx = e.x - p.x, dy = e.y - p.y;
         if (dx * dx + dy * dy > rr * rr) continue;
 
-        this.damageEnemy(e, p.damage, p.wid);
+        this.damageEnemy(p.owner, e, p.damage, p.wid);
 
         if (p.pierce > 0) { p.pierce -= 1; continue; }
         consumed = true;
@@ -1448,31 +1453,31 @@ export class Game {
     }
   }
 
-  private collidePlayer(dt: number) {
-    if (this.iframe > 0) return;
-    const cand = this.grid.query(this.px, this.py, PLAYER.radius + 30, this.scratch);
+  private collideHero(h: Hero, dt: number) {
+    if (h.iframe > 0) return;
+    const cand = this.grid.query(h.px, h.py, PLAYER.radius + 30, this.scratch);
     for (let i = 0; i < cand.length; i++) {
       const e = cand[i];
       const rr = PLAYER.radius + e.radius;
-      const dx = e.x - this.px, dy = e.y - this.py;
+      const dx = e.x - h.px, dy = e.y - h.py;
       if (dx * dx + dy * dy > rr * rr) continue;
       // Armor düz azaltma (VS) — ama en az 1 hasar geçer, yoksa yüksek armor
       // oyuncuyu tamamen dokunulmaz yapar ve run hiç bitmez.
-      const taken = Math.max(1, e.damage - this.stats.armor);
-      this.hp -= taken;
-      this.iframe = PLAYER.iframeSec;
+      const taken = Math.max(1, e.damage - h.stats.armor);
+      h.hp -= taken;
+      h.iframe = PLAYER.iframeSec;
       this.events.add('hurt');
-      this.hurtT = 0.32;
+      h.hurtT = 0.32;
       if (this.hurts.length < 4) this.hurts.push({ amount: taken });
-      if (this.hp <= 0) {
-        if (this.stats.revival > 0) {
+      if (h.hp <= 0) {
+        if (h.stats.revival > 0) {
           // Second Burial — VS'teki gibi %50 canla dirilir, hak tükenir
-          this.stats.revival -= 1;
-          this.hp = this.stats.maxHp * 0.5;
-          this.iframe = 2.5; // dirilişten sonra nefes payı
-          this.revives += 1;
+          h.stats.revival -= 1;
+          h.hp = h.stats.maxHp * 0.5;
+          h.iframe = 2.5; // dirilişten sonra nefes payı
+          h.revives += 1;
         } else {
-          this.hp = 0;
+          h.hp = 0;
           this.phase = 'dead';
         }
       }
@@ -1480,14 +1485,14 @@ export class Game {
     }
   }
 
-  private updateGems(dt: number) {
-    const magnet = PLAYER.pickupRadius * this.stats.magnet;
+  private updateGems(h: Hero, dt: number) {
+    const magnet = PLAYER.pickupRadius * h.stats.magnet;
     for (let i = this.gems.length - 1; i >= 0; i--) {
       const g = this.gems[i];
       g.life -= dt;
       if (g.life <= 0) { this.swapRemove(this.gems, i); continue; }
 
-      const dx = this.px - g.x, dy = this.py - g.y;
+      const dx = h.px - g.x, dy = h.py - g.y;
       const d = Math.hypot(dx, dy);
       if (d < magnet) {
         // çekim: yaklaştıkça hızlanır (VS'deki mücevher akışı hissi)
@@ -1496,22 +1501,22 @@ export class Game {
         g.y += (dy / (d || 1)) * pull;
       }
       if (d < PLAYER.radius + GEM.radius) {
-        this.addXp(g.xp);
+        this.addXp(h, g.xp);
         this.events.add('gem');
         this.swapRemove(this.gems, i);
       }
     }
   }
 
-  private addXp(amount: number) {
-    this.xp += amount * this.stats.growth; // Grave Crown
+  private addXp(h: Hero, amount: number) {
+    h.xp += amount * h.stats.growth; // Grave Crown
     // Ömür boyu toplanan XP — seviye atlayınca sıfırlanan `xp`'nin aksine
     // MONOTON. Profil sayfası bunu kullanacak; testler de "XP akıyor mu"
     // sorusunu seviye EŞİĞİNE takılmadan sorabiliyor.
-    this.xpEarned += amount * this.stats.growth;
-    if (this.xp >= this.xpNext) {
-      this.xp -= this.xpNext;
-      this.levelUp();
+    h.xpEarned += amount * h.stats.growth;
+    if (h.xp >= h.xpNext) {
+      h.xp -= h.xpNext;
+      this.levelUp(h);
     }
   }
 
@@ -1523,10 +1528,10 @@ export class Game {
    * bu yol hiç işlemiyor — yani derinlik 1'den başlayan tüm eski seed'ler
    * aynı akışı görüyor ve SIM_VERSION artmıyor.
    */
-  private levelUp() {
+  private levelUp(h: Hero) {
     this.level += 1;
     this.xpNext = xpForLevel(this.level);
-    this.rollOffers();
+    this.rollOffers(h);
     this.events.add('levelup');
     this.phase = 'levelup';
   }
@@ -1535,7 +1540,7 @@ export class Game {
    * 3 seçenek üret: silah yükseltmesi + yeni silah + istatistik karışımı.
    * VS deseni: silahlar istatistiklerden ÖNCELİKLİ, yoksa oyuncu tek silahta kalır.
    */
-  private rollOffers() {
+  private rollOffers(h: Hero) {
     const pool: Offer[] = [];
 
     // sahip olunan ve max'a ulaşmamış silahlar
@@ -1587,6 +1592,8 @@ export class Game {
 
   /** levelup fazında seçim uygula */
   choose(id: string) {
+    const h = this.hero;   // ⚠️ dışarıdan gelen seçim BİRİNCİ dövüşçünün
+
     if (this.phase !== 'levelup') return;
     const o = this.offers.find((x) => x.id === id);
     if (!o) return;
@@ -1594,7 +1601,7 @@ export class Game {
 
     switch (o.kind) {
       case 'weapon-new':
-        this.giveWeapon(key);
+        this.giveWeapon(h, key);
         break;
       case 'weapon-up': {
         const w = this.weapons.find((x) => x.def.id === key);
@@ -1602,7 +1609,7 @@ export class Game {
         break;
       }
       case 'passive-new':
-        this.givePassive(key);
+        this.givePassive(h, key);
         break;
       case 'passive-up': {
         const p = this.passives.find((x) => x.def.id === key);
@@ -1610,7 +1617,7 @@ export class Game {
           p.level += 1;
           // Max HP artışı anında iyileştirir (VS: Hollow Heart aldığında canın artar)
           const before = this.stats.maxHp;
-          this.recomputeStats();
+          this.recomputeStats(this.hero);
           if (this.stats.maxHp > before) this.hp += this.stats.maxHp - before;
         }
         break;

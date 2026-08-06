@@ -988,10 +988,10 @@ console.log('\n[9] Pasifler ve istatistikler');
   for (const def of PASSIVES.slice(0, 4)) {
     const t = new Game(1);
     t.setViewport(1280, 720);
-    (t as any).givePassive(def.id);
+    (t as any).givePassive(t.hero, def.id);
     const p = t.passives.find((x) => x.def.id === def.id)!;
     p.level = def.maxLevel;
-    (t as any).recomputeStats();
+    (t as any).recomputeStats(t.hero);
     const before = STAT_BASE[def.stat];
     const after = t.stats[def.stat];
     const moved = def.stat === 'cooldown' ? after < before : after > before;
@@ -1002,7 +1002,7 @@ console.log('\n[9] Pasifler ve istatistikler');
   const capTest = new Game(1);
   capTest.setViewport(1280, 720);
   (capTest as any).passives = PASSIVES.map((def) => ({ def, level: def.maxLevel * 20 })); // absürt seviye
-  (capTest as any).recomputeStats();
+  (capTest as any).recomputeStats(capTest.hero);
   check('cooldown %10 dibinin altına inmiyor', capTest.stats.cooldown >= COOLDOWN_FLOOR - 1e-9,
     `${capTest.stats.cooldown.toFixed(3)}`);
   check('amount tavanı (10) aşılmıyor', capTest.stats.amount <= STAT_CAP.amount!, `${capTest.stats.amount}`);
@@ -1015,7 +1015,7 @@ console.log('\n[9] Pasifler ve istatistikler');
   // ZOR bölümde test edilmeli — kolay bölümde oyuncu ölmüyor, diriliş tetiklenmiyor
   const g = new Game(seedFromString('revive'), OLCUM_BOLUMU);
   g.setViewport(1280, 720);
-  (g as any).givePassive('burial');
+  (g as any).givePassive(g.hero, 'burial');
   g.setInput(0, 0);
   let sawRevive = false;
   for (let i = 0; i < Math.round(300 / TICK); i++) {
@@ -1108,10 +1108,10 @@ function evolveScenario(weaponMax: boolean, passiveMax: boolean) {
   g.setViewport(1280, 720);
   const w = g.weapons.find((x) => x.def.id === 'shard')!;
   w.level = weaponMax ? w.def.maxLevel : 1;
-  (g as any).givePassive('hands');
+  (g as any).givePassive(g.hero, 'hands');
   const p = g.passives.find((x) => x.def.id === 'hands')!;
   p.level = passiveMax ? p.def.maxLevel : 1;
-  (g as any).recomputeStats();
+  (g as any).recomputeStats(g.hero);
   // evrim sandığını doğrudan oyuncunun üstüne koy
   g.chests.push({ x: g.px, y: g.py, evolution: true });
   g.step();
@@ -1127,7 +1127,7 @@ check('ikisi de MAX ise evrim OLUYOR', evolveScenario(true, true));
   g.setViewport(1280, 720);
   const w = g.weapons.find((x) => x.def.id === 'shard')!;
   w.level = w.def.maxLevel;
-  (g as any).givePassive('hands');
+  (g as any).givePassive(g.hero, 'hands');
   g.passives[0].level = g.passives[0].def.maxLevel;
   const goldBefore = g.rareGold;
   g.chests.push({ x: g.px, y: g.py, evolution: false });
@@ -1143,13 +1143,13 @@ check('ikisi de MAX ise evrim OLUYOR', evolveScenario(true, true));
   g.setViewport(1280, 720);
   const w = g.weapons.find((x) => x.def.id === 'shard')!;
   w.level = w.def.maxLevel;
-  (g as any).givePassive('hands');
+  (g as any).givePassive(g.hero, 'hands');
   g.passives[0].level = g.passives[0].def.maxLevel;
   g.chests.push({ x: g.px, y: g.py, evolution: true });
   g.step();
   let sawEvolvedOffer = false;
   for (let i = 0; i < 60; i++) {
-    (g as any).rollOffers();
+    (g as any).rollOffers(g.hero);
     if (g.offers.some((o) => o.id === 'w:reliquary' || o.name === 'Reliquary')) sawEvolvedOffer = true;
   }
   check('evrimleşmiş silah level-up havuzunda çıkmıyor', !sawEvolvedOffer);
