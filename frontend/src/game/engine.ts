@@ -490,7 +490,30 @@ export class Game {
     if (m > 1e-4) { this.inx = x / m; this.iny = y / m; } else { this.inx = 0; this.iny = 0; }
   }
 
-  setViewport(w: number, h: number) { this.viewW = w; this.viewH = h; }
+  /**
+   * ⚠️ GÖRÜŞ ALANI SİMÜLASYONU ETKİLİYOR — doğum halkasının yarıçapı
+   * buradan geliyor (`spawn`). Yani PENCERE BOYUTU dünyayı değiştiriyor.
+   *
+   * Solo'da zararsız (herkes kendi koşusunu oynuyor) ama 1v1'de ÖLÜMCÜL:
+   * dizüstünde 1280×720, masaüstünde 2560×1440 oynayan iki oyuncu FARKLI
+   * düşmanlar görür ve lockstep sessizce çöker — kimse hata mesajı görmez,
+   * sadece iki oyun ayrışır.
+   *
+   * `lockViewport` bu yüzden var: arena kurulurken sabit bir görüş alanı
+   * mühürleniyor ve render katmanının `setViewport` çağrıları yok sayılıyor.
+   */
+  private viewLocked = false;
+
+  setViewport(w: number, h: number) {
+    if (this.viewLocked) return;
+    this.viewW = w; this.viewH = h;
+  }
+
+  /** Arena modunda görüş alanını SABİTLE — bkz. setViewport başlığı */
+  lockViewport(w: number, h: number) {
+    this.viewW = w; this.viewH = h;
+    this.viewLocked = true;
+  }
 
   get minute() { return this.time / 60; }
 
