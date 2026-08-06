@@ -16,6 +16,7 @@ import { WorldBossPanel } from '@/components/WorldBossPanel';
 import { GuildPanel } from '@/components/GuildPanel';
 import { GearPanel } from '@/components/GearPanel';
 import { SkillPanel } from '@/components/SkillPanel';
+import { DuelPanel } from '@/components/DuelPanel';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -39,7 +40,7 @@ import { installAudioUnlock, play } from '@/game/sfx';
 import { getMode, getWallet } from '@/lib/session';
 import {
   buyUpgrade, engineModeOf, finishBossRun, finishRun as settleRun, loadSessionProgress,
-  setHero as saveHero, startBossRun, startRun,
+  setHero as saveHero, startBossRun, startDuel, startRun,
   type RunKind, type RunTicket, type Settled,
 } from '@/lib/gameSession';
 
@@ -62,6 +63,8 @@ type Payout = {
   wager: { stake: number; target: number; won: boolean; dust: number } | null;
   /** Wilderness koşusuysa: çıkabildi mi ve ne buldu */
   wilderness: Settled['wilderness'];
+  /** düello koşusuysa: kazandı mı, puan nasıl değişti */
+  duel: Settled['duel'];
 };
 
 export default function PlayPage() {
@@ -166,7 +169,7 @@ export default function PlayPage() {
           // döner ve döküm yanlış ekranı gösterirdi.
           mode: kind, deepestCleared: run.deepestCleared,
           progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
-          wager: r.wager, wilderness: r.wilderness ?? null,
+          wager: r.wager, wilderness: r.wilderness ?? null, duel: r.duel ?? null,
         });
       })
       .catch(() => setNote('Koşu kaydedilemedi — ödül işlenmedi.'));
@@ -178,6 +181,20 @@ export default function PlayPage() {
     startRun(mode, stageId, wantStartDepth, wantAscension)
       .then((ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }))
       .catch(() => setNote('Koşu başlatılamadı.'));
+  }, []);
+
+  /**
+   * Düelloya gir — rakibin koşusunu oynamak.
+   *
+   * ⚠️ AYRI UÇ (`/duel/start`): seed rakibin KAYDINDAN geliyor, yeni
+   * üretilmiyor. `startRun` kullanılsaydı sunucu taze bir seed üretir ve
+   * düellonun tek adalet dayanağı yok olurdu.
+   */
+  const beginDuel = useCallback((recordId: string) => {
+    setPanel(null);
+    startDuel(recordId)
+      .then((t) => setScreen({ kind: 'stage', stageId: t.duel.stageId, mode: 'duel', ticket: t }))
+      .catch((e) => setNote(e instanceof Error ? e.message : 'Meydan okuma açılamadı.'));
   }, []);
 
   /**
@@ -298,6 +315,68 @@ export default function PlayPage() {
 
       {/* Koşu sonu ödül dökümü — ödülün NEREDEN geldiği görünür olmalı,
           yoksa "tekrar oynadım ama gold gelmedi" haklı şikâyeti doğar */}
+      {/* ⚠️ DÜELLONUN KENDİ DÖKÜMÜ. Gold dökümünü göstermek "+0 GOLD" yazan
+          bir ekran olurdu — oyuncu düelloyu kazandığı hâlde başarısız
+          olduğunu sanırdı. Farklı ödeyen mod, farklı ekran. */}
+      {payout?.duel && (
+        <div onClick={() => setPayout(null)}
+          style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.86)', zIndex: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: `${dockH + 20}px 20px 20px` }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 22, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+            <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.4, color: C.blood, marginBottom: 5 }}>
+              THE ANSWERING
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 4,
+              color: payout.duel.won ? C.candle : '#e4657a' }}>
+              {payout.duel.won ? 'You went deeper' : 'You fell short'}
+            </div>
+            <div style={{ fontSize: 12.5, color: C.boneFaint, marginBottom: 16, lineHeight: 1.5 }}>
+              Depth <b style={{ color: C.bone }}>{payout.duel.depth}</b> against
+              their <b style={{ color: C.bone }}>{payout.duel.target}</b>
+              {' — '}same seed, same enemies.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <span style={{ ...glass(9), padding: '10px 14px', minWidth: 96 }}>
+                <span style={{ display: 'block', fontSize: 9, letterSpacing: 1.4, color: C.boneFaint }}>STANDING</span>
+                <span style={{ display: 'block', fontSize: 20, fontWeight: 900, color: C.bone }}>
+                  {payout.duel.rating}
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 900,
+                  color: payout.duel.delta >= 0 ? C.ok : C.bloodSoft }}>
+                  {payout.duel.delta >= 0 ? '+' : ''}{payout.duel.delta}
+                </span>
+              </span>
+              <span style={{ ...glass(9), padding: '10px 14px', minWidth: 96 }}>
+                <span style={{ display: 'block', fontSize: 9, letterSpacing: 1.4, color: C.boneFaint }}>DUST</span>
+                <span style={{ display: 'block', fontSize: 20, fontWeight: 900,
+                  color: payout.duel.dust > 0 ? C.candle : C.boneFaint }}>
+                  +{payout.duel.dust}
+                </span>
+                {/* ⚠️ Toz 0 ise SEBEBİ yazılmalı: oyuncu kazandığı hâlde toz
+                    gelmeyince "bozuk" sanar. */}
+                <span style={{ fontSize: 10, color: C.boneFaint }}>
+                  {payout.duel.won
+                    ? (payout.duel.dust > 0 ? 'today’s reward' : 'daily cap reached')
+                    : 'wins only'}
+                </span>
+              </span>
+            </div>
+
+            {/* ⚠️ Kırpılmış koşu düello KAZANAMAZ ve bu SESSİZ KALMAMALI */}
+            {payout.duel.capped && (
+              <div style={{ marginTop: 12, padding: '9px 11px', borderRadius: 8,
+                background: 'rgba(160,18,38,0.14)', border: `1px solid ${C.bad}55`,
+                fontSize: 11.5, color: '#e4657a', lineHeight: 1.5 }}>
+                Your claim did not fit the time you spent, so it was not counted.
+              </div>
+            )}
+
+            <button onClick={() => setPayout(null)}
+              style={{ ...ctaButton(true), marginTop: 18, width: '100%' }}>Back to the village</button>
+          </div>
+        </div>
+      )}
+
       {/* ⚠️ WILDERNESS'IN KENDİ DÖKÜMÜ. Gold dökümünü göstermek "+0 GOLD"
           yazan bir ekran olurdu — oyuncu ödülünü aldığı hâlde başarısız
           olduğunu sanırdı. Farklı ödeyen mod, farklı ekran. */}
@@ -368,7 +447,7 @@ export default function PlayPage() {
         </div>
       )}
 
-      {payout && !payout.wilderness && (
+      {payout && !payout.wilderness && !payout.duel && (
         <div onClick={() => setPayout(null)}
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
@@ -473,6 +552,8 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : panel === 'duel' ? (
+              <DuelPanel onChallenge={beginDuel} onError={setNote} />
             ) : panel === 'paths' ? (
               <SkillPanel
                 progress={progress ?? loadProgress()}

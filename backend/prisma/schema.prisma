@@ -71,6 +71,17 @@ model Player {
   /// günlük seri: { days, last }  — `last` SUNUCUNUN UTC günü
   streak           Json @default("{}")
 
+  // ── DÜELLO (asenkron PvP — bkz. game/duel.ts) ──
+  /// Elo puanı. ⚠️ Taban 100; sıfırlanan oyuncu tablodan düşer ve formül
+  /// uçlarda anlamsızlaşır.
+  duelRating Int @default(1000)
+  duelWins   Int @default(0)
+  duelLosses Int @default(0)
+  /// ⚠️ TOZ MUSLUĞUNUN TAVANI. Düello sınırsız oynanabiliyor; ödüllü maç
+  /// sayısı GÜNLÜK sınırlı olmasa oyuncu başına sınırsız toz olurdu.
+  duelDay      String @default("")
+  duelRewarded Int    @default(0)
+
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
 
@@ -116,6 +127,7 @@ model Player {
   listings Listing[]
   awards   SeasonAward[]
   gear     GearItem[]
+  records  DuelRecord[]
 
   @@index([bestRating])
   @@index([guildId])
@@ -176,7 +188,64 @@ model Run {
   /// sunucu iddiayı kırptıysa işaretlenir — admin panelinde şüpheli listesi
   capped       Boolean @default(false)
 
+  // ── DÜELLO ANLIK GÖRÜNTÜSÜ ──
+  // ⚠️ HEDEF KOŞU AÇILIRKEN DONDURULUYOR. Kapanışta rakibin GÜNCEL kaydına
+  // bakılsaydı hedef hareketli olurdu: oyuncu 40'ı geçmek için girer, o
+  // sırada rakip 45'e çıkar ve kaybederdi. Ekranda gördüğü sayıya karşı
+  // oynamalı.
+  duelDefender    String?
+  duelTargetDepth Int?
+  duelDefRating   Int?
+
   @@index([wallet, startedAt])
+}
+
+// DÜELLO KAYDI — rakibin "cevaplanacak" koşusu.
+//
+// ⚠️ SEED BURADA DURUYOR ve düellonun bütün adaleti buna dayanıyor: meydan
+// okuyan TAM OLARAK bu koşuyu oynuyor — aynı düşmanlar, aynı sıra, aynı
+// sandıklar. Netcode yok, tahmin/uzlaştırma yok, determinizm mührü sağlam.
+//
+// ⚠️ Oyuncu × bölüm başına TEK kayıt: en iyisi. Her koşuyu saklamak tabloyu
+// şişirir ve "hangisine meydan okuyayım" sorusunu anlamsızlaştırırdı.
+model DuelRecord {
+  id     String @id
+  wallet String
+  player Player @relation(fields: [wallet], references: [wallet], onDelete: Cascade)
+
+  stageId Int
+  /// ⚠️ BigInt — seed uint32 ve INT4 taşıyor (bkz. Run.seed)
+  seed    BigInt
+  /// SUNUCUNUN KABUL ETTİĞİ derinlik — iddia değil
+  depth   Int
+  /// challengeRating(stage, depth, ascension) — tabloyu sıralamak için
+  rating  Float
+
+  createdAt DateTime @default(now())
+
+  @@unique([wallet, stageId])
+  @@index([stageId, depth])
+}
+
+// Oynanmış bir düello. ⚠️ Asıl işi SOĞUMA SÜRESİ: aynı çiftin son maçı
+// buradan okunuyor. Olmadan bir oyuncu ikinci hesabına sonsuz meydan
+// okuyabilirdi (Elo kazancı sıfıra yaklaşsa da sıfır değil).
+model Duel {
+  id         String @id
+  challenger String
+  defender   String
+  stageId    Int
+  /// meydan okuyanın ulaştığı derinlik / hedef
+  depth      Int
+  target     Int
+  won        Boolean
+  /// meydan okuyanın puan değişimi
+  delta      Int
+  dust       Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([challenger, defender, createdAt])
+  @@index([createdAt])
 }
 
 // ── MARKETPLACE ───────────────────────────────────────────────────────

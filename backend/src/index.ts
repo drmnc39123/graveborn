@@ -24,6 +24,7 @@ import {
   GearError, equipGear, equippedBonus, grantRunGear, listGear, salvageGear, unequipSlot,
 } from './gear.js';
 import { SkillError, listSkills, setSkills, skillsBonusOf } from './skills.js';
+import { DuelError, board as duelBoard, publishRecord, resolveChallenge, settleDuel } from './duel.js';
 import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
@@ -99,7 +100,7 @@ for (const yol of [
   '/market/list', '/market/cancel', '/market/buy',
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
-  '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set',
+  '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -542,7 +543,7 @@ app.post('/wager/clear', wrap(async (req, res) => {
 const startSchema = z.object({
   // ⚠️ 'wilderness' motorda BİR MOD DEĞİL — motor onu descent olarak
   // çalıştırıyor (bkz. gear.ts başlığı). Fark tamamen sunucunun ne ödediğinde.
-  mode: z.enum(['campaign', 'descent', 'wilderness']),
+  mode: z.enum(['campaign', 'descent', 'wilderness', 'duel']),
   stageId: z.number().int().min(1).max(99),
   /**
    * İstemcinin başlamak İSTEDİĞİ derinlik. Bir istek, bir izin değil —
@@ -671,6 +672,38 @@ app.post('/run/finish', wrap(async (req, res) => {
   const before = toProgress(player);
   const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
 
+  // ── DÜELLO ──
+  // ⚠️ AYRI YOL, `settleRun`'a HİÇ UĞRAMIYOR. Wilderness ile aynı gerekçe:
+  // düello sınırsız tekrarlanabiliyor, dolayısıyla tek kuruş gold ödeyemez.
+  // `depthPaid` de ilerlemiyor ve leaderboard'a yazılmıyor.
+  if (run.mode === 'duel') {
+    const kabul = acceptDepth('duel', run.stageId, body.data.deepestCleared,
+      elapsedSec, run.startDepth);
+    const sonuc = kabul.capped
+      // Kırpılmış bir iddia düello KAZANAMAZ — leaderboard ve bahisteki
+      // kuralın aynısı. Şüpheli koşuya puan vermek tabloyu kilitlerdi.
+      ? await settleDuel(wallet, run.duelDefender!, run.stageId, 0,
+          run.duelTargetDepth ?? 0, run.duelDefRating ?? 1000)
+      : await settleDuel(wallet, run.duelDefender!, run.stageId, kabul.depth,
+          run.duelTargetDepth ?? 0, run.duelDefRating ?? 1000);
+
+    await prisma.run.update({
+      where: { id: run.id },
+      data: {
+        claimedAt: new Date(), claimedDepth: body.data.deepestCleared,
+        claimedGold: 0, awarded: 0, awardedDepth: kabul.depth, capped: kabul.capped,
+      },
+    });
+    if (kabul.capped) console.warn('[kirpildi:duel]', wallet, run.id, kabul.reason.join(' | '));
+
+    res.json({
+      progress: toProgress(await getOrCreatePlayer(wallet)),
+      awarded: 0, progressGold: 0, dropGold: 0, record: false, wager: null,
+      duel: { ...sonuc, defender: run.duelDefender, capped: kabul.capped },
+    });
+    return;
+  }
+
   // ── THE WILDERNESS ──
   // ⚠️ AYRI YOL, `settleRun`'a HİÇ UĞRAMIYOR. Sebep tek cümle: Wilderness
   // sınırsız tekrarlanabilir, dolayısıyla tek kuruş gold ödeyemez. Aynı
@@ -771,6 +804,11 @@ app.post('/run/finish', wrap(async (req, res) => {
   // Aynı kırpma kuralı sezon tablosunda da geçerli — iki tablo, tek karar.
   const record = s.capped ? false : await recordDescent(wallet, run.mode, run.stageId, ulasilan, run.ascension);
   if (!s.capped) await recordSeason(wallet, run.mode, run.stageId, ulasilan, run.ascension);
+  // ⚠️ DÜELLO KAYDI da buradan yayınlanıyor — ve SADECE kırpılmamış koşudan.
+  // Şüpheli bir iddiadan doğan kayıt, ona meydan okuyan HERKESİN puanını
+  // bozardı.
+  await publishRecord(wallet, run.mode, run.stageId, Number(run.seed), ulasilan,
+    run.ascension, s.capped);
 
   res.json({
     progress: toProgress(saved),
@@ -1019,6 +1057,61 @@ app.post('/skills/set', wrap(async (req, res) => {
     if (e instanceof SkillError) { res.status(e.status).json({ error: e.code }); return; }
     throw e;
   }
+}));
+
+// ── DÜELLO (asenkron PvP) ──
+//
+// ⚠️ Meydan okuyan RAKİBİN SEED'İNİ oynuyor — düellonun bütün adaleti buna
+// dayanıyor. Gerçek zamanlı PvP bilerek yapılmadı: determinizm mührünü ve
+// sunucu-otoriteli ödülü bozardı (bkz. game/duel.ts başlığı).
+app.get('/duel', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const p = toProgress(await getOrCreatePlayer(wallet));
+  res.json(await duelBoard(wallet, p.cleared as unknown as Record<string, boolean>));
+}));
+
+app.post('/duel/start', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+  const p = toProgress(player);
+
+  let ch;
+  try {
+    ch = await resolveChallenge(wallet, req.body?.recordId, p.cleared as unknown as Record<string, boolean>);
+  } catch (e) {
+    if (e instanceof DuelError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+
+  const runId = crypto.randomUUID();
+  const guildGrowth = await growthOf(wallet);
+  const gear = await equippedBonus(wallet);
+  const skills = await skillsBonusOf(wallet);
+
+  // ⚠️ Tılsımlar düelloda da koşu AÇILIRKEN yanıyor — normal koşudaki
+  // kuralın aynısı, yoksa düello tılsım saklamanın bedava yolu olurdu.
+  const charms = p.charms;
+  if (charms.length) {
+    await prisma.player.update({ where: { wallet }, data: { charms: [] } });
+  }
+
+  await acikKosulariIptalEt(wallet);
+  await prisma.run.create({
+    data: {
+      id: runId, wallet, seed: BigInt(ch.seed), hero: p.hero,
+      mode: 'duel', stageId: ch.stageId, startDepth: 1, ascension: 0,
+      // ⚠️ HEDEF DONDURULUYOR — bkz. duel.ts başlığı
+      duelDefender: ch.defender, duelTargetDepth: ch.targetDepth, duelDefRating: ch.defRating,
+    },
+  });
+  res.json({
+    runId, seed: ch.seed, hero: p.hero, charms,
+    startDepth: 1, ascension: 0, guildGrowth, gear, skills,
+    duel: { defender: ch.defender, target: ch.targetDepth, stageId: ch.stageId },
+  });
 }));
 
 // ── MARKETPLACE ──

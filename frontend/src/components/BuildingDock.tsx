@@ -43,6 +43,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // ⚠️ Sonda duruyor ama en dikkat çeken yer olmalı — haftalık, kaçırılırsa
   // bir daha o boss gelmiyor. Rozet/vurgu Faz 5 cilasında eklenecek.
   { id: 'boss', label: 'BARROW', sub: "The Shared Barrow — this week's world boss" },
+  // ⚠️ BARROW'un yanında: ikisi de "başkalarına karşı" oynanan yerler.
+  // Boss ORTAK bir düşman, düello ise doğrudan başka bir oyuncunun koşusu —
+  // rekabet kolu burada okunuyor.
+  { id: 'duel', label: 'DUELS', sub: "The Answering — play another player's run and go deeper" },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
   // ⚠️ TAVERN'in yanında: ikisi de "kim olduğun" ile ilgili. Lonca sohbetin
   // yanına konsaydı bir araç gibi görünürdü; profilin yanında bir AİDİYET

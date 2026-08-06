@@ -40,6 +40,15 @@ export interface Settled {
   /** koşuda bahis vardıysa sonucu — koşu sonu dökümünde gösterilir */
   wager: { stake: number; target: number; won: boolean; dust: number } | null;
   /**
+   * Düello koşusuysa sonucu. ⚠️ `awarded` HER ZAMAN 0 — düello da gold
+   * ödemiyor (bkz. game/duel.ts başlığı).
+   */
+  duel?: {
+    won: boolean; depth: number; target: number;
+    delta: number; rating: number; dust: number;
+    defender: string; capped: boolean;
+  } | null;
+  /**
    * The Wilderness koşusuysa sonucu. ⚠️ `awarded` HER ZAMAN 0 olur — bu mod
    * gold ödemiyor (bkz. backend/gear.ts başlığı).
    */
@@ -447,7 +456,7 @@ export async function cancelWager(current: Progress): Promise<Progress> {
  * motoru DESCENT olarak çalıştırıyor; farkı sunucunun ne ödediğinde ve
  * arayüzde. Bu ayrımı tek yerde tutuyoruz: `engineModeOf`.
  */
-export type RunKind = 'campaign' | 'descent' | 'wilderness';
+export type RunKind = 'campaign' | 'descent' | 'wilderness' | 'duel';
 
 export function engineModeOf(kind: RunKind): 'campaign' | 'descent' {
   return kind === 'campaign' ? 'campaign' : 'descent';
@@ -561,7 +570,7 @@ export async function finishRun(
 
   const out = await api<{
     progress: Progress; awarded: number; progressGold: number; dropGold: number;
-    wager: Settled['wager']; wilderness?: Settled['wilderness'];
+    wager: Settled['wager']; wilderness?: Settled['wilderness']; duel?: Settled['duel'];
   }>('/run/finish', {
     method: 'POST',
     body: {
@@ -578,6 +587,7 @@ export async function finishRun(
   return {
     ...out,
     wilderness: out.wilderness ?? null,
+    duel: out.duel ?? null,
     paidRange: after > before ? { from: before, to: after } : null,
   };
 }
@@ -684,6 +694,58 @@ export async function salvageGear(ids: string[]): Promise<{
   dust: number; removed: number; progress: Progress; gear: GearView;
 }> {
   return api('/gear/salvage', { method: 'POST', body: { ids } });
+}
+
+// ── DÜELLO (asenkron PvP) ─────────────────────────────────────────────
+// ⚠️ DEMO MODUNDA YOK. Düello başka bir oyuncunun SUNUCUDAKİ kaydına karşı
+// oynanıyor; demoda rakip diye bir şey yok ve sahte bir rakip uydurmak,
+// olmayan bir topluluğu varmış gibi göstermek olurdu.
+
+export interface DuelRow {
+  id: string; wallet: string; stageId: number; depth: number;
+  rating: number; duelRating: number; hero: string;
+  /** meydan okunamıyorsa SEBEBİ */
+  blocker: string | null;
+}
+
+export interface DuelBoard {
+  me: { rating: number; wins: number; losses: number; rewardedToday: number };
+  rows: DuelRow[];
+  recent: {
+    challenger: string; defender: string; stageId: number;
+    depth: number; target: number; won: boolean; delta: number; at: string;
+  }[];
+}
+
+export async function fetchDuels(): Promise<DuelBoard> {
+  return api<DuelBoard>('/duel');
+}
+
+/**
+ * Meydan okumayı başlat.
+ *
+ * ⚠️ SEED SUNUCUDAN VE RAKİBİN KAYDINDAN gelir — istemci ne seçiyor ne de
+ * biliyor. Düellonun bütün adaleti buna dayanıyor: iki oyuncu TAM OLARAK
+ * aynı koşuyu oynuyor.
+ */
+export async function startDuel(recordId: string): Promise<RunTicket & {
+  duel: { defender: string; target: number; stageId: number };
+}> {
+  const out = await api<{
+    runId: string; seed: number; charms?: string[]; startDepth?: number; ascension?: number;
+    guildGrowth?: number; gear?: Partial<Record<string, number>>;
+    skills?: Partial<Record<string, number>>;
+    duel: { defender: string; target: number; stageId: number };
+  }>('/duel/start', { method: 'POST', body: { recordId } });
+  return {
+    runId: out.runId, seed: out.seed, charms: out.charms ?? [],
+    startDepth: 1, ascension: 0,
+    guildGrowth: Math.max(0, out.guildGrowth ?? 0),
+    gear: (out.gear ?? {}) as RunTicket['gear'],
+    skills: (out.skills ?? {}) as RunTicket['skills'],
+    wager: null,
+    duel: out.duel,
+  };
 }
 
 // ── BECERİ AĞACI ──────────────────────────────────────────────────────
