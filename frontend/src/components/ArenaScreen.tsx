@@ -1,0 +1,320 @@
+'use client';
+// ARENA — gerçek zamanlı 1v1 ekranı: kuyruk → maç → sonuç.
+//
+// ⚠️ SİMÜLASYON KENDİ GİRDİNLE İLERLEMİYOR. Tuş yalnızca sunucuya
+// gönderiliyor; motor sunucudan dönen kare akışıyla ilerliyor
+// (bkz. lib/arenaClient.ts). O yüzden burada `game.step()` YOK, sadece
+// `handle.catchUp()` var.
+//
+// ⚠️ GÖRÜŞ ALANI MÜHÜRLÜ — `setViewport` çağrılmıyor. Pencere boyutu
+// simülasyonu etkiliyor (doğum halkası) ve iki oyuncunun ekranı farklı
+// olabilir; arena sabit 1280×720 simüle edip ekrana ölçekleniyor.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ARENA, type ArenaSetup } from '@/game/arena';
+import { render, resetEffects } from '@/game/render';
+import { heroById } from '@/game/heroes';
+import { duelTier } from '@/game/duel';
+import { Portrait } from '@/components/HeroPicker';
+import {
+  joinArena, leaveQueue, pollQueue, type ArenaEnd, type ArenaHandle,
+} from '@/lib/arenaClient';
+import { C, FONT, glass, ctaButton } from '@/lib/theme';
+
+const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+
+type Durum =
+  | { k: 'idle' }
+  | { k: 'queue'; waited: number }
+  | { k: 'match'; setup: ArenaSetup }
+  | { k: 'result'; setup: ArenaSetup; end: ArenaEnd };
+
+export function ArenaScreen({ onExit }: { onExit: () => void }) {
+  const [durum, setDurum] = useState<Durum>({ k: 'idle' });
+  const [hata, setHata] = useState<string | null>(null);
+
+  // ── KUYRUK ──
+  useEffect(() => {
+    if (durum.k !== 'queue') return;
+    let bitti = false;
+    const tik = async () => {
+      if (bitti) return;
+      try {
+        const r = await pollQueue();
+        if (bitti) return;
+        if (r.state === 'matched' && r.setup) setDurum({ k: 'match', setup: r.setup });
+        else setDurum({ k: 'queue', waited: r.waited ?? 0 });
+      } catch (e) {
+        setHata(e instanceof Error ? e.message : 'Kuyruk açılamadı.');
+        setDurum({ k: 'idle' });
+      }
+    };
+    tik();
+    const id = setInterval(tik, 2000);
+    return () => { bitti = true; clearInterval(id); };
+  }, [durum.k]);
+
+  // ⚠️ Sekme kapanırsa kuyruktan DÜŞ. Yoksa rakip, hiç gelmeyecek biriyle
+  // eşleşip boş bir odada bekler.
+  useEffect(() => {
+    if (durum.k !== 'queue') return;
+    const cik = () => { void leaveQueue(); };
+    window.addEventListener('beforeunload', cik);
+    return () => { window.removeEventListener('beforeunload', cik); cik(); };
+  }, [durum.k]);
+
+  if (durum.k === 'match') {
+    return (
+      <Match
+        setup={durum.setup}
+        onEnd={(end) => setDurum({ k: 'result', setup: durum.setup, end })}
+      />
+    );
+  }
+  if (durum.k === 'result') {
+    return <Result setup={durum.setup} end={durum.end} onAgain={() => setDurum({ k: 'queue', waited: 0 })} onExit={onExit} />;
+  }
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+      justifyContent: 'center', padding: 20, fontFamily: FONT.ui }}>
+      <div style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+        <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.6, color: C.blood }}>
+          THE PIT
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: C.bone, marginTop: 3, marginBottom: 8 }}>
+          {durum.k === 'queue' ? 'Looking for someone…' : 'Same arena. Same waves.'}
+        </div>
+        <div style={{ fontSize: 12, color: C.boneFaint, lineHeight: 1.6, marginBottom: 18 }}>
+          {durum.k === 'queue'
+            ? `Waiting ${durum.waited}s — the longer you wait, the wider the search.`
+            : 'You and one other hunter drop into the same arena, against the same horde. You cannot hurt each other. The last one standing wins.'}
+        </div>
+
+        {hata && (
+          <div style={{ marginBottom: 12, fontSize: 11.5, color: C.bad }}>{hata}</div>
+        )}
+
+        {durum.k === 'queue' ? (
+          <button onClick={() => { void leaveQueue(); setDurum({ k: 'idle' }); }}
+            style={{ ...ctaButton(false), width: '100%' }}>CANCEL</button>
+        ) : (
+          <>
+            <button onClick={() => { setHata(null); setDurum({ k: 'queue', waited: 0 }); }}
+              style={{ ...ctaButton(true), width: '100%' }}>FIND A MATCH</button>
+            <button onClick={onExit}
+              style={{ ...ctaButton(false), width: '100%', marginTop: 8 }}>BACK</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── MAÇ ──────────────────────────────────────────────────────────────
+
+function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const handleRef = useRef<ArenaHandle | null>(null);
+  const [hud, setHud] = useState({ me: 100, them: 100, myKills: 0, theirKills: 0, behind: 0, bagli: false });
+
+  useEffect(() => {
+    resetEffects();
+    const h = joinArena(setup, onEnd);
+    handleRef.current = h;
+
+    const tuslar = new Set<string>();
+    const down = (e: KeyboardEvent) => { tuslar.add(e.key.toLowerCase()); };
+    const up = (e: KeyboardEvent) => { tuslar.delete(e.key.toLowerCase()); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    let raf = 0;
+    let son = performance.now();
+
+    const dongu = (now: number) => {
+      const dt = Math.min((now - son) / 1000, 0.25);
+      son = now;
+
+      // ── GİRDİ → SUNUCU ──
+      const x = (tuslar.has('d') || tuslar.has('arrowright') ? 1 : 0)
+        - (tuslar.has('a') || tuslar.has('arrowleft') ? 1 : 0);
+      const y = (tuslar.has('s') || tuslar.has('arrowdown') ? 1 : 0)
+        - (tuslar.has('w') || tuslar.has('arrowup') ? 1 : 0);
+      const m = Math.hypot(x, y) || 1;
+      h.send(x / m, y / m);
+
+      // ── SUNUCUDAN GELEN KARELERİ UYGULA ──
+      h.catchUp();
+
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
+      if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
+        canvas.width = cssW * dpr; canvas.height = cssH * dpr;
+      }
+      // ⚠️ ODAK KENDİ DÖVÜŞÇÜN — 1. taraf oynayan oyuncunun karakteri `rival`
+      const g = h.game;
+      const ben = h.side === 0 ? g.hero : g.rival!;
+      const rakip = h.side === 0 ? g.rival! : g.hero;
+      render(ctx, g, cssW, cssH, dpr, dt, null, [], ben);
+
+      setHud({
+        me: Math.max(0, Math.round((ben.hp / ben.stats.maxHp) * 100)),
+        them: Math.max(0, Math.round((rakip.hp / rakip.stats.maxHp) * 100)),
+        myKills: ben.kills, theirKills: rakip.kills,
+        behind: h.behind(), bagli: h.connected(),
+      });
+
+      raf = requestAnimationFrame(dongu);
+    };
+    raf = requestAnimationFrame(dongu);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      h.close();
+      handleRef.current = null;
+    };
+  }, [setup, onEnd]);
+
+  const benim = setup.players[setup.side];
+  const onun = setup.players[setup.side === 0 ? 1 : 0];
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: C.void }}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+
+      {/* ⚠️ İKİ CAN ÇUBUĞU DA GÖRÜNMEK ZORUNDA. "Son ayakta kalan" bir maçta
+          tek bilinmesi gereken şey rakibin ne kadar dayandığı; onu göremezsen
+          ne zaman risk alacağını bilemezsin. */}
+      <div style={{ position: 'absolute', top: 12, left: 0, right: 0, display: 'flex',
+        justifyContent: 'center', gap: 10, pointerEvents: 'none', fontFamily: FONT.ui }}>
+        <Bar name="YOU" wallet={benim.wallet} hero={benim.heroId} pct={hud.me}
+          kills={hud.myKills} accent={C.candle} />
+        <Bar name="THEM" wallet={onun.wallet} hero={onun.heroId} pct={hud.them}
+          kills={hud.theirKills} accent={C.blood} flip />
+      </div>
+
+      {/* ⚠️ GECİKME GÖSTERGESİ. Motor sunucudan hızlı koşamaz; kare gelmezse
+          oyun donar. Oyuncu bunu "oyun bozuldu" diye okumamalı — sayı
+          görünsün ki neyin beklendiği belli olsun. */}
+      {(hud.behind > ARENA.hz / 2 || !hud.bagli) && (
+        <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+          ...glass(9), padding: '6px 12px', fontSize: 11, fontFamily: FONT.ui,
+          color: hud.bagli ? C.candle : C.bad }}>
+          {hud.bagli ? `catching up · ${hud.behind} ticks` : 'connection lost'}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Bar({ name, wallet, hero, pct, kills, accent, flip }: {
+  name: string; wallet: string; hero: string; pct: number;
+  kills: number; accent: string; flip?: boolean;
+}) {
+  return (
+    <div style={{
+      ...glass(10), padding: '7px 10px', minWidth: 190,
+      display: 'flex', gap: 8, alignItems: 'center',
+      flexDirection: flip ? 'row-reverse' : 'row',
+    }}>
+      <Portrait hero={heroById(hero)} size={34} frame={false} flip={flip} />
+      <div style={{ flex: 1, minWidth: 0, textAlign: flip ? 'right' : 'left' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'baseline',
+          flexDirection: flip ? 'row-reverse' : 'row' }}>
+          <span style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: 1.4, color: accent }}>
+            {name}
+          </span>
+          <span style={{ fontSize: 10, color: C.boneFaint }}>{kisa(wallet)}</span>
+          <span style={{ marginLeft: flip ? 0 : 'auto', marginRight: flip ? 'auto' : 0,
+            fontSize: 10, color: C.boneDim }}>{kills} kill</span>
+        </div>
+        <div style={{ height: 7, borderRadius: 4, marginTop: 3, overflow: 'hidden',
+          background: 'rgba(0,0,0,0.45)' }}>
+          <div style={{
+            width: `${pct}%`, height: '100%', float: flip ? 'right' : 'left',
+            background: pct > 30 ? accent : C.bad,
+            transition: 'width 120ms linear',
+          }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── SONUÇ ────────────────────────────────────────────────────────────
+
+function Result({ setup, end, onAgain, onExit }: {
+  setup: ArenaSetup; end: ArenaEnd; onAgain: () => void; onExit: () => void;
+}) {
+  const kazandim = end.winner === setup.side;
+  const benim = setup.players[setup.side];
+  const onun = setup.players[setup.side === 0 ? 1 : 0];
+  const t = duelTier(benim.duelRating + (kazandim ? end.delta : -end.delta));
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, background: 'rgba(8,6,5,0.92)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      fontFamily: FONT.ui }}>
+      <div style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+        <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.6, color: C.blood }}>
+          THE PIT
+        </div>
+        <div style={{ fontSize: 28, fontWeight: 900, marginTop: 4, marginBottom: 6,
+          color: end.winner === null ? C.boneDim : kazandim ? C.candle : '#e4657a' }}>
+          {end.winner === null ? 'No result' : kazandim ? 'Last one standing' : 'You fell first'}
+        </div>
+        <div style={{ fontSize: 12, color: C.boneFaint, marginBottom: 16, lineHeight: 1.55 }}>
+          {end.winner === null
+            // ⚠️ Sonuçsuz maç SEBEBİYLE söylenmeli, yoksa "oyun bozuk" okunur
+            ? 'The match ended without a winner — someone left, or it ran past the limit. No standing changed.'
+            : `${Math.round(end.tick / ARENA.hz)} seconds in the same arena.`}
+        </div>
+
+        <div style={{ display: 'flex', gap: 9, marginBottom: 16 }}>
+          <Sonuc label="YOU" wallet={benim.wallet} hero={benim.heroId}
+            kills={end.kills[setup.side]} accent={C.candle} />
+          <Sonuc label="THEM" wallet={onun.wallet} hero={onun.heroId}
+            kills={end.kills[setup.side === 0 ? 1 : 0]} accent={C.blood} flip />
+        </div>
+
+        {end.winner !== null && (
+          <div style={{ ...glass(9), padding: '10px 14px', marginBottom: 16 }}>
+            <div style={{ fontSize: 9, letterSpacing: 1.4, color: C.boneFaint }}>STANDING</div>
+            <div style={{ fontSize: 20, fontWeight: 900, color: t.color }}>{t.name}</div>
+            <div style={{ fontSize: 12, fontWeight: 900,
+              color: kazandim ? C.ok : C.bloodSoft }}>
+              {kazandim ? '+' : '−'}{Math.abs(end.delta)}
+            </div>
+          </div>
+        )}
+
+        <button onClick={onAgain} style={{ ...ctaButton(true), width: '100%' }}>AGAIN</button>
+        <button onClick={onExit} style={{ ...ctaButton(false), width: '100%', marginTop: 8 }}>
+          BACK TO THE VILLAGE
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Sonuc({ label, wallet, hero, kills, accent, flip }: {
+  label: string; wallet: string; hero: string; kills: number; accent: string; flip?: boolean;
+}) {
+  return (
+    <div style={{ flex: 1, padding: '10px 8px', borderRadius: 10,
+      border: `1px solid ${accent}44`,
+      background: `linear-gradient(180deg, ${accent}18, rgba(0,0,0,0.30))` }}>
+      <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1.6, color: C.boneFaint }}>{label}</div>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <Portrait hero={heroById(hero)} size={54} frame={false} flip={flip} />
+      </div>
+      <div style={{ fontSize: 11, color: C.bone }}>{kisa(wallet)}</div>
+      <div style={{ fontSize: 15, fontWeight: 900, color: accent }}>{kills} <span style={{ fontSize: 10, color: C.boneFaint }}>kill</span></div>
+    </div>
+  );
+}

@@ -20,6 +20,7 @@
 
 import type { Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
+import { routeUpgrade } from './wsRoute.js';
 import { readToken } from './auth.js';
 import { bossWeek } from '@game/worldBoss';
 import { kaydet, konusabilir, son as sonMesajlar, temizle } from './chat.js';
@@ -110,8 +111,17 @@ function broadcast() {
 
 let timer: NodeJS.Timeout | null = null;
 
+/**
+ * ⚠️ `noServer: true` — AYNI HTTP SUNUCUSUNA İKİ ws SUNUCUSU BAĞLANAMAZ.
+ *
+ * Önce `new WebSocketServer({ server, path })` kullanılıyordu ve arena
+ * eklenince ÖLÇÜLDÜ: `ws` her örnek için ayrı bir `upgrade` dinleyicisi
+ * kuruyor, yoluna uymayan bağlantıyı da REDDEDİYOR — ikinci soket her
+ * seferinde HTTP 400 alıyordu. Yönlendirme tek yerde (index.ts) yapılıyor.
+ */
 export function attachPresence(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/presence' });
+  const wss = new WebSocketServer({ noServer: true });
+  routeUpgrade(server, '/presence', wss);
 
   wss.on('connection', (ws, req) => {
     // ⚠️ Kimlik URL sorgusundan: tarayıcı WebSocket API'si özel başlık

@@ -25,6 +25,7 @@ import { nextRatings } from '@game/duel';
 import type { Game } from '@game/engine';
 import { prisma } from './db.js';
 import { readToken } from './auth.js';
+import { routeUpgrade } from './wsRoute.js';
 import { equippedBonus } from './gear.js';
 import { skillsBonusOf } from './skills.js';
 import { growthOf } from './guild.js';
@@ -358,7 +359,10 @@ export function debugReset() {
  * göndermeye izin vermiyor (presence'taki gerekçenin aynısı).
  */
 export function attachArena(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/arena' });
+  // ⚠️ `noServer: true` — bkz. presence.ts başlığı: `{ server, path }` ile
+  // iki ws sunucusu birbirinin bağlantısını 400 ile reddediyor.
+  const wss = new WebSocketServer({ noServer: true });
+  routeUpgrade(server, '/arena', wss);
 
   wss.on('connection', (ws, req) => {
     const url = new URL(req.url ?? '/', 'http://x');

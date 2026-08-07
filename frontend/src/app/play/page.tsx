@@ -17,6 +17,7 @@ import { GuildPanel } from '@/components/GuildPanel';
 import { GearPanel } from '@/components/GearPanel';
 import { SkillPanel } from '@/components/SkillPanel';
 import { DuelPanel } from '@/components/DuelPanel';
+import { ArenaScreen } from '@/components/ArenaScreen';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -48,7 +49,13 @@ type Screen =
   | { kind: 'hub' }
   | { kind: 'stage'; stageId: number; mode: RunKind; ticket: RunTicket }
   /** ⚠️ Boss odası AYRI bir ekran: `settleRun`'a hiç uğramıyor, gold ödemiyor */
-  | { kind: 'boss'; runId: string; seed: number };
+  | { kind: 'boss'; runId: string; seed: number }
+  /**
+   * ⚠️ ARENA TAM EKRAN, PANEL DEĞİL. Gerçek zamanlı bir maçı panel içinde
+   * göstermek, oyuncunun yanlışlıkla dışarı tıklayıp maçı kaybetmesi
+   * demekti — panel katmanı arka plana basınca kapanıyor.
+   */
+  | { kind: 'arena' };
 
 /** Koşu sonu bildirimi — ödülün nereden geldiği oyuncuya AÇIKÇA gösterilir */
 type Payout = {
@@ -251,6 +258,10 @@ export default function PlayPage() {
     return () => { delete w.__gb; };
   }, [finishRun]);
 
+  if (screen.kind === 'arena') {
+    return <ArenaScreen onExit={() => setScreen({ kind: 'hub' })} />;
+  }
+
   if (screen.kind === 'boss') {
     const p = progress ?? loadProgress();
     const def = bossOfWeek(bossWeek(new Date()));
@@ -309,7 +320,11 @@ export default function PlayPage() {
       />
 
       {/* Cüzdan + bina rıhtımı — yürümek seçenek, zorunluluk değil */}
-      <BuildingDock open={panel} onOpen={setPanel} gold={progress?.gold ?? 0} wallet={wallet}
+      <BuildingDock open={panel} onOpen={(id) => {
+        // ⚠️ Pit bir panel değil, ekran: rıhtımdan doğrudan maça giriliyor.
+        if (id === 'pit') { setPanel(null); setScreen({ kind: 'arena' }); return; }
+        setPanel(id);
+      }} gold={progress?.gold ?? 0} wallet={wallet}
         onHeight={setDockH} />
 
       {/* ⚠️ SOHBET PANEL DEĞİL, KÖŞEDE DURUYOR. Panele koymak onu "gidip

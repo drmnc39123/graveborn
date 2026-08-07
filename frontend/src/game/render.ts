@@ -4,7 +4,7 @@
 
 import { C } from '@/lib/theme';
 import { PLAYER, RUN, WEAPON } from './config';
-import type { Game } from './engine';
+import type { Game, Hero } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
@@ -141,6 +141,12 @@ export function render(
   auraId: string | null = null,
   /** canlı boss odasındaki diğer oyuncular — SADECE ÇİZİLİR (bkz. drawGhosts) */
   ghosts: readonly { n: string; x: number; y: number; f: number; a?: string }[] = [],
+  /**
+   * Kameranın takip ettiği dövüşçü. ⚠️ 1v1'de ŞART: 1. taraf oynayan
+   * oyuncunun karakteri `g.rival`; odak sabit kalsaydı kendi karakterini
+   * ekranın kenarında kovalardı.
+   */
+  focus: Hero = g.hero,
 ) {
   const cx = w / 2;
   const cy = h / 2;
@@ -159,12 +165,12 @@ export function render(
 
   // kamera oyuncuyu ortalar (+ ekran sarsıntısı)
   ctx.save();
-  ctx.translate(cx - g.px + sh.x, cy - g.py + sh.y);
+  ctx.translate(cx - focus.px + sh.x, cy - focus.py + sh.y);
 
   pumpEffects(g, dt);
 
-  drawStageGround(ctx, g.stage.def.id, g.px, g.py, w, h);
-  drawStageDecor(ctx, g.stage.def.id, g.px, g.py, w, h);
+  drawStageGround(ctx, g.stage.def.id, focus.px, focus.py, w, h);
+  drawStageDecor(ctx, g.stage.def.id, focus.px, focus.py, w, h);
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
   drawChests(ctx, g);
@@ -183,7 +189,10 @@ export function render(
   // kalmalı, kalabalıkta seni örten bir hayalet oyunu oynanamaz yapardı.
   drawGhosts(ctx, ghosts);
   drawCosmeticAura(ctx, g, auraId);  // halenin ALTINDA kalması gereken tek şey oyuncu
-  drawPlayer(ctx, g);
+  // ⚠️ RAKİP ÖNCE ÇİZİLİYOR: üst üste geldiklerinde KENDİ karakterin
+  // üstte kalmalı, yoksa kalabalıkta kendini kaybediyorsun.
+  if (g.rival) drawPlayer(ctx, g, g.rival === focus ? g.hero : g.rival);
+  drawPlayer(ctx, g, focus);
   // Kıvılcım ve hasar sayıları EN ÜSTTE — oyuncunun altında kalırlarsa
   // vuruşun geri bildirimi kayboluyor.
   drawFxWorld(ctx);
@@ -547,15 +556,22 @@ function drawEnemyShots(ctx: CanvasRenderingContext2D, g: Game) {
   ctx.stroke();
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {
+/**
+ * Bir dövüşçüyü çiz.
+ *
+ * ⚠️ `Game` DEĞİL `Hero` alıyor ve bu 1v1 için ŞART: render bugüne kadar
+ * yalnızca `g.px/py`'yi (yani birinci dövüşçüyü) çiziyordu — arena maçında
+ * RAKİP HİÇ GÖRÜNMÜYORDU. Aynı fonksiyon iki kez çağrılıyor.
+ */
+function drawPlayer(ctx: CanvasRenderingContext2D, g: Game, h: Hero) {
   // dokunulmazlık penceresinde yanıp söner
-  const blink = g.iframe > 0 && Math.floor(g.iframe * 14) % 2 === 0;
+  const blink = h.iframe > 0 && Math.floor(h.iframe * 14) % 2 === 0;
 
   // toplama yarıçapı
   ctx.strokeStyle = 'rgba(239,167,46,0.16)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.arc(g.px, g.py, PLAYER.pickupRadius * g.stats.magnet, 0, Math.PI * 2);
+  ctx.arc(h.px, h.py, PLAYER.pickupRadius * h.stats.magnet, 0, Math.PI * 2);
   ctx.stroke();
 
   // ⚠️ ANİMASYON ÖNCELİĞİ: ölüm > hasar > saldırı > koşu > durma.
@@ -566,27 +582,27 @@ function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {
   // `atkT`/`hurtT` motorun SUNUM sayaçları; mantığı beslemezler.
   // Animasyon zamanı 0'dan başlamalı (loop:false, son karede donar), o yüzden
   // geçen süre = tetiklenme süresi − kalan.
-  const art = playerArt(g.heroId);
-  let anim = g.moving ? 'run' : 'idle';
-  let animT = g.animT;
+  const art = playerArt(h.heroId);
+  let anim = h.moving ? 'run' : 'idle';
+  let animT = h.animT;
   if (g.phase === 'dead' && art.anims.death) {
     anim = 'death';
-    animT = g.animT;                    // ölümde donar, son kare kalır
-  } else if (g.hurtT > 0 && art.anims.hurt) {
+    animT = h.animT;                    // ölümde donar, son kare kalır
+  } else if (h.hurtT > 0 && art.anims.hurt) {
     anim = 'hurt';
-    animT = 0.32 - g.hurtT;
-  } else if (g.atkT > 0 && art.anims.atk) {
+    animT = 0.32 - h.hurtT;
+  } else if (h.atkT > 0 && art.anims.atk) {
     anim = 'atk';
-    animT = 0.30 - g.atkT;
+    animT = 0.30 - h.atkT;
   }
 
   // sprite varsa onu çiz; dokunulmazlık penceresinde yarı saydam yanıp söner
   if (!blink) {
-    if (drawActor(ctx, art, anim, animT, g.px, g.py, g.facingRight)) return;
+    if (drawActor(ctx, art, anim, animT, h.px, h.py, h.facingRight)) return;
   } else {
     ctx.save();
     ctx.globalAlpha = 0.45;
-    const drawn = drawActor(ctx, art, anim, animT, g.px, g.py, g.facingRight);
+    const drawn = drawActor(ctx, art, anim, animT, h.px, h.py, h.facingRight);
     ctx.restore();
     if (drawn) return;
   }
@@ -596,7 +612,7 @@ function drawPlayer(ctx: CanvasRenderingContext2D, g: Game) {
   ctx.strokeStyle = C.void;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.arc(g.px, g.py, PLAYER.radius, 0, Math.PI * 2);
+  ctx.arc(h.px, h.py, PLAYER.radius, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
 }

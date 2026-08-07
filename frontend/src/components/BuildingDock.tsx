@@ -47,7 +47,7 @@ export interface DockGroup {
 
 export const GROUPS: readonly DockGroup[] = [
   // Dövüş önce: oyuncunun oyuna girdiği yer en solda ve en görünür olmalı.
-  { id: 'fight', label: 'FIGHT', color: '#a01226', members: ['quests', 'boss', 'duel'] },
+  { id: 'fight', label: 'FIGHT', color: '#a01226', members: ['quests', 'boss', 'duel', 'pit'] },
   { id: 'power', label: 'POWER', color: '#efa72e', members: ['upgrade', 'paths', 'gear', 'shop'] },
   { id: 'spend', label: 'SPEND', color: '#5f9e4a', members: ['market', 'exchange', 'reliquary'] },
   { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['guild', 'tavern'] },
@@ -79,6 +79,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // Boss ORTAK bir düşman, düello ise doğrudan başka bir oyuncunun koşusu —
   // rekabet kolu burada okunuyor.
   { id: 'duel', label: 'DUELS', sub: "The Answering — play another player's run and go deeper" },
+  // ⚠️ DUELS'in yanında ama BAŞKA BİR ŞEY: düello asenkron (rakibin
+  // kaydını oynuyorsun), Pit gerçek zamanlı (aynı anda aynı arenadasınız).
+  // İkisi de "PvP" ama karıştırılırlarsa oyuncu yanlış beklentiyle giriyor.
+  { id: 'pit', label: 'THE PIT', sub: 'Live 1v1 — same arena, same waves, last one standing' },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
   // ⚠️ TAVERN'in yanında: ikisi de "kim olduğun" ile ilgili. Lonca sohbetin
   // yanına konsaydı bir araç gibi görünürdü; profilin yanında bir AİDİYET
