@@ -26,6 +26,58 @@ gerekirse `presence` bir pub/sub'a taşınmalı, önce değil.
 
 ---
 
+## ⚠️ BACKEND'İN DEPLOY KÖKÜ `backend/` DEĞİL, **DEPONUN KÖKÜ**
+
+En kolay yapılan hata ve ÖLÇÜLDÜ, tahmin değil. `backend/` klasörü tek
+başına kopyalanıp çalıştırıldığında sunucu açılışta ölüyor:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@game/heroes'
+    imported from .../backend/src/db.ts
+```
+
+Sebep: backend oyun mantığını frontend'den içe aktarıyor
+(`@game/* → ../frontend/src/game/*`, bkz. `backend/tsconfig.json`). Bu
+bilinçli — ekonomi kuralını iki yerde yazmak er ya da geç iki yerde
+ayrışmak demek ve **ayrışan taraf para basar**. Bedeli de bu: backend
+yalnız başına taşınamaz.
+
+⚠️ Hata mesajı deploy'u yapan kişiye hiçbir şey anlatmıyor; eksik bir npm
+paketi sanılıp `npm i @game/heroes` denenir. Bu yüzden `start:prod` artık
+önce `preflight.mjs` çalıştırıyor ve yanlış kökte açık bir cümleyle duruyor.
+(Kontrol `index.ts`'in içine KONULAMAZ: import çözümlemesi kodun ilk satırı
+çalışmadan önce yapılıyor, oradaki hiçbir guard'a sıra gelmez.)
+
+**Barındırıcı ayarı:**
+
+| Alan | Değer |
+|---|---|
+| Root Directory | `.` — deponun kökü, **`backend` DEĞİL** |
+| Build Command | `cd backend && npm ci && npm run build` |
+| Start Command | `cd backend && npm run start:prod` |
+
+Frontend tarafında böyle bir kısıt YOK: Vercel'in Root Directory'si
+`frontend` olabilir (ve olmalı).
+
+⚠️ `frontend/node_modules` backend için GEREKMİYOR — `@game/*` modülleri saf
+TypeScript, dışarıdan hiçbir şey içe aktarmıyor ve `tsx` onları doğrudan
+çeviriyor. Kurulması gereken tek şey `backend/node_modules`.
+
+---
+
+## ⚠️ `prisma` ve `tsx` ÇALIŞMA ZAMANI BAĞIMLILIĞI — devDependencies DEĞİL
+
+Bir derleme adımı YOK: `tsx` TypeScript'i doğrudan koşturuyor. Yani
+`start:prod` (`prisma migrate deploy && tsx src/index.ts`) üretimde bu iki
+ikiliye İHTİYAÇ DUYUYOR. `devDependencies`'te bırakılsalardı, üretim
+kurulumunda devDependencies'i atlayan bir barındırıcıda sunucu
+`tsx: not found` ile hiç açılmazdı.
+
+İkisi de `dependencies` altına taşındı. `package.json` yorum kabul etmediği
+için gerekçe burada duruyor — oraya geri taşımayın.
+
+---
+
 ## ⚠️ VERİTABANI: `migrate deploy`, `db push` DEĞİL
 
 Depoda artık bir migration geçmişi var (`prisma/migrations/`). Üretimde
@@ -79,8 +131,9 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ## Sıra
 
 1. Postgres oluştur → `DATABASE_URL`'i backend'e ver.
-2. Backend'i deploy et. Başlangıç komutu: `npm run start:prod`
-   (önce `migrate deploy`, sonra sunucu).
+2. Backend'i deploy et. **Root Directory `.`** (yukarıdaki uyarı), başlangıç
+   komutu `cd backend && npm run start:prod`
+   (önce preflight, sonra `migrate deploy`, sonra sunucu).
 3. `CORS_ORIGIN`'i frontend adresine ayarla.
 4. Frontend'i Vercel'e deploy et, `NEXT_PUBLIC_API_URL` = backend adresi.
 5. Doğrula: `GET /health` → `{ok:true}`, ana sayfa açılıyor, demo modu
