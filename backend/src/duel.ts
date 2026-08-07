@@ -22,6 +22,7 @@ import { challengeRating } from '@game/config';
 import { utcDay } from '@game/progress';
 import { prisma } from './db.js';
 import { markPvpMatch } from './pvpSeason.js';
+import { trackQuest } from './quests.js';
 
 export class DuelError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
@@ -402,6 +403,10 @@ export async function settleDuel(
     // sayılmayan kayıtlar doğardı ve yerleşim şartı delinirdi.
     await markPvpMatch(tx, [challenger, defender]);
   });
+
+  // ⚠️ Transaction DIŞINDA: görev sayacı bir maçın kapanmasını asla
+  // engellememeli (bkz. quests.trackQuest başlığı).
+  if (won) await trackQuest(challenger, 'duel', 1);
 
   const son = await prisma.player.findUniqueOrThrow({
     where: { wallet: challenger }, select: { duelRating: true },

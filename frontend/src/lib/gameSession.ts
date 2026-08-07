@@ -739,6 +739,26 @@ export interface DuelBoard {
  * tablo puana göre sıralı olduğu için oyuncu doğal olarak en zayıfı seçiyor
  * ve ladder "en kolay hedefi bul" oyununa dönüyordu.
  */
+// ── GÜNLÜK GÖREVLER ──
+// ⚠️ DEMO MODUNDA YOK: ilerleme sunucunun doğruladığı olaylardan geliyor.
+
+export interface QuestState {
+  day: string;
+  quests: { id: string; text: string; goal: number; dust: number;
+    progress: number; done: boolean; claimed: boolean }[];
+  bonus: { dust: number; ready: boolean; claimed: boolean };
+  /** günün toplam toz tavanı */
+  ceiling: number;
+}
+
+export async function fetchQuests(): Promise<QuestState> {
+  return api<QuestState>('/quests');
+}
+
+export async function claimQuest(id: string): Promise<{ view: QuestState; dust: number; progress: Progress }> {
+  return api('/quests/claim', { method: 'POST', body: { id } });
+}
+
 // ── PvP SEZONU ──
 // ⚠️ Bu istek YAN ETKİLİ: sunucu kapanmayı bekleyen haftaları burada
 // kapatıyor (cron yok). "Tabloyu aç" aynı zamanda "geçen sezonu kapat"

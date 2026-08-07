@@ -18,6 +18,7 @@ import { GearPanel } from '@/components/GearPanel';
 import { SkillPanel } from '@/components/SkillPanel';
 import { DuelPanel } from '@/components/DuelPanel';
 import { ArenaScreen } from '@/components/ArenaScreen';
+import { QuestPanel } from '@/components/QuestPanel';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -579,6 +580,12 @@ export default function PlayPage() {
               />
             ) : panel === 'gear' ? (
               <GearPanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
+              />
+            ) : panel === 'daily' ? (
+              <QuestPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}

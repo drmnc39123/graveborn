@@ -70,6 +70,11 @@ model Player {
   cryptClaimedWeek Int  @default(0)
   /// günlük seri: { days, last }  — `last` SUNUCUNUN UTC günü
   streak           Json @default("{}")
+  /// Günlük görev ilerlemesi: { day, progress, claimed, bonus }
+  /// ⚠️ Görev LİSTESİ burada DEĞİL — `wallet + gün`den türetiliyor
+  /// (bkz. game/quests.ts). Listeyi de saklamak her gece herkes için satır
+  /// üretmek (cron!) ve o cron çalışmadığında görevsiz oyuncular demekti.
+  quests           Json @default("{}")
 
   // ── DÜELLO (asenkron PvP — bkz. game/duel.ts) ──
   /// Elo puanı. ⚠️ Taban 100; sıfırlanan oyuncu tablodan düşer ve formül

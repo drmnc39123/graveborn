@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 import { prisma, YarisHatasi } from './db.js';
 import { contributeToVault } from './crypt.js';
+import { trackQuest } from './quests.js';
 
 /** Defter kalemi türü. Yeni bir gold yolu açan HER uç buraya bir tür eklemeli. */
 export type LedgerKind =
@@ -94,6 +95,11 @@ export async function withLedger(
     // açan kişi eklemeyi unutur, kasa sessizce eksik dolar. Aynı transaction
     // içinde olması da şart, yoksa kasa ile defter ayrışır.
     await contributeToVault(tx, entry.kind, entry.gold);
+  // ⚠️ "GOLD HARCA" GÖREVİ BURADAN SAYILIYOR — defter zaten HER gold
+  // çıkışının tek geçidi. Harcama noktalarına tek tek `trackQuest` serpmek
+  // denenmedi ve denenmemeli: yeni bir sink eklendiğinde biri unutulur ve
+  // "bazı harcamalar sayılıyor" hâli hiç saymamaktan kötüdür.
+  if (entry.gold < 0) void trackQuest(wallet, 'spend', -entry.gold);
     await tx.ledger.create({
       data: {
         id: crypto.randomUUID(), wallet,

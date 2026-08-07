@@ -16,6 +16,7 @@ import {
   PVP_PAYOUT_DEPTH, PVP_PLACEMENT, pvpReward, softReset,
 } from '@game/pvpSeason';
 import { seasonWeek } from '@game/season';
+import { Prisma } from '@prisma/client';
 import { prisma } from './db.js';
 
 export interface PvpRow {
@@ -196,7 +197,10 @@ export async function pvpAwards(wallet: string, limit = 8) {
  * "bu puan bu haftaya ait" işaretleniyor ve maç sayacı ilerliyor.
  */
 export async function markPvpMatch(
-  tx: { player: { updateMany: (a: unknown) => Promise<unknown> } },
+  // ⚠️ `Prisma.TransactionClient` — el yazması bir arayüz DEĞİL. Kendi
+  // yazdığım dar tip, Prisma'nın jenerik `updateMany` imzasıyla uyuşmuyordu
+  // ve çağrı yeri derlenmiyordu; daraltmanın hiçbir güvenlik faydası da yok.
+  tx: Prisma.TransactionClient,
   wallets: string[], now = new Date(),
 ) {
   const week = seasonWeek(now);

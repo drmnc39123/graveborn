@@ -24,6 +24,7 @@
 import { GEAR, GEAR_SLOTS, gearBonus, rarityOf, rollRunGear, type GearItem, type GearSlot } from '@game/gear';
 import type { StatKey } from '@game/config';
 import { prisma } from './db.js';
+import { trackQuest } from './quests.js';
 
 export class GearError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
@@ -193,7 +194,7 @@ export async function salvageGear(
   const list = ids.filter((x): x is string => typeof x === 'string' && !!x);
   if (list.length === 0) throw new GearError('bos_secim');
 
-  return prisma.$transaction(async (tx) => {
+  const sonuc = await prisma.$transaction(async (tx) => {
     const rows = await tx.gearItem.findMany({
       where: { id: { in: list }, wallet, equipped: false },
     });
@@ -211,4 +212,8 @@ export async function salvageGear(
     await tx.player.update({ where: { wallet }, data: { dust: { increment: toz } } });
     return { dust: toz, removed: silinen.count };
   });
+  // ⚠️ Transaction DIŞINDA: görev sayacı bir parçalamayı asla
+  // engellememeli (bkz. quests.trackQuest başlığı).
+  await trackQuest(wallet, 'salvage', sonuc.removed);
+  return sonuc;
 }

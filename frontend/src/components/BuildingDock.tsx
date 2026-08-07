@@ -50,7 +50,7 @@ export const GROUPS: readonly DockGroup[] = [
   { id: 'fight', label: 'FIGHT', color: '#a01226', members: ['quests', 'boss', 'duel', 'pit'] },
   { id: 'power', label: 'POWER', color: '#efa72e', members: ['upgrade', 'paths', 'gear', 'shop'] },
   { id: 'spend', label: 'SPEND', color: '#5f9e4a', members: ['market', 'exchange', 'reliquary'] },
-  { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['guild', 'tavern'] },
+  { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['daily', 'guild', 'tavern'] },
 ] as const;
 
 /** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */
@@ -83,6 +83,9 @@ export const BUILDINGS: readonly DockEntry[] = [
   // kaydını oynuyorsun), Pit gerçek zamanlı (aynı anda aynı arenadasınız).
   // İkisi de "PvP" ama karıştırılırlarsa oyuncu yanlış beklentiyle giriyor.
   { id: 'pit', label: 'THE PIT', sub: 'Live 1v1 — same arena, same waves, last one standing' },
+  // ⚠️ TAVERN'in yanında: ikisi de "ben ne yaptım" sorusu. Günlük görev
+  // FIGHT grubuna konmadı — bir dövüş yeri değil, günün listesi.
+  { id: 'daily', label: 'TODAY', sub: "Today's work — three things, resets at midnight UTC" },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
   // ⚠️ TAVERN'in yanında: ikisi de "kim olduğun" ile ilgili. Lonca sohbetin
   // yanına konsaydı bir araç gibi görünürdü; profilin yanında bir AİDİYET

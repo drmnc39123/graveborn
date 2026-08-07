@@ -25,6 +25,7 @@ import { nextRatings } from '@game/duel';
 import type { Game } from '@game/engine';
 import { prisma } from './db.js';
 import { markPvpMatch } from './pvpSeason.js';
+import { trackQuest } from './quests.js';
 import { readToken } from './auth.js';
 import { routeUpgrade } from './wsRoute.js';
 import { equippedBonus } from './gear.js';
@@ -226,6 +227,8 @@ export async function settleArena(a: Seat, b: Seat, winner: 0 | 1, ticks: number
     // ⚠️ Düellodaki kuralın aynısı — aynı transaction'da (bkz. duel.ts)
     await markPvpMatch(tx, [a.wallet, b.wallet]);
   });
+  // ⚠️ Transaction DIŞINDA — bkz. duel.ts'teki aynı gerekçe
+  await trackQuest(winner === 0 ? a.wallet : b.wallet, 'arena', 1);
   return winner === 0 ? da : db;
 }
 

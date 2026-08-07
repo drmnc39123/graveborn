@@ -41,6 +41,7 @@ import { bossState, contribute } from './worldBoss.js';
 import { attachPresence, presenceCount } from './presence.js';
 import { arenaStats, attachArena, joinQueue, leaveQueue } from './arena.js';
 import { pvpAwards, pvpBoard, settlePvpSeasons } from './pvpSeason.js';
+import { QuestError, claimQuest, listQuests, trackQuest } from './quests.js';
 import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
@@ -103,7 +104,7 @@ for (const yol of [
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
   '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start', '/duel/find',
-  '/arena/queue',
+  '/arena/queue', '/quests/claim',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -812,6 +813,13 @@ app.post('/run/finish', wrap(async (req, res) => {
   // bozardı.
   await publishRecord(wallet, run.mode, run.stageId, Number(run.seed), ulasilan,
     run.ascension, s.capped);
+  // ⚠️ GÖREVLER SUNUCUNUN KABUL ETTİĞİ DEĞERLE — `ulasilan` zaten süre
+  // tabanına kırpılmış derinlik, istemcinin iddiası değil. Kırpılmış koşu
+  // görev de saymaz: şüpheli bir iddiadan ödül doğmamalı.
+  if (!s.capped) {
+    await trackQuest(wallet, 'run', 1);
+    if (run.mode === 'descent') await trackQuest(wallet, 'depth', ulasilan);
+  }
 
   res.json({
     progress: toProgress(saved),
@@ -1139,6 +1147,28 @@ app.post('/duel/start', wrap(async (req, res) => {
     startDepth: 1, ascension: 0, guildGrowth, gear, skills,
     duel: { defender: ch.defender, target: ch.targetDepth, stageId: ch.stageId },
   });
+}));
+
+// ── GÜNLÜK GÖREVLER ──
+//
+// ⚠️ "Görevi bitirdim" diyen bir uç YOK. İlerleme yalnızca sunucunun
+// doğruladığı olaylardan işleniyor (bkz. quests.ts).
+app.get('/quests', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json(await listQuests(wallet));
+}));
+
+app.post('/quests/claim', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    const out = await claimQuest(wallet, req.body?.id);
+    res.json({ ...out, progress: toProgress(await getOrCreatePlayer(wallet)) });
+  } catch (e) {
+    if (e instanceof QuestError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
 }));
 
 // ── PvP SEZONU ──
