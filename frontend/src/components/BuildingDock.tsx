@@ -9,7 +9,7 @@
 // Ayrıca haritada 'quests' kapısı HİÇ YOK — Warden's Post'a tek giriş dövüş
 // portalıydı. Bu navbar o boşluğu da kapatıyor.
 
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { PixelButton } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
@@ -114,7 +114,7 @@ export const BUILDINGS: readonly DockEntry[] = [
  * Sabit sayı yerine GERÇEK yükseklik ölçülüyor; düğme sayısı ya da ekran
  * genişliği değişince kendiliğinden doğru kalıyor.
  */
-export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onHeight }: {
+export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onHeight, footer }: {
   /** açık olan panel — buton "Selected" görünür */
   open: string | null;
   onOpen: (id: string) => void;
@@ -125,6 +125,12 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
   style?: CSSProperties;
   /** rıhtımın kapladığı toplam yükseklik (px) — panel boşluğu buna göre ayarlanır */
   onHeight?: (h: number) => void;
+  /**
+   * Rıhtımın ALTINA, aynı sütunun içine asılan içerik (hafta sonu şeridi).
+   * ⚠️ Sayfaya ayrı yerleştirilip `onHeight` ile hizalanmıyor — sebebi
+   * aşağıda, render'ın sonundaki notta.
+   */
+  footer?: ReactNode;
 }) {
   const boxRef = useRef<HTMLDivElement>(null);
   /**
@@ -260,6 +266,20 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
           })}
         </div>
       )}
+
+      {/* ── RIHTIMIN ALTINA ASILAN ŞERİT (hafta sonu etkinliği) ──
+          ⚠️ ÖLÇÜLEN SAYIYLA DEĞİL, AKIŞLA konumlanıyor ve bu bilinçli.
+          İlk denemede şerit `top: dockH + 8` ile sayfaya ayrı yerleştirildi;
+          `dockH` ölçülen bir değer olduğu için "sabit sayı yazma" dersine
+          uyuyordu ama yeni bir kırılganlık getiriyordu: ölçüm bir
+          `ResizeObserver`'a bağlı ve RO — tıpkı `requestAnimationFrame` gibi —
+          sayfa kare üretmediğinde SUSUYOR. Yani sekme arkadayken satır
+          sarması olursa şerit eski yüksekliğe göre kalır ve rıhtımın son
+          düğmelerini örter. Örtünce de zIndex 6 olan rıhtım kazanır: oyuncu
+          şeride basar, tıklama başka bir düğmeye gider.
+          Şerit rıhtımın KENDİ sütununun son çocuğu olunca, üst üste binmesi
+          yapısal olarak imkânsız — ölçülecek bir şey kalmıyor. */}
+      {footer}
       </div>
     </div>
   );

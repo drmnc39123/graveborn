@@ -165,34 +165,79 @@ async function settleOne(week: number): Promise<{ week: number; winners: number 
     select: { wallet: true, cosmetics: true, dust: true },
   });
 
+  // ⚠️ TABLO 10'DAN 100'E ÇIKINCA DÖNGÜ DE DEĞİŞMEK ZORUNDAYDI. Eski hâli
+  // kazanan başına iki sorgu atıyordu (player.update + seasonAward.create);
+  // 10 kişide 20 sorgu sorun değildi, 100 kişide 200 sorgu TEK BİR
+  // transaction'ın içinde ve uzak bir veritabanında zaman aşımına aday.
+  // Zaman aşımı da en kötü yerde olurdu: kapanış geri alınır, hafta bir
+  // sonraki istekte yeniden denenir ve her denemede yine düşerdi.
+  //
+  // İŞ ÜÇE AYRILDI:
+  //   • kozmetik alanlar (ilk 10) → tek tek; kozmetik listesi kişiye özel bir
+  //     küme ve `updateMany` ile birleştirilemez
+  //   • sadece toz alanlar (11-100) → toz miktarına göre GRUPLANIP
+  //     `updateMany` — 90 sorgu yerine 3
+  //   • ödül kayıtları → tek `createMany`
+  // Toplam ~15 sorgu.
+  type Odul = NonNullable<ReturnType<typeof rewardForRank>>;
+  const kozmetikli: { wallet: string; owned: string[]; reward: Odul }[] = [];
+  const tozGrup = new Map<number, string[]>();
+  const kayitlar: {
+    id: string; week: number; wallet: string; rank: number;
+    cosmetic: string | null; dust: number;
+  }[] = [];
+
+  for (let i = 0; i < winners.length; i++) {
+    const rank = i + 1;
+    const reward = rewardForRank(rank);
+    if (!reward) continue;
+    const w = winners[i];
+
+    if (reward.cosmetic) {
+      // Zaten sahip olunan kozmetik ikinci kez eklenmez — envanter bir küme.
+      const owned = Array.isArray(w.cosmetics)
+        ? (w.cosmetics as unknown[]).filter((x): x is string => typeof x === 'string')
+        : [];
+      kozmetikli.push({ wallet: w.wallet, owned, reward });
+    } else if (reward.dust > 0) {
+      const g = tozGrup.get(reward.dust);
+      if (g) g.push(w.wallet); else tozGrup.set(reward.dust, [w.wallet]);
+    }
+    kayitlar.push({
+      id: crypto.randomUUID(), week, wallet: w.wallet, rank,
+      cosmetic: reward.cosmetic ?? null, dust: reward.dust,
+    });
+  }
+
   return prisma.$transaction(async (tx) => {
     // ⚠️ İLK YAZILAN BU. Çakışırsa transaction burada ölür ve hiçbir ödül
     // verilmez — sıra tersine olsaydı ödüller verilip kapanış düşerdi.
     await tx.seasonClose.create({ data: { week, winners: winners.length } });
 
-    for (let i = 0; i < winners.length; i++) {
-      const rank = i + 1;
-      const reward = rewardForRank(rank);
-      if (!reward) continue;
-      const w = winners[i];
-
-      // Zaten sahip olunan kozmetik ikinci kez eklenmez — envanter bir küme.
-      const owned = Array.isArray(w.cosmetics) ? (w.cosmetics as unknown[]).filter((x) => typeof x === 'string') as string[] : [];
-      const add = reward.cosmetic && !owned.includes(reward.cosmetic) ? reward.cosmetic : null;
-
+    for (const k of kozmetikli) {
+      const add = k.reward.cosmetic && !k.owned.includes(k.reward.cosmetic)
+        ? k.reward.cosmetic : null;
       await tx.player.update({
-        where: { wallet: w.wallet },
+        where: { wallet: k.wallet },
         data: {
-          dust: { increment: reward.dust },
-          ...(add ? { cosmetics: [...owned, add] } : {}),
+          dust: { increment: k.reward.dust },
+          ...(add ? { cosmetics: [...k.owned, add] } : {}),
         },
       });
-      await tx.seasonAward.create({
-        data: {
-          id: crypto.randomUUID(), week, wallet: w.wallet, rank,
-          cosmetic: reward.cosmetic ?? null, dust: reward.dust,
-        },
+    }
+
+    for (const [toz, cuzdanlar] of tozGrup) {
+      await tx.player.updateMany({
+        where: { wallet: { in: cuzdanlar } },
+        data: { dust: { increment: toz } },
       });
+    }
+
+    // ⚠️ `skipDuplicates`: (week, wallet) tekil. Aynı haftayı kapatmaya çalışan
+    // ikinci istek zaten `seasonClose` anahtarına çarpıp ölüyor, ama burada da
+    // çakışmaya dayanıklı olmak bedavaya geliyor.
+    if (kayitlar.length > 0) {
+      await tx.seasonAward.createMany({ data: kayitlar, skipDuplicates: true });
     }
     return { week, winners: winners.length };
   });

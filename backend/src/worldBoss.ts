@@ -108,6 +108,16 @@ export interface ContributeResult {
  */
 export async function contribute(
   wallet: string, progress: Progress, claimed: number, elapsedSec: number,
+  /**
+   * Hafta sonu etkinliği çarpanı (bkz. `@game/events`).
+   *
+   * ⚠️ TAVANDAN SONRA uygulanıyor. `maxBossDamage`'ı çarpmak cazipti ama o
+   * tavan "bu oyuncu bu sürede en fazla ne verebilirdi" sorusunun cevabı —
+   * yani bir DOĞRULAMA aracı. İkiye katlamak, etkinlik hafta sonu UYDURMA
+   * hasarın tavanını da ikiye katlamak olurdu. Bonus, kabul edilmiş hasarın
+   * üstüne biner.
+   */
+  eventMul = 1,
   now = new Date(),
 ): Promise<ContributeResult> {
   const { week } = await currentBoss(now);
@@ -119,7 +129,11 @@ export async function contribute(
 
   const ham = Math.max(0, Math.floor(Number(claimed) || 0));
   const capped = ham > tavan;
-  const accepted = Math.min(ham, tavan);
+  // ⚠️ `capped` çarpandan ETKİLENMEZ: bonus bir kırpma değil. Etkinlik hafta
+  // sonu her koşunun "şüpheli" işaretlenmesi, admin panelini kullanılamaz
+  // hâle getirirdi.
+  const mul = Number.isFinite(eventMul) ? Math.max(1, eventMul) : 1;
+  const accepted = Math.floor(Math.min(ham, tavan) * mul);
 
   if (accepted > 0) {
     await prisma.$transaction([

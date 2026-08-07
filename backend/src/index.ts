@@ -12,6 +12,7 @@ import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
+import { eventMul, eventWindow } from '@game/events';
 import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun } from './reward.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
@@ -393,6 +394,29 @@ app.get('/profile', wrap(async (req, res) => {
 // ⚠️ AYRI UÇLAR, `settleRun`'a DOKUNULMADI. Boss odası gold ÖDEMİYOR, yani
 // `settleRun`'ın kampanya/descent dallarına üçüncü bir mod eklemek sadece
 // risk olurdu — ödül hesabı en hassas kod ve boss'un onunla işi yok.
+// ── HAFTA SONU ETKİNLİĞİ ──
+//
+// ⚠️ KİMLİK GEREKMİYOR ve GEREKMEMELİ: etkinlik takvimi herkese aynı, giriş
+// yapmamış bir ziyaretçinin de "bu hafta sonu ne var" diye bakabilmesi
+// gerekiyor — geri çağırma aracının yarısı bu.
+//
+// ⚠️ SUNUCU SAATİ YETKİLİ. İstemci kendi saatinden hesaplasaydı, saati
+// kaymış bir cihaz Salı günü "Ashfall açık" yazar, oyuncu koşuyu bitirir ve
+// bonusu göremezdi. Pencere buradan geliyor, arayüz sadece geri sayıyor.
+app.get('/events', wrap(async (_req, res) => {
+  const w = eventWindow(new Date());
+  res.json({
+    now: Date.now(),
+    live: w.live,
+    startsAt: w.startsAt,
+    endsAt: w.endsAt,
+    event: {
+      id: w.event.id, name: w.event.name, blurb: w.event.blurb,
+      effect: w.event.effect, mul: w.event.mul, tone: w.event.tone,
+    },
+  });
+}));
+
 app.get('/worldboss', wrap(async (req, res) => {
   // Kimlik ZORUNLU DEĞİL: boss odası herkese görünür, "gir de gör" olsun.
   res.json(await bossState(auth(req) ?? undefined));
@@ -439,7 +463,14 @@ app.post('/boss/finish', wrap(async (req, res) => {
   // ⚠️ SÜRE SUNUCUDAN. Tavan buna bağlı; istemciden alınsaydı tavan da
   // istemcinin elinde olurdu.
   const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
-  const out = await contribute(wallet, toProgress(player), body.data.damage, elapsedSec);
+  // ⚠️ ÇARPAN `contribute`'un İÇİNE DEĞİL, GİRDİSİNE de değil — ORAYA
+  // dokunulsaydı yapısal tavan da ×2 olurdu ve etkinlik, uydurma hasarın
+  // tavanını da ikiye katlardı. Onun yerine `contribute` iddiayı her zamanki
+  // gibi kırpıyor; bonus KABUL EDİLEN hasarın üstüne biniyor.
+  const bossMul = eventMul(run.startedAt, 'bossDamage');
+  const out = await contribute(
+    wallet, toProgress(player), body.data.damage, elapsedSec, bossMul,
+  );
 
   await prisma.run.update({
     where: { id: run.id },
@@ -756,6 +787,11 @@ app.post('/run/finish', wrap(async (req, res) => {
   const s = settleRun(
     before, run.mode as 'campaign' | 'descent', run.stageId, body.data, elapsedSec,
     run.startDepth, run.ascension,
+    // ⚠️ ETKİNLİK KOŞUNUN BAŞLANGICINDAN. `new Date()` yazılsaydı Pazar
+    // 23:55'te başlayan bir koşu kapanışta bonusunu kaybederdi. İstismar
+    // tavanı bir koşu kadar: `acikKosulariIptalEt` aynı anda tek koşu
+    // bırakıyor, yani "etkinlik bitmeden 50 koşu açayım" diye bir yol yok.
+    eventMul(run.startedAt, 'dropGold'),
   );
 
   // ── BAHİS ──
@@ -831,6 +867,7 @@ app.post('/run/finish', wrap(async (req, res) => {
     awarded: s.awarded,
     progressGold: s.progressGold,
     dropGold: s.dropGold,
+    eventGold: s.eventGold,
     record,
     // Bahis vardıysa sonucu — arayüz koşu sonu dökümünde gösterir
     wager: run.wagerStake > 0

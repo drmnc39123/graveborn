@@ -36,6 +36,12 @@ export interface Settled {
   awarded: number;
   progressGold: number;
   dropGold: number;
+  /**
+   * `dropGold`'un kaçı hafta sonu etkinliğinden geldi (bkz. game/events.ts).
+   * ⚠️ `dropGold`'a EKLENMEZ, onun İÇİNDE — ayrı satır olarak gösterilirken
+   * toplama ikinci kez eklenmemeli.
+   */
+  eventGold: number;
   paidRange: { from: number; to: number } | null;
   /** koşuda bahis vardıysa sonucu — koşu sonu dökümünde gösterilir */
   wager: { stake: number; target: number; won: boolean; dust: number } | null;
@@ -571,14 +577,17 @@ export async function finishRun(
     saveProgress(prog);
     return {
       progress: prog, awarded: r.awarded,
-      progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
+      progressGold: r.progressGold, dropGold: r.dropGold,
+      // Demo/çevrimdışı yolda etkinlik yok: çarpan sunucuda uygulanıyor ve
+      // burada sunucu yok. Sıfır yazmak, olmayan bir bonusu göstermekten iyi.
+      eventGold: 0, paidRange: r.paidRange,
       wager: wagerOut,
     };
   }
 
   const out = await api<{
     progress: Progress; awarded: number; progressGold: number; dropGold: number;
-    wager: Settled['wager']; wilderness?: Settled['wilderness']; duel?: Settled['duel'];
+    eventGold?: number; wager: Settled['wager']; wilderness?: Settled['wilderness']; duel?: Settled['duel'];
   }>('/run/finish', {
     method: 'POST',
     body: {
@@ -594,10 +603,33 @@ export async function finishRun(
   const after = paidDepth(out.progress, run.stageId);
   return {
     ...out,
+    eventGold: out.eventGold ?? 0,
     wilderness: out.wilderness ?? null,
     duel: out.duel ?? null,
     paidRange: after > before ? { from: before, to: after } : null,
   };
+}
+
+// ── HAFTA SONU ETKİNLİĞİ ──────────────────────────────────────────────
+// ⚠️ PENCERE SUNUCUDAN OKUNUR, istemcide hesaplanmaz. `eventAt(new Date())`
+// yazmak cazipti ve tek satırdı — ama saati kaymış bir cihaz Salı günü
+// "Ashfall açık" yazar, oyuncu koşuyu bitirir ve bonusu göremezdi. Ödemeyi
+// yapan saat hangisiyse, gösteren saat de o olmalı.
+
+export interface EventState {
+  /** sunucunun saati — geri sayım bunun üstünden yürür, cihazınkinden değil */
+  now: number;
+  live: boolean;
+  startsAt: number;
+  endsAt: number;
+  event: {
+    id: string; name: string; blurb: string;
+    effect: string; mul: number; tone: string;
+  };
+}
+
+export async function fetchEvent(): Promise<EventState> {
+  return api<EventState>('/events');
 }
 
 // ── THE CRYPT DEED ────────────────────────────────────────────────────

@@ -21,7 +21,9 @@ const DENEYIMLI = { deepestDepth: 40, cleared: true };
 const YENI = { deepestDepth: 0, cleared: false };
 import { utcDay } from '@game/progress';
 import { prisma } from './db.js';
-import { claimQuest, listQuests, trackQuest } from './quests.js';
+import {
+  claimQuest as claimQuestAt, listQuests as listQuestsAt, trackQuest as trackQuestAt,
+} from './quests.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -32,7 +34,28 @@ const check = (n: string, ok: boolean, d = '') => {
 const P = `TEST_QUEST_${Date.now()}`;
 const w = (n: number) => `${P}_${n}`;
 const get = (n: number) => prisma.player.findUniqueOrThrow({ where: { wallet: w(n) } });
-const BUGUN = utcDay(new Date());
+/**
+ * ⚠️ TEST SAATİ SABİT — bu bir kolaylık değil, ZORUNLULUK.
+ *
+ * Hafta sonu etkinliği (`@game/events`) üç haftada bir görev tozunu ikiye
+ * katlıyor. Gerçek saatle çalışan bir test, kod hiç değişmeden bir Cumartesi
+ * kendiliğinden kırmızıya dönerdi — ve o kırmızı, bakan kişiye "ödül sistemi
+ * bozuldu" derdi. Yalan söyleyen bir test, hiç olmayandan kötüdür.
+ *
+ * 2026-08-05 bir ÇARŞAMBA: hiçbir etkinlik açık değil, yani aşağıdaki bütün
+ * sayılar TABAN değerler. Çarpanın kendi ölçümü ayrı dosyada
+ * (`frontend/src/game/events.test.mts`).
+ */
+const NOW = new Date('2026-08-05T12:00:00Z');
+const BUGUN = utcDay(NOW);
+
+// Sabit saati her çağrıya elle taşımak yerine sarmalanıyor — 24 çağrı yerinde
+// unutulan tek bir `now`, testi yine takvime bağımlı yapardı.
+const listQuests = (wallet: string, now = NOW) => listQuestsAt(wallet, now);
+const claimQuest = (wallet: string, id: unknown, now = NOW) => claimQuestAt(wallet, id, now);
+const trackQuest = (
+  wallet: string, kind: Parameters<typeof trackQuestAt>[1], amount = 1, now = NOW,
+) => trackQuestAt(wallet, kind, amount, now);
 
 // ⚠️ Test oyuncuları GERÇEKTEN deneyimli olmalı: sunucu havuzu KAYITTAKİ
 // derinlikten süzüyor, testin `DENEYIMLI` sabitinden değil. Kurulum eksik

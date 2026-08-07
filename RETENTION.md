@@ -178,12 +178,51 @@ sorusuna cevap veriyor.
    Şu an 4 karakter var ve hepsi aynı Forge'u paylaşıyor; ayrı ilerleme
    "bir daha oyna" sebebi üretir.
 
-### FAZ R4 — RİTİM
-8. **Günlük görev.** 00:00 UTC sıfırlanan 3 görev. En standart, en işe
-   yarayan geri çağırma aracı. Bizde HİÇ YOK.
-9. **Etkinlikler.** Hafta sonu ×2 düşüş, sınırlı süreli boss, turnuva.
-10. **Sezon ödülleri genişlesin.** Şu an sadece ilk 10 alıyor; katılım
-    ödülü olmayan bir sezon, 11. sıradaki için yok hükmünde.
+### FAZ R4 — RİTİM ✅ BİTTİ
+8. ~~**Günlük görev.**~~ ✅ 3 görev + tamamlama bonusu, 00:00 UTC sıfırlanıyor.
+
+9. ~~**Etkinlikler.**~~ ✅ **Hafta sonu etkinlikleri** (`game/events.ts`).
+   Cumartesi 00:00 → Pazartesi 00:00 UTC, üç haftalık döngü:
+   **Ashfall** (düşüş gold'u ×1,5) · **Blood Moon** (boss hasarı ×2) ·
+   **Night Vigil** (görev tozu ×2).
+
+   ⚠️ **MOTORA DOKUNULMADI ve dokunulmamalı.** İlk akla gelen "hafta sonu
+   düşman yoğunluğu ×1,5" idi; yapılsaydı `SIM_SEAL`'in dayandığı "aynı
+   girdi + aynı seed → aynı koşu" varsayımı kırılırdı: mühür testi tarihe
+   bağımlı hâle gelir, sunucunun koşuyu yeniden oynatarak doğrulama ihtimali
+   tamamen ölürdü. Etkinlik bunun yerine bir **kapanış katmanı çarpanı** —
+   koşu normal oynanır, sunucu iddiayı her zamanki gibi kırpar, çarpan EN SON
+   ödeme anında biner. Her etkinliğin TEK bir yetki noktası var.
+
+   ⚠️ **SIRA: önce kırp, sonra çarp.** Tavan iddianın MEŞRULUĞUNU ölçüyor
+   (oyuncunun gerçek greed'ine bağlı); etkinlik doğrulanmış bir ödemeyi
+   büyütüyor. Ölçüldü: tekrar koşusunda yalancı/dürüst oranı hafta içi de
+   etkinlikte de **4,311** — etkinlik yalancıya ek avantaj vermiyor.
+
+   ⚠️ **`progressGold` bilerek ÇARPILMIYOR.** Her derinlik için BİR KEZ
+   ödenen bir ödül; çarpılsaydı oyuncuya "ilerlemeyi hafta sonuna sakla"
+   derdi. Bir etkinliğin oyuncuyu Cuma günü OYNAMAMAYA teşvik etmesi kendi
+   amacını yener.
+
+   ⚠️ **Musluk maliyeti ölçüldü:** Ashfall takvimin %9,5'inde açık →
+   tekrar koşusu gelirinde **+%4,8** (sadece hafta sonu oynayan için üst
+   sınır +%16,7). Büyütülecekse ölçüm tekrarlanmalı.
+
+   ⚠️ Testler artık **SABİT SAATLE** koşuyor (`quests.test.mts`): gerçek
+   saate bağlı bir test, kod hiç değişmeden bir Cumartesi kendiliğinden
+   kırmızıya döner ve bakan kişiye "ödül sistemi bozuldu" der.
+
+10. ~~**Sezon ödülleri genişlesin.**~~ ✅ Tablo **10 → 100 sıra**.
+    İlk 10 kozmetik + toz, **11-100 SADECE toz** (kozmetik yok). "İlk 10'a
+    girdim" cümlesi korundu; 11. sıradaki artık boş dönmüyor. Haftalık toz
+    musluğu 4.445 ≈ 2,1 legendary — ölçüldü, sınırın içinde.
+
+    ⚠️ Kapanış döngüsü de değişmek ZORUNDAYDI: kazanan başına iki sorgu,
+    100 kişide tek transaction içinde 200 sorgu demekti ve uzak bir
+    veritabanında zaman aşımına adaydı — üstelik en kötü yerde, çünkü zaman
+    aşımı kapanışı geri alır ve her denemede yine düşerdi. Şimdi kozmetikliler
+    tek tek, toz alanlar miktara göre gruplanıp `updateMany`, kayıtlar tek
+    `createMany` → ~15 sorgu.
 
 ### FAZ R5 — İÇERİK HACMİ
 11. **Kampanya 10 → 20+ bölüm.** 1,5 saat çok kısa.

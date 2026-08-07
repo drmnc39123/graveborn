@@ -24,6 +24,7 @@ import { FirstRun, isNewcomer } from '@/components/FirstRun';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
+import { EventBanner } from '@/components/EventBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
@@ -68,6 +69,8 @@ type Payout = {
   deepestCleared: number;
   progressGold: number;
   dropGold: number;
+  /** `dropGold`'un içindeki hafta sonu etkinliği payı — ayrı satır */
+  eventGold: number;
   paidRange: { from: number; to: number } | null;
   /** bahis vardıysa sonucu — gold değil TOZ öder (bkz. game/wager.ts) */
   wager: { stake: number; target: number; won: boolean; dust: number } | null;
@@ -208,7 +211,8 @@ export default function PlayPage() {
           // descent olarak çalıştırıyor, yani `run.mode` her zaman 'descent'
           // döner ve döküm yanlış ekranı gösterirdi.
           mode: kind, deepestCleared: run.deepestCleared, cleared: run.cleared,
-          progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
+          progressGold: r.progressGold, dropGold: r.dropGold,
+          eventGold: r.eventGold, paidRange: r.paidRange,
           wager: r.wager, wilderness: r.wilderness ?? null, duel: r.duel ?? null,
         });
       })
@@ -345,7 +349,11 @@ export default function PlayPage() {
         if (id === 'pit') { setPanel(null); setScreen({ kind: 'arena' }); return; }
         setPanel(id);
       }} gold={progress?.gold ?? 0} wallet={wallet}
-        onHeight={setDockH} />
+        onHeight={setDockH}
+        // ⚠️ ŞERİT RIHTIMIN İÇİNDE, sayfada ayrı bir katmanda DEĞİL — gerekçe
+        // BuildingDock'un render sonundaki notta. Panel açıkken gizleniyor:
+        // oyuncu zaten bir şeye bakıyor demektir.
+        footer={!panel ? <EventBanner /> : null} />
 
       {/* ── İLK KOŞU ÇAĞRISI ──
           ⚠️ ÖLÇÜLDÜ: yeni oyuncu köye düşüyor ve karşısında 4 grup, 14 panel,
@@ -542,7 +550,23 @@ export default function PlayPage() {
                       ? 'already claimed — replay pays nothing'
                       : 'the stage pays when you finish it — try again'}
               />
-              <Row label="Rare finds" value={payout.dropGold} hint={payout.dropGold === 0 ? 'nothing dropped this run' : undefined} />
+              {/* ⚠️ ETKİNLİK PAYI `dropGold`'un İÇİNDE, yanında değil. Ayrı bir
+                  satır olarak gösterip toplama da eklemek, oyuncuya olmayan
+                  bir gold saydırırdı. Bu yüzden "Rare finds" TAM tutarı yazıyor,
+                  bonus onun altında bir AÇIKLAMA satırı olarak duruyor. */}
+              <Row label="Rare finds" value={payout.dropGold}
+                hint={payout.dropGold === 0 ? 'nothing dropped this run' : undefined} />
+              {payout.eventGold > 0 && (
+                <div style={{
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+                  marginTop: -3, paddingLeft: 10, fontSize: 11,
+                }}>
+                  <span style={{ color: C.candle }}>↳ weekend event</span>
+                  <span style={{ color: C.candle, fontWeight: 900 }}>
+                    {payout.eventGold} of that
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* ⚠️ BAHİS AYRI KUTUDA. Yukarıdaki satırlar GOLD sayıyor; bahis

@@ -15,7 +15,7 @@ import {
   fetchLeaderboard, fetchProfile, fetchSeasonBoard,
   type LeaderRow, type ProfileData, type ProfileRun, type SeasonAwardRow,
 } from '@/lib/gameSession';
-import { SEASON_REWARDS, rewardForRank } from '@/game/season';
+import { SEASON_COSMETIC_DEPTH, SEASON_REWARDS, rewardForRank } from '@/game/season';
 import { cosmeticById } from '@/game/cosmetics';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
 import { AchievementsTab } from '@/components/AchievementsTab';
@@ -312,24 +312,47 @@ function SeasonRewards() {
       <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2, color: C.candle, marginBottom: 8 }}>
         WHAT THE WEEK PAYS
       </div>
-      {SEASON_REWARDS.map((r) => {
+      {SEASON_REWARDS.map((r, i) => {
         const kozmetik = r.cosmetic ? cosmeticById(r.cosmetic) : undefined;
+        // ⚠️ KOZMETİK ÇİZGİSİ GÖRÜNÜR OLMALI. Tablo 100 sıraya genişledi ama
+        // ödülün iki farklı CİNSİ var: taşınan bir şey (ilk 10) ve bir toz
+        // teşekkürü (11-100). Aynı listede ayrımsız dizmek, 40. sıradaki
+        // oyuncuya "ben de kalıntı alacağım" dedirtirdi — sonra almayınca da
+        // haklı olarak kandırıldığını düşünürdü.
+        const oncekiKozmetikli = i > 0 && !!SEASON_REWARDS[i - 1].cosmetic;
+        const ayrac = oncekiKozmetikli && !r.cosmetic;
         return (
-          <div key={`${r.from}-${r.to}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-            <span style={{ width: 46, flexShrink: 0, fontSize: 11.5, fontWeight: 900,
-              color: r.from === 1 ? C.candle : C.boneDim }}>
-              {r.from === r.to ? `#${r.from}` : `#${r.from}-${r.to}`}
-            </span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: C.bone,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {kozmetik?.name ?? r.label}
-            </span>
-            <Tag tone="gold">{r.dust} DUST</Tag>
+          <div key={`${r.from}-${r.to}`}>
+            {ayrac && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 7,
+                margin: '7px 0 5px', fontSize: 9, fontWeight: 900,
+                letterSpacing: 1.4, color: C.boneFaint,
+              }}>
+                <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.10)' }} />
+                DUST ONLY
+                <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.10)' }} />
+              </div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
+              <span style={{ width: 52, flexShrink: 0, fontSize: 11.5, fontWeight: 900,
+                color: r.from === 1 ? C.candle : C.boneDim }}>
+                {r.from === r.to ? `#${r.from}` : `#${r.from}-${r.to}`}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 11.5,
+                color: r.cosmetic ? C.bone : C.boneDim,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {kozmetik?.name ?? r.label}
+              </span>
+              <Tag tone="gold">{r.dust} DUST</Tag>
+            </div>
           </div>
         );
       })}
       <div style={{ marginTop: 7, fontSize: 10.5, color: C.boneFaint, lineHeight: 1.5 }}>
-        These relics cannot be bought or pulled. Only a week&apos;s top ten ever wears one.
+        These relics cannot be bought or pulled — only a week&apos;s top{' '}
+        {SEASON_COSMETIC_DEPTH} ever wears one. Everyone else who set a mark
+        this week is still counted, and paid in dust.
       </div>
     </div>
   );

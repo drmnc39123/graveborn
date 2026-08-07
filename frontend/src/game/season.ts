@@ -38,19 +38,40 @@ export interface SeasonReward {
 }
 
 /**
- * ÖDÜL TABLOSU — ilk 10.
+ * ÖDÜL TABLOSU.
  *
- * ⚠️ Neden sadece 10: daha geniş bir tablo ödülü ucuzlatır. "İlk 10'a
- * girdim" bir cümledir; "ilk 100'e girdim" değildir. Toz miktarları da
- * bilinçli olarak küçük — bunlar bir gelir kaynağı değil, bir nişan.
- * (Referans: legendary kozmetik tozla 2100'e alınıyor, yani birincinin
- * haftalık tozu tek bir legendary'nin beşte biri kadar.)
+ * ⚠️ BU TABLO ÖNCE SADECE İLK 10'DU ve gerekçesi şuydu: "daha geniş bir tablo
+ * ödülü ucuzlatır — 'ilk 10'a girdim' bir cümledir, 'ilk 100'e girdim'
+ * değildir." O gerekçe HÂLÂ GEÇERLİ ve tablo onu bozmadan genişledi.
+ *
+ * RETENTION.md'nin itirazı da haklıydı: 11. sıradaki için sezon YOK
+ * hükmündeydi. Bütün hafta oynayıp 12. biten oyuncu, hiç oynamayanla tam
+ * olarak aynı şeyi alıyordu — ve bir daha denemek için hiçbir sebebi yoktu.
+ *
+ * ÇÖZÜM İKİ TABAKA:
+ *   • İlk 10  → KOZMETİK + toz. Görünen, övünülen, taşınan şey burada kalır.
+ *   • 11-100 → SADECE TOZ, kozmetik YOK. Tırmanmak için bir sebep var ama
+ *     "ilk 10" çizgisi hâlâ bir çizgi.
+ *
+ * ⚠️ 11-100 tozu bilerek KÜÇÜK. En alt kademe 20 toz; legendary bir kozmetik
+ * 2100. Yani 51-100 aralığı bir gelir kaynağı değil, "sayıldın" demenin ucuz
+ * yolu. Büyütmek sıralamayı bir toz musluğuna çevirirdi.
  */
 export const SEASON_REWARDS: readonly SeasonReward[] = [
   { from: 1, to: 1, cosmetic: 't_deepest', dust: 420, label: 'Deepest of the Week' },
   { from: 2, to: 3, cosmetic: 'p_season', dust: 240, label: 'Vigil Silver' },
   { from: 4, to: 10, cosmetic: 'r_wreath', dust: 110, label: 'Barrow Wreath' },
+  { from: 11, to: 25, dust: 60, label: 'Vigil Kept' },
+  { from: 26, to: 50, dust: 35, label: 'Vigil Kept' },
+  { from: 51, to: 100, dust: 20, label: 'Counted' },
 ] as const;
+
+/**
+ * Kozmetik ödülün bittiği sıra — "ilk 10" çizgisi TEK KAYNAKTAN türüyor.
+ * Arayüz bu sayıyı kendi yazmasın: tablo değişirse çizgi de değişmeli.
+ */
+export const SEASON_COSMETIC_DEPTH =
+  SEASON_REWARDS.reduce((m, r) => (r.cosmetic ? Math.max(m, r.to) : m), 0);
 
 /** Verilen sıraya düşen ödül — sıra tablo dışındaysa `null` */
 export function rewardForRank(rank: number): SeasonReward | null {

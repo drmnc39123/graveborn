@@ -17,6 +17,7 @@ import {
 } from '@game/quests';
 import { STAGES } from '@game/config';
 import { paidDepth, utcDay, type Progress } from '@game/progress';
+import { eventMul } from '@game/events';
 import { prisma, toProgress } from './db.js';
 
 interface QuestState {
@@ -100,7 +101,7 @@ export async function listQuests(wallet: string, now = new Date()): Promise<Ques
   // ⚠️ Seçilen set HEMEN yazılıyor: yoksa oyuncu paneli açtıktan sonra
   // derinleşirse bir sonraki okumada başka görevler görürdü.
   await yaz(wallet, row.quests, st);
-  return goruntule(day, st);
+  return goruntule(day, st, now);
 }
 
 /** Durumu KOŞULLU yaz — araya giren bir isteği ezmesin */
@@ -113,11 +114,19 @@ async function yaz(wallet: string, onceki: unknown, st: QuestState): Promise<boo
   return hit.count > 0;
 }
 
-function goruntule(day: string, st: QuestState): QuestView {
+/**
+ * ⚠️ GÖSTERİLEN SAYI ÖDENECEK SAYI OLMALI. Etkinlik çarpanı hem `claimQuest`
+ * hem burada uygulanıyor: sadece ödemede uygulansaydı panel 40 toz yazar,
+ * oyuncu 80 alırdı — bu iyi bir sürpriz gibi görünüp aslında paneli yalancı
+ * yapardı. Aynı gerekçeyle `ceiling` de çarpılıyor, yoksa "günün tavanı"
+ * gerçek kazancın yarısını gösterirdi.
+ */
+function goruntule(day: string, st: QuestState, now: Date): QuestView {
+  const mul = eventMul(now, 'questDust');
   const liste = st.ids.map((id) => questById(id)).filter((q): q is NonNullable<typeof q> => !!q).map((q) => {
     const ilerleme = st.progress[q.id] ?? 0;
     return {
-      id: q.id, text: q.text, goal: q.goal, dust: q.dust,
+      id: q.id, text: q.text, goal: q.goal, dust: Math.floor(q.dust * mul),
       progress: Math.min(ilerleme, q.goal),
       done: questDone(q, ilerleme),
       claimed: st.claimed.includes(q.id),
@@ -127,13 +136,13 @@ function goruntule(day: string, st: QuestState): QuestView {
     day,
     quests: liste,
     bonus: {
-      dust: QUESTS.allBonus,
+      dust: Math.floor(QUESTS.allBonus * mul),
       // ⚠️ Bonus, üçünün de ALINMASINA bağlı (sadece bitmesine değil):
       // yoksa oyuncu bonusu alıp tek tek ödülleri almayı unutabilirdi.
       ready: liste.every((q) => q.claimed),
       claimed: st.bonus,
     },
-    ceiling: dayDustCeiling(st.ids),
+    ceiling: Math.floor(dayDustCeiling(st.ids) * mul),
   };
 }
 
@@ -193,7 +202,7 @@ export async function claimQuest(
 
   let toz = 0;
   if (questId === '__bonus') {
-    const gorunum = goruntule(day, st);
+    const gorunum = goruntule(day, st, now);
     if (!gorunum.bonus.ready) throw new QuestError('bonus_hazir_degil');
     if (st.bonus) throw new QuestError('zaten_alindi');
     st.bonus = true;
@@ -210,6 +219,14 @@ export async function claimQuest(
     toz = q.dust;
   }
 
+  // ⚠️ ETKİNLİK ÖDEME ANINDAN ÇÖZÜLÜR, görevin verildiği andan değil.
+  // Sebep: `st.ids` günün başında donuyor ve o listede etkinlik bilgisi yok.
+  // "Cumartesi aldığın görev Pazartesi de çift ödesin" demek, oyuncuya
+  // ödülünü BEKLETMEYİ öğretirdi — etkinliğin amacı tam tersi. Hafta sonu
+  // bitmişse bonus da bitmiş olmalı.
+  const mul = eventMul(now, 'questDust');
+  if (mul > 1) toz = Math.floor(toz * mul);
+
   // ⚠️ KOŞULLU YAZMA: araya giren bir istek aynı ödülü almış olabilir.
   // `quests` alanı okuduğumuzdan farklıysa yazma düşer ve ödül tekrarlanmaz.
   const hit = await prisma.player.updateMany({
@@ -218,5 +235,5 @@ export async function claimQuest(
   });
   if (hit.count === 0) throw new QuestError('es_zamanli_degisim', 409);
 
-  return { view: goruntule(day, st), dust: toz };
+  return { view: goruntule(day, st, now), dust: toz };
 }

@@ -257,6 +257,8 @@ export interface Settlement {
   awarded: number;
   progressGold: number;
   dropGold: number;
+  /** `dropGold`'un kaçı hafta sonu etkinliğinden geldi — koşu sonu dökümü */
+  eventGold: number;
   /** iddia kırpıldı mı — admin panelinde şüpheli işareti */
   capped: boolean;
   reason: string[];
@@ -283,6 +285,18 @@ export function settleRun(
    * Hem düşüş tavanını hem sıralama puanını etkiliyor.
    */
   ascension = 0,
+  /**
+   * Hafta sonu etkinliğinin nadir düşüş çarpanı (bkz. `@game/events`).
+   *
+   * ⚠️ KOŞUNUN BAŞLANGIÇ ANINDAN çözülür, kapanış anından değil — çağrı
+   * yeri `eventMul(run.startedAt, 'dropGold')` gönderiyor.
+   *
+   * ⚠️ SADECE `dropGold`'a dokunuyor. `progressGold` bilerek dışarıda:
+   * o her derinlik için BİR KEZ ödenen bir ödül ve çarpılsaydı oyuncuya
+   * "ilerlemeyi hafta sonuna sakla" derdi. Bir etkinliğin oyuncuyu Cuma
+   * günü OYNAMAMAYA teşvik etmesi, kendi amacını yenerdi.
+   */
+  eventDropMul = 1,
 ): Settlement {
   const reason: string[] = [];
   let capped = false;
@@ -303,11 +317,20 @@ export function settleRun(
     reason.push(`nadir gold ${rawGold} → tavan ${goldCap}`);
   }
 
+  // 2b) Etkinlik çarpanı — ⚠️ TAVANDAN SONRA.
+  // Tavan iddianın MEŞRULUĞUNU ölçüyor (oyuncunun gerçek greed'ine bağlı);
+  // etkinlik ise doğrulanmış bir ödemeyi büyütüyor. Ters sırada tavan bonusu
+  // yerdi ve etkinlik hiçbir şey yapmazdı. Ayrıca `capped` bayrağı burada
+  // DEĞİŞMİYOR: bonus bir kırpma değil, koşu şüpheli sayılmamalı.
+  const eventMul = Number.isFinite(eventDropMul) ? Math.max(1, eventDropMul) : 1;
+  const eventGold = eventMul > 1 ? Math.floor(rareGold * eventMul) - rareGold : 0;
+  rareGold += eventGold;
+
   // 3) Bölüm gerçekten açık mı — kilitli bölümden ödül alınamaz
   if (stageId > before.unlockedStage) {
     reason.push(`kilitli bölüm ${stageId} (açık: ${before.unlockedStage})`);
     return {
-      progress: before, awarded: 0, progressGold: 0, dropGold: 0,
+      progress: before, awarded: 0, progressGold: 0, dropGold: 0, eventGold: 0,
       capped: true, reason,
     };
   }
@@ -326,6 +349,7 @@ export function settleRun(
     awarded: r.awarded,
     progressGold: r.progressGold,
     dropGold: r.dropGold,
+    eventGold,
     capped,
     reason,
   };

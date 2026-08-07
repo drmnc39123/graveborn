@@ -12,7 +12,9 @@
 // Çalıştır:  npx tsx src/season.test.mts
 
 import { challengeRating } from '@game/config';
-import { SEASON_PAYOUT_DEPTH, rewardForRank, seasonWeek } from '@game/season';
+import {
+  SEASON_COSMETIC_DEPTH, SEASON_PAYOUT_DEPTH, SEASON_REWARDS, rewardForRank, seasonWeek,
+} from '@game/season';
 import { bossWeek } from '@game/worldBoss';
 import { prisma } from './db.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
@@ -64,19 +66,63 @@ console.log('\n[2] Ödül tablosu');
 {
   check('1. sıra ödül alıyor', rewardForRank(1)?.cosmetic === 't_deepest');
   check('10. sıra hâlâ ödül alıyor', rewardForRank(10) !== null);
-  check('11. sıra ödül ALMIYOR', rewardForRank(11) === null);
   check('0 ve negatif sıra ödül almıyor', rewardForRank(0) === null && rewardForRank(-1) === null);
-  check('ödeme derinliği tablodan türüyor', SEASON_PAYOUT_DEPTH === 10, `${SEASON_PAYOUT_DEPTH}`);
-  // ⚠️ GOLD ÖDÜLÜ YOK — bu kural kod tarafından da korunmalı, yorumda kalmamalı
-  const goldVar = Object.keys(rewardForRank(1)!).includes('gold');
-  check('ödül tablosunda GOLD alanı yok', !goldVar);
-  // Sıra kötüleştikçe ödül artmamalı
+
+  // ⚠️ BU ÖLÇÜM DEĞİŞTİ ve neyi koruduğu değişti. Eskiden "11. sıra ödül
+  // ALMIYOR" diyordu; tablo 100'e genişledi çünkü 11. sıradaki için sezonun
+  // hiçbir anlamı yoktu. AMA GENİŞLEME BEDAVA DEĞİL: korunması gereken şey
+  // artık "kimse ödül almıyor" değil, **kozmetik çizgisinin ilk 10'da
+  // kalması**. 'İlk 10'a girdim' bir cümledir; toz bunu ucuzlatmamalı.
+  check('kozmetik çizgisi hâlâ 10\'da', SEASON_COSMETIC_DEPTH === 10, `${SEASON_COSMETIC_DEPTH}`);
+  check('11. sıra TOZ alıyor ama KOZMETİK ALMIYOR',
+    !!rewardForRank(11) && !rewardForRank(11)!.cosmetic, `${rewardForRank(11)?.dust} toz`);
+  check('son ödüllü sıradan sonrası boş',
+    rewardForRank(SEASON_PAYOUT_DEPTH) !== null && rewardForRank(SEASON_PAYOUT_DEPTH + 1) === null,
+    `son ödül #${SEASON_PAYOUT_DEPTH}`);
+  check('ödeme derinliği tablodan türüyor', SEASON_PAYOUT_DEPTH === 100, `${SEASON_PAYOUT_DEPTH}`);
+
+  // ⚠️ GOLD ÖDÜLÜ YOK — bu kural kod tarafından da korunmalı, yorumda kalmamalı.
+  // Tablo genişlediği için artık HER satır kontrol ediliyor: tek bir satıra
+  // gold eklemek, musluğu sıralamaya bağlamanın en sessiz yolu olurdu.
+  const goldVar = SEASON_REWARDS.some((r) => Object.keys(r).includes('gold'));
+  check('ödül tablosunun HİÇBİR satırında GOLD yok', !goldVar);
+
+  // Sıra kötüleştikçe ödül artmamalı — artık 100 sıranın tamamında
   let azalan = true;
-  for (let r = 1; r < 10; r++) {
+  let kirilan = 0;
+  for (let r = 1; r < SEASON_PAYOUT_DEPTH; r++) {
     const a = rewardForRank(r)!, b = rewardForRank(r + 1)!;
-    if (b.dust > a.dust) { azalan = false; break; }
+    if (b.dust > a.dust) { azalan = false; kirilan = r; break; }
   }
-  check('alt sıralar üst sıralardan çok toz almıyor', azalan);
+  check('alt sıralar üst sıralardan çok toz almıyor', azalan, kirilan ? `#${kirilan}` : '');
+
+  // ⚠️ TOPLAM TOZ MUSLUĞU ÖLÇÜLÜYOR, tahmin edilmiyor. 100 kişiye ödül
+  // dağıtmak "toz enflasyonu" endişesi doğuruyor; sayı bunu cevaplasın.
+  let toplam = 0;
+  for (let r = 1; r <= SEASON_PAYOUT_DEPTH; r++) toplam += rewardForRank(r)!.dust;
+  const legendary = 2100;   // cosmetics.ts RARITY.legendary.dustCost
+  console.log(`     haftalık toz musluğu: ${toplam} = ${(toplam / legendary).toFixed(1)} legendary`);
+  check('haftalık toz musluğu 4 legendary\'yi aşmıyor', toplam <= legendary * 4,
+    `${toplam} ≤ ${legendary * 4}`);
+  // ⚠️ BU ÖLÇÜM DE İLK DENEMEDE YANLIŞ KURULDU. "11-100'ün payı toplamın
+  // yarısını geçmesin" yazmıştım ve %62,4 ile kırmızı yandı. Ama düzeltilmesi
+  // gereken tablo değil, sorunun kendisiydi: 90 kişi 10 kişiden fazla toplam
+  // alıyor çünkü 90 KİŞİLER — bu bir cömertlik ölçüsü değil, bir nüfus
+  // sayımı. Toplam payı büyüdükçe podyum ucuzlamaz.
+  //
+  // "Podyum özel kalıyor mu" sorusunun gerçek ölçüsü KİŞİ BAŞI oran.
+  // (Toz enflasyonu endişesi de zaten yukarıdaki toplam musluk ölçümünde.)
+  const kuyruk = toplam - 420 - 240 * 2 - 110 * 7;
+  console.log(`     podyum (1-10): ${toplam - kuyruk} · kuyruk (11-100): ${kuyruk} · kişi başı ${(kuyruk / 90).toFixed(1)}`);
+  check('birinci, 11. sıranın en az 5 katını alıyor',
+    rewardForRank(1)!.dust >= rewardForRank(11)!.dust * 5,
+    `${rewardForRank(1)!.dust} vs ${rewardForRank(11)!.dust}`);
+  check('podyumun en altı bile kuyruğun en üstünden fazla alıyor',
+    rewardForRank(10)!.dust > rewardForRank(11)!.dust,
+    `#10 ${rewardForRank(10)!.dust} > #11 ${rewardForRank(11)!.dust}`);
+  check('kuyruk kişi başı bir legendary\'nin %5\'ini geçmiyor',
+    rewardForRank(11)!.dust <= legendary * 0.05,
+    `${rewardForRank(11)!.dust} ≤ ${legendary * 0.05}`);
 }
 
 // ── 3) Puan yazımı ──
