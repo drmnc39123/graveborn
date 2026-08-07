@@ -61,6 +61,11 @@ const KIND_TR: Record<string, string> = {
   market_list: 'ilan (escrow)', market_cancel: 'ilan iptali',
 };
 
+interface TicketRow {
+  id: string; subject: string; status: string; bumpedAt: string;
+  messages: { fromAdmin: boolean; body: string; at: string }[];
+}
+
 export default function AdminPage() {
   const [secret, setSecret] = useState('');
   const [authed, setAuthed] = useState(false);
@@ -78,6 +83,12 @@ export default function AdminPage() {
     const s = sessionStorage.getItem(K_SECRET);
     if (s) { setSecret(s); setAuthed(true); }
   }, []);
+
+  // ⚠️ Talepler AYRI yükleniyor: `refresh` panelin geri kalanını çekiyor ve
+  // bir talebe cevap yazmak tüm paneli yeniden çekmemeli.
+  const [tickets, setTickets] = useState<TicketRow[]>([]);
+  const [ticketFilter, setTicketFilter] = useState('open');
+  const [ticketDraft, setTicketDraft] = useState<Record<string, string>>({});
 
   const call = useCallback(async <T,>(path: string, init?: RequestInit): Promise<T> => {
     const res = await fetch(API + path, {
@@ -98,6 +109,9 @@ export default function AdminPage() {
         call<Economy>('/admin/economy?hours=168'),
       ]);
       setOv(o); setPlayers(p.players); setRuns(r.runs); setEco(e);
+      call<{ tickets: TicketRow[] }>(`/admin/tickets?status=${ticketFilter}`)
+        .then((t) => setTickets(t.tickets))
+        .catch(() => { /* talepler süs; panelin geri kalanını bozmasın */ });
       sessionStorage.setItem(K_SECRET, secret);
       setAuthed(true);
     } catch (e) {
@@ -297,6 +311,125 @@ export default function AdminPage() {
             </tr>
           ))}
         </Table>
+      </section>
+
+      {/* ── DESTEK TALEPLERİ ──
+          ⚠️ Cevap yazmak tüm paneli yenilemiyor, sadece o talebi
+          güncelliyor: 50 satırlık oyuncu/koşu listesini her mesajda
+          yeniden çekmek paneli kullanılmaz yapardı. */}
+      <section style={{ marginBottom: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 15, color: C.bone }}>
+            Destek talepleri
+          </h2>
+          {['open', 'answered', 'all'].map((f) => (
+            <button key={f} onClick={() => {
+              setTicketFilter(f);
+              call<{ tickets: TicketRow[] }>(`/admin/tickets?status=${f}`)
+                .then((t) => setTickets(t.tickets)).catch(() => setTickets([]));
+            }}
+              style={{
+                all: 'unset', cursor: 'pointer', padding: '3px 10px', borderRadius: 5,
+                fontSize: 11, fontWeight: 900,
+                color: ticketFilter === f ? '#1a0508' : C.boneFaint,
+                background: ticketFilter === f ? C.candle : 'rgba(255,255,255,0.06)',
+              }}>
+              {f}
+            </button>
+          ))}
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: C.boneFaint }}>
+            {tickets.length} talep
+          </span>
+        </div>
+
+        {tickets.length === 0 ? (
+          <div style={{ fontSize: 12, color: C.boneFaint }}>Bu filtrede talep yok.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {tickets.map((t) => (
+              <div key={t.id} style={{
+                borderRadius: 8, padding: '10px 12px',
+                border: `1px solid ${t.status === 'open' ? `${C.candle}55` : 'rgba(255,255,255,0.10)'}`,
+                background: 'rgba(255,255,255,0.03)',
+              }}>
+                <div style={{ display: 'flex', gap: 9, alignItems: 'baseline', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: C.bone }}>{t.subject}</span>
+                  <span style={{ fontSize: 10, fontWeight: 900,
+                    color: t.status === 'open' ? C.candle : C.boneFaint }}>
+                    {t.status.toUpperCase()}
+                  </span>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: C.boneFaint }}>
+                    {new Date(t.bumpedAt).toLocaleString('tr-TR')}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5,
+                  maxHeight: 230, overflowY: 'auto', marginBottom: 8 }}>
+                  {t.messages.map((m, i) => (
+                    <div key={i} style={{
+                      alignSelf: m.fromAdmin ? 'flex-end' : 'flex-start', maxWidth: '85%',
+                      padding: '6px 9px', borderRadius: 7, fontSize: 12, lineHeight: 1.5,
+                      whiteSpace: 'pre-wrap',
+                      color: C.bone,
+                      background: m.fromAdmin ? 'rgba(239,167,46,0.14)' : 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${m.fromAdmin ? `${C.candle}44` : 'rgba(255,255,255,0.09)'}`,
+                    }}>
+                      <span style={{ display: 'block', fontSize: 9, fontWeight: 900,
+                        letterSpacing: 1, color: m.fromAdmin ? C.candle : C.boneFaint,
+                        marginBottom: 2 }}>
+                        {m.fromAdmin ? 'SEN' : 'OYUNCU'} · {new Date(m.at).toLocaleString('tr-TR')}
+                      </span>
+                      {m.body}
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    value={ticketDraft[t.id] ?? ''}
+                    onChange={(e) => setTicketDraft((d) => ({ ...d, [t.id]: e.target.value }))}
+                    placeholder="Cevabını yaz…"
+                    style={{
+                      flex: 1, minWidth: 0, padding: '6px 9px', borderRadius: 6,
+                      border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.35)',
+                      color: C.bone, fontFamily: FONT.ui, fontSize: 12, outline: 'none',
+                    }} />
+                  <button
+                    disabled={(ticketDraft[t.id] ?? '').trim().length < 2}
+                    onClick={() => {
+                      call<{ ticket: TicketRow }>('/admin/tickets/reply', {
+                        method: 'POST',
+                        body: JSON.stringify({ id: t.id, body: ticketDraft[t.id] }),
+                      }).then((r) => {
+                        setTickets((ts) => ts.map((x) => (x.id === t.id ? r.ticket : x)));
+                        setTicketDraft((d) => ({ ...d, [t.id]: '' }));
+                      }).catch(() => setErr('Cevap gönderilemedi.'));
+                    }}
+                    style={{
+                      all: 'unset', cursor: 'pointer', padding: '6px 13px', borderRadius: 6,
+                      fontSize: 11.5, fontWeight: 900, color: '#1a0508', background: C.candle,
+                    }}>
+                    CEVAPLA
+                  </button>
+                  <button
+                    onClick={() => {
+                      call('/admin/tickets/close', {
+                        method: 'POST', body: JSON.stringify({ id: t.id }),
+                      }).then(() => setTickets((ts) => ts.filter((x) => x.id !== t.id)))
+                        .catch(() => setErr('Kapatılamadı.'));
+                    }}
+                    style={{
+                      all: 'unset', cursor: 'pointer', padding: '6px 11px', borderRadius: 6,
+                      fontSize: 11.5, fontWeight: 900, color: C.boneFaint,
+                      background: 'rgba(255,255,255,0.06)',
+                    }}>
+                    KAPAT
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── OYUNCU DOSYASI ── */}

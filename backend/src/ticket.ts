@@ -14,22 +14,15 @@
 // yanlış cevaplardı.
 
 import crypto from 'node:crypto';
+import { TICKET } from '@game/tickets';
 import { prisma } from './db.js';
+
+export { TICKET };
 
 export class TicketError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
 }
 
-export const TICKET = {
-  /** aynı anda açık kalabilecek talep sayısı */
-  maxOpen: 3,
-  /** iki mesaj arasında geçmesi gereken saniye — spam koruması */
-  cooldownSec: 20,
-  subjectMax: 80,
-  bodyMax: 1200,
-  /** bir talepte biriken en fazla mesaj — sonsuz iplik olmasın */
-  maxMessages: 40,
-} as const;
 
 /**
  * Görünmez/kontrol karakterlerini at, boşlukları sadeleştir.

@@ -609,7 +609,7 @@ export default function PlayPage() {
                 onError={setNote}
               />
             ) : panel === 'settings' ? (
-              <SettingsPanel />
+              <SettingsPanel onError={setNote} />
             ) : panel === 'boss' ? (
               <WorldBossPanel onEnter={beginBoss} />
             ) : panel === 'reliquary' ? (

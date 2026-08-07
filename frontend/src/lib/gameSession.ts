@@ -739,6 +739,34 @@ export interface DuelBoard {
  * tablo puana göre sıralı olduğu için oyuncu doğal olarak en zayıfı seçiyor
  * ve ladder "en kolay hedefi bul" oyununa dönüyordu.
  */
+// ── DESTEK TALEPLERİ ──
+// ⚠️ DEMO MODUNDA YOK: talep cüzdana bağlı, cevaplanacak bir muhatap yok.
+
+export interface TicketView {
+  id: string; subject: string; status: string;
+  createdAt: string; bumpedAt: string;
+  messages: { fromAdmin: boolean; body: string; at: string }[];
+}
+
+export async function fetchTickets(): Promise<TicketView[]> {
+  const { tickets } = await api<{ tickets: TicketView[] }>('/tickets');
+  return tickets;
+}
+
+export async function openTicket(subject: string, body: string): Promise<TicketView> {
+  const { ticket } = await api<{ ticket: TicketView }>('/tickets', {
+    method: 'POST', body: { subject, body },
+  });
+  return ticket;
+}
+
+export async function replyTicket(id: string, body: string): Promise<TicketView> {
+  const { ticket } = await api<{ ticket: TicketView }>('/tickets/reply', {
+    method: 'POST', body: { id, body },
+  });
+  return ticket;
+}
+
 // ── TAKİP (arkadaş listesi) ──
 // ⚠️ Tek yönlü, onay yok — listede görünen her şey zaten sıralamada
 // görünüyor (bkz. backend/follow.ts).

@@ -11,6 +11,7 @@
 // kaybolmuyor — sadece hareket kalkıyor.
 
 import { useCallback, useEffect, useState } from 'react';
+import { TicketSection } from '@/components/TicketSection';
 import { applyFxSettings } from '@/game/fx';
 import { loadSettings, saveSettings, type Settings } from '@/game/settings';
 import { setVolume } from '@/game/sfx';
@@ -58,7 +59,7 @@ function Toggle({ label, hint, on, onChange }: {
   );
 }
 
-export function SettingsPanel() {
+export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
   const [s, setS] = useState<Settings | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -164,6 +165,11 @@ export function SettingsPanel() {
             fontSize: 11, color: C.ice }}>{flash}</div>
         )}
       </Card>
+
+      {/* ⚠️ DESTEK AYARLARIN İÇİNDE (kullanıcının kararı). Rıhtımda kendi
+          düğmesini hak edecek kadar sık kullanılmıyor; oraya konsaydı
+          diğer sekmeleri seyreltirdi. */}
+      <TicketSection onError={onError} />
 
       <CardSection label="WHERE THESE LIVE">
         <span style={{ fontSize: 11, color: C.boneFaint, lineHeight: 1.5 }}>

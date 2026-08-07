@@ -43,6 +43,10 @@ import { arenaStats, attachArena, joinQueue, leaveQueue } from './arena.js';
 import { pvpAwards, pvpBoard, settlePvpSeasons } from './pvpSeason.js';
 import { QuestError, claimQuest, listQuests, trackQuest } from './quests.js';
 import { FollowError, follow, listFollows, unfollow } from './follow.js';
+import {
+  TicketError, adminList as ticketAdminList, closeTicket, myTickets, openTicket,
+  openTicketCount, reply as ticketReply,
+} from './ticket.js';
 import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
@@ -105,7 +109,7 @@ for (const yol of [
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
   '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start', '/duel/find',
-  '/arena/queue', '/quests/claim', '/follow',
+  '/arena/queue', '/quests/claim', '/follow', '/tickets', '/tickets/reply',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -1148,6 +1152,60 @@ app.post('/duel/start', wrap(async (req, res) => {
     startDepth: 1, ascension: 0, guildGrowth, gear, skills,
     duel: { defender: ch.defender, target: ch.targetDepth, stageId: ch.stageId },
   });
+}));
+
+// ── DESTEK TALEPLERİ ──
+//
+// ⚠️ Oyuncu tarafı OTURUM jetonuyla, admin tarafı `x-admin-secret` ile.
+// İkisini tek uçta birleştirmek, "admin miyim" sorusunu her istekte
+// yeniden sormak demekti; ayrı uçlar yetkiyi yolun kendisine yazıyor.
+app.get('/tickets', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json({ tickets: await myTickets(wallet) });
+}));
+
+app.post('/tickets', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    res.json({ ticket: await openTicket(wallet, req.body?.subject, req.body?.body) });
+  } catch (e) {
+    if (e instanceof TicketError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/tickets/reply', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    // ⚠️ `asAdmin` GÖNDERİLMİYOR: istemcinin kendini admin ilan edebileceği
+    // tek yer burası olurdu.
+    res.json({ ticket: await ticketReply(req.body?.id, req.body?.body, { wallet }) });
+  } catch (e) {
+    if (e instanceof TicketError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.get('/admin/tickets', adminOnly, wrap(async (req, res) => {
+  const status = typeof req.query?.status === 'string' ? req.query.status : 'open';
+  res.json({ tickets: await ticketAdminList(status), open: await openTicketCount() });
+}));
+
+app.post('/admin/tickets/reply', adminOnly, wrap(async (req, res) => {
+  try {
+    res.json({ ticket: await ticketReply(req.body?.id, req.body?.body, { asAdmin: true }) });
+  } catch (e) {
+    if (e instanceof TicketError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/admin/tickets/close', adminOnly, wrap(async (req, res) => {
+  await closeTicket(req.body?.id);
+  res.json({ ok: true });
 }));
 
 // ── TAKİP (arkadaş listesi) ──
