@@ -40,6 +40,7 @@ import { profileOf } from './profile.js';
 import { bossState, contribute } from './worldBoss.js';
 import { attachPresence, presenceCount } from './presence.js';
 import { arenaStats, attachArena, joinQueue, leaveQueue } from './arena.js';
+import { pvpAwards, pvpBoard, settlePvpSeasons } from './pvpSeason.js';
 import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
@@ -1138,6 +1139,21 @@ app.post('/duel/start', wrap(async (req, res) => {
     startDepth: 1, ascension: 0, guildGrowth, gear, skills,
     duel: { defender: ch.defender, target: ch.targetDepth, stageId: ch.stageId },
   });
+}));
+
+// ── PvP SEZONU ──
+//
+// ⚠️ Bu istek YAN ETKİLİ: kapanmayı bekleyen haftalar burada kapatılıyor
+// (cron yok — uyuyan sunucuda arka plan işi çalışmaz). "Tabloyu aç" aynı
+// zamanda "geçen sezonu kapat" demek. Tekrarlanabilir ve zararsız.
+app.get('/pvp/season', wrap(async (req, res) => {
+  const wallet = auth(req);
+  await settlePvpSeasons();
+  const [board, awards] = await Promise.all([
+    pvpBoard(wallet),
+    wallet ? pvpAwards(wallet) : Promise.resolve([]),
+  ]);
+  res.json({ ...board, awards });
 }));
 
 // ── ARENA (gerçek zamanlı 1v1) ──

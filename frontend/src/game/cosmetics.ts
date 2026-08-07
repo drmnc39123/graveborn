@@ -160,6 +160,10 @@ export const COSMETICS: readonly CosmeticDef[] = [
   // gold basan olur ve musluk beceriyle birlikte üssel büyür. Ödül tozla
   // ödeniyor: toz sadece kozmetik alır, ekonomiye sızmaz.
   { ...T('t_deepest', 'Deepest of the Week', 'legendary', 'For one week, no one went further down.'), source: 'earned' },
+  // ⚠️ `source: 'earned'` — PvP sezonunun zirve unvanı SATIN ALINAMAZ.
+  // Reliquary havuzuna girseydi tırmanmanın tek görünür ödülü, gold'u olan
+  // herkesin çekebileceği bir şeye dönerdi.
+  { ...T('t_undying', 'the Undying', 'legendary', 'First on the ladder when a season closed. Nobody sold you this.'), source: 'earned' },
   { ...P('p_season', 'Vigil Silver', 'epic', '#d8e0e8', '#6d7a86', 'Second and third place still had to walk down there.'), source: 'earned' },
   { ...R('r_wreath', 'Barrow Wreath', 'rare', 'spr_crown_strip5', 5, 'Cut for the top ten of a week that has since ended.'), source: 'earned' },
 ] as const;

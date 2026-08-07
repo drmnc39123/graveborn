@@ -81,6 +81,15 @@ model Player {
   /// sayısı GÜNLÜK sınırlı olmasa oyuncu başına sınırsız toz olurdu.
   duelDay      String @default("")
   duelRewarded Int    @default(0)
+  /// ⚠️ PUANIN AİT OLDUĞU HAFTA. Sezon kapanınca `duelRating` YUMUŞAK
+  /// sıfırlanıyor; bu alan olmadan hangi puanın hangi sezona ait olduğu
+  /// bilinemez ve kapanış tekrar çalışınca ikinci kez sıfırlardı.
+  duelWeek     Int    @default(0)
+  /// bu sezonda oynanan maç sayısı — YERLEŞİM ŞARTI (bkz. pvpSeason.ts)
+  duelMatches  Int    @default(0)
+  /// ⚠️ ÖMÜR BOYU EN YÜKSEK PUAN. Sezon sıfırlaması kimliği silmemeli;
+  /// "bir zamanlar 1800'dün" bilgisi kaybolursa sıfırlama ceza gibi gelir.
+  duelPeak     Int    @default(1000)
 
   /// admin kararı — banlı oyuncu koşu başlatamaz
   banned Boolean @default(false)
@@ -126,6 +135,7 @@ model Player {
   runs     Run[]
   listings Listing[]
   awards   SeasonAward[]
+  pvpAwards PvpAward[]
   gear     GearItem[]
   records  DuelRecord[]
 
@@ -357,6 +367,36 @@ model SeasonClose {
   settledAt DateTime @default(now())
   /// kaç oyuncu ödül aldı
   winners   Int      @default(0)
+}
+
+/// PvP sezonunun kapanış mührü.
+///
+/// ⚠️ `SeasonClose` ile AYNI TABLO DEĞİL ve bu kasıtlı: iki sıralama farklı
+/// eksende (derinlik vs. kimi yendiğin) ve farklı haftalarda kapanabilir.
+/// Tek tabloda tutmak, birini kapatınca ötekini de kapanmış saydırırdı.
+model PvpClose {
+  week      Int      @id
+  settledAt DateTime @default(now())
+  winners   Int      @default(0)
+}
+
+/// Bir oyuncunun bir PvP sezonundan aldığı ödül.
+model PvpAward {
+  id        String   @id
+  week      Int
+  wallet    String
+  rank      Int
+  /// sezon sonu puanı — "geçen hafta 1740 ile 3. oldun" diyebilmek için
+  rating    Int      @default(0)
+  cosmetic  String?
+  dust      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  player Player @relation(fields: [wallet], references: [wallet], onDelete: Cascade)
+
+  /// ⚠️ Bir oyuncu bir haftadan EN FAZLA BİR ödül alır — kapanış tekrar
+  /// çalışsa bile ikinci kez ödeme yapılamaz.
+  @@unique([week, wallet])
 }
 
 // Bir oyuncunun bir haftadan aldığı ödül. Oyuncuya "geçen hafta 3. oldun"

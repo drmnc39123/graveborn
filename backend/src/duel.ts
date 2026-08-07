@@ -21,6 +21,7 @@ import { DUEL, duelBlocker, duelWon, nextRatings } from '@game/duel';
 import { challengeRating } from '@game/config';
 import { utcDay } from '@game/progress';
 import { prisma } from './db.js';
+import { markPvpMatch } from './pvpSeason.js';
 
 export class DuelError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
@@ -396,6 +397,10 @@ export async function settleDuel(
         depth, target, won, delta: dc, dust,
       },
     });
+    // ⚠️ Maç SEZONA işleniyor: yerleşim sayacı ve puanın ait olduğu hafta.
+    // Aynı transaction'da olmak zorunda — ayrı olsaydı puan yazılıp maç
+    // sayılmayan kayıtlar doğardı ve yerleşim şartı delinirdi.
+    await markPvpMatch(tx, [challenger, defender]);
   });
 
   const son = await prisma.player.findUniqueOrThrow({

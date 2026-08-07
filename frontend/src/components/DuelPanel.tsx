@@ -14,7 +14,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { DUEL, duelTier } from '@/game/duel';
 import { stageById } from '@/game/config';
 import { heroById } from '@/game/heroes';
-import { fetchDuels, findDuel, type DuelBoard, type DuelLadderRow, type DuelRow } from '@/lib/gameSession';
+import { fetchDuels, fetchPvpSeason, findDuel, type DuelBoard, type DuelRow, type PvpSeasonRow, type PvpSeasonState } from '@/lib/gameSession';
+import { PVP_PAYOUT_DEPTH, pvpReward } from '@/game/pvpSeason';
 import { DuelBriefing } from '@/components/DuelBriefing';
 import { getMode, getWallet } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
@@ -40,12 +41,17 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
   const [brifing, setBrifing] = useState<DuelRow | null>(null);
   const [wallet, setWallet] = useState('');
   const [araniyor, setAraniyor] = useState(false);
+  const [sezon, setSezon] = useState<PvpSeasonState | null>(null);
   useEffect(() => { setWallet(getWallet() ?? ''); }, []);
 
   const yukle = useCallback(() => {
     fetchDuels().then(setBoard).catch(() => setErr(true));
   }, []);
   useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => {
+    if (getMode() !== 'wallet') return;
+    fetchPvpSeason().then(setSezon).catch(() => { /* sezon süs, panel çalışmaya devam eder */ });
+  }, []);
 
   if (getMode() !== 'wallet') {
     return (
@@ -117,29 +123,59 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
         </span>
       </button>
 
-      {/* ── SIRALAMA — KENDİ KARTINDA ──
+      {/* ── SEZON SIRALAMASI — KENDİ KARTINDA ──
           ⚠️ Koşu tablosundan AYRI. Düellonun puanı bambaşka bir eksende
           (derinlik değil, kimi yendiğin); ikisini aynı listede göstermek
-          iki farklı başarıyı tek sayıya indirirdi. */}
-      <CardSection label="Standings" tone={C.candle}>
-        {board.ladder.rows.length === 0 ? (
-          <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.55 }}>
-            Nobody has fought yet. The first duel writes the first name here.
-          </div>
+          iki farklı başarıyı tek sayıya indirirdi.
+          ⚠️ SEZONLUK. Puan sonsuza kadar birikseydi ilk ay tırmanan
+          kilitlenir, sonradan gelen asla yetişemezdi — ikisi de bırakırdı. */}
+      <CardSection label={sezon ? `This season — ends weekly` : 'Standings'} tone={C.candle}>
+        {!sezon ? (
+          <div style={{ fontSize: 11.5, color: C.boneDim }}>Reading the ladder…</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {board.ladder.rows.map((r) => (
-              <Ladder key={r.wallet} row={r} me={r.wallet === wallet} />
-            ))}
-            {/* ⚠️ Tablonun dışındaysam SIRAM YİNE GÖRÜNMELİ — "listede
-                yoksun" demek, tırmanmak için sebep bırakmaz. */}
-            {board.ladder.me && !board.ladder.rows.some((r) => r.wallet === wallet) && (
-              <>
-                <div style={{ textAlign: 'center', fontSize: 11, color: C.boneFaint, padding: '2px 0' }}>···</div>
-                <Ladder row={board.ladder.me} me />
-              </>
+          <>
+            {/* ⚠️ YERLEŞİM DURUMU EN ÜSTTE. Oyuncu tabloda kendini
+                bulamayınca "bozuk" sanıyor; kaç maç kaldığı YAZILI olmalı. */}
+            {sezon.me && sezon.me.rank === 0 && (
+              <div style={{ marginBottom: 7, padding: '8px 10px', borderRadius: 7,
+                background: 'rgba(239,167,46,0.12)', border: `1px solid ${C.candle}44`,
+                fontSize: 11.5, color: C.candleSoft, lineHeight: 1.5 }}>
+                {sezon.placement - sezon.me.matches} more {sezon.placement - sezon.me.matches > 1 ? 'matches' : 'match'} to
+                enter the ladder — {sezon.me.matches}/{sezon.placement} played.
+              </div>
             )}
-          </div>
+            {sezon.rows.length === 0 ? (
+              <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.55 }}>
+                Nobody has placed this season yet. {sezon.placement} matches puts your
+                name here.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {sezon.rows.map((r) => (
+                  <Ladder key={r.wallet} row={r} me={r.wallet === wallet} />
+                ))}
+                {sezon.me && sezon.me.rank > 0
+                  && !sezon.rows.some((r) => r.wallet === wallet) && (
+                  <>
+                    <div style={{ textAlign: 'center', fontSize: 11, color: C.boneFaint }}>···</div>
+                    <Ladder row={sezon.me} me />
+                  </>
+                )}
+              </div>
+            )}
+            {/* ⚠️ ÖDÜLÜN NE OLDUĞU GÖRÜNMELİ — görünmeyen ödül, olmayan ödüldür */}
+            <div style={{ marginTop: 7, fontSize: 11, color: C.boneFaint, lineHeight: 1.5 }}>
+              Top {PVP_PAYOUT_DEPTH} take dust when the season closes; first place
+              also takes <b style={{ color: C.candle }}>the Undying</b> — a title the
+              Reliquary never sells. Ratings then settle back toward the middle.
+            </div>
+            {sezon.awards.length > 0 && (
+              <div style={{ marginTop: 6, fontSize: 11, color: C.boneDim }}>
+                Last season you finished <b style={{ color: C.candle }}>#{sezon.awards[0].rank}</b>
+                {' '}(+{sezon.awards[0].dust} dust).
+              </div>
+            )}
+          </>
         )}
       </CardSection>
 
@@ -248,7 +284,7 @@ function Row({ row, onChallenge, onError }: {
   );
 }
 
-function Ladder({ row, me }: { row: DuelLadderRow; me: boolean }) {
+function Ladder({ row, me }: { row: PvpSeasonRow; me: boolean }) {
   const t = duelTier(row.rating);
   return (
     <div style={{
@@ -260,6 +296,10 @@ function Ladder({ row, me }: { row: DuelLadderRow; me: boolean }) {
         color: row.rank <= 3 ? C.candle : C.boneFaint }}>
         {row.rank}
       </span>
+      {/* Ödül alan sıralar işaretli — tırmanmanın nerede bittiği görünsün */}
+      {row.rank <= PVP_PAYOUT_DEPTH && pvpReward(row.rank) && (
+        <span style={{ width: 5, height: 5, borderRadius: 3, background: C.candle, flexShrink: 0 }} />
+      )}
       <span style={{ minWidth: 0, flex: 1, fontSize: 11.5, fontWeight: me ? 900 : 700,
         color: me ? C.candle : C.bone, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {me ? 'You' : kisa(row.wallet)}

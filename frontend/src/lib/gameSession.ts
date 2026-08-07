@@ -739,6 +739,30 @@ export interface DuelBoard {
  * tablo puana göre sıralı olduğu için oyuncu doğal olarak en zayıfı seçiyor
  * ve ladder "en kolay hedefi bul" oyununa dönüyordu.
  */
+// ── PvP SEZONU ──
+// ⚠️ Bu istek YAN ETKİLİ: sunucu kapanmayı bekleyen haftaları burada
+// kapatıyor (cron yok). "Tabloyu aç" aynı zamanda "geçen sezonu kapat"
+// demek — tekrarlanabilir ve zararsız.
+
+export interface PvpSeasonRow {
+  rank: number; wallet: string; rating: number;
+  wins: number; losses: number; matches: number; hero: string;
+}
+
+export interface PvpSeasonState {
+  week: number;
+  rows: PvpSeasonRow[];
+  /** sıram — `rank: 0` = henüz yerleşmedim */
+  me: PvpSeasonRow | null;
+  /** sıralamaya girmek için gereken maç sayısı */
+  placement: number;
+  awards: { week: number; rank: number; rating: number; cosmetic: string | null; dust: number }[];
+}
+
+export async function fetchPvpSeason(): Promise<PvpSeasonState> {
+  return api<PvpSeasonState>('/pvp/season');
+}
+
 export async function findDuel(): Promise<DuelRow> {
   const { match } = await api<{ match: DuelRow }>('/duel/find', { method: 'POST', body: {} });
   return match;
