@@ -75,6 +75,15 @@ type Payout = {
   wilderness: Settled['wilderness'];
   /** düello koşusuysa: kazandı mı, puan nasıl değişti */
   duel: Settled['duel'];
+  /**
+   * Bu koşuda bölüm temizlendi mi.
+   *
+   * ⚠️ OLMADAN İLK ÖLÜM MESAJI YANLIŞTI ve ölçüldü: kampanyada 0 gold'un
+   * TEK açıklaması "zaten aldın" sanılıyordu. İlk koşusunda ölen yeni
+   * oyuncuya "already claimed — replay pays nothing" deniyordu — hiçbir şey
+   * almamışken. Bir oyuncunun göreceği en kötü ilk mesaj.
+   */
+  cleared: boolean;
 };
 
 export default function PlayPage() {
@@ -198,7 +207,7 @@ export default function PlayPage() {
           // ⚠️ Çeşit BİLETTEN okunur, `run.mode`'dan DEĞİL: motor Wilderness'ı
           // descent olarak çalıştırıyor, yani `run.mode` her zaman 'descent'
           // döner ve döküm yanlış ekranı gösterirdi.
-          mode: kind, deepestCleared: run.deepestCleared,
+          mode: kind, deepestCleared: run.deepestCleared, cleared: run.cleared,
           progressGold: r.progressGold, dropGold: r.dropGold, paidRange: r.paidRange,
           wager: r.wager, wilderness: r.wilderness ?? null, duel: r.duel ?? null,
         });
@@ -517,14 +526,21 @@ export default function PlayPage() {
                   ? `New depths ${payout.paidRange.from + 1}–${payout.paidRange.to}`
                   : payout.mode === 'descent'
                     ? (payout.deepestCleared === 0 ? 'No depth cleared' : 'No new depths')
-                    : 'First clear'}
+                    // ⚠️ ÜÇ AYRI DURUM, ÜÇ AYRI CÜMLE. Kampanyada 0 gold'un
+                    // iki sebebi var ve ikisi bambaşka: ya bölümü BİTİREMEDİN
+                    // ya da ilk-geçiş ödülünü DAHA ÖNCE aldın. Tek cümleye
+                    // indirmek, ilk koşusunda ölen yeni oyuncuya "zaten
+                    // aldın" dedirtiyordu.
+                    : payout.cleared ? 'First clear' : 'Stage unfinished'}
                 value={payout.progressGold}
                 hint={payout.progressGold > 0 ? undefined
                   : payout.mode === 'descent'
                     ? (payout.deepestCleared === 0
                         ? 'you left before clearing depth 1'
                         : 'you have been this deep before — go deeper')
-                    : 'already claimed — replay pays nothing'}
+                    : payout.cleared
+                      ? 'already claimed — replay pays nothing'
+                      : 'the stage pays when you finish it — try again'}
               />
               <Row label="Rare finds" value={payout.dropGold} hint={payout.dropGold === 0 ? 'nothing dropped this run' : undefined} />
             </div>
