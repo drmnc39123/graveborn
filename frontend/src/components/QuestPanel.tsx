@@ -150,6 +150,7 @@ export function QuestPanel({ onChange, onError }: {
       <div style={{ marginTop: 10, fontSize: 11, color: C.boneFaint, lineHeight: 1.55 }}>
         Daily work pays dust, never gold — the same rule the wager, the barrow
         and the ladder follow. At most {st.ceiling} dust a day.
+        {' '}Harder work appears as you go deeper.
       </div>
     </>
   );

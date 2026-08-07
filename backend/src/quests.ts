@@ -13,13 +13,24 @@
 
 import {
   QUESTS, dayDustCeiling, questAccumulate, questById, questDone, questsFor,
-  type QuestKind,
+  type QuestKind, type QuestProfile,
 } from '@game/quests';
-import { utcDay } from '@game/progress';
-import { prisma } from './db.js';
+import { STAGES } from '@game/config';
+import { paidDepth, utcDay, type Progress } from '@game/progress';
+import { prisma, toProgress } from './db.js';
 
 interface QuestState {
   day: string;
+  /**
+   * ⚠️ GÜNÜN GÖREVLERİ DONDURULUYOR.
+   *
+   * Havuz oyuncunun derinliğine göre süzülüyor (bkz. QuestDef.minDepth) ve
+   * derinlik GÜN İÇİNDE değişebiliyor. Her okumada yeniden hesaplasaydık,
+   * oyuncu öğlen derinleştiği anda sabahki görevleri listeden düşerdi:
+   * aldığı ödüller kaybolur, yarım kalan ilerleme silinirdi. Set bir kez
+   * seçiliyor ve gün boyunca sabit kalıyor.
+   */
+  ids: string[];
   progress: Record<string, number>;
   claimed: string[];
   /** üçünü de bitirme bonusu alındı mı */
@@ -27,7 +38,15 @@ interface QuestState {
 }
 
 function bosDurum(day: string): QuestState {
-  return { day, progress: {}, claimed: [], bonus: false };
+  return { day, ids: [], progress: {}, claimed: [], bonus: false };
+}
+
+/** Havuzu belirleyen durum — SUNUCUDAN, istemciden değil */
+function profil(p: Progress): QuestProfile {
+  return {
+    deepestDepth: STAGES.reduce((m, st) => Math.max(m, paidDepth(p, st.id)), 0),
+    cleared: Object.values(p.cleared ?? {}).some(Boolean),
+  };
 }
 
 /**
@@ -38,12 +57,17 @@ function bosDurum(day: string): QuestState {
  * Aksi hâlde kayda "claimed: [hepsi]" yazmak ödülleri tekrar almanın yolu
  * olurdu.
  */
-function oku(raw: unknown, wallet: string, day: string): QuestState {
-  if (!raw || typeof raw !== 'object') return bosDurum(day);
-  const s = raw as Partial<QuestState>;
-  if (s.day !== day) return bosDurum(day);
+function oku(raw: unknown, wallet: string, day: string, p: QuestProfile): QuestState {
+  const s = (raw && typeof raw === 'object' ? raw : {}) as Partial<QuestState>;
+  const yeniGun = s.day !== day;
+  // ⚠️ Set YALNIZCA gün başında ya da kayıt bozuksa seçiliyor — bkz. `ids`
+  const ids = !yeniGun && Array.isArray(s.ids) && s.ids.length > 0
+    && s.ids.every((x) => typeof x === 'string' && questById(x))
+    ? s.ids
+    : questsFor(wallet, day, p).map((q) => q.id);
+  if (yeniGun) return { ...bosDurum(day), ids };
 
-  const bugun = new Set(questsFor(wallet, day).map((q) => q.id));
+  const bugun = new Set(ids);
   const progress: Record<string, number> = {};
   for (const [k, v] of Object.entries(s.progress ?? {})) {
     if (!bugun.has(k)) continue;
@@ -53,7 +77,7 @@ function oku(raw: unknown, wallet: string, day: string): QuestState {
   const claimed = Array.isArray(s.claimed)
     ? s.claimed.filter((x): x is string => typeof x === 'string' && bugun.has(x))
     : [];
-  return { day, progress, claimed, bonus: s.bonus === true };
+  return { day, ids, progress, claimed, bonus: s.bonus === true };
 }
 
 export interface QuestView {
@@ -70,13 +94,27 @@ export interface QuestView {
 
 export async function listQuests(wallet: string, now = new Date()): Promise<QuestView> {
   const day = utcDay(now);
-  const p = await prisma.player.findUnique({ where: { wallet }, select: { quests: true } });
-  const st = oku(p?.quests, wallet, day);
-  return goruntule(wallet, day, st);
+  const row = await prisma.player.findUnique({ where: { wallet } });
+  if (!row) throw new QuestError('oyuncu_yok', 404);
+  const st = oku(row.quests, wallet, day, profil(toProgress(row)));
+  // ⚠️ Seçilen set HEMEN yazılıyor: yoksa oyuncu paneli açtıktan sonra
+  // derinleşirse bir sonraki okumada başka görevler görürdü.
+  await yaz(wallet, row.quests, st);
+  return goruntule(day, st);
 }
 
-function goruntule(wallet: string, day: string, st: QuestState): QuestView {
-  const liste = questsFor(wallet, day).map((q) => {
+/** Durumu KOŞULLU yaz — araya giren bir isteği ezmesin */
+async function yaz(wallet: string, onceki: unknown, st: QuestState): Promise<boolean> {
+  if (JSON.stringify(onceki ?? {}) === JSON.stringify(st)) return true;
+  const hit = await prisma.player.updateMany({
+    where: { wallet, quests: { equals: (onceki ?? {}) as object } },
+    data: { quests: st as unknown as object },
+  });
+  return hit.count > 0;
+}
+
+function goruntule(day: string, st: QuestState): QuestView {
+  const liste = st.ids.map((id) => questById(id)).filter((q): q is NonNullable<typeof q> => !!q).map((q) => {
     const ilerleme = st.progress[q.id] ?? 0;
     return {
       id: q.id, text: q.text, goal: q.goal, dust: q.dust,
@@ -95,7 +133,7 @@ function goruntule(wallet: string, day: string, st: QuestState): QuestView {
       ready: liste.every((q) => q.claimed),
       claimed: st.bonus,
     },
-    ceiling: dayDustCeiling(wallet, day),
+    ceiling: dayDustCeiling(st.ids),
   };
 }
 
@@ -115,9 +153,11 @@ export async function trackQuest(
   if (amount <= 0) return;
   try {
     const day = utcDay(now);
-    const p = await prisma.player.findUnique({ where: { wallet }, select: { quests: true } });
-    const st = oku(p?.quests, wallet, day);
-    const bugun = questsFor(wallet, day).filter((q) => q.kind === kind);
+    const row = await prisma.player.findUnique({ where: { wallet } });
+    if (!row) return;
+    const st = oku(row.quests, wallet, day, profil(toProgress(row)));
+    const bugun = st.ids.map((id) => questById(id))
+      .filter((q): q is NonNullable<typeof q> => !!q && q.kind === kind);
     if (bugun.length === 0) return;
 
     let degisti = false;
@@ -126,7 +166,7 @@ export async function trackQuest(
       if (yeni !== (st.progress[q.id] ?? 0)) { st.progress[q.id] = yeni; degisti = true; }
     }
     if (!degisti) return;
-    await prisma.player.update({ where: { wallet }, data: { quests: st as unknown as object } });
+    await yaz(wallet, row.quests, st);
   } catch (e) {
     console.warn('[gorev] islenemedi', wallet, kind, e);
   }
@@ -147,15 +187,13 @@ export async function claimQuest(
   wallet: string, questId: unknown, now = new Date(),
 ): Promise<{ view: QuestView; dust: number }> {
   const day = utcDay(now);
-  const p = await prisma.player.findUnique({
-    where: { wallet }, select: { quests: true, banned: true },
-  });
-  if (!p || p.banned) throw new QuestError('yasakli', 403);
-  const st = oku(p.quests, wallet, day);
+  const row = await prisma.player.findUnique({ where: { wallet } });
+  if (!row || row.banned) throw new QuestError('yasakli', 403);
+  const st = oku(row.quests, wallet, day, profil(toProgress(row)));
 
   let toz = 0;
   if (questId === '__bonus') {
-    const gorunum = goruntule(wallet, day, st);
+    const gorunum = goruntule(day, st);
     if (!gorunum.bonus.ready) throw new QuestError('bonus_hazir_degil');
     if (st.bonus) throw new QuestError('zaten_alindi');
     st.bonus = true;
@@ -165,7 +203,7 @@ export async function claimQuest(
     const q = questById(questId);
     if (!q) throw new QuestError('gecersiz_gorev');
     // ⚠️ BUGÜNÜN görevi mi — dünkü bir id ile ödül alınamamalı
-    if (!questsFor(wallet, day).some((x) => x.id === questId)) throw new QuestError('bugunun_gorevi_degil');
+    if (!st.ids.includes(questId)) throw new QuestError('bugunun_gorevi_degil');
     if (st.claimed.includes(questId)) throw new QuestError('zaten_alindi');
     if (!questDone(q, st.progress[questId] ?? 0)) throw new QuestError('tamamlanmadi');
     st.claimed.push(questId);
@@ -175,10 +213,10 @@ export async function claimQuest(
   // ⚠️ KOŞULLU YAZMA: araya giren bir istek aynı ödülü almış olabilir.
   // `quests` alanı okuduğumuzdan farklıysa yazma düşer ve ödül tekrarlanmaz.
   const hit = await prisma.player.updateMany({
-    where: { wallet, quests: { equals: (p.quests ?? {}) as object } },
+    where: { wallet, quests: { equals: (row.quests ?? {}) as object } },
     data: { quests: st as unknown as object, dust: { increment: toz } },
   });
   if (hit.count === 0) throw new QuestError('es_zamanli_degisim', 409);
 
-  return { view: goruntule(wallet, day, st), dust: toz };
+  return { view: goruntule(day, st), dust: toz };
 }

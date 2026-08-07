@@ -10,7 +10,15 @@
 //
 // Çalıştır:  npx tsx src/quests.test.mts
 
-import { QUESTS, questAccumulate, questsFor, dayDustCeiling } from '@game/quests';
+import { QUESTS, QUEST_POOL, questAccumulate, questsFor, dayDustCeiling } from '@game/quests';
+
+/**
+ * ⚠️ GÖREV HAVUZU ARTIK OYUNCUYA GÖRE SÜZÜLÜYOR (bkz. QuestDef.minDepth).
+ * Testin profili açıkça vermesi ŞART: varsayılan bir profil koymak, 1. gün
+ * hatasını testin gözünden kaçırırdı — zaten öyle kaçmıştı.
+ */
+const DENEYIMLI = { deepestDepth: 40, cleared: true };
+const YENI = { deepestDepth: 0, cleared: false };
 import { utcDay } from '@game/progress';
 import { prisma } from './db.js';
 import { claimQuest, listQuests, trackQuest } from './quests.js';
@@ -26,24 +34,33 @@ const w = (n: number) => `${P}_${n}`;
 const get = (n: number) => prisma.player.findUniqueOrThrow({ where: { wallet: w(n) } });
 const BUGUN = utcDay(new Date());
 
-await prisma.player.createMany({ data: [0, 1].map((n) => ({ wallet: w(n), gold: 100_000 })) });
+// ⚠️ Test oyuncuları GERÇEKTEN deneyimli olmalı: sunucu havuzu KAYITTAKİ
+// derinlikten süzüyor, testin `DENEYIMLI` sabitinden değil. Kurulum eksik
+// kalsaydı sunucu başlangıç görevlerini dondurur ve testin beklentileriyle
+// ayrışırdı.
+await prisma.player.createMany({
+  data: [0, 1].map((n) => ({
+    wallet: w(n), gold: 100_000,
+    depthPaid: { '1': 40 }, cleared: { '1': true },
+  })),
+});
 
 console.log('\n═══ GÜNLÜK GÖREVLER ═══');
 
 console.log('\n[1] Görevler TÜRETİLİYOR, saklanmıyor');
 {
-  const a = questsFor(w(0), BUGUN);
-  const b = questsFor(w(0), BUGUN);
+  const a = questsFor(w(0), BUGUN, DENEYIMLI);
+  const b = questsFor(w(0), BUGUN, DENEYIMLI);
   check('aynı cüzdan + aynı gün → AYNI görevler',
     a.map((q) => q.id).join() === b.map((q) => q.id).join(), a.map((q) => q.id).join(', '));
   check('günde 3 görev', a.length === QUESTS.perDay, `${a.length}`);
 
-  const c = questsFor(w(1), BUGUN);
+  const c = questsFor(w(1), BUGUN, DENEYIMLI);
   check('farklı cüzdan farklı görev alabiliyor',
     a.map((q) => q.id).join() !== c.map((q) => q.id).join()
     || true, c.map((q) => q.id).join(', '));
 
-  const d = questsFor(w(0), '2020-01-01');
+  const d = questsFor(w(0), '2020-01-01', DENEYIMLI);
   check('farklı gün farklı görevler', a.map((q) => q.id).join() !== d.map((q) => q.id).join());
 
   // ⚠️ AYNI TÜRDEN İKİ GÖREV DÜŞMEMELİ — "2 koşu" ile "4 koşu" aynı gün
@@ -52,9 +69,30 @@ console.log('\n[1] Görevler TÜRETİLİYOR, saklanmıyor');
   check('aynı türden iki görev YOK', new Set(turler).size === turler.length, turler.join(', '));
 
   // ⚠️ Musluk ölçülebilir olmalı
-  console.log(`     günlük toz tavanı: ${dayDustCeiling(w(0), BUGUN)}`);
-  check('günlük toz tavanı makul', dayDustCeiling(w(0), BUGUN) <= 250,
-    `${dayDustCeiling(w(0), BUGUN)}`);
+  console.log(`     günlük toz tavanı: ${dayDustCeiling(questsFor(w(0), BUGUN, DENEYIMLI).map((q) => q.id))}`);
+  check('günlük toz tavanı makul', dayDustCeiling(questsFor(w(0), BUGUN, DENEYIMLI).map((q) => q.id)) <= 250,
+    `${dayDustCeiling(questsFor(w(0), BUGUN, DENEYIMLI).map((q) => q.id))}`);
+}
+
+console.log('\n[1b] ⭐ 1. GÜN OYUNCUSU — verilen görevler YAPILABİLİR mi');
+{
+  // ⚠️ BU TEST BIR HATAYI YAKALADI. Ölçüldü: sıfırdan bir oyuncuya
+  // "derinlik 10'a in" ve "2.000 gold harca" düşüyordu — cüzdanında 0 gold
+  // vardı ve tek bölüm temizlememişti. Üçünü de yapamaz, bonusa hiç
+  // ulaşamaz ve paneli bir daha açmazdı.
+  const g = questsFor(w(0), BUGUN, YENI);
+  console.log('     yeni oyuncu: ' + g.map((q) => q.text).join(' · '));
+  check('yeni oyuncuya 3 görev veriliyor', g.length === QUESTS.perDay, `${g.length}`);
+  check('hiçbiri derinlik şartı istemiyor', g.every((q) => !q.minDepth));
+  check('hiçbiri temizlenmiş bölüm istemiyor', g.every((q) => !q.needsCleared));
+  const spend = g.find((q) => q.kind === 'spend');
+  check('gold görevi 1. günde ödenebilir', !spend || spend.goal <= 500, `${spend?.goal ?? '-'}`);
+  const depth = g.find((q) => q.kind === 'depth');
+  check('derinlik görevi 1. günde ulaşılabilir', !depth || depth.goal <= 5, `${depth?.goal ?? '-'}`);
+  const zor = questsFor(w(0), BUGUN, DENEYIMLI);
+  check('deneyimliye zor görevler de düşebiliyor',
+    zor.some((q) => (q.minDepth ?? 0) > 0 || q.needsCleared === true),
+    zor.map((q) => q.id).join(', '));
 }
 
 console.log('\n[2] ⭐ `depth` TOPLANMIYOR, en iyisi sayılıyor');
@@ -70,7 +108,7 @@ console.log('\n[2] ⭐ `depth` TOPLANMIYOR, en iyisi sayılıyor');
 
 console.log('\n[3] ⭐ İlerleme ve ödül');
 {
-  const gorevler = questsFor(w(0), BUGUN);
+  const gorevler = questsFor(w(0), BUGUN, DENEYIMLI);
   const hedef = gorevler[0];
   // Görevi tam tamamla
   await trackQuest(w(0), hedef.kind, hedef.goal);
@@ -106,7 +144,7 @@ console.log('\n[3] ⭐ İlerleme ve ödül');
 
 console.log('\n[4] ⭐ Üçünü de bitirince bonus');
 {
-  for (const q of questsFor(w(0), BUGUN)) {
+  for (const q of questsFor(w(0), BUGUN, DENEYIMLI)) {
     await trackQuest(w(0), q.kind, q.goal);
     await claimQuest(w(0), q.id).catch(() => null);
   }
@@ -124,8 +162,8 @@ console.log('\n[4] ⭐ Üçünü de bitirince bonus');
 
   // ⚠️ Günlük tavan aşılmamalı
   const alinan = (await get(0)).dust;
-  check('günün tozu tavanı aşmadı', alinan <= dayDustCeiling(w(0), BUGUN),
-    `${alinan} ≤ ${dayDustCeiling(w(0), BUGUN)}`);
+  check('günün tozu tavanı aşmadı', alinan <= dayDustCeiling(questsFor(w(0), BUGUN, DENEYIMLI).map((q) => q.id)),
+    `${alinan} ≤ ${dayDustCeiling(questsFor(w(0), BUGUN, DENEYIMLI).map((q) => q.id))}`);
 }
 
 console.log('\n[5] ⭐ GÜVENLİK: elle düzenlenmiş kayıt');
@@ -143,14 +181,14 @@ console.log('\n[5] ⭐ GÜVENLİK: elle düzenlenmiş kayıt');
     },
   });
   const v = await listQuests(w(1));
-  const bugun = new Set(questsFor(w(1), BUGUN).map((q) => q.id));
+  const bugun = new Set(questsFor(w(1), BUGUN, DENEYIMLI).map((q) => q.id));
   check('bilinmeyen görev id\'si eleniyor', v.quests.every((q) => bugun.has(q.id)));
   // Bugünün görevi olmayan bir claim geçmemeli
   const sahte = v.quests.filter((q) => q.claimed && !bugun.has(q.id));
   check('bugünün görevi olmayan claim eleniyor', sahte.length === 0);
 
   // ⚠️ Dünkü bir görev id'siyle bugün ödül alınamamalı
-  const dunku = questsFor(w(1), '2020-01-01').find((q) => !bugun.has(q.id));
+  const dunku = questsFor(w(1), '2020-01-01', DENEYIMLI).find((q) => !bugun.has(q.id));
   if (dunku) {
     let gecti = true;
     try { await claimQuest(w(1), dunku.id); } catch { gecti = false; }
@@ -162,6 +200,40 @@ console.log('\n[5] ⭐ GÜVENLİK: elle düzenlenmiş kayıt');
   check('geçersiz id reddediliyor', await red(() => claimQuest(w(1), 'yok_boyle')));
   check('sayı id reddediliyor', await red(() => claimQuest(w(1), 42 as unknown as string)));
   check('null id reddediliyor', await red(() => claimQuest(w(1), null)));
+}
+
+console.log('\n[5b] ⭐ GÜNÜN SETİ DONDURULUYOR');
+{
+  // ⚠️ Havuz derinliğe göre süzülüyor ve derinlik GÜN İÇİNDE değişebiliyor.
+  // Set her okumada yeniden hesaplansaydı, oyuncu öğlen derinleştiği anda
+  // sabahki görevleri listeden düşerdi: aldığı ödüller kaybolur, yarım
+  // kalan ilerleme silinirdi.
+  const taze = `${P}_taze`;
+  await prisma.player.create({ data: { wallet: taze } });
+  const sabah = await listQuests(taze);
+  const sabahIds = sabah.quests.map((q) => q.id).join();
+  console.log(`     sabah (yeni oyuncu): ${sabah.quests.map((q) => q.text).join(' · ')}`);
+
+  // Bir görevi tamamla ve ödülünü al
+  const ilk = sabah.quests[0];
+  const def = QUEST_POOL.find((q) => q.id === ilk.id)!;
+  await trackQuest(taze, def.kind, def.goal);
+  await claimQuest(taze, ilk.id);
+
+  // Oyuncu gün içinde DERİNLEŞTİ — havuz artık çok daha geniş
+  await prisma.player.update({
+    where: { wallet: taze },
+    data: { depthPaid: { '1': 40 }, cleared: { '1': true } },
+  });
+  const oglen = await listQuests(taze);
+  check('görev seti DEĞİŞMEDİ', oglen.quests.map((q) => q.id).join() === sabahIds,
+    oglen.quests.map((q) => q.id).join());
+  check('alınan ödül KAYBOLMADI',
+    oglen.quests.find((q) => q.id === ilk.id)?.claimed === true);
+  check('ilerleme de duruyor',
+    (oglen.quests.find((q) => q.id === ilk.id)?.progress ?? 0) > 0);
+
+  await prisma.player.delete({ where: { wallet: taze } });
 }
 
 console.log('\n[6] Gün değişimi');
@@ -181,7 +253,7 @@ console.log('\n[6] Gün değişimi');
 console.log('\n[7] Eşzamanlı alma');
 {
   await prisma.player.update({ where: { wallet: w(1) }, data: { dust: 0, quests: {} } });
-  const q = questsFor(w(1), BUGUN)[0];
+  const q = questsFor(w(1), BUGUN, DENEYIMLI)[0];
   await trackQuest(w(1), q.kind, q.goal);
   const r = await Promise.all([1, 2, 3, 4].map(() =>
     claimQuest(w(1), q.id).then((x) => x.dust).catch(() => 0)));
