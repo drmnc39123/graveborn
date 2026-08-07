@@ -142,6 +142,7 @@ model Player {
   awards   SeasonAward[]
   pvpAwards PvpAward[]
   follows   Follow[]  @relation("follower")
+  tickets   Ticket[]
   gear     GearItem[]
   records  DuelRecord[]
 
@@ -399,6 +400,43 @@ model Follow {
   /// ⚠️ Aynı kişiyi iki kez takip edememeli — liste kendini tekrarlardı
   @@unique([wallet, target])
   @@index([wallet])
+}
+
+/// DESTEK TALEBİ — oyuncu yazar, admin cevaplar.
+///
+/// ⚠️ İKİ TABLO, TEK KONUŞMA. Mesajları `Ticket` üzerinde tek bir metin
+/// alanında biriktirmek denenmemeli: kimin ne zaman yazdığı kaybolur ve
+/// "admin cevapladı mı" sorusu ancak metni ayrıştırarak cevaplanabilirdi.
+model Ticket {
+  id        String   @id
+  wallet    String
+  player    Player   @relation(fields: [wallet], references: [wallet], onDelete: Cascade)
+  subject   String
+  /// 'open' | 'answered' | 'closed'
+  status    String   @default("open")
+  createdAt DateTime @default(now())
+  /// son mesajın zamanı — admin listesi buna göre sıralanıyor
+  bumpedAt  DateTime @default(now())
+
+  messages TicketMessage[]
+
+  /// ⚠️ Admin listesi "açık olanlar, en son yazılan üstte" diye okunuyor
+  @@index([status, bumpedAt])
+  @@index([wallet, bumpedAt])
+}
+
+model TicketMessage {
+  id       String   @id
+  ticketId String
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  /// ⚠️ Yazarı ROL olarak tutuyoruz, cüzdan olarak değil: admin cüzdanı
+  /// veritabanına sızmamalı ve "bunu admin mi yazdı" sorusu tek alanla
+  /// cevaplanmalı.
+  fromAdmin Boolean @default(false)
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 model PvpClose {
