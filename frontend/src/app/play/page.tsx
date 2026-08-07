@@ -20,6 +20,7 @@ import { DuelPanel } from '@/components/DuelPanel';
 import { ArenaScreen } from '@/components/ArenaScreen';
 import { QuestPanel } from '@/components/QuestPanel';
 import { FollowPanel } from '@/components/FollowPanel';
+import { FirstRun, isNewcomer } from '@/components/FirstRun';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -128,6 +129,14 @@ export default function PlayPage() {
   }, []);
   /** rıhtımın ölçülen yüksekliği — panel boşluğu buna göre (bkz. BuildingDock) */
   const [dockH, setDockH] = useState(78);
+  /**
+   * İlk koşu çağrısı kapatıldı mı — SADECE bu oturum için.
+   *
+   * ⚠️ Kalıcı olarak saklanmıyor: koşuyu bitiren oyuncuda `isNewcomer`
+   * zaten false oluyor, yani kaydedilecek bir şey yok. Ayrı bir bayrak
+   * tutmak, ilerlemeden türeyen bir soruya ikinci bir gerçek eklerdi.
+   */
+  const [ilkGizli, setIlkGizli] = useState(false);
   // ⚠️ Doğrudan `getWallet()` ÇAĞIRMA. localStorage okur; sunucuda null döner,
   // istemcide adres döner ve navbar rozeti "DEMO" ↔ adres arasında uyuşmazlığa
   // düşerek hidrasyonu bozar (React tüm ağacı istemci içeriğiyle değiştirir).
@@ -328,6 +337,20 @@ export default function PlayPage() {
         setPanel(id);
       }} gold={progress?.gold ?? 0} wallet={wallet}
         onHeight={setDockH} />
+
+      {/* ── İLK KOŞU ÇAĞRISI ──
+          ⚠️ ÖLÇÜLDÜ: yeni oyuncu köye düşüyor ve karşısında 4 grup, 14 panel,
+          12 bina buluyor; hiçbiri "önce şunu yap" demiyordu. Tutorial ancak
+          koşunun İÇİNDE başlıyor. Panel açıkken gösterilmiyor — oyuncu zaten
+          bir şeye bakıyor demektir. */}
+      {!panel && !ilkGizli && isNewcomer(progress) && (
+        <FirstRun
+          // ⚠️ Kahraman ve mod SORULMUYOR: ilk koşuda oyuncunun bunlara
+          // verecek cevabı yok, sadece engel oluyorlar.
+          onBegin={() => beginStage(STAGES[0].id, 'campaign')}
+          onDismiss={() => setIlkGizli(true)}
+        />
+      )}
 
       {/* ⚠️ SOHBET PANEL DEĞİL, KÖŞEDE DURUYOR. Panele koymak onu "gidip
           bakılan bir yer" yapardı; insanların orada olduğunu görmeyen oyuncu
