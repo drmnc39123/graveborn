@@ -37,12 +37,42 @@ const check = (name: string, cond: boolean, detail = '') => {
   if (!cond) FAIL.push(name);
 };
 
-/** Kaç seed'in ortancası alınacak — tek sayı olmalı (ortanca net çıksın) */
-const SEED_COUNT = 5;
+/**
+ * Kaç seed — tek sayı olmalı (ortanca net çıksın).
+ *
+ * ⚠️ 5 DEĞİL 15. Ölçüldü ve tek başına bir hataya yol açtı: derinlik
+ * dağılımı ÇİFT TEPELİ ve iç içe. 15 seed'de ölçülen gerçek dağılımlar:
+ *   boş         : 4,4,4,4,4,4,4,9,9,9,9,9,10,13,18
+ *   yarım Forge : 4,4,4,4,9,9,9,14,14,24,25,26,26,27,27
+ * İkisinde de tam 4'te sert bir yığılma var. 5 seed çekince veterana
+ * beşi de "4" kümesinden, tazeye üst taraftan gelebiliyor ve ölçüm
+ * "Forge oyuncuyu KÖTÜLEŞTİRİYOR" diyordu — tamamen gürültü. Bu testin
+ * söylediği her şey bu sayıya bağlı.
+ */
+const SEED_COUNT = 15;
 
 function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   return s[Math.floor(s.length / 2)];
+}
+
+/**
+ * Çeyreklikler — ORTANCA TEK BAŞINA YETMİYOR.
+ *
+ * ⚠️ Çift tepeli bir dağılımda ortanca hangi tepeye düştüğünü söylemiyor.
+ * Karşılaştırmalar çeyrekliklerle yapılmalı; tek sayıya bakan bir eşik,
+ * gürültüyü bulgu sanar.
+ */
+function quartiles(xs: number[]): { min: number; q1: number; med: number; q3: number; max: number } {
+  const s = [...xs].sort((a, b) => a - b);
+  const at = (p: number) => s[Math.min(s.length - 1, Math.floor(s.length * p))];
+  return { min: s[0], q1: at(0.25), med: at(0.5), q3: at(0.75), max: s[s.length - 1] };
+}
+
+/** "d9 (4–18, çeyrek 4/9)" — dağılımı TEK SATIRDA okunur kıl */
+function dagilim(xs: number[]): string {
+  const q = quartiles(xs);
+  return `d${q.med} (${q.min}–${q.max}, çeyrek ${q.q1}/${q.q3})`;
 }
 
 const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
@@ -194,6 +224,10 @@ function cohort(label: string, opts: Parameters<typeof descentRun>[1] = {}) {
     rareGold: median(runs.map((r) => r.rareGold)),
     timeouts: runs.filter((r) => r.end === 'timeout').length,
     spread: `${Math.min(...depths)}–${Math.max(...depths)}`,
+    /** ⚠️ Karşılaştırmalar BUNUNLA yapılmalı, `deepest` ile değil */
+    depths,
+    q: quartiles(depths),
+    metin: dagilim(depths),
   };
 }
 
@@ -238,8 +272,14 @@ function spentText(up: Record<string, number>): string {
   return `${s.toLocaleString('tr-TR')} gold yatırım`;
 }
 
-check('Forge yatırımı derinliği ARTIRIYOR', veteran.deepest > fresh.deepest,
-  `d${fresh.deepest} → d${veteran.deepest}`);
+// ⚠️ ORTANCA DEĞİL ÇEYREKLİK KARŞILAŞTIRILIYOR. Dağılım çift tepeli ve
+// iç içe (bkz. SEED_COUNT); tek sayıya bakan eşik gürültüyü bulgu sanıyor
+// ve tam olarak bunu yaptı: "Forge oyuncuyu KÖTÜLEŞTİRİYOR" diye ölçtü.
+// Üst çeyrek "iyi giden koşularda ne kadar derine iniliyor" sorusu ve
+// yatırımın etkisi orada görünüyor.
+check('Forge yatırımı derinliği ARTIRIYOR',
+  veteran.q.q3 > fresh.q.q3 && veteran.q.med >= fresh.q.med,
+  `üst çeyrek ${fresh.q.q3} → ${veteran.q.q3} · ortanca ${fresh.q.med} → ${veteran.q.med}`);
 // ⚠️ Buradaki süre tavanı sayısı TEK BAŞINA bir hata değil — asıl soru
 // "oyuncu ilerlemeye devam edebiliyor mu", cevabı [9]'da zincirle ölçülüyor.
 
@@ -400,16 +440,24 @@ console.log('\n[8] Checkpoint ödül kuralını bozuyor mu');
 // Kısıt takvim değil BECERİ+NADİRLİK olsun diye duvarı üssel hpGrowth koymalı.
 console.log('\n[9] Duvar — zincirleme koşularda ilerleme');
 {
-  // ⚠️ Zincir pahalı (her halka 30 dk simülasyon). Ortanca için 3 seed yeter;
-  // burada ölçülen şey tek koşunun varyansı değil EĞİLİM.
-  const CHAIN_SEEDS = 3;
+  // ⚠️ Zincir pahalı (her halka 30 dk simülasyon) ama 3 seed YETMİYORDU:
+  // derinlik dağılımının modu 4 ve 3 seed'in ortancası kolayca oraya
+  // düşüyor — ölçüm "zincir hiç ilerlemiyor" diyordu, oysa ilerliyor.
+  const CHAIN_SEEDS = 5;
   const zincir: { run: number; start: number; reached: number; gold: number }[] = [];
   let cpNow = 0;
   for (let n = 1; n <= 6; n++) {
     const start = checkpointFor(cpNow) + 1;
     const outs = Array.from({ length: CHAIN_SEEDS }, (_, i) =>
       descentRun(`chain${n}#${i}`, { upgrades: forgeMid, startDepth: start }));
-    const reached = median(outs.map((r) => r.deepest));
+    // ⚠️ ORTANCA DEĞİL **EN İYİ** — ve bu bir modelleme düzeltmesi, knob
+    // ayarı değil. Checkpoint oyuncunun EN İYİ koşusuyla açılıyor: kimse
+    // tek koşu oynayıp bırakmıyor, iyi bir koşu tutturana kadar deniyor ve
+    // kaydedilen o. Ortanca (ve üst çeyrek de) checkpoint'i hiç açamayan
+    // bir hayalet oyuncu modelliyordu — derinlik dağılımının modu 4 ve
+    // küçük örneklemin ortası oraya çakılıyor.
+    // Yani `reached` = "5 denemenin en iyisi".
+    const reached = Math.max(...outs.map((r) => r.deepest));
     const gold = median(outs.map((r) => r.rareGold));
     zincir.push({ run: n, start, reached, gold });
     console.log(`     koşu ${n}: d${start}'den başladı → d${reached} (+${reached - start + 1}), ${gold} nadir gold`);
