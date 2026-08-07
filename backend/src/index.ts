@@ -42,6 +42,7 @@ import { attachPresence, presenceCount } from './presence.js';
 import { arenaStats, attachArena, joinQueue, leaveQueue } from './arena.js';
 import { pvpAwards, pvpBoard, settlePvpSeasons } from './pvpSeason.js';
 import { QuestError, claimQuest, listQuests, trackQuest } from './quests.js';
+import { FollowError, follow, listFollows, unfollow } from './follow.js';
 import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
@@ -104,7 +105,7 @@ for (const yol of [
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
   '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start', '/duel/find',
-  '/arena/queue', '/quests/claim',
+  '/arena/queue', '/quests/claim', '/follow',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -1147,6 +1148,38 @@ app.post('/duel/start', wrap(async (req, res) => {
     startDepth: 1, ascension: 0, guildGrowth, gear, skills,
     duel: { defender: ch.defender, target: ch.targetDepth, stageId: ch.stageId },
   });
+}));
+
+// ── TAKİP (arkadaş listesi) ──
+//
+// ⚠️ Tek yönlü, onay yok (bkz. follow.ts). Liste bir "kim ne yapıyor"
+// ekranı: çevrimiçi mi, puanı ne, meydan okunabilir mi.
+app.get('/follow', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const p = toProgress(await getOrCreatePlayer(wallet));
+  res.json(await listFollows(wallet, p.cleared as unknown as Record<string, boolean>));
+}));
+
+app.post('/follow', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    await follow(wallet, req.body?.wallet);
+    const p = toProgress(await getOrCreatePlayer(wallet));
+    res.json(await listFollows(wallet, p.cleared as unknown as Record<string, boolean>));
+  } catch (e) {
+    if (e instanceof FollowError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.delete('/follow', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  await unfollow(wallet, req.query?.wallet);
+  const p = toProgress(await getOrCreatePlayer(wallet));
+  res.json(await listFollows(wallet, p.cleared as unknown as Record<string, boolean>));
 }));
 
 // ── GÜNLÜK GÖREVLER ──

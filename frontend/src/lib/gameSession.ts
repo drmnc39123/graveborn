@@ -739,6 +739,32 @@ export interface DuelBoard {
  * tablo puana göre sıralı olduğu için oyuncu doğal olarak en zayıfı seçiyor
  * ve ladder "en kolay hedefi bul" oyununa dönüyordu.
  */
+// ── TAKİP (arkadaş listesi) ──
+// ⚠️ Tek yönlü, onay yok — listede görünen her şey zaten sıralamada
+// görünüyor (bkz. backend/follow.ts).
+
+export interface FollowRow {
+  wallet: string; hero: string; online: boolean;
+  duelRating: number; bestStage: number; bestDepth: number;
+  recordId: string | null; recordDepth: number;
+  /** meydan okunamıyorsa SEBEBİ */
+  blocker: string | null;
+}
+
+export interface FollowState { rows: FollowRow[]; max: number }
+
+export async function fetchFollows(): Promise<FollowState> {
+  return api<FollowState>('/follow');
+}
+
+export async function addFollow(wallet: string): Promise<FollowState> {
+  return api('/follow', { method: 'POST', body: { wallet } });
+}
+
+export async function removeFollow(wallet: string): Promise<FollowState> {
+  return api(`/follow?wallet=${encodeURIComponent(wallet)}`, { method: 'DELETE' });
+}
+
 // ── GÜNLÜK GÖREVLER ──
 // ⚠️ DEMO MODUNDA YOK: ilerleme sunucunun doğruladığı olaylardan geliyor.
 

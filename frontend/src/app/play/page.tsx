@@ -19,6 +19,7 @@ import { SkillPanel } from '@/components/SkillPanel';
 import { DuelPanel } from '@/components/DuelPanel';
 import { ArenaScreen } from '@/components/ArenaScreen';
 import { QuestPanel } from '@/components/QuestPanel';
+import { FollowPanel } from '@/components/FollowPanel';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
@@ -584,6 +585,8 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : panel === 'watch' ? (
+              <FollowPanel onChallenge={beginDuel} onError={setNote} />
             ) : panel === 'daily' ? (
               <QuestPanel
                 progress={progress ?? loadProgress()}

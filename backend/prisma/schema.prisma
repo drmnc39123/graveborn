@@ -141,6 +141,7 @@ model Player {
   listings Listing[]
   awards   SeasonAward[]
   pvpAwards PvpAward[]
+  follows   Follow[]  @relation("follower")
   gear     GearItem[]
   records  DuelRecord[]
 
@@ -379,6 +380,27 @@ model SeasonClose {
 /// ⚠️ `SeasonClose` ile AYNI TABLO DEĞİL ve bu kasıtlı: iki sıralama farklı
 /// eksende (derinlik vs. kimi yendiğin) ve farklı haftalarda kapanabilir.
 /// Tek tabloda tutmak, birini kapatınca ötekini de kapanmış saydırırdı.
+/// TAKİP — tek yönlü arkadaş listesi.
+///
+/// ⚠️ KARŞILIKLI DEĞİL, ONAY YOK. İstek/kabul akışı iki ekran, iki bildirim
+/// ve "bekleyen istek" durumu demekti; oysa oyunda kimseyi engellemek ya da
+/// gizli bir şey paylaşmak yok — görünen her şey zaten tabloda görünüyor.
+/// Tek yönlü takip aynı değerin %90'ını sıfır makineyle veriyor.
+model Follow {
+  id        String   @id
+  /// takip eden
+  wallet    String
+  /// takip edilen
+  target    String
+  createdAt DateTime @default(now())
+
+  player Player @relation("follower", fields: [wallet], references: [wallet], onDelete: Cascade)
+
+  /// ⚠️ Aynı kişiyi iki kez takip edememeli — liste kendini tekrarlardı
+  @@unique([wallet, target])
+  @@index([wallet])
+}
+
 model PvpClose {
   week      Int      @id
   settledAt DateTime @default(now())

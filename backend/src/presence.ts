@@ -214,6 +214,19 @@ export function presenceCount(): { total: number; byWeek: Record<number, number>
   return { total: peers.size, byWeek };
 }
 
+/**
+ * Şu an bağlı cüzdanlar.
+ *
+ * ⚠️ Arkadaş listesi bunu okuyor. Ayrı bir "son görülme" sütunu tutmak
+ * denenmedi: her ws mesajında bir yazma demekti ve zaten burada, bellekte,
+ * kesin bilgi duruyor.
+ */
+export function onlineWallets(): Set<string> {
+  const out = new Set<string>();
+  for (const p of peers.values()) out.add(p.wallet);
+  return out;
+}
+
 /** Test/kapanış için — zamanlayıcıyı bırak, yoksa süreç sonlanmaz */
 export function stopPresence() {
   if (timer) { clearInterval(timer); timer = null; }

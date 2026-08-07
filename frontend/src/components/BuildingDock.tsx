@@ -50,7 +50,7 @@ export const GROUPS: readonly DockGroup[] = [
   { id: 'fight', label: 'FIGHT', color: '#a01226', members: ['quests', 'boss', 'duel', 'pit'] },
   { id: 'power', label: 'POWER', color: '#efa72e', members: ['upgrade', 'paths', 'gear', 'shop'] },
   { id: 'spend', label: 'SPEND', color: '#5f9e4a', members: ['market', 'exchange', 'reliquary'] },
-  { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['daily', 'guild', 'tavern'] },
+  { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['daily', 'watch', 'guild', 'tavern'] },
 ] as const;
 
 /** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */
@@ -86,6 +86,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // ⚠️ TAVERN'in yanında: ikisi de "ben ne yaptım" sorusu. Günlük görev
   // FIGHT grubuna konmadı — bir dövüş yeri değil, günün listesi.
   { id: 'daily', label: 'TODAY', sub: "Today's work — three things, resets at midnight UTC" },
+  // ⚠️ TODAY'in yanında: ikisi de "her gün açtığın" ekranlar. Takip listesi
+  // FIGHT grubuna konsaydı bir dövüş aracı gibi görünürdü; oysa asıl işi
+  // kimin orada olduğunu göstermek.
+  { id: 'watch', label: 'WATCH', sub: 'The Watch — people you keep an eye on' },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
   // ⚠️ TAVERN'in yanında: ikisi de "kim olduğun" ile ilgili. Lonca sohbetin
   // yanına konsaydı bir araç gibi görünürdü; profilin yanında bir AİDİYET
