@@ -42,9 +42,35 @@ export const ARENA = {
   batch: 3,
   /** eşleşme kuyruğunda en fazla bekleme (sn) — sonra iptal */
   queueTimeoutSec: 60,
+  /**
+   * ⚠️ PUAN PENCERESİ BEKLEDİKÇE GENİŞLER.
+   *
+   * İlk sürümde eşleştirme "kuyruktaki en yakın puanlı"yı seçiyordu ve
+   * ÖLÇÜLDÜ: kuyrukta zaten biri varsa anında onunla eşleşiyor, yani
+   * yakınlık mantığı pratikte hiç çalışmıyordu — 1000 puanlı, sırada duran
+   * 1900'lükle eşleşiyordu ve maç daha başlamadan bitiyordu.
+   *
+   * Şimdi başlangıçta dar bir pencere var; her `widenEvery` saniyede
+   * `widenBy` kadar açılıyor. Böylece kalabalıkken dengi çıkıyor, kimse
+   * yokken yine de eşleşiyor — "adil ama sonsuza kadar bekletmeyen".
+   */
+  window0: 120,
+  widenBy: 160,
+  widenEvery: 8,
   /** bir maçın sert üst sınırı (sn) — kopan bağlantı sonsuza kadar oda tutmasın */
   maxMatchSec: 15 * 60,
 } as const;
+
+/**
+ * Bu kadar saniye beklemiş biri, kaç puanlık farkı kabul eder.
+ *
+ * ⚠️ SAF FONKSİYON: eşleştirme kuralı tek yerde yazılı ve testten doğrudan
+ * ölçülebiliyor. Sunucuya gömülü olsaydı ancak canlı kuyrukla sınanabilirdi.
+ */
+export function ratingWindow(waitedSec: number): number {
+  const adim = Math.floor(Math.max(0, waitedSec) / ARENA.widenEvery);
+  return ARENA.window0 + adim * ARENA.widenBy;
+}
 
 /** Sunucunun maç açarken ürettiği, iki tarafa da aynen giden kurulum */
 export interface ArenaSetup {

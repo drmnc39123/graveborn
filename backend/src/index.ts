@@ -39,6 +39,7 @@ import { PULL_COST } from '@game/cosmetics';
 import { profileOf } from './profile.js';
 import { bossState, contribute } from './worldBoss.js';
 import { attachPresence, presenceCount } from './presence.js';
+import { arenaStats, attachArena, joinQueue, leaveQueue } from './arena.js';
 import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
@@ -101,6 +102,7 @@ for (const yol of [
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
   '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start', '/duel/find',
+  '/arena/queue',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -1138,6 +1140,32 @@ app.post('/duel/start', wrap(async (req, res) => {
   });
 }));
 
+// ── ARENA (gerçek zamanlı 1v1) ──
+//
+// ⚠️ Kuyruk HTTP YOKLAMASI ile ilerliyor, ws push ile değil: sadece bekleme
+// ekranı için ikinci bir soket ömrü yönetmeye değmez (bkz. arena.ts).
+// Maçın kendisi `/arena` ws yolunda.
+app.post('/arena/queue', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+  try {
+    // ⚠️ Kahraman KAYITTAN okunuyor, istekten değil — düellodaki kuralın
+    // aynısı: koşuya giren karakteri istemci beyan edemez.
+    res.json(await joinQueue(wallet, toProgress(player).hero));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : 'kuyruk_hatasi' });
+  }
+}));
+
+app.delete('/arena/queue', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  leaveQueue(wallet);
+  res.json({ ok: true });
+}));
+
 // ── MARKETPLACE ──
 // Oyuncudan oyuncuya: gold ↔ $GRAVE. Hazine taraf DEĞİL (bkz. market.ts).
 const listSchema = z.object({
@@ -1265,3 +1293,4 @@ const server = app.listen(port, () => {
   console.log(`GRAVEBORN backend :${port}`);
 });
 attachPresence(server);
+attachArena(server);
