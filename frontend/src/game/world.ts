@@ -61,7 +61,8 @@ export type BuildingId =
   | 'quests' | 'upgrade' | 'shop' | 'market' | 'exchange' | 'tavern'
   // ⚠️ Bunların köyde HİÇ kapısı yoktu; yalnızca navbar'dan açılıyorlardı.
   // Oyuncu kocaman binaların önünde durup hiçbir şey olmadığını görüyordu.
-  | 'duel' | 'gear' | 'guild' | 'reliquary';
+  | 'duel' | 'gear' | 'guild' | 'reliquary'
+  | 'paths' | 'boss';
 
 export interface Building {
   id: BuildingId; name: string; hint: string; src: string;
@@ -78,6 +79,22 @@ const b128 = (id: BuildingId, name: string, hint: string, file: string, tx: numb
     id, name, hint, src: `${TW}/${file}.png`, x, y, w: 128, h: 128,
     foot: { dx: 10, dy: 76, w: 108, h: 46 },
     doorX: x + 64, doorY: y + 138,
+  };
+};
+
+/**
+ * 256'lık binalar için taban — gözlemevi gibi anıtsal yapılar.
+ *
+ * ⚠️ `b128`'in ölçüleri BURADA ÇALIŞMAZ: kapı `y + 138`'de kalır ve binanın
+ * ORTASINA düşer, yani ulaşılamaz olur. Anıtsal yapının kapısı iki kat
+ * aşağıda.
+ */
+const b256 = (id: BuildingId, name: string, hint: string, file: string, tx: number, ty: number): Building => {
+  const x = tx * TILE, y = ty * TILE;
+  return {
+    id, name, hint, src: `${TW}/${file}.png`, x, y, w: 256, h: 256,
+    foot: { dx: 24, dy: 168, w: 208, h: 76 },
+    doorX: x + 128, doorY: y + 266,
   };
 };
 
@@ -107,6 +124,12 @@ export const BUILDINGS: readonly Building[] = [
   // nesneleriyle çakışıp çakışmadığı kontrol edilmeli.
   b128('guild', 'The Longhouse', 'Stand with others', 'Stone_House', 10, 30),
   b128('reliquary', 'The Reliquary', 'Relics, titles and auras', 'Merchant_House', 62, 30),
+  // ⚠️ Kışla MEZARLIKTA, kilisenin yanında: haftalık ortak boss oraya
+  // çağırıyor. Köyün ortasına konsaydı "toplanma yeri" hissi kaybolurdu.
+  b128('boss', 'The Muster', "Where the week's barrow is answered", 'spr_Barracks', 36, 6),
+  // ⚠️ 10,18 — 14,18 DEĞİL. Gözlemevi orada duruyordu ama kapısı bir
+  // engelin altına düşüyordu; ölçülüp taşındı (guild'deki hatanın aynısı).
+  b256('paths', 'The Observatory', 'The paths you chose', 'Spr_Magical_Observatory', 10, 18),
 ] as const;
 
 /** Dekoratif binalar — rol yok, köyü dolduruyor. Yine ELLE konumlandırıldı. */
@@ -131,8 +154,9 @@ export const DECOR: readonly Decor[] = [
   // nehir kıyısında su değirmeni — nehre bakması mantıklı
   { src: `${TW}/spr_water_building.png`, x: 72 * TILE, y: 34 * TILE, w: 64, h: 96, solid: 34 },
 
-  // gözlemevi — uzaktan görünen dönüm noktası
-  { src: `${TW}/Spr_Magical_Observatory.png`, x: 14 * TILE, y: 18 * TILE, w: 256, h: 256, solid: 70 },
+  // ⚠️ Gözlemevi buradan ÇIKARILDI — artık gerçek bina (BUILDINGS).
+  // İkisinde birden kalsaydı üst üste çizilir ve çarpışma kutusu iki kez
+  // eklenirdi.
 ] as const;
 
 // ── PORTALLAR ─────────────────────────────────────────────────────────
