@@ -18,8 +18,8 @@
 // Çalıştır:  npx tsx src/game/campaign.test.mts
 
 import { Game } from './engine.js';
-import { STAGES, TICK } from './config.js';
-import { FORGE, permanentBonus } from './forge.js';
+import { ENEMIES, STAGES, TICK } from './config.js';
+import { FORGE, costOf, permanentBonus } from './forge.js';
 import { seedFromString } from './rng.js';
 import { emptyProgress } from './progress.js';
 import { unlockedWeapons } from './unlocks.js';
@@ -99,11 +99,43 @@ function pick(g: any): string {
   return [...g.offers].sort((a: any, b: any) => p(b) - p(a))[0].id;
 }
 
-/** O bölüme ULAŞAN oyuncunun Forge'u — 20. bölümde tam dolu kabul */
-function permFor(stageId: number) {
-  const oran = Math.min(1, stageId / 20);
+/**
+ * O bölüme ULAŞAN oyuncunun Forge'u — GERÇEK GOLD BÜTÇESİNDEN.
+ *
+ * 🔴 ÖNCEKİ HÂLİ `stageId / 20` diyordu, yani 20. bölümde ağaç TAM DOLU
+ * kabul ediliyordu. Ölçüldü ve gerçekle karşılaştırıldı:
+ *   b 5: gerçek ağacın %1'i   · testin varsayımı %25
+ *   b10: gerçek %5            · varsayım %50
+ *   b20: gerçek %20           · varsayım %100
+ *   b25: gerçek %33           · varsayım %100
+ * Yani teste 5-25 kat ZENGİN bir oyuncu veriliyordu. Kampanyanın "kısa ve
+ * düz" görünmesinin sebeplerinden biri buydu: geç bölümlerde yapay oyuncu
+ * hiçbir gerçek oyuncunun sahip olamayacağı bir Forge ile dövüşüyordu.
+ *
+ * ⚠️ Bütçe SADECE ilk-geçiş ödüllerinden — saf kampanya oyuncusunun garanti
+ * geliri. Koşu içi nadir düşüşler bunun ÜSTÜNE gelir, yani bu bir ALT SINIR.
+ * Silah kilidinde alınan "en kötü hâl" duruşunun aynısı.
+ *
+ * ⚠️ Bütçe EN UCUZDAN harcanıyor — oyuncu da öyle yapar. Pahalı satırı önce
+ * almak, aynı gold'la daha az seviye demek.
+ */
+function permFor(butce: number) {
+  let kalan = butce;
   const lv: Record<string, number> = {};
-  for (const u of FORGE) lv[u.id] = Math.floor(u.maxLevel * oran);
+  for (const u of FORGE) lv[u.id] = 0;
+  // En ucuz alınabilir yükseltmeyi al, bütçe bitene kadar tekrarla
+  for (;;) {
+    let enUcuz: { id: string; cost: number } | null = null;
+    for (const u of FORGE) {
+      const cur = lv[u.id];
+      if (cur >= u.maxLevel) continue;
+      const c = costOf(u, cur);
+      if (!enUcuz || c < enUcuz.cost) enUcuz = { id: u.id, cost: c };
+    }
+    if (!enUcuz || enUcuz.cost > kalan) break;
+    kalan -= enUcuz.cost;
+    lv[enUcuz.id] += 1;
+  }
   return permanentBonus(lv);
 }
 
@@ -118,13 +150,27 @@ function permFor(stageId: number) {
 // b10'unkinden azdı), 5→6 ise eğri yeniden şekillendirilirken YENİ AÇILDI.
 // İkisi de düzeltildi; bu kontrol tekrar açılmasını engelliyor.
 {
+  // 🔴 ÖLÇÜT ÖNCE `enemyCount × hpMul` İDİ ve DÜŞMANIN TABAN CANINI SAYMIYORDU.
+  // Bu yüzden yeşil yanarken gerçek eğri bir hız treniydi:
+  //   b17 3,43M can → 18,8 dk   ·   b21 0,85M can → 6,9 dk
+  // 21. bölüm `imp, rogue, bird, fiend, dire_rat` kullanıyordu — yani 1-6.
+  // bölümün düşmanları (ortalama 34 can), 17. bölüm ise 203. Aynı `hpMul`
+  // ile bunlar bambaşka bölümler.
+  // Gerçek ölçüt SAHNEYE ÇIKAN TOPLAM CAN: adet × çarpan × roster ortalaması.
+  const toplamCan = (st: typeof STAGES[number]) => {
+    const roster = st.enemies
+      .map((id) => ENEMIES.find((e) => e.id === id))
+      .filter((e): e is NonNullable<typeof e> => !!e);
+    const ort = roster.reduce((a, e) => a + e.hp, 0) / Math.max(1, roster.length);
+    return st.enemyCount * st.hpMul * ort;
+  };
   const kirik: string[] = [];
   for (let i = 1; i < STAGES.length; i++) {
-    const z = STAGES[i].enemyCount * STAGES[i].hpMul;
-    const o = STAGES[i - 1].enemyCount * STAGES[i - 1].hpMul;
-    if (z <= o) kirik.push(`${STAGES[i - 1].id}→${STAGES[i].id}`);
+    if (toplamCan(STAGES[i]) <= toplamCan(STAGES[i - 1])) {
+      kirik.push(`${STAGES[i - 1].id}→${STAGES[i].id}`);
+    }
   }
-  check('zorluk eğrisi HER bölümde artıyor', kirik.length === 0,
+  check('GERÇEK zorluk (toplam can) HER bölümde artıyor', kirik.length === 0,
     kirik.length ? kirik.join(' ') : `${STAGES.length} bölüm`);
 }
 
@@ -149,6 +195,22 @@ console.log(`\n═══ KAMPANYA — ${STAGES.length} BÖLÜM ═══\n`);
  */
 const SEED_SAYISI = 7;
 
+/**
+ * ⚠️ BÜTÇE KOŞULARIN KENDİSİNDEN BİRİKİYOR — varsayılmıyor.
+ *
+ * İki uç da ölçüldü ve ikisi de yanlıştı:
+ *   · "20. bölümde ağaç tam dolu" → oyuncuya 5-25 kat fazla Forge, kampanya
+ *     2,3 saat ve dümdüz bir eğri
+ *   · "sadece ilk-geçiş gold'u" → 4,0 saat ama kuyrukta b21/b25 4/7 bitiyor,
+ *     yani hiçbir gerçek oyuncunun yaşamayacağı bir fakirlik
+ *
+ * Gerçek oyuncu ikisinin arasında: ilk-geçiş ödülünü DE alıyor, koşu içi
+ * nadir düşüşleri DE topluyor. İkincisini varsaymak yerine ÖLÇÜYORUZ —
+ * her bölümün koşularından çıkan nadir gold bir sonraki bölümün bütçesine
+ * ekleniyor. Böylece model kendi kendini besliyor, elle ayarlanan bir sayı
+ * kalmıyor.
+ */
+let butce = 0;
 let toplamSn = 0;
 const bitmeyen: number[] = [];
 const ortancalar: number[] = [];
@@ -156,6 +218,7 @@ const idler: number[] = [];
 
 for (const st of STAGES) {
   const sureler: number[] = [];
+  const nadirler: number[] = [];
   let biten = 0;
   for (let k = 0; k < SEED_SAYISI; k++) {
     // ⚠️ SİLAH KİLİDİ MODELLENİYOR — testin ADI "kampanya İLK GEÇİŞİ".
@@ -170,7 +233,7 @@ for (const st of STAGES) {
       ...emptyProgress(),
       cleared: Object.fromEntries(STAGES.filter((x) => x.id < st.id).map((x) => [x.id, true])),
     };
-    const g: any = new Game(seedFromString(`camp-${st.id}-${k}`), st, permFor(st.id) as any,
+    const g: any = new Game(seedFromString(`camp-${st.id}-${k}`), st, permFor(butce) as any,
       'campaign', undefined, 1, 0, unlockedWeapons(oGunkuIlerleme));
     g.setViewport(1280, 720);
     const max = Math.round(TAVAN_SN / TICK);
@@ -182,7 +245,13 @@ for (const st of STAGES) {
       g.step();
     }
     if (g.phase === 'won') { biten += 1; sureler.push(g.time); }
+    nadirler.push(Math.floor(g.rareGold));
   }
+  // ⚠️ ORTANCA nadir gold — en şanslı koşuyu almak oyuncuyu olduğundan
+  // zengin gösterirdi.
+  const nadirOrt = [...nadirler].sort((a, b) => a - b)[Math.floor(nadirler.length / 2)] ?? 0;
+  // Bölüm geçildi: ilk-geçiş ödülü + o bölümde toplanan nadir gold
+  butce += st.firstClearGold + nadirOrt;
   // Ortanca SADECE bitenlerden — takılan koşu ortalamayı bozmasın
   const ortanca = sureler.length
     ? [...sureler].sort((a, b) => a - b)[Math.floor(sureler.length / 2)] : TAVAN_SN;
