@@ -766,6 +766,26 @@ export class Game {
     return list.length ? list : [ENEMIES[0]];
   }
 
+  /**
+   * Ağırlıklı düşman seçimi — özel tipler NADİR olsun.
+   *
+   * ⚠️ TEK ZAR TÜKETİR, tıpkı `rng.pick` gibi. Tüketilen zar sayısı değişseydi
+   * RNG akışı kayar ve mühür kırılırdı. Ağırlıkların hepsi 1 olduğunda bu
+   * fonksiyon `pick` ile BİREBİR aynı sonucu veriyor — 1. bölüm (imp/rogue)
+   * bu yüzden hiç etkilenmedi ve `SIM_SEAL` korundu.
+   */
+  private pickWeighted(types: readonly EnemyType[]): EnemyType {
+    let toplam = 0;
+    for (let i = 0; i < types.length; i++) toplam += types[i].weight ?? 1;
+    let r = this.rng.range(0, toplam);
+    for (let i = 0; i < types.length; i++) {
+      r -= types[i].weight ?? 1;
+      if (r < 0) return types[i];
+    }
+    // kayan nokta artığı — son elemana düş (asla `undefined` dönme)
+    return types[types.length - 1];
+  }
+
   private spawn(dt: number) {
     const st = this.stage;
     if (st.toSpawn <= 0) return; // havuz bitti — bölümdeki her düşman salındı
@@ -789,7 +809,7 @@ export class Game {
       if (st.toSpawn <= 0) { this.spawnAcc = 0; break; }
       if (this.enemies.length >= st.def.maxAlive) { this.spawnAcc = 0; break; }
       st.toSpawn -= 1;
-      const t = this.rng.pick(types);
+      const t = this.pickWeighted(types);
       // ekran dikdörtgeninin dışındaki bir elipste doğ
       const ang = this.rng.range(0, Math.PI * 2);
       const rx = this.viewW / 2 + SPAWN.ringMargin;

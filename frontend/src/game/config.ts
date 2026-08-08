@@ -1226,6 +1226,23 @@ export interface EnemyType {
   art?: string;
   /** hareket kalıbı — yazılmazsa 'chase' */
   behavior?: Behavior;
+  /**
+   * Doğma ağırlığı — yazılmazsa 1 (sıradan düşman).
+   *
+   * 🔴 NİYE EKLENDİ: seçim `rng.pick` ile DÜZGÜN DAĞILIMDI, yani 6 tipli bir
+   * bölümde haberci sürünün ALTIDA BİRİYDİ. Ölçüm bunu yakaladı — kampanya
+   * paketi kırmızıya döndü: 5. bölümün ortancası 8,8 dakikaya çıktı ve ilk
+   * geçiş 3 saati aştı.
+   *
+   * Sebep sadece performans değil TASARIM: haberci "önce bunu öldür" kararı
+   * yaratmak için var; sürünün altıda biriyse o bir karar değil, arka plan
+   * olur. Patlayıcı ve bölünen için de aynı — özel olan şey NADİR olmalı.
+   *
+   * ⚠️ Ağırlıklı seçim TEK zar tüketir (`rng.pick` gibi): tüketilen zar sayısı
+   * değişseydi RNG akışı kayar ve mühür kırılırdı. Ağırlıkların hepsi eşitken
+   * seçim `pick` ile birebir aynı sonucu verir — 1. bölüm bu yüzden bozulmadı.
+   */
+  weight?: number;
 }
 
 /** Davranış ayarları — tek yerde, motorda gömülü sayı yok. */
@@ -1431,15 +1448,15 @@ export const ENEMIES: readonly EnemyType[] = [
 
   // PATLAYICI — öldüğü yerde patlar. Canı DÜŞÜK: yaklaşmadan öldürebilmek
   // gerçek bir seçenek olmalı, yoksa ceza kaçınılmaz olur.
-  { id: 'bloat', hp: 26, speed: 34, damage: 9, radius: 13, xp: 4, color: '#efa72e', fromMinute: 4, art: 'mon_wretch', behavior: 'exploder' },
-  { id: 'gravebloat', hp: 96, speed: 30, damage: 20, radius: 17, xp: 11, color: '#c8324a', fromMinute: 10, art: 'mon_brute', behavior: 'exploder' },
+  { id: 'bloat', hp: 26, speed: 34, damage: 9, radius: 13, xp: 4, color: '#efa72e', fromMinute: 4, art: 'mon_wretch', behavior: 'exploder', weight: 0.5 },
+  { id: 'gravebloat', hp: 96, speed: 30, damage: 20, radius: 17, xp: 11, color: '#c8324a', fromMinute: 10, art: 'mon_brute', behavior: 'exploder', weight: 0.5 },
 
   // BÖLÜNEN — alan hasarına karşı sürüyü büyütür.
-  { id: 'husk', hp: 44, speed: 44, damage: 10, radius: 13, xp: 4, color: '#5f9e4a', fromMinute: 5, art: 'mon_slim', behavior: 'splitter' },
+  { id: 'husk', hp: 44, speed: 44, damage: 10, radius: 13, xp: 4, color: '#5f9e4a', fromMinute: 5, art: 'mon_slim', behavior: 'splitter', weight: 0.45 },
 
   // HABERCİ — yavaş ve dayanıklı; yanındakileri hızlandırır. Öncelik hedefi.
-  { id: 'herald', hp: 180, speed: 24, damage: 14, radius: 16, xp: 13, color: '#8a97a3', fromMinute: 7, art: 'mon_horned', behavior: 'herald' },
-  { id: 'bone_herald', hp: 300, speed: 22, damage: 22, radius: 17, xp: 22, color: '#e3d8c0', fromMinute: 13, art: 'bone_archer', behavior: 'herald' },
+  { id: 'herald', hp: 180, speed: 24, damage: 14, radius: 16, xp: 13, color: '#8a97a3', fromMinute: 7, art: 'mon_horned', behavior: 'herald', weight: 0.28 },
+  { id: 'bone_herald', hp: 300, speed: 22, damage: 22, radius: 17, xp: 22, color: '#e3d8c0', fromMinute: 13, art: 'bone_archer', behavior: 'herald', weight: 0.28 },
 ] as const;
 
 /** DENGE NOTU: ilk değerler (base 2.4 / perMinute 1.7 / cap 620 / hp +%34) ile
