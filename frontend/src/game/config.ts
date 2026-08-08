@@ -41,7 +41,12 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
 // ⚠️ BU SEFERKİ GERÇEK BİR RNG DEĞİŞİKLİĞİ: level-up teklifleri havuzdan
 // `rng` ile seçiliyor ve havuz büyüdü. Yani aynı seed artık BAŞKA kartlar
 // gösteriyor — mühür zorunlu olarak kırıldı ve yenilendi.
-export const SIM_VERSION = 6;
+// v7: 5 yeni düşman + 3 yeni DAVRANIŞ (exploder/splitter/herald). Bölüm
+// düşman listeleri değişti → 3. bölümden itibaren doğan tipler farklı.
+// ⚠️ Mühürlenen koşu 1. bölümde (imp/rogue) olduğu için o listeler bilerek
+// DEĞİŞTİRİLMEDİ — mühür korunuyor ama sürüm yine de artıyor: oyunun
+// davranışı değişti ve bunu sürüm numarası söylemeli.
+export const SIM_VERSION = 7;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -118,19 +123,19 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 3, name: 'The Charnel Works', enemyCount: 350, firstClearGold: 1400,
-    spawnRate: 3.0, maxAlive: 90, enemies: ['skeleton', 'wretch', 'horned', 'bird'],
+    spawnRate: 3.0, maxAlive: 90, enemies: ['skeleton', 'wretch', 'horned', 'bird', 'bloat'],
     hpMul: 1.9, speedMul: 1.08,
     boss: { hp: 4200, speed: 44, damage: 24, radius: 38, art: 'boss_mini', label: 'The Gorged' },
   },
   {
     id: 4, name: 'The Toll Tower', enemyCount: 550, firstClearGold: 2400,
-    spawnRate: 3.8, maxAlive: 130, enemies: ['horned', 'bird', 'brute', 'fiend'],
+    spawnRate: 3.8, maxAlive: 130, enemies: ['horned', 'bird', 'brute', 'fiend', 'husk'],
     hpMul: 2.7, speedMul: 1.12,
     boss: { hp: 11000, speed: 48, damage: 30, radius: 44, art: 'boss_mega', label: 'Bell Warden' },
   },
   {
     id: 5, name: 'The Black Chapel', enemyCount: 800, firstClearGold: 4000,
-    spawnRate: 4.6, maxAlive: 180, enemies: ['brute', 'fiend', 'crab', 'warrior', 'hulk'],
+    spawnRate: 4.6, maxAlive: 180, enemies: ['brute', 'fiend', 'crab', 'warrior', 'hulk', 'herald'],
     hpMul: 3.8, speedMul: 1.16,
     boss: { hp: 30000, speed: 54, damage: 38, radius: 52, art: 'boss_nightmare', label: 'The Unburied' },
   },
@@ -140,19 +145,19 @@ export const STAGES: readonly StageDef[] = [
   // undead/vermin'e kayıyor — sürü görsel olarak da değişiyor.
   {
     id: 6, name: 'The Sunken Ossuary', enemyCount: 800, firstClearGold: 4200,
-    spawnRate: 5.4, maxAlive: 220, enemies: ['fiend', 'crab', 'rat', 'dire_rat', 'warrior'],
+    spawnRate: 5.4, maxAlive: 220, enemies: ['fiend', 'crab', 'rat', 'dire_rat', 'warrior', 'bloat', 'husk'],
     hpMul: 4.2, speedMul: 1.2, damageMul: 1.2,
     boss: { hp: 45_000, speed: 50, damage: 44, radius: 54, art: 'boss_mega', label: 'The Drowned Choir' },
   },
   {
     id: 7, name: 'Gallows Reach', enemyCount: 950, firstClearGold: 4500,
-    spawnRate: 6.0, maxAlive: 260, enemies: ['dire_rat', 'warrior', 'hulk', 'bone_thrall'],
+    spawnRate: 6.0, maxAlive: 260, enemies: ['dire_rat', 'warrior', 'hulk', 'bone_thrall', 'gravebloat'],
     hpMul: 4.4, speedMul: 1.24, damageMul: 1.35,
     boss: { hp: 62_000, speed: 52, damage: 50, radius: 56, art: 'boss_nightmare', label: 'The Hanged Warden' },
   },
   {
     id: 8, name: 'The Bone Choir', enemyCount: 1000, firstClearGold: 4900,
-    spawnRate: 6.7, maxAlive: 300, enemies: ['bone_thrall', 'bone_archer', 'hulk', 'crab'],
+    spawnRate: 6.7, maxAlive: 300, enemies: ['bone_thrall', 'bone_archer', 'hulk', 'crab', 'bone_herald'],
     hpMul: 4.6, speedMul: 1.28, damageMul: 1.5,
     boss: { hp: 79_000, speed: 54, damage: 58, radius: 58, art: 'boss_mega', label: 'The Choirmaster' },
   },
@@ -1193,7 +1198,19 @@ export const CONTACT_HIT_CD = 0.42;
  * mesafe tutup bölümü kilitleyebilir (bu tuzağa bir kez düşüldü: Ossuary
  * Halls 14 düşmanla 25 dakika sürdü ve hiç bitmedi).
  */
-export type Behavior = 'chase' | 'weave' | 'ranged' | 'charger' | 'swarm' | 'circler';
+export type Behavior =
+  | 'chase' | 'weave' | 'ranged' | 'charger' | 'swarm' | 'circler'
+  // ── R5/12 ile gelenler ──
+  // ⚠️ Yukarıdaki altısı HAREKET kalıbı — "nasıl geliyor". Aşağıdaki üçü
+  // ise oyuncunun ÖLDÜRME kararını değiştiriyor: nerede, hangi sırayla,
+  // hangisini önce. Sürüye yeni bir yürüyüş biçimi eklemek çeşitlilik
+  // hissi vermiyordu; asıl eksik olan buydu.
+  /** öldüğünde PATLAR — "nerede öldürdüğün" sorusu */
+  | 'exploder'
+  /** öldüğünde İKİYE bölünür (bir kuşak) — "hangi sırayla" sorusu */
+  | 'splitter'
+  /** yakınındaki düşmanları HIZLANDIRIR — "önce hangisini" sorusu */
+  | 'herald';
 
 export interface EnemyType {
   id: string;
@@ -1290,6 +1307,73 @@ export const BEHAVIOR = {
      */
     closeIn: 24,
   },
+
+  /**
+   * PATLAYICI — öldüğü YERDE patlar.
+   *
+   * Oyuncuya "nerede öldürdüğün" sorusunu sorar. Menzilli bir silahla uzaktan
+   * düşürmek bedava; aura/yörünge gibi temas silahlarıyla eritmek bedel
+   * istiyor. Aynı sürü, silahına göre farklı bir problem hâline geliyor.
+   *
+   * ⚠️ TEMASTA DEĞİL ÖLÜMDE patlıyor. Temasta patlasaydı `charger`ın kötü bir
+   * kopyası olurdu; ölümde patlaması onu bir ÖLDÜRME kararına çeviriyor.
+   * ⚠️ Patlama düşmanlara ZARAR VERMEZ — verseydi oyuncu tek bir patlayıcıyı
+   * öldürüp sürünün yarısını temizler, silahları gereksizleşirdi.
+   */
+  exploder: {
+    blastR: 96,
+    /** temas hasarının bu katı — ölümcül değil ama ihmal edilemez */
+    blastDamageMul: 1.6,
+  },
+
+  /**
+   * BÖLÜNEN — öldüğünde iki küçük parçaya ayrılır.
+   *
+   * "Hangi sırayla öldüreceğin" sorusu: alan hasarı bir anda çok bölünen
+   * öldürürse sürü büyüyor. Tek hedefli silahlar bu tipe karşı daha iyi.
+   *
+   * ⚠️ TEK KUŞAK. Parçalar tekrar bölünmez — sonsuz bölünme hem bölümün
+   * bitmesini imkânsız kılar hem 420 düşman tavanını anında doldurur.
+   * ⚠️ Parçalar `stage.toSpawn` sayacına GİRMEZ: o sayaç "kaç düşman
+   * DOĞACAK" demek, bitiş koşulu ayrıca sahnenin boşalmasına bakıyor.
+   */
+  splitter: {
+    children: 2,
+    /** parçanın can/boyut/xp oranı — toplamları ana gövdeyi AŞMAMALI */
+    childHpMul: 0.42,
+    childRadiusMul: 0.72,
+    childSpeedMul: 1.18,
+    /** parçalar birbirinden bu kadar ayrık doğar (üst üste binmesinler) */
+    spreadPx: 22,
+  },
+
+  /**
+   * HABERCİ — yakınındaki düşmanları HIZLANDIRIR.
+   *
+   * Oyunun ilk "önce hangisini öldüreyim" kararı. Şimdiye kadar sürüdeki
+   * her düşman eşit derecede önemliydi; haberci bir HEDEF ÖNCELİĞİ yaratıyor.
+   *
+   * ⚠️ Kendisi YAVAŞ ve görünür. Hızlı olsaydı hem yakalanamaz hem sürünün
+   * içinde kaybolurdu; oysa öncelik hedefi olmasının şartı FARK EDİLMESİ.
+   * ⚠️ Etki KENDİSİNE uygulanmaz (yoksa habercilerin yanındaki haberci
+   * birbirini hızlandırır ve etki katlanır).
+   */
+  herald: {
+    auraR: 190,
+    /** menzildeki düşmanların hız çarpanı */
+    speedMul: 1.45,
+    /**
+     * Hızlandırma TAVANI — oyuncu hızının bu oranı.
+     *
+     * ⚠️ ŞART. Derin inişte hız `speedMax` ile 1,9 katına çıkıyor: en hızlı
+     * düşman (fare, 74) orada 141 px/sn oluyor ve oyuncu 165. Haberci
+     * çarpanı buna binseydi 204 çıkardı — yani KAÇILAMAZ bir düşman.
+     * Kaçılamaz düşman "zor" değil, haksızdır.
+     * ⚠️ Tavan düşmanın KENDİ hızını asla DÜŞÜRMEZ (bkz. motor): tavanın işi
+     * buff'ı sınırlamak, tabanı budamak değil.
+     */
+    speedCap: 0.92,
+  },
 } as const;
 
 // Renkler theme.ts paletinden — MOR YOK
@@ -1335,6 +1419,27 @@ export const ENEMIES: readonly EnemyType[] = [
   { id: 'bone_archer', hp: 150, speed: 40, damage: 19, radius: 13, xp: 12, color: '#e3d8c0', fromMinute: 11, art: 'bone_archer', behavior: 'ranged' },
   // HÜCUMCU: yaklaşır, durur (telegraf), sonra fırlar. Tehlike ani ve okunabilir.
   { id: 'grave_knight', hp: 320, speed: 34, damage: 26, radius: 16, xp: 20, color: '#8a97a3', fromMinute: 14, art: 'skel_armored', behavior: 'charger' },
+
+  // ── R5/12: ÖLDÜRME KARARINI DEĞİŞTİRENLER ──
+  //
+  // ⚠️ SPRITE YENİDEN KULLANILIYOR ve bu bilinçli. Diskte 16 düşman sprite'ı
+  // var ve 16'sı da kullanılıyor — yeni görsel YOK. Ama bu üçünün ayrımı
+  // zaten görselde değil DAVRANIŞTA: patlayan bir sefil ile normal bir sefil
+  // aynı sprite'ı kullansa bile oyuncu ikisini bir kez patlayınca ayırt eder.
+  // (Aynı ders boss arketiplerinde de geçerliydi.)
+  // ⚠️ Renkleri farklı: sürüde hangisinin "özel" olduğu okunabilmeli.
+
+  // PATLAYICI — öldüğü yerde patlar. Canı DÜŞÜK: yaklaşmadan öldürebilmek
+  // gerçek bir seçenek olmalı, yoksa ceza kaçınılmaz olur.
+  { id: 'bloat', hp: 26, speed: 34, damage: 9, radius: 13, xp: 4, color: '#efa72e', fromMinute: 4, art: 'mon_wretch', behavior: 'exploder' },
+  { id: 'gravebloat', hp: 96, speed: 30, damage: 20, radius: 17, xp: 11, color: '#c8324a', fromMinute: 10, art: 'mon_brute', behavior: 'exploder' },
+
+  // BÖLÜNEN — alan hasarına karşı sürüyü büyütür.
+  { id: 'husk', hp: 44, speed: 44, damage: 10, radius: 13, xp: 4, color: '#5f9e4a', fromMinute: 5, art: 'mon_slim', behavior: 'splitter' },
+
+  // HABERCİ — yavaş ve dayanıklı; yanındakileri hızlandırır. Öncelik hedefi.
+  { id: 'herald', hp: 180, speed: 24, damage: 14, radius: 16, xp: 13, color: '#8a97a3', fromMinute: 7, art: 'mon_horned', behavior: 'herald' },
+  { id: 'bone_herald', hp: 300, speed: 22, damage: 22, radius: 17, xp: 22, color: '#e3d8c0', fromMinute: 13, art: 'bone_archer', behavior: 'herald' },
 ] as const;
 
 /** DENGE NOTU: ilk değerler (base 2.4 / perMinute 1.7 / cap 620 / hp +%34) ile

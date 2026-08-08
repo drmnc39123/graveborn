@@ -8,7 +8,7 @@
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatial';
 import {
-  BOSS, BOSS_ARCH, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
+  BOSS, BOSS_ARCH, CHEST_RADIUS, DESCENT, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
   WEAPONS, ASCENSION, BEHAVIOR, ascensionDropMul, bossArchetypeOf, descentStage, rareDropAmount,
   rareDropChance, startLevelFor, weaponById,
@@ -19,6 +19,16 @@ import {
 import { DEFAULT_HERO, heroById, mergeStats } from './heroes';
 
 export interface Enemy {
+  /**
+   * Hangi `EnemyType`ten doğdu (config id).
+   *
+   * ⚠️ Mantığı BESLEMEZ — davranış `behavior` alanından okunuyor. Bu alan
+   * ölçüm ve hata ayıklama için: testte "hangi tip kaç tane" sorusu `radius`
+   * karşılaştırmasıyla çözülmeye çalışıldı ve YANLIŞ cevap verdi (brute ile
+   * herald aynı çapta). Kimliği çapından tahmin etmek yerine taşımak daha
+   * ucuz ve doğru.
+   */
+  typeId: string;
   x: number; y: number; hp: number; maxHp: number;
   speed: number; damage: number; radius: number; xp: number;
   color: string; hitFlash: number;
@@ -78,6 +88,12 @@ export interface Enemy {
   cdx: number; cdy: number;
   /** weave salınımının faz ofseti — spawn sayacından türetilir (RNG'ye dokunmaz) */
   phase: number;
+  /**
+   * `splitter` için kuşak sayacı. 0 = ana gövde, 1 = parça.
+   * ⚠️ Parçalar TEKRAR BÖLÜNMEZ: sonsuz bölünme hem bölümün bitmesini
+   * imkânsız kılar hem 420 düşman tavanını anında doldururdu.
+   */
+  splitGen?: number;
 }
 
 /** Düşman mermisi — oyuncuya zarar verir. Oyuncununkinden AYRI dizi. */
@@ -349,6 +365,16 @@ export class Game {
   hitZones: HitZone[] = [];
   /** açık ışınlar — bkz. Beam */
   beams: Beam[] = [];
+  /**
+   * Sahnedeki HABERCİLER — her tick tazelenen küçük bir liste.
+   *
+   * ⚠️ Neden ayrı liste: haberci aurası her düşman için sorgulanıyor ve
+   * 420 düşman × 420 düşman taraması saniyede 10 milyon karşılaştırma
+   * demekti. Haberciler nadirdir (sahnede tipik 0-3); ayrı tutmak taramayı
+   * 420 × 3'e indiriyor. Izgara sorgusu da denenebilirdi ama haberci sayısı
+   * o kadar düşük ki düz döngü daha ucuz.
+   */
+  private heralds: Enemy[] = [];
   chests: Chest[] = [];
 
   /** Oynanan bölüm — sabit düşman havuzu, "hepsi öldü" bitiş koşulu */
@@ -774,6 +800,7 @@ export class Game {
         ? (this.spawnCount % 2 === 0 ? this.hero : r)
         : (this.hero.alive ? this.hero : (r ?? this.hero));
       this.enemies.push({
+        typeId: t.id,
         // ⚠️ DOĞUM MERKEZİ SIRAYLA. Halka birinci dövüşçüye sabitliyken
         // ölçüldü: rakip 25 saniyede SIFIR düşman gördü, sürünün tamamı bir
         // tarafa yığıldı (6 / 0). Paylaşılan arena, paylaşılan sürü demek —
@@ -817,6 +844,7 @@ export class Game {
     const rx = this.viewW / 2 + SPAWN.ringMargin;
     const ry = this.viewH / 2 + SPAWN.ringMargin;
     this.enemies.push({
+      typeId: 'boss',
       x: this.px + Math.cos(ang) * rx,
       y: this.py + Math.sin(ang) * ry,
       hp, maxHp: hp,
@@ -911,6 +939,14 @@ export class Game {
     // Artık SADECE son 8 düşman ve taban oyuncu hızının ALTINDA kalıyor:
     // kaçabilirsin ama mesafe açamazsın → menzilde kalırlar, silah onları biçer.
     // Yakınsama garantisi korunuyor, haksız hız yok.
+    // ⚠️ HER TICK TAZELENİR, kalıcı tutulmaz: ölen bir haberci listede
+    // kalsaydı sürüyü mezarından hızlandırmaya devam ederdi.
+    this.heralds.length = 0;
+    for (let i = 0; i < this.enemies.length; i++) {
+      const e = this.enemies[i];
+      if (e.behavior === 'herald' && e.hp > 0) this.heralds.push(e);
+    }
+
     const left = this.remaining;
     const playerSpeed = PLAYER.speed * this.stats.moveSpeed;
     let huntFloor = 0;
@@ -928,7 +964,30 @@ export class Game {
       const dy = tg.py - e.y;
       const d = Math.hypot(dx, dy) || 1;
       const nx = dx / d, ny = dy / d;
-      const sp = e.boss ? e.speed : Math.max(e.speed, huntFloor);
+      // HABERCİ AURASI — yakındaki habercinin hız çarpanı.
+      // ⚠️ Habercinin KENDİSİNE uygulanmaz: uygulansaydı iki haberci
+      // birbirini hızlandırır ve etki katlanırdı.
+      // ⚠️ Boss'a da uygulanmaz — boss hızı kendi arketip mantığında.
+      let auraMul = 1;
+      if (!e.boss && e.behavior !== 'herald' && this.heralds.length > 0) {
+        for (let k = 0; k < this.heralds.length; k++) {
+          const hr = this.heralds[k];
+          if (hr.hp <= 0) continue;
+          const hdx = hr.x - e.x, hdy = hr.y - e.y;
+          if (hdx * hdx + hdy * hdy <= BEHAVIOR.herald.auraR * BEHAVIOR.herald.auraR) {
+            auraMul = BEHAVIOR.herald.speedMul;
+            break;   // ⚠️ TEK KEZ — çarpanlar üst üste BİNMEZ
+          }
+        }
+      }
+      // ⚠️ BUFF TAVANI — haberci hiçbir düşmanı oyuncudan hızlı yapamaz.
+      // Tavan düşmanın KENDİ hızını asla düşürmez: `Math.max(e.speed, ...)`
+      // olmasaydı yavaş bir oyuncunun karşısındaki sürü buff'sız hâlinden bile
+      // yavaşlar, yani haberci düşmanları KÖTÜLEŞTİRİRDİ.
+      const buffed = auraMul > 1
+        ? Math.min(e.speed * auraMul, Math.max(e.speed, playerSpeed * BEHAVIOR.herald.speedCap))
+        : e.speed;
+      const sp = e.boss ? e.speed : Math.max(buffed, huntFloor);
 
       // AV MODU davranışı EZER: son 8 düşman kaldığında herkes kovalar.
       // Menzilli/hücumcu bir düşman mesafe tutmaya devam ederse bölüm
@@ -1974,6 +2033,55 @@ export class Game {
         x: e.x, y: e.y, art: e.art,
         facingRight: e.facingRight, radius: e.radius, boss: !!e.boss,
       });
+    }
+
+    // ── PATLAYICI: öldüğü YERDE patlar ──
+    // ⚠️ Patlama SADECE dövüşçülere zarar verir, DÜŞMANLARA DEĞİL. Düşmanlara
+    // da verseydi oyuncu tek bir patlayıcıyı öldürüp sürünün yarısını
+    // temizler, silahlar gereksizleşirdi.
+    if (e.behavior === 'exploder') {
+      const B = BEHAVIOR.exploder;
+      const tg = this.target(e.x, e.y);
+      const dd = Math.hypot(tg.px - e.x, tg.py - e.y);
+      if (dd <= B.blastR && tg.iframe <= 0) {
+        const taken = Math.max(1, Math.round(e.damage * B.blastDamageMul) - tg.stats.armor);
+        tg.hp -= taken;
+        tg.iframe = PLAYER.iframeSec;
+        this.events.add('hurt');
+        tg.hurtT = 0.32;
+        if (this.hurts.length < 4) this.hurts.push({ amount: taken });
+      }
+      this.events.add('charge');   // patlamanın kendi sesi
+    }
+
+    // ── BÖLÜNEN: ikiye ayrılır ──
+    // ⚠️ TEK KUŞAK (`splitGen`) ve ⚠️ TAVANA SAYGILI: `aliveMax` dolmuşken
+    // bölünmek 420 sınırını delerdi ve o sınır fps emniyeti.
+    if (e.behavior === 'splitter' && !e.splitGen) {
+      const S = BEHAVIOR.splitter;
+      const cocukHp = Math.max(1, e.maxHp * S.childHpMul);
+      for (let k = 0; k < S.children; k++) {
+        if (this.enemies.length >= DESCENT.aliveMax) break;
+        // ⚠️ Açı SPAWN SAYACINDAN türüyor, rng'den DEĞİL: burada zar atmak
+        // RNG akışını ölüm sayısına bağlar ve aynı seed başka koşu üretirdi.
+        const a = ((this.spawnCount++ * 2.399) + k * Math.PI) % (Math.PI * 2);
+        this.enemies.push({
+          typeId: e.typeId,
+          x: e.x + Math.cos(a) * S.spreadPx,
+          y: e.y + Math.sin(a) * S.spreadPx,
+          hp: cocukHp, maxHp: cocukHp,
+          speed: e.speed * S.childSpeedMul,
+          damage: e.damage,
+          radius: Math.max(6, e.radius * S.childRadiusMul),
+          // ⚠️ XP de bölünüyor: bölünmek oyuncuya BEDAVA seviye vermemeli.
+          xp: Math.max(1, Math.round(e.xp * S.childHpMul)),
+          color: e.color, hitFlash: 0,
+          art: e.art, animT: 0, facingRight: true, contactCd: 0,
+          behavior: 'chase', atkCd: 0, cState: 0, cdx: 0, cdy: 0,
+          phase: (this.spawnCount * 1.13) % (Math.PI * 2),
+          splitGen: 1,
+        });
+      }
     }
   }
 
