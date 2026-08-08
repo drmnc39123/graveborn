@@ -139,7 +139,7 @@ export const STAGES: readonly StageDef[] = [
   {
     id: 5, name: 'The Black Chapel', enemyCount: 960, firstClearGold: 4000,
     spawnRate: 4.6, maxAlive: 180, enemies: ['brute', 'fiend', 'crab', 'warrior', 'hulk', 'herald'],
-    hpMul: 3.8, speedMul: 1.16,
+    hpMul: 3.42, speedMul: 1.16,
     boss: { hp: 30000, speed: 54, damage: 38, radius: 52, art: 'boss_nightmare', label: 'The Unburied' },
   },
   // ── GEÇ KAMPANYA ──
@@ -149,25 +149,25 @@ export const STAGES: readonly StageDef[] = [
   {
     id: 6, name: 'The Sunken Ossuary', enemyCount: 960, firstClearGold: 4200,
     spawnRate: 5.4, maxAlive: 220, enemies: ['fiend', 'crab', 'rat', 'dire_rat', 'warrior', 'bloat', 'husk'],
-    hpMul: 4.2, speedMul: 1.2, damageMul: 1.2,
+    hpMul: 3.78, speedMul: 1.2, damageMul: 1.2,
     boss: { hp: 45_000, speed: 50, damage: 44, radius: 54, art: 'boss_mega', label: 'The Drowned Choir' },
   },
   {
     id: 7, name: 'Gallows Reach', enemyCount: 1140, firstClearGold: 4500,
     spawnRate: 6.0, maxAlive: 260, enemies: ['dire_rat', 'warrior', 'hulk', 'bone_thrall', 'gravebloat'],
-    hpMul: 4.4, speedMul: 1.24, damageMul: 1.35,
+    hpMul: 3.96, speedMul: 1.24, damageMul: 1.35,
     boss: { hp: 62_000, speed: 52, damage: 50, radius: 56, art: 'boss_nightmare', label: 'The Hanged Warden' },
   },
   {
     id: 8, name: 'The Bone Choir', enemyCount: 1200, firstClearGold: 4900,
     spawnRate: 6.7, maxAlive: 300, enemies: ['bone_thrall', 'bone_archer', 'hulk', 'crab', 'bone_herald'],
-    hpMul: 4.6, speedMul: 1.28, damageMul: 1.5,
+    hpMul: 4.14, speedMul: 1.28, damageMul: 1.5,
     boss: { hp: 79_000, speed: 54, damage: 58, radius: 58, art: 'boss_mega', label: 'The Choirmaster' },
   },
   {
     id: 9, name: 'The Iron Vigil', enemyCount: 1200, firstClearGold: 5300,
     spawnRate: 7.4, maxAlive: 350, enemies: ['grave_knight', 'bone_archer', 'warrior', 'hulk'],
-    hpMul: 4.8, speedMul: 1.32, damageMul: 1.7,
+    hpMul: 4.32, speedMul: 1.32, damageMul: 1.7,
     boss: { hp: 96_000, speed: 56, damage: 66, radius: 60, art: 'boss_nightmare', label: 'The Iron Vigil' },
   },
   {
@@ -201,7 +201,7 @@ export const STAGES: readonly StageDef[] = [
   // Yani ikinci kitabın bölümleri KISA ve SERT: 4-8 dakika, her biri kendi
   // sürüsü ve kendi boss'uyla. Amaç kampanyayı ~1,5 saatten ~5 saate çıkarmak.
   {
-    id: 11, name: 'The Weeping Steps', enemyCount: 1020, firstClearGold: 6200,
+    id: 11, name: 'The Weeping Steps', enemyCount: 1320, firstClearGold: 6200,
     spawnRate: 7.0, maxAlive: 300, enemies: ['bone_archer', 'grave_knight', 'skeleton', 'dire_rat'],
     hpMul: 5.2, speedMul: 1.38, damageMul: 2.2,
     boss: { hp: 121_000, speed: 56, damage: 84, radius: 60, art: 'boss_mega', label: 'The Stair Widow' },
@@ -221,74 +221,74 @@ export const STAGES: readonly StageDef[] = [
   {
     id: 14, name: 'Hollow King\'s Court', enemyCount: 1380, firstClearGold: 7800,
     spawnRate: 7.6, maxAlive: 350, enemies: ['grave_knight', 'warrior', 'bone_archer', 'skeleton'],
-    hpMul: 5.7, speedMul: 1.44, damageMul: 3.1,
+    hpMul: 6.58, speedMul: 1.44, damageMul: 3.1,
     boss: { hp: 145_000, speed: 60, damage: 110, radius: 70, art: 'boss_nightmare', label: 'The Hollow King' },
   },
   {
     id: 15, name: 'The Rat Cathedral', enemyCount: 1380, firstClearGold: 8400,
     spawnRate: 8.0, maxAlive: 380, enemies: ['rat', 'dire_rat', 'wretch', 'imp'],
-    hpMul: 5.8, speedMul: 1.46, damageMul: 3.4,
+    hpMul: 7.01, speedMul: 1.46, damageMul: 3.4,
     boss: { hp: 153_000, speed: 64, damage: 118, radius: 58, art: 'boss_mini', label: 'The Litter Mother' },
   },
   {
     id: 16, name: 'Emberglass Wastes', enemyCount: 1440, firstClearGold: 9100,
     spawnRate: 8.0, maxAlive: 390, enemies: ['fiend', 'horned', 'bird', 'brute'],
-    hpMul: 6.0, speedMul: 1.48, damageMul: 3.8,
+    hpMul: 7.58, speedMul: 1.48, damageMul: 3.8,
     boss: { hp: 161_000, speed: 62, damage: 128, radius: 66, art: 'boss_mega', label: 'Glasswalker' },
   },
   {
     id: 17, name: 'The Sunless Vault', enemyCount: 1440, firstClearGold: 9800,
     spawnRate: 8.0, maxAlive: 400, enemies: ['bone_thrall', 'bone_archer', 'grave_knight', 'hulk'],
-    hpMul: 6.1, speedMul: 1.50, damageMul: 4.2,
+    hpMul: 8.03, speedMul: 1.50, damageMul: 4.2,
     boss: { hp: 169_000, speed: 60, damage: 140, radius: 72, art: 'boss_nightmare', label: 'The Vaultkeeper' },
   },
   {
     id: 18, name: 'Carrionfield', enemyCount: 1500, firstClearGold: 10600,
     spawnRate: 8.0, maxAlive: 410, enemies: ['bird', 'crab', 'rogue', 'wretch', 'rat'],
-    hpMul: 6.3, speedMul: 1.52, damageMul: 4.6,
+    hpMul: 8.64, speedMul: 1.52, damageMul: 4.6,
     boss: { hp: 177_000, speed: 66, damage: 152, radius: 60, art: 'boss_mini', label: 'The Carrion Choir' },
   },
   {
     id: 19, name: 'The Iron Throat', enemyCount: 1500, firstClearGold: 11400,
     spawnRate: 8.0, maxAlive: 420, enemies: ['warrior', 'grave_knight', 'hulk', 'brute'],
-    hpMul: 6.4, speedMul: 1.54, damageMul: 5.0,
+    hpMul: 9.12, speedMul: 1.54, damageMul: 5.0,
     boss: { hp: 185_000, speed: 62, damage: 166, radius: 74, art: 'boss_nightmare', label: 'Throat of Iron' },
   },
   {
     id: 20, name: 'The Pale Procession', enemyCount: 1560, firstClearGold: 12300,
     spawnRate: 8.0, maxAlive: 420, enemies: ['skeleton', 'bone_thrall', 'bone_archer', 'grave_knight'],
-    hpMul: 6.6, speedMul: 1.56, damageMul: 5.4,
+    hpMul: 9.76, speedMul: 1.56, damageMul: 5.4,
     boss: { hp: 193_000, speed: 64, damage: 182, radius: 68, art: 'boss_mega', label: 'The Pale Marshal' },
   },
   {
     id: 21, name: 'Where the Wood Ends', enemyCount: 1560, firstClearGold: 13300,
     spawnRate: 8.0, maxAlive: 420, enemies: ['imp', 'rogue', 'bird', 'fiend', 'dire_rat'],
-    hpMul: 6.7, speedMul: 1.58, damageMul: 5.8,
+    hpMul: 10.27, speedMul: 1.58, damageMul: 5.8,
     boss: { hp: 201_000, speed: 68, damage: 200, radius: 64, art: 'boss_mini', label: 'The Last Root' },
   },
   {
     id: 22, name: 'The Ossuary Deep', enemyCount: 1620, firstClearGold: 14400,
     spawnRate: 8.0, maxAlive: 420, enemies: ['bone_thrall', 'skeleton', 'grave_knight', 'bone_archer', 'hulk'],
-    hpMul: 6.9, speedMul: 1.60, damageMul: 6.2,
+    hpMul: 10.95, speedMul: 1.60, damageMul: 6.2,
     boss: { hp: 209_000, speed: 66, damage: 220, radius: 76, art: 'boss_nightmare', label: 'Marrowmind' },
   },
   {
     id: 23, name: 'The Furnace Below', enemyCount: 1620, firstClearGold: 15500,
     spawnRate: 8.0, maxAlive: 420, enemies: ['brute', 'hulk', 'horned', 'crab', 'warrior'],
-    hpMul: 7.0, speedMul: 1.62, damageMul: 6.5,
+    hpMul: 11.49, speedMul: 1.62, damageMul: 6.5,
     boss: { hp: 217_000, speed: 64, damage: 242, radius: 78, art: 'boss_mega', label: 'The Bellows' },
   },
   {
     id: 24, name: 'The Widow\'s Vigil', enemyCount: 1680, firstClearGold: 16800,
     spawnRate: 8.0, maxAlive: 420, enemies: ['grave_knight', 'bone_archer', 'warrior', 'fiend', 'bone_thrall'],
-    hpMul: 7.2, speedMul: 1.64, damageMul: 6.8,
+    hpMul: 12.21, speedMul: 1.64, damageMul: 6.8,
     boss: { hp: 225_000, speed: 68, damage: 266, radius: 72, art: 'boss_nightmare', label: 'She Who Waited' },
   },
   {
     id: 25, name: 'The Grave of Graves', enemyCount: 1680, firstClearGold: 18100,
     spawnRate: 8.0, maxAlive: 420,
     enemies: ['grave_knight', 'hulk', 'bone_archer', 'bone_thrall', 'fiend', 'warrior'],
-    hpMul: 7.4, speedMul: 1.66, damageMul: 7.2,
+    hpMul: 12.95, speedMul: 1.66, damageMul: 7.2,
     boss: { hp: 233_000, speed: 70, damage: 292, radius: 84, art: 'boss_nightmare', label: 'GRAVEBORN' },
   },
 ] as const;
