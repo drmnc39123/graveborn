@@ -15,7 +15,7 @@ import {
   BEHAVIOR, BOSS, BOSS_ARCH, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES,
   MAX_WEAPONS, PASSIVES, PLAYER,
   SIM_VERSION, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
-  descentStage, rareDropChance, stageById,
+  descentStage, rareDropChance, stageById, weaponById,
   type BossArchetype, type StageDef,
 } from './config.js';
 import { ENEMY_ART } from './sprites.js';
@@ -161,6 +161,43 @@ const seal = fnv1a([
 
 check(`simülasyon mührü (SIM_VERSION ${SIM_VERSION})`, seal === SIM_SEAL,
   seal === SIM_SEAL ? seal : `${seal} ≠ ${SIM_SEAL} — RNG AKIŞI KAYDI`);
+
+// ── 1C) HAVUZ MÜHRÜ — birinci mührün İKİNCİ kör noktası ──
+//
+// 🔴 ÖLÇÜLDÜ: yukarıdaki `SIM_SEAL` koşusu **LV1'de bitiyor** — yani
+// `rollOffers` HİÇ ÇAĞRILMIYOR. (Sebep: daire çizen sürücü mücevherleri
+// toplamıyor; 240 saniyeye çıkarıldı, yine LV1.) Silah havuzuna 3 silah
+// eklendi, `rng.shuffle(pool)` havuz uzunluğu kadar zar tüketiyor, yani RNG
+// akışı KESİNLİKLE kaydı — ama mühür kılını kıpırdatmadı.
+//
+// Bu, aynı mührün ikinci kör noktası (birincisi: boss'u hiç görmüyor, bkz.
+// [10B]). `SIM_SEAL`in gerçekte kapsadığı şey dar: doğma, hareket, BAŞLANGIÇ
+// silahı ve nadir gold.
+//
+// ⚠️ Bu mühür KOŞU ÜZERİNDEN DEĞİL, havuzu DOĞRUDAN sorguluyor. Seviye
+// atlayan bir koşu kurmaya çalışmak (daha uzun süre, başka sürücü, XP hilesi)
+// ölçümü kırılganlaştırırdı: hedef "havuz değişti mi", "oyuncu seviye
+// atlayabiliyor mu" değil.
+{
+  const g = new Game(SEED, STAGES[0]);
+  g.setViewport(1280, 720);
+  const dizi: string[] = [];
+  for (let i = 0; i < 60; i++) {
+    (g as unknown as { rollOffers: (h: unknown) => void }).rollOffers(g.hero);
+    dizi.push(g.offers.map((o) => o.id).join('+'));
+  }
+  const POOL_SEAL = '1fde9e22';
+  const poolSeal = fnv1a(dizi.join('|'));
+  const gorulen = new Set(dizi.join('|').split(/[|+]/));
+  const eksik = WEAPONS.filter((w) => !gorulen.has(`w:${w.id}`)).map((w) => w.id);
+  console.log(`     60 ruloda ${gorulen.size} farklı teklif`);
+  // ⚠️ ÖNCE ULAŞILABİLİRLİK: teklif edilmeyen bir silah, oyunda YOK demektir.
+  // Mühür bunu yakalamaz — aynı şekilde "hiç" de mühürlenebilir.
+  check('her TABAN silah teklif havuzuna giriyor', eksik.length === 0,
+    eksik.length ? eksik.join(',') : `${WEAPONS.length} silah`);
+  check(`havuz mührü (SIM_VERSION ${SIM_VERSION})`, poolSeal === POOL_SEAL,
+    poolSeal === POOL_SEAL ? poolSeal : `${poolSeal} ≠ ${POOL_SEAL} — TEKLİF HAVUZU DEĞİŞTİ`);
+}
 
 // ── 1C) KOZMETİK İZOLASYON ──
 // Render katmanı motorun kozmetik kuyruklarını her frame boşaltıyor. Bu
@@ -549,7 +586,18 @@ console.log('\n[3C] Nadir düşüş');
   check('farklı seed farklı nadir gold', x.gold !== z.gold, `${x.gold} vs ${z.gold}`);
   check('düşüş NADİR (kill başına maaş değil)', x.gold < x.kills,
     `${x.gold} gold / ${x.kills} kill`);
-  check('ama hiç düşmüyor da değil', x.gold > 0, `${x.gold} gold`);
+  // ⚠️ ÇOK SEED — tek seed'e "gold düşmeli" dedirtmek YAZI-TURA.
+  // Bu satır önce `x.gold > 0` diyordu ve seed 4242'de kırmızı yandı; ölçüldü:
+  // 100 kill'de altı seed'in üçü SIFIR düşüş veriyor (4242:0 · 9999:13 · 1:0
+  // · 77:3 · 555:0 · 31337:5). Yani sıfır, düşüşün NADİR olmasının doğal
+  // sonucu — bozuk olan mekanik değil, ölçümdü. Korunması gereken şey
+  // "her koşuda düşer" değil, "hiç düşmez hâle gelmedi".
+  const cokSeed = [4242, 9999, 1, 77, 555, 31337].map((sd) => runRare(sd).gold);
+  const dusen = cokSeed.filter((v) => v > 0).length;
+  console.log(`     6 seed: ${cokSeed.join(', ')} nadir gold`);
+  check('düşüş mekanizması ÇALIŞIYOR (6 seedin en az biri)', dusen > 0,
+    `${dusen}/6 seed düşüş verdi`);
+  check('ama HER koşuda düşmüyor (gerçekten nadir)', dusen < 6, `${dusen}/6`);
   // ihtimal derinlikle iyileşmeli — derin oyuncu üretici olmalı
   check('düşüş ihtimali derinlikle artıyor', rareDropChance(30) > rareDropChance(0),
     `${rareDropChance(0).toFixed(4)} → ${rareDropChance(30).toFixed(4)}`);
@@ -747,6 +795,11 @@ console.log('\n[8D] Silah güç dengesi (1. bölüm, 60 sn, tek silah, dairesel 
     aimed: 'auto', nova: 'auto', chain: 'auto', aura: 'auto', ground: 'auto',
     sweep: 'directional', boomerang: 'directional',
     orbit: 'orbit',
+    // ⚠️ Sınıf, silahın SÜRÜCÜYE bağımlılığına göre: `homing` ve `mine`
+    // oyuncunun baktığı yönü umursamıyor (auto), `beam` umursuyor
+    // (directional). Yanlış sınıflamak, sınıf farkını denge sorunu sanmak olur.
+    homing: 'auto', mine: 'auto',
+    beam: 'directional',
   };
   const rows = WEAPONS.map((w) => ({ name: w.name, kills: killsWith(w), cls: CLASS[w.pattern] }))
     .sort((a, b) => b.kills - a.kills);
@@ -1086,6 +1139,27 @@ for (const arch of ARCHS) {
   // tek seed yazı-turadır.) Aynı seed'le değişen TEK şey arketip oluyor.
   const g = new Game(seedFromString('boss-yakinsama'), st);
   g.setViewport(1280, 720);
+  // ⚠️ BUILD SABİT — level-up piyangosuna BIRAKILMAZ.
+  //
+  // Test önce `offers[0]` politikasıyla koşuyordu ve silah havuzuna 3 silah
+  // eklenince DÖRT ARKETİP DE ÇÖKTÜ: yapay oyuncu başka kartlar çekti, iki
+  // seviye-1 silahla kaldı, sürüyü temizleyemedi, boss hiç doğmadı. Boss
+  // kodunda hiçbir şey değişmemişti — ölçüm bozulmuştu. (Ölçüldü: aynı
+  // senaryoda YALNIZCA `shard` ile de takılıyor, yani suç yeni silahlarda
+  // değil, testin bir kart çekilişine bağlı olmasındaydı.)
+  //
+  // Bu bölümün sorusu "boss yakınsıyor mu"; "yapay oyuncu iyi kart çekti mi"
+  // değil. Sabit ve yeterli bir build, soruyu sorulmak istenen soru yapıyor.
+  g.weapons = [
+    // ⚠️ SEVİYE 3 — ÖLÇÜLEREK seçildi, gözden değil. Seviye 8'de bölüm
+    // temizleniyor ama boss 3,6 saniye yaşıyor: telegraf ve küre HİÇ
+    // görülmüyor, yani test boss davranışını değil boss'un ölüm hızını
+    // ölçüyor. Seviye 1'de ise sürü hiç temizlenmiyor (boss doğmuyor).
+    // Ölçüm: lv8 → boss 3,6 sn · lv5 → 11,8 sn · lv3 → 16,0 sn · lv2 → 36,6 sn.
+    // 3 hem bölümü 141 sn'de bitiriyor hem boss'a nefes bırakıyor.
+    { def: weaponById('shard')!, level: 3, cd: 0 },
+    { def: weaponById('lash')!, level: 3, cd: 0 },
+  ];
   let enYakin = Infinity;
   let bossGoruldu = false;
   let telegrafGoruldu = false;
@@ -1157,6 +1231,11 @@ console.log('\n[10C] keeper: merkez GERÇEKTEN güvenli mi');
   function halkaHasari(nokta: (bossR: number, slamR: number, ic: number) => number): number {
     const g = new Game(seedFromString('keeper-merkez'), st);
     g.setViewport(1280, 720);
+    // ⚠️ Build sabit — gerekçe [10B]'deki notta.
+    g.weapons = [
+      { def: weaponById('shard')!, level: 3, cd: 0 },
+      { def: weaponById('lash')!, level: 3, cd: 0 },
+    ];
     let toplam = 0;
     const ticks = Math.round(600 / TICK);
     for (let i = 0; i < ticks; i++) {

@@ -102,8 +102,37 @@ export interface Projectile {
   returning?: boolean;
   /** boomerang: dönüş hızı (ilk atış hızı) */
   speed?: number;
+  /**
+   * homing: saniyede kaç radyan DÖNEBİLİR.
+   * ⚠️ Sonsuz olmamalı — kusursuz takip `aimed`i gereksiz kılar (bkz. config).
+   */
+  seek?: number;
   /** ⚠️ SADECE GÖRSEL ETİKET — hangi silahtan çıktı. Hiçbir mantığı beslemez;
    *  render doğru mermi/çarpma sprite'ını seçmek için okur. */
+  wid?: string;
+}
+
+/**
+ * IŞIN — oyundaki tek SÜREKLİ hasar kaynağı.
+ *
+ * ⚠️ AÇI ATIŞ ANINDA KİLİTLENİR, kaynak oyuncuyu TAKİP EDER. İkisi birden
+ * takip etseydi silah "her yeri tarayan bedava alan" olurdu; ikisi birden
+ * sabit olsaydı oyuncu ışını bırakıp gitmek zorunda kalırdı. Bu hâliyle
+ * oyuncu bir yön SEÇİYOR, sonra o yönü taşıyarak yürüyor.
+ */
+export interface Beam {
+  /** kaynak — her frame oyuncuya güncellenir */
+  x: number; y: number;
+  /** ⚠️ atışta kilitlenir, bir daha değişmez */
+  angle: number;
+  range: number; width: number;
+  damage: number;
+  life: number; maxLife: number;
+  /** hasar aralığı ve sayacı */
+  tick: number; tickCd: number;
+  owner: Hero;
+  /** aynı tikte aynı düşmana iki kez vurmasın */
+  hit: Set<Enemy>;
   wid?: string;
 }
 
@@ -127,6 +156,12 @@ export interface HitZone {
   retickCd?: number;
   /** true ise dikdörtgen değil DAİRE olarak çarpışır ve çizilir */
   round?: boolean;
+  /**
+   * TUZAK. Doluysa alan HENÜZ hasar vermiyor: kuruluyor, sonra bekliyor,
+   * düşman yaklaşınca PATLIYOR ve normal bir yuvarlak alana dönüşüyor.
+   * ⚠️ `damage` tetiklenene kadar 0 — tuzağın tamamı bu gecikmede.
+   */
+  trap?: { arm: number; triggerR: number; blastR: number; damage: number };
   /** ⚠️ SADECE GÖRSEL ETİKET — bkz. Projectile.wid */
   wid?: string;
 }
@@ -312,6 +347,8 @@ export class Game {
   arcs: Arc[] = [];
   gems: Gem[] = [];
   hitZones: HitZone[] = [];
+  /** açık ışınlar — bkz. Beam */
+  beams: Beam[] = [];
   chests: Chest[] = [];
 
   /** Oynanan bölüm — sabit düşman havuzu, "hepsi öldü" bitiş koşulu */
@@ -567,6 +604,7 @@ export class Game {
     this.fire(this.hero, dt);            // 4 desen: aimed / sweep / orbit / aura
     if (r && r.alive) this.fire(r, dt);
     this.updateHitZones(dt);  // sweep hitbox'ları
+    this.updateBeams(dt);     // sürekli ışınlar
     this.moveProjectiles(dt);
     this.collideProjectiles();
     this.reapDead();          // TÜM hasar kaynaklarından sonra tek temizlik
@@ -1268,6 +1306,29 @@ export class Game {
     return best;
   }
 
+  /**
+   * En yakın düşman — OYUNCUYA değil, verilen NOKTAYA göre.
+   *
+   * ⚠️ Takip eden mermi için `nearestEnemy` yanlış cevabı verirdi: mermi
+   * oyuncudan uzaklaştıkça oyuncunun yanındaki düşmanı hedeflemeye devam
+   * eder, yani geri dönerdi. Hedef merminin KENDİ konumundan seçilmeli.
+   * ⚠️ Ölmekte olanlar elenir; ölü bir hedefe kilitlenen mermi, sürünün
+   * ortasında dümdüz gider.
+   */
+  private nearestEnemyTo(x: number, y: number, range: number): Enemy | null {
+    let best: Enemy | null = null;
+    let bestD = range * range;
+    const cand = this.grid.query(x, y, range, this.scratch);
+    for (let i = 0; i < cand.length; i++) {
+      const e = cand[i];
+      if (e.hp <= 0) continue;
+      const dx = e.x - x, dy = e.y - y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < bestD) { bestD = d2; best = e; }
+    }
+    return best;
+  }
+
   /** Tüm silahları ilerlet. Motor tek, desen veri — yeni silah = config kaydı. */
   private fire(h: Hero, dt: number) {
     // Yörünge açısı sürekli döner (silah olmasa da; kayıt tutmak ucuz).
@@ -1329,6 +1390,20 @@ export class Game {
         w.cd = this.wCooldown(h, w);
         h.atkT = 0.30;
         this.fireChain(h, w, target);
+      } else if (def.pattern === 'homing') {
+        // ⚠️ `aimed`den farkı: hedef YOKSA DA ateş eder. Takip eden mermi
+        // sonradan hedef bulabilir; beklemek bu silahın anlamını yok ederdi.
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireHoming(h, w);
+      } else if (def.pattern === 'mine') {
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireMine(h, w);
+      } else if (def.pattern === 'beam') {
+        w.cd = this.wCooldown(h, w);
+        h.atkT = 0.30;
+        this.fireBeam(h, w);
       }
     }
   }
@@ -1380,6 +1455,162 @@ export class Game {
   }
 
   /** #5 boomerang — baktığın yöne savrulur, ömrünün yarısında geri döner */
+  /**
+   * TAKİP — `aimed`in cevaplayamadığı soruyu cevaplıyor: kaçan düşman.
+   *
+   * ⚠️ Hedef yoksa da ateş eder ve mermi hedefi SONRADAN arar. `aimed` gibi
+   * "hedef yoksa bekle" deseydi takip özelliğinin anlamı kalmazdı — mermi
+   * zaten hedefe kilitli doğardı.
+   */
+  private fireHoming(h: Hero, w: OwnedWeapon) {
+    const def = w.def;
+    const n = this.wCount(h, w);
+    const spd = (def.projectileSpeed ?? 210) * h.stats.projSpeed;
+    const life = (def.lifeSec ?? 3.2) * h.stats.duration;
+    // Varsa en yakın düşmana, yoksa bakılan yöne — ikisi de KİLİT DEĞİL,
+    // sadece başlangıç yönü.
+    const t = this.nearestEnemy(def.range ?? 520);
+    const baseAng = t
+      ? Math.atan2(t.y - h.py, t.x - h.px)
+      : (h.facingRight ? 0 : Math.PI);
+    for (let i = 0; i < n; i++) {
+      // ⚠️ Yelpaze GENİŞ: dar açılsaydı n mermi aynı düşmana gider, fazlası
+      // boşa yanardı. Takip zaten toparlıyor; geniş başlamak kapsama kazandırıyor.
+      const off = n === 1 ? 0 : (i - (n - 1) / 2) * 0.55;
+      const a = baseAng + off;
+      this.projectiles.push({ owner: h,
+        x: h.px, y: h.py,
+        vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+        damage: this.wDamage(h, w), radius: 7,
+        life, pierce: def.pierce ?? 1,
+        seek: def.seekRate ?? 3.4,
+        wid: def.id,
+      });
+    }
+  }
+
+  /**
+   * TUZAK — tek "önceden düşün" silahı.
+   *
+   * ⚠️ Oyuncunun ÜSTÜNE bırakılıyor, ileri değil. İleri bırakmak "nereye
+   * bakıyorsun" sorusunu sorardı ve onu zaten boomerang soruyor. Buradaki
+   * soru "sürü nereden gelecek": oyuncu tuzağı bırakıp çekiliyor.
+   */
+  private fireMine(h: Hero, w: OwnedWeapon) {
+    const def = w.def;
+    const n = this.wCount(h, w);
+    const alan = this.wArea(h, w);
+    const trigger = (def.mineTriggerR ?? 40) * alan;
+    const blast = (def.mineBlastR ?? 92) * alan;
+    const life = (def.mineLifeSec ?? 9) * h.stats.duration;
+    for (let i = 0; i < n; i++) {
+      // Tuzaklar üst üste binmesin: binseydi tek tuzak gibi görünür ve
+      // aynı anda patlayıp tek patlama etkisi yaparlardı.
+      const a = (i / Math.max(1, n)) * Math.PI * 2;
+      const off = n === 1 ? 0 : trigger * 1.6;
+      this.hitZones.push({ owner: h,
+        x: h.px + Math.cos(a) * off, y: h.py + Math.sin(a) * off,
+        w: trigger * 2, h: trigger * 2,
+        life, maxLife: life,
+        // ⚠️ SIFIR — tuzak kurulurken hiçbir şeye zarar vermez.
+        damage: 0,
+        facingRight: true,
+        hit: new Set<Enemy>(),
+        anchored: true,
+        round: true,
+        trap: {
+          arm: def.mineArmSec ?? 0.6,
+          triggerR: trigger,
+          blastR: blast,
+          damage: this.wDamage(h, w),
+        },
+        wid: def.id,
+      });
+    }
+  }
+
+  /**
+   * IŞIN — oyundaki tek SÜREKLİ hasar kaynağı.
+   *
+   * ⚠️ Hedef ARAMAZ, bakılan yöne açılır (boomerang gibi). Otomatik nişan
+   * alsaydı "hep en iyi silah" olur ve build seçimi yine ölürdü.
+   */
+  private fireBeam(h: Hero, w: OwnedWeapon) {
+    const def = w.def;
+    const alan = this.wArea(h, w);
+    const life = (def.beamLifeSec ?? 1.1) * h.stats.duration;
+    // ⚠️ AÇI HAREKET YÖNÜNDEN, `facingRight`ten DEĞİL.
+    //
+    // İlk sürüm `facingRight ? 0 : Math.PI` yazıyordu ve ölçüm bunu yakaladı:
+    // [8D]'de 30 kill ile sınıfının en zayıfı oldu (Grave Lash 73). Sebep
+    // denge değil TASARIM hatasıydı — oyuncuya "yön seç" diyen bir silahın
+    // yalnızca İKİ seçeneği vardı: sol ve sağ. Sürünün büyük kısmı dikey
+    // geldiğinde ışın boşluğa açılıyordu.
+    //
+    // ⚠️ Otomatik nişan HÂLÂ YOK: açı hedeften değil OYUNCUNUN GİRDİSİNDEN
+    // geliyor. Silahın kimliği "sen yön seçersin" olarak duruyor, sadece
+    // seçebileceği yön sayısı 2'den sonsuza çıkıyor. Duruyorsa (girdi yok)
+    // son baktığı yöne açılır.
+    const gx = h.inx, gy = h.iny;
+    const aci = (gx * gx + gy * gy) > 1e-6
+      ? Math.atan2(gy, gx)
+      : (h.facingRight ? 0 : Math.PI);
+    this.beams.push({
+      x: h.px, y: h.py,
+      angle: aci,
+      range: (def.beamRange ?? 340) * alan,
+      width: (def.beamWidth ?? 20) * alan,
+      damage: this.wDamage(h, w),
+      life, maxLife: life,
+      tick: def.beamTickSec ?? 0.16,
+      tickCd: 0,
+      owner: h,
+      hit: new Set<Enemy>(),
+      wid: def.id,
+    });
+  }
+
+  /**
+   * Işınları ilerlet. Kaynak oyuncuyu TAKİP EDER, açı KİLİTLİ kalır.
+   *
+   * Çarpışma: düşmanın ışın DOĞRU PARÇASINA uzaklığı. Sadece uç noktayı ya da
+   * tek bir daireyi kontrol etmek, ışının ortasındaki düşmanları ıskalardı —
+   * sürekli hasarın anlamı tam olarak hat boyunca herkesi vurmak.
+   */
+  private updateBeams(dt: number) {
+    for (let i = this.beams.length - 1; i >= 0; i--) {
+      const b = this.beams[i];
+      b.x = b.owner.px;
+      b.y = b.owner.py;
+
+      b.tickCd -= dt;
+      if (b.tickCd <= 0) {
+        b.tickCd = b.tick;
+        b.hit.clear();
+        const dx = Math.cos(b.angle), dy = Math.sin(b.angle);
+        // Sorgu ışının ORTASINDAN yapılıyor: uç noktadan sorsaydık kaynağa
+        // yakın düşmanlar ızgara sorgusuna hiç girmezdi.
+        const mx = b.x + dx * b.range / 2, my = b.y + dy * b.range / 2;
+        const cand = this.grid.query(mx, my, b.range / 2 + b.width, this.scratch);
+        for (let j = 0; j < cand.length; j++) {
+          const e = cand[j];
+          if (e.hp <= 0 || b.hit.has(e)) continue;
+          // düşmanın ışın üzerindeki izdüşümü [0, range] aralığına kırpılır
+          const px = e.x - b.x, py = e.y - b.y;
+          const t = Math.max(0, Math.min(b.range, px * dx + py * dy));
+          const cx = px - dx * t, cy = py - dy * t;
+          const rr = b.width / 2 + e.radius;
+          if (cx * cx + cy * cy > rr * rr) continue;
+          b.hit.add(e);
+          this.damageEnemy(b.owner, e, b.damage, b.wid);
+        }
+      }
+
+      b.life -= dt;
+      if (b.life <= 0) this.swapRemove(this.beams, i);
+    }
+  }
+
   private fireBoomerang(h: Hero, w: OwnedWeapon) {
     const def = w.def;
     const n = this.wCount(h, w);
@@ -1572,6 +1803,44 @@ export class Game {
         z.y = this.py;
       }
 
+      // ── TUZAK: kurul → bekle → PATLA ──
+      // ⚠️ Patlamadan ÖNCE hiç hasar vermiyor (`damage` 0). Patlayınca normal
+      // bir yuvarlak alana DÖNÜŞÜYOR: yarıçap patlama yarıçapı oluyor, hasar
+      // yazılıyor, ömür tek bir vuruşluk kırpılıyor ve `trap` siliniyor.
+      // Ayrı bir "patlama" nesnesi eklemek yerine bu yol seçildi — aynı
+      // çarpışma kodu, yeni bir tür yok.
+      if (z.trap) {
+        const tr = z.trap;
+        if (tr.arm > 0) tr.arm -= dt;
+        let patla = false;
+        if (tr.arm <= 0) {
+          const yakin = this.grid.query(z.x, z.y, tr.triggerR + 40, this.scratch);
+          for (let j = 0; j < yakin.length; j++) {
+            const e = yakin[j];
+            if (e.hp <= 0) continue;
+            const dx = e.x - z.x, dy = e.y - z.y;
+            const rr = tr.triggerR + e.radius;
+            if (dx * dx + dy * dy <= rr * rr) { patla = true; break; }
+          }
+        }
+        if (patla) {
+          z.w = tr.blastR * 2;
+          z.h = tr.blastR * 2;
+          z.damage = tr.damage;
+          // ⚠️ Kısa ama SIFIR DEĞİL: sıfır ömür, çarpışma hiç koşmadan
+          // alanın silinmesi demekti — tuzak sessizce hiçbir şey yapmazdı.
+          z.life = 0.14;
+          z.maxLife = 0.14;
+          z.hit.clear();
+          z.trap = undefined;
+        } else {
+          // Kurulurken ne vurur ne de süresi dolmadan silinir
+          z.life -= dt;
+          if (z.life <= 0) this.swapRemove(this.hitZones, i);
+          continue;
+        }
+      }
+
       // Tekrar vuran alan: sayaç dolunca vurulanlar listesi temizlenir
       if (z.retick && z.retick > 0) {
         z.retickCd = (z.retickCd ?? 0) - dt;
@@ -1603,6 +1872,26 @@ export class Game {
   private moveProjectiles(dt: number) {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+
+      // TAKİP: hız vektörünü hedefe doğru SINIRLI bir açıyla çevir.
+      // ⚠️ Hız BÜYÜKLÜĞÜ korunuyor, sadece yön dönüyor — yoksa takip eden
+      // mermi hedefe yaklaştıkça hızlanır/yavaşlar ve denge kayardı.
+      if (p.seek && p.seek > 0) {
+        const t = this.nearestEnemyTo(p.x, p.y, 900);
+        if (t) {
+          const sp = Math.hypot(p.vx, p.vy) || 1;
+          const cur = Math.atan2(p.vy, p.vx);
+          const want = Math.atan2(t.y - p.y, t.x - p.x);
+          // açı farkını [-π, π] aralığına indir
+          let fark = want - cur;
+          while (fark > Math.PI) fark -= Math.PI * 2;
+          while (fark < -Math.PI) fark += Math.PI * 2;
+          const en = p.seek * dt;
+          const yeni = cur + Math.max(-en, Math.min(en, fark));
+          p.vx = Math.cos(yeni) * sp;
+          p.vy = Math.sin(yeni) * sp;
+        }
+      }
 
       // BOOMERANG: MESAFEYE göre döner, ömre göre değil.
       //

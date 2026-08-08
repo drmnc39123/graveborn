@@ -36,7 +36,12 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
 // v5: MEZAR KÜRESİ — boss'un arketipten bağımsız ikinci yeteneği. Yine rng
 // değişikliği DEĞİL (hedef ve yelpaze açısı sabit), ama artık her boss
 // dövüşünde fazladan mermiler var ve sonuç kayıyor.
-export const SIM_VERSION = 5;
+//
+// v6: 3 yeni silah pattern'ı (homing/mine/beam) → taban silah 8'den 11'e.
+// ⚠️ BU SEFERKİ GERÇEK BİR RNG DEĞİŞİKLİĞİ: level-up teklifleri havuzdan
+// `rng` ile seçiliyor ve havuz büyüdü. Yani aynı seed artık BAŞKA kartlar
+// gösteriyor — mühür zorunlu olarak kırıldı ve yenilendi.
+export const SIM_VERSION = 6;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -818,7 +823,16 @@ export type WeaponPattern =
   | 'nova'       // her yöne halka patlaması (Toll of Bells)
   | 'ground'     // yere bırakılan kalıcı alan (Consecrated Ash)
   | 'boomerang'  // gidip dönen mermi (Rusted Sickle)
-  | 'chain';     // düşmandan düşmana sıçrayan (Pale Lightning)
+  | 'chain'      // düşmandan düşmana sıçrayan (Pale Lightning)
+  // ── R5/12 ile gelenler ──
+  // ⚠️ YENİ SİLAH = YENİ KARAR olmalı, yeni sayı değil. 8 taban silah varken
+  // `MAX_WEAPONS` 6'ydı: oyuncu neredeyse hepsini alıyordu, yani "hangi silah"
+  // diye bir soru yoktu. Sayıyı artırmak o soruyu ancak silahlar BİRBİRİNDEN
+  // FARKLI ŞEYLER YAPIYORSA doğurur — aynı mermiyi başka renkte atan bir
+  // silah, seçeneği değil listeyi uzatır. (Boss arketiplerindeki aynı ders.)
+  | 'homing'     // hedefe DÖNEREK giden mermi — nişan değil, takip
+  | 'mine'       // yere bırakılan tuzak; düşman yaklaşınca PATLAR
+  | 'beam';      // sürekli ışın — vuruş değil, basılı tutulan hasar
 
 export interface WeaponDef {
   id: string;
@@ -870,6 +884,34 @@ export interface WeaponDef {
   chainRange?: number;
   /** her sıçramada hasar bu oranla azalır */
   chainFalloff?: number;
+
+  // homing — hedefe dönerek giden mermi
+  /**
+   * Dönüş hızı (radyan/sn). ⚠️ SONSUZ OLMAMALI: tam takip eden bir mermi
+   * ıskalamaz ve `aimed`ı gereksiz kılar. Bu hızda hızlı/kaçan düşmanı
+   * yakalıyor ama keskin dönüşlerde dışarı savruluyor — takas bu.
+   */
+  seekRate?: number;
+
+  // mine — yere bırakılan tuzak
+  /** kurulma süresi; bu bitmeden tetiklenmez (hemen patlayan tuzak = ground) */
+  mineArmSec?: number;
+  /** düşman bu yarıçapa girince patlar */
+  mineTriggerR?: number;
+  /** patlama yarıçapı — tetikleme yarıçapından BÜYÜK olmalı */
+  mineBlastR?: number;
+  /** tetiklenmezse bu sürede söner */
+  mineLifeSec?: number;
+
+  // beam — sürekli ışın
+  /** ışının uzunluğu */
+  beamRange?: number;
+  /** ışının kalınlığı (yarıçap olarak çarpışır) */
+  beamWidth?: number;
+  /** ışın bu aralıkla hasar verir */
+  beamTickSec?: number;
+  /** ışın bir açılışta ne kadar açık kalır */
+  beamLifeSec?: number;
 }
 
 export const WEAPONS: readonly WeaponDef[] = [
@@ -945,6 +987,36 @@ export const WEAPONS: readonly WeaponDef[] = [
     dmgPerLevel: 1.22, cdPerLevel: 0.94,
     chainJumps: 2, chainRange: 190, chainFalloff: 0.72, range: 460,
   },
+  {
+    // TAKİP — `aimed`in cevabı olmadığı soruyu soruyor: hızlı ve kaçan
+    // düşmanlar. `aimed` nişan alıp düz atıyor, `weave`/`circler` düşmanlar
+    // o mermiden kaçıyor. Bu silah yavaş ve zayıf ama ISKALAMIYOR.
+    // ⚠️ Dönüş hızı bilerek SONSUZ DEĞİL: kusursuz takip `aimed`i gereksiz
+    // kılardı. Keskin dönüşlerde savruluyor — takas bu.
+    id: 'soul', name: 'Wandering Soul', desc: 'A slow light that follows what flees',
+    pattern: 'homing', maxLevel: 8, damage: 16, cooldownSec: 0.85,
+    dmgPerLevel: 1.19, cdPerLevel: 0.94, countLevels: [3, 6],
+    projectileSpeed: 210, pierce: 1, range: 520, lifeSec: 3.2, seekRate: 3.4,
+  },
+  {
+    // TUZAK — tek "önceden düşün" silahı. Diğerleri ANI cevaplıyor (düşman
+    // geldi → vur); bu, düşmanın NEREYE geleceğini soruyor. Kurulma süresi
+    // bu yüzden var: hemen patlasaydı `ground`un kopyası olurdu.
+    id: 'cairn', name: 'Cairn Charge', desc: 'A stone that waits, then breaks',
+    pattern: 'mine', maxLevel: 8, damage: 74, cooldownSec: 2.6,
+    dmgPerLevel: 1.24, cdPerLevel: 0.93, countLevels: [4, 7],
+    mineArmSec: 0.6, mineTriggerR: 40, mineBlastR: 92, mineLifeSec: 9,
+  },
+  {
+    // IŞIN — oyundaki tek SÜREKLİ hasar kaynağı. Geri kalan her silah
+    // vuruş/tik atıyor; bu, açık kaldığı sürece hattaki her şeyi eritiyor.
+    // ⚠️ Hedef ARAMAZ, baktığın yöne gider (boomerang gibi): otomatik
+    // nişan alsaydı "en güçlü silah" olur ve seçim yine ölürdü.
+    id: 'ray', name: 'Vigil Ray', desc: 'A held light that burns a line',
+    pattern: 'beam', maxLevel: 8, damage: 11, cooldownSec: 2.9,
+    dmgPerLevel: 1.2, cdPerLevel: 0.95, areaPerLevel: 1.05,
+    beamRange: 340, beamWidth: 54, beamTickSec: 0.16, beamLifeSec: 1.1,
+  },
 ] as const;
 
 // ── EVRİMLEŞMİŞ SİLAHLAR ──────────────────────────────────────────────
@@ -998,6 +1070,30 @@ export const EVOLVED: readonly WeaponDef[] = [
     dmgPerLevel: 1, cdPerLevel: 1, chainJumps: 8, chainRange: 290,
     chainFalloff: 0.92, range: 560,
   },
+  {
+    // Evrim: takip KUSURSUZLAŞIYOR ve mermi delip geçiyor. Taban silahın
+    // zayıflığı (savrulma) ortadan kalkıyor — evrimin vaadi tam olarak bu.
+    id: 'lost', name: 'Choir of the Lost', desc: 'Evolved Wandering Soul', evolved: true,
+    pattern: 'homing', maxLevel: 1, damage: 40, cooldownSec: 0.42,
+    dmgPerLevel: 1, cdPerLevel: 1, projectileSpeed: 300, pierce: 4,
+    range: 700, lifeSec: 4, seekRate: 9, countLevels: [1, 1],
+  },
+  {
+    // Evrim: tuzak neredeyse anında kuruluyor ve patlaması iki katı geniş.
+    // "Önceden düşün" cezası kalkıyor, ödülü kalıyor.
+    id: 'barrow', name: 'Barrowfall', desc: 'Evolved Cairn Charge', evolved: true,
+    pattern: 'mine', maxLevel: 1, damage: 168, cooldownSec: 1.5,
+    dmgPerLevel: 1, cdPerLevel: 1, mineArmSec: 0.15, mineTriggerR: 62,
+    mineBlastR: 176, mineLifeSec: 12, countLevels: [1, 1],
+  },
+  {
+    // Evrim: ışın neredeyse hiç sönmüyor. Taban silahta asıl kısıt hasar
+    // değil AÇIK KALMA SÜRESİYDİ; evrim onu kaldırıyor.
+    id: 'dawn', name: 'The Long Dawn', desc: 'Evolved Vigil Ray', evolved: true,
+    pattern: 'beam', maxLevel: 1, damage: 22, cooldownSec: 1.4,
+    dmgPerLevel: 1, cdPerLevel: 1, beamRange: 520, beamWidth: 96,
+    beamTickSec: 0.12, beamLifeSec: 2.6, areaPerLevel: 1, countLevels: [],
+  },
 ] as const;
 
 export interface EvolutionDef {
@@ -1020,6 +1116,12 @@ export const EVOLUTIONS: readonly EvolutionDef[] = [
   { weapon: 'ash', passive: 'bloodmeal', to: 'pyre' },      // Consecrated Ash + Bloodmeal
   { weapon: 'sickle', passive: 'sinew', to: 'reaper' },     // Rusted Sickle + Sinew Wrap
   { weapon: 'lightning', passive: 'skull', to: 'sainthood' }, // Pale Lightning + Cursed Skull
+  // ⚠️ Üçü de KULLANILMAMIŞ pasif alıyor — yukarıdaki kural (her evrim farklı
+  // pasif) 8'de değil 11'de de geçerli. 17 pasifin 11'i artık bir evrimin
+  // şartı; kalan 6'sı serbest, yani yeni evrimler için yer var.
+  { weapon: 'soul', passive: 'soulpull', to: 'lost' },      // Wandering Soul + Soul Pull
+  { weapon: 'cairn', passive: 'burial', to: 'barrow' },     // Cairn Charge + Burial Rite
+  { weapon: 'ray', passive: 'crown', to: 'dawn' },          // Vigil Ray + Grave Crown
 ] as const;
 
 /** id → tanım (taban + evrimleşmiş hepsi) */

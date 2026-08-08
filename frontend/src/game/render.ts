@@ -179,6 +179,7 @@ export function render(
   drawEnemies(ctx, g);
   drawBossBars(ctx, g);
   drawEffects(ctx); // ölüm patlamaları düşmanların üstünde, oyuncunun altında
+  drawBeams(ctx, g);        // ışın alan hasarının ALTINDA: kesikleri örtmesin
   drawHitZones(ctx, g);
   drawOrbits(ctx, g);
   drawAuras(ctx, g);
@@ -394,6 +395,56 @@ function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
 }
 
 /** Grave Lash — kesik izi. Ömrü boyunca solar ve hafifçe genişler. */
+/**
+ * IŞIN — oyundaki tek sürekli hasar kaynağı, o yüzden okunması da sürekli.
+ *
+ * ⚠️ Üç katman: geniş ve soluk hale, çekirdek çizgi, kaynakta parlama.
+ * Tek düz çizgi çizmek denenmedi ve denenmemeli — 400 düşmanın üstünde ince
+ * bir çizgi kaybolur, oyuncu silahının çalışıp çalışmadığını göremez.
+ * ⚠️ `shadowBlur` YOK (projenin perf kuralı); yumuşaklık gradient'ten geliyor.
+ */
+function drawBeams(ctx: CanvasRenderingContext2D, g: Game) {
+  if (!g.beams.length) return;
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let i = 0; i < g.beams.length; i++) {
+    const b = g.beams[i];
+    const k = b.life / b.maxLife;             // 1 → 0
+    const x2 = b.x + Math.cos(b.angle) * b.range;
+    const y2 = b.y + Math.sin(b.angle) * b.range;
+
+    // hale — geniş, soluk, uçta sönümlenen
+    const grad = ctx.createLinearGradient(b.x, b.y, x2, y2);
+    grad.addColorStop(0, 'rgba(239,167,46,0.45)');
+    grad.addColorStop(0.75, 'rgba(200,50,74,0.28)');
+    grad.addColorStop(1, 'rgba(160,18,38,0)');
+    ctx.globalAlpha = Math.min(1, k * 1.6);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = b.width;
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    // çekirdek — ince ve parlak, ışının GERÇEK hattı burası
+    ctx.globalAlpha = Math.min(1, k * 1.9);
+    ctx.strokeStyle = C.candleSoft;
+    ctx.lineWidth = Math.max(2, b.width * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    // kaynak parlaması — ışının oyuncudan çıktığı belli olsun
+    ctx.globalAlpha = Math.min(1, k);
+    ctx.fillStyle = C.candle;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.width * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawHitZones(ctx: CanvasRenderingContext2D, g: Game) {
   if (!g.hitZones.length) return;
   ctx.save();
@@ -401,6 +452,32 @@ function drawHitZones(ctx: CanvasRenderingContext2D, g: Game) {
     const z = g.hitZones[i];
     const k = z.life / z.maxLife;      // 1 → 0
     const grow = 1 + (1 - k) * 0.18;
+
+    // ── KURULU TUZAK (Cairn Charge) ──
+    // ⚠️ YANAN ALANDAN AYRI ÇİZİLİR. İkisi de yuvarlak ve yerde duruyor, ama
+    // biri "buraya basma" diğeri "buraya çek" diyor. Aynı görünselerdi oyuncu
+    // kendi tuzağından kaçar, sürüyü de üstüne çekmezdi — silahın tamamı
+    // sürüyü tuzağa çekmek üzerine kurulu.
+    // Yanan alan DOLU ve sıcak; tuzak İÇİ BOŞ, soğuk ve nabız atıyor.
+    if (z.trap) {
+      const r = z.w / 2;
+      const kuruldu = z.trap.arm <= 0;
+      // nabız: kurulmadan hızlı, kurulunca yavaş — "hazır" hâli okunsun
+      const nabiz = 0.5 + 0.5 * Math.sin(artTime * (kuruldu ? 4 : 11));
+      ctx.globalAlpha = 0.35 + nabiz * 0.35;
+      ctx.strokeStyle = kuruldu ? C.ice : C.boneFaint;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(z.x, z.y, r * (0.8 + nabiz * 0.2), 0, Math.PI * 2);
+      ctx.stroke();
+      // çekirdek — küçük ama katı, "burada bir şey var" sinyali
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = kuruldu ? C.ice : C.boneFaint;
+      ctx.beginPath();
+      ctx.arc(z.x, z.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
 
     // YERE BIRAKILAN ALAN (Consecrated Ash) — kesikten tamamen farklı okunmalı:
     // oyuncu "burası hâlâ yanıyor mu" sorusuna bir bakışta cevap verebilmeli.
