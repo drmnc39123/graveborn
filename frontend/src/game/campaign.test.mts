@@ -69,14 +69,32 @@ function flee(g: any): [number, number] {
   return [vx, vy];
 }
 
+/**
+ * Kart seçimi — yapay oyuncunun politikası.
+ *
+ * 🔴 ÖNCEKİ SÜRÜMÜN HER DALI ÖLÜYDÜ ve bu bütün kampanya ölçümlerini
+ * sessizce bozuyordu:
+ *   · `o.kind === 'weapon'` HİÇBİR ZAMAN doğru olmuyor — gerçek değerler
+ *     'weapon-new' | 'weapon-up' | 'passive-new' | 'passive-up'
+ *   · `o.stat` diye bir alan `Offer` tipinde YOK, hep `undefined`
+ * Yani `p()` her seçenek için 40 döndürüyor, sıralama hiçbir şey yapmıyor
+ * ve fonksiyon `offers[0]`'a düşüyordu. Test "akıllı oyuncu" ölçtüğünü
+ * sanırken "önüne geleni alan oyuncu" ölçüyordu.
+ *
+ * Etkisi ölçüldü: b9'un yavaş koşuları 3. dakikada 1-2 SİLAHLA oynuyordu
+ * (s5: tek silah, 66 kill), hızlı koşular 4-6 silahla (s0: 6 silah, 383
+ * kill). Silah alamayan koşu az öldürüyor → az mücevher → az seviye → yine
+ * silah alamıyor. Kampanyanın "iki kümeli" görünmesinin sebebi buydu.
+ *
+ * ⚠️ SİLAH ÖNCE. Bu türde erken silah çeşitliliği kartopunun kendisi;
+ * gerçek oyuncu da öyle oynar. Yeni silah > silah yükseltme > pasif.
+ */
 function pick(g: any): string {
   const p = (o: any) => {
-    if (o.kind === 'weapon') return o.level ? 100 : 90;
-    const s = o.stat;
-    if (s === 'might') return 80;
-    if (s === 'maxHp' || s === 'armor') return 70;
-    if (s === 'cooldown') return 65;
-    return 40;
+    if (o.kind === 'weapon-new') return 100;
+    if (o.kind === 'weapon-up') return 85;
+    if (o.kind === 'passive-new') return 60;
+    return 50;   // passive-up
   };
   return [...g.offers].sort((a: any, b: any) => p(b) - p(a))[0].id;
 }
