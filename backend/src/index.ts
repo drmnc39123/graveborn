@@ -22,7 +22,8 @@ import {
   upgradeGuild,
 } from './guild.js';
 import {
-  GearError, equipGear, equippedBonus, grantRunGear, listGear, salvageGear, unequipSlot,
+  GearError, equipGear, equippedBonus, grantRunGear, listGear, reforgeGear, salvageGear,
+  unequipSlot,
 } from './gear.js';
 import { SkillError, listSkills, setSkills, skillsBonusOf } from './skills.js';
 import { DuelError, board as duelBoard, findMatch, ladder as duelLadder, publishRecord, resolveChallenge, settleDuel } from './duel.js';
@@ -109,7 +110,8 @@ for (const yol of [
   '/market/list', '/market/cancel', '/market/buy',
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
-  '/gear/equip', '/gear/unequip', '/gear/salvage', '/skills/set', '/duel/start', '/duel/find',
+  '/gear/equip', '/gear/unequip', '/gear/salvage', '/gear/reforge',
+  '/skills/set', '/duel/start', '/duel/find',
   '/arena/queue', '/quests/claim', '/follow', '/tickets', '/tickets/reply',
 ]) app.use(yol, paraLimiti);
 
@@ -1085,6 +1087,26 @@ app.post('/gear/salvage', wrap(async (req, res) => {
     res.json({ ...out, progress: toProgress(await getOrCreatePlayer(wallet)), gear: await listGear(wallet) });
   } catch (e) {
     if (e instanceof GearError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+// ⚠️ YENİDEN DÖVME — GOLD HARCAYAN uç, o yüzden yazma limitine dahil
+// (yukarıdaki liste). Ekler SUNUCUDA üretiliyor; istemci sadece "hangi parça,
+// hangi işlem" diyor (bkz. gear.reforgeGear başlığı).
+app.post('/gear/reforge', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    const out = await reforgeGear(wallet, req.body?.id, req.body?.action);
+    res.json({
+      ...out,
+      progress: toProgress(await getOrCreatePlayer(wallet)),
+      gear: await listGear(wallet),
+    });
+  } catch (e) {
+    if (e instanceof GearError) { res.status(e.status).json({ error: e.code }); return; }
+    if (e instanceof YarisHatasi) { res.status(409).json({ error: 'es_zamanli_degisim' }); return; }
     throw e;
   }
 }));

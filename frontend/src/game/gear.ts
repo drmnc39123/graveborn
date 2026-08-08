@@ -25,7 +25,7 @@
 // yetkili olan sunucunun aynı seed'le ürettiği parçadır.
 
 import type { StatKey } from './config';
-import { createRng } from './rng';
+import { createRng, type Rng } from './rng';
 
 // ── YUVALAR ───────────────────────────────────────────────────────────
 // Beş yuva, beş AYRI karakter. Yuvaların bonus havuzları kasıtlı olarak
@@ -254,31 +254,18 @@ export function rarityWeights(depth: number): number[] {
 }
 
 /**
- * Tek bir parça üret — TAMAMEN DETERMİNİSTİK.
+ * Bir parçanın EKLERİNİ üret — düşüşte de YENİDEN DİZMEDE de bu çalışır.
  *
- * ⚠️ `seed` SUNUCUDAN GELEN koşu seed'i, `index` de kaçıncı düşüş olduğu.
- * Sunucu koşu kapanışında aynı çağrıyı yapıp aynı parçayı üretiyor; istemci
- * hiçbir zaman "bende Graveborn çıktı" DEMİYOR, sadece gösteriyor. Gold
- * tarafındaki kuralın aynısı.
+ * ⚠️ `rollGear`'ın içinden AYNEN çıkarıldı, tek satırı bile değişmedi:
+ * rng çağrı sırası korunmak zorunda, yoksa eski seed'ler başka parça üretir
+ * ve sunucunun "aynı seed → aynı düşüş" doğrulaması çöker.
+ *
+ * ⚠️ Yeniden dizme LANETLERİ DE atar. Sadece bonusları atsaydı oyuncu
+ * laneti olmayan bir parçaya ulaşana kadar döndürür ve ekipman tasarımının
+ * kalbi olan takas ortadan kalkardı.
  */
-export function rollGear(seed: number, depth: number, index: number): GearItem {
-  // Her düşüş kendi akışını kullanıyor: koşunun rng'sine dokunmuyor ve
-  // düşüşlerin sırası birbirini kaydırmıyor.
-  const rng = createRng((seed ^ (index * 0x9e3779b1) ^ (depth * 0x85ebca6b)) >>> 0);
-
-  const slot = rng.pick(GEAR_SLOTS);
-
-  // Ağırlıklı nadirlik seçimi
-  const w = rarityWeights(depth);
-  const toplam = w.reduce((s, v) => s + v, 0);
-  let atis = rng.next() * toplam;
-  let tier = 1;
-  for (let i = 0; i < w.length; i++) {
-    atis -= w[i];
-    if (atis <= 0) { tier = i + 1; break; }
-  }
+export function rollAffixes(rng: Rng, slot: GearSlot, tier: number): Affix[] {
   const r = rarityOf(tier);
-
   const affixes: Affix[] = [];
 
   // ── OLUMLU EKLER ──
@@ -327,6 +314,35 @@ export function rollGear(seed: number, depth: number, index: number): GearItem {
     affixes.push({ stat, value: yuvarla(m * isaret), kind: 'bane' });
     lanetKalan--;
   }
+
+  return affixes;
+}
+
+/**
+ * Tek bir parça üret — TAMAMEN DETERMİNİSTİK.
+ *
+ * ⚠️ `seed` SUNUCUDAN GELEN koşu seed'i, `index` de kaçıncı düşüş olduğu.
+ * Sunucu koşu kapanışında aynı çağrıyı yapıp aynı parçayı üretiyor; istemci
+ * hiçbir zaman "bende Graveborn çıktı" DEMİYOR, sadece gösteriyor. Gold
+ * tarafındaki kuralın aynısı.
+ */
+export function rollGear(seed: number, depth: number, index: number): GearItem {
+  // Her düşüş kendi akışını kullanıyor: koşunun rng'sine dokunmuyor ve
+  // düşüşlerin sırası birbirini kaydırmıyor.
+  const rng = createRng((seed ^ (index * 0x9e3779b1) ^ (depth * 0x85ebca6b)) >>> 0);
+
+  const slot = rng.pick(GEAR_SLOTS);
+
+  // Ağırlıklı nadirlik seçimi
+  const w = rarityWeights(depth);
+  const toplam = w.reduce((s, v) => s + v, 0);
+  let atis = rng.next() * toplam;
+  let tier = 1;
+  for (let i = 0; i < w.length; i++) {
+    atis -= w[i];
+    if (atis <= 0) { tier = i + 1; break; }
+  }
+  const affixes = rollAffixes(rng, slot, tier);
 
   return {
     id: `${seed >>> 0}-${depth}-${index}`,

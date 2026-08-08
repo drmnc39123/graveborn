@@ -9,6 +9,7 @@
 // güncellemesini ve kaydı birlikte yapar; çağıran ikisini ayırmayı seçemez.
 
 import crypto from 'node:crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma, YarisHatasi } from './db.js';
 import { contributeToVault } from './crypt.js';
 import { trackQuest } from './quests.js';
@@ -30,8 +31,11 @@ export type LedgerKind =
   | 'skill'          // beceri ağacı respec'i. ⚠️ GÜÇ SATMIYOR — oyuncu zaten
                      // sahip olduğu gücü yeniden diziyor; sonsuz, tekrarlanabilir
                      // ve hiçbir şey ÜRETMEYEN bir sink.
-  | 'guild';         // lonca kurma + hazine bağışı. ⚠️ GERİ ÇEKİLEMEZ —
+  | 'guild'          // lonca kurma + hazine bağışı. ⚠️ GERİ ÇEKİLEMEZ —
                      // çekilebilseydi lonca oyuncular arası transfer kanalı olurdu.
+  | 'reforge';       // ekipman yükseltme + yeniden dizme. ⚠️ SONSUZ SINK ve
+                     // hiçbir şey ÜRETMİYOR: gold gidiyor, karşılığında
+                     // oyuncunun ZATEN sahip olduğu parça yeniden diziliyor.
 
 export interface LedgerEntry {
   wallet: string;
@@ -73,8 +77,22 @@ export async function withLedger(
    * ölçüldü, vermeyince tek ödemeyle 5 çekiliş geçiyor.
    */
   rev?: number,
+  /**
+   * ⚠️ AYNI TRANSACTION İÇİNDE koşan ek yazma.
+   *
+   * Niye var: gold harcayıp BAŞKA bir tabloyu da değiştiren işlemler
+   * (ekipman yeniden dövme) iki ayrı transaction'a bölünemez — arada bir
+   * çökme "gold gitti ama parça değişmedi" bırakırdı. Alternatif, bu tür
+   * işlemleri `withLedger` dışında kendi transaction'ıyla yazmaktı; o da
+   * kasa katkısını ve "gold harca" görevini atlardı (bkz. aşağıdaki notlar).
+   *
+   * ⚠️ SADECE `rev` VERİLDİĞİNDE desteklenir: gold harcayan her yol zaten
+   * `rev` vermek ZORUNDA, yani kısıt bir eksiklik değil, kuralın kendisi.
+   */
+  extra?: (tx: Prisma.TransactionClient) => Promise<void>,
 ) {
   if (rev === undefined) {
+    if (extra) throw new Error('withLedger: extra icin rev zorunlu');
     const [saved] = await prisma.$transaction([
       prisma.player.update({ where: { wallet }, data }),
       ledgerWrite({ ...entry, wallet }),
@@ -89,6 +107,11 @@ export async function withLedger(
     // ⚠️ ÖNCE BU. Sayı 0 ise atıp çıkıyoruz; defter kaydı sonra geldiği için
     // "para gitti ama defterde yok" durumu oluşamaz.
     if (hit.count === 0) throw new YarisHatasi();
+
+    // ⚠️ KİLİTTEN SONRA: `rev` tutmadıysa yukarıda çıktık, yani buraya
+    // gelen işlem gold'u gerçekten harcadı. Ek yazma burada patlarsa
+    // transaction geri alınır ve gold da geri gelir.
+    if (extra) await extra(tx);
 
     // ⚠️ CRYPT VAULT KATKISI BURADA — her gold sink'i zaten bu fonksiyondan
     // geçiyor. Uçlara tek tek eklemek denenmedi ve denenmemeli: yeni bir sink

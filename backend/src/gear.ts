@@ -21,7 +21,14 @@
 // sayısı derinliğe bağlı ve derinlik zaten süre tabanına kırpılıyor. Yani
 // hile riski kaldırıyor, ekonomiye fazladan parça SOKMUYOR.
 
-import { GEAR, GEAR_SLOTS, gearBonus, rarityOf, rollRunGear, type GearItem, type GearSlot } from '@game/gear';
+import crypto from 'node:crypto';
+import {
+  GEAR, GEAR_SLOTS, gearBonus, rarityOf, rollAffixes, rollRunGear,
+  type GearItem, type GearSlot,
+} from '@game/gear';
+import { canPromote, promoteCost, rerollCost } from '@game/reforge';
+import { createRng } from '@game/rng';
+import { withLedger } from './ledger.js';
 import type { StatKey } from '@game/config';
 import { prisma } from './db.js';
 import { trackQuest } from './quests.js';
@@ -216,4 +223,83 @@ export async function salvageGear(
   // engellememeli (bkz. quests.trackQuest başlığı).
   await trackQuest(wallet, 'salvage', sonuc.removed);
   return sonuc;
+}
+
+/**
+ * YENİDEN DÖVME — yükseltme ya da yeniden dizme.
+ *
+ * ⚠️ EKLER SUNUCUDA ÜRETİLİR, seed'i de SUNUCU SEÇER. Bu, sistemin güvenlik
+ * kalbi: istemci seed verseydi beğendiği sonucu bulana kadar dener, sonra
+ * o seed'i gönderirdi — yani sonsuz ücretsiz yeniden dizme. Burada seed
+ * `crypto` ile üretiliyor, istemciye hiç gitmiyor ve tahmin edilemiyor.
+ *
+ * ⚠️ `Math.random` YASAĞI motor içindir (determinizm), sunucu için değil:
+ * bu işlem bir koşu simülasyonunun parçası değil, tek seferlik bir yazma.
+ * Yine de `crypto` kullanılıyor — tahmin edilebilirlik burada bir para açığı.
+ *
+ * ⚠️ GOLD VE PARÇA AYNI TRANSACTION'DA. `withLedger`'ın `extra` kancası tam
+ * bu yüzden eklendi; ikiye bölseydik arada bir çökme "gold gitti, parça
+ * değişmedi" bırakırdı ve bu geri alınamaz.
+ *
+ * ⚠️ TAKILI PARÇA DA DÖVÜLEBİLİR — parçalamanın aksine. Sebep: bu işlem
+ * YIKICI DEĞİL, parça yerinde kalıyor. Yasaklamak oyuncuyu "çıkar → döv →
+ * tak" üçlemesine zorlardı ve hiçbir şey korumazdı. (Açık koşu etkilenmez:
+ * ekipman bonusu koşu BAŞLARKEN dondurulur.)
+ */
+export async function reforgeGear(
+  wallet: string, id: unknown, action: unknown,
+): Promise<{ item: GearItem; spent: number; gold: number }> {
+  if (typeof id !== 'string' || !id) throw new GearError('gecersiz_parca');
+  if (action !== 'promote' && action !== 'reroll') throw new GearError('gecersiz_islem');
+
+  const row = await prisma.gearItem.findFirst({ where: { id, wallet } });
+  if (!row) throw new GearError('parca_yok', 404);
+
+  const player = await prisma.player.findUnique({
+    where: { wallet }, select: { gold: true, rev: true, banned: true },
+  });
+  if (!player || player.banned) throw new GearError('yasakli', 403);
+
+  const yeniTier = action === 'promote' ? row.rarity + 1 : row.rarity;
+  if (action === 'promote' && !canPromote(row.rarity)) throw new GearError('en_ust_kademe');
+
+  const maliyet = action === 'promote'
+    ? (promoteCost(row.rarity) ?? 0)
+    : rerollCost(row.rarity);
+  if (maliyet <= 0) throw new GearError('gecersiz_islem');
+  if (player.gold < maliyet) throw new GearError('gold_yetersiz');
+
+  // ⚠️ SEED SUNUCUDAN — bkz. fonksiyon başlığı.
+  const rng = createRng(crypto.randomInt(0, 0xffffffff));
+  const affixes = rollAffixes(rng, row.slot as GearSlot, yeniTier);
+
+  const saved = await withLedger(
+    wallet,
+    { gold: { decrement: maliyet } },
+    {
+      kind: 'reforge',
+      gold: -maliyet,
+      detail: action === 'promote'
+        ? `promote ${row.slot} t${row.rarity}→t${yeniTier}`
+        : `reroll ${row.slot} t${row.rarity}`,
+    },
+    player.rev,
+    // ⚠️ Parça güncellemesi de KOŞULLU: araya giren bir istek (parçalama,
+    // başka bir dövme) parçayı değiştirdiyse bu yazma düşer ve gold da
+    // geri gelir. `updateMany` + sayı kontrolü, `update`'in aksine yarışı
+    // sessizce ezmiyor.
+    async (tx) => {
+      const hit = await tx.gearItem.updateMany({
+        where: { id, wallet, rarity: row.rarity },
+        data: { rarity: yeniTier, affixes: affixes as unknown as object },
+      });
+      if (hit.count === 0) throw new GearError('yaris', 409);
+    },
+  );
+
+  return {
+    item: { id: row.id, slot: row.slot as GearSlot, rarity: yeniTier, affixes, depth: row.depth },
+    spent: maliyet,
+    gold: Math.floor(saved.gold),
+  };
 }

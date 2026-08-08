@@ -17,7 +17,8 @@ import {
   type GearItem, type GearSlot,
 } from '@/game/gear';
 import type { Progress } from '@/game/progress';
-import { equipGear, fetchGear, salvageGear, unequipGear, type GearView } from '@/lib/gameSession';
+import { equipGear, fetchGear, reforgeGear, salvageGear, unequipGear, type GearView } from '@/lib/gameSession';
+import { promotePreview, rerollCost } from '@/game/reforge';
 import { getMode } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { PixelButton } from '@/components/ui/kit';
@@ -50,6 +51,18 @@ export function GearPanel({ progress, onChange, onError }: {
   const secili = useMemo(
     () => (view?.items ?? []).find((i) => i.id === sec) ?? null,
     [view, sec],
+  );
+
+  // ⚠️ Fiyatlar ve önizleme SAF katmandan (`game/reforge`) okunuyor, burada
+  // hesaplanmıyor — sunucu da AYNI dosyayı kullanıyor. İki yerde fiyat
+  // yazmak, arayüzün gösterdiği sayı ile ödenen sayının ayrışması demekti.
+  const onizleme = useMemo(
+    () => (secili ? promotePreview(secili.rarity) : null),
+    [secili],
+  );
+  const yenidenFiyat = useMemo(
+    () => (secili ? rerollCost(secili.rarity) : 0),
+    [secili],
   );
 
   if (getMode() !== 'wallet') {
@@ -182,6 +195,70 @@ export function GearPanel({ progress, onChange, onError }: {
               </>
             )}
           </div>
+          {/* ── YENİDEN DÖVME ──
+              ⚠️ AYRI BİR KUTUDA ve GOLD yazıyor. Yukarıdaki düğmeler TOZ
+              ekonomisinde (parçalama), bunlar GOLD ekonomisinde. Aynı sıraya
+              koymak iki para birimini karıştırmanın en kolay yolu olurdu.
+              ⚠️ Takılı parça da dövülebiliyor (parçalamanın aksine): işlem
+              yıkıcı değil, parça yerinde kalıyor. */}
+          <div style={{
+            marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`,
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.4,
+              color: C.boneFaint, marginBottom: 7 }}>
+              THE REFORGE
+            </div>
+
+            {onizleme ? (
+              <>
+                <PixelButton variant="01A" scale={2}
+                  disabled={busy || progress.gold < onizleme.cost}
+                  onClick={() => sar(async () => {
+                    const r = await reforgeGear(secili.id, 'promote');
+                    setView(r.gear); onChange(r.progress);
+                  })}>
+                  TEMPER → {onizleme.to.toUpperCase()} · {onizleme.cost.toLocaleString('en-US')} GOLD
+                </PixelButton>
+                {/* ⚠️ LANET ARTIŞI HARCAMADAN ÖNCE SÖYLENMELİ. 32.000 gold
+                    harcayıp "bir lanet daha geldi" diye öğrenmek, geri
+                    alınamayan bir işlemde verilebilecek en kötü sürpriz. */}
+                <div style={{ fontSize: 10.5, color: C.boneFaint, marginTop: 5, lineHeight: 1.5 }}>
+                  {onizleme.boonsFrom} → {onizleme.boonsTo} boons ·{' '}
+                  {onizleme.banesTo > onizleme.banesFrom ? (
+                    <span style={{ color: C.bloodSoft }}>
+                      {onizleme.banesFrom} → {onizleme.banesTo} banes
+                    </span>
+                  ) : `${onizleme.banesTo} banes`}
+                  {' · all affixes are rolled again.'}
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: 11, color: C.boneFaint, marginBottom: 7 }}>
+                Already at the highest rarity — nothing left to temper.
+              </div>
+            )}
+
+            <div style={{ marginTop: 9 }}>
+              <PixelButton variant="03A" scale={2}
+                disabled={busy || progress.gold < yenidenFiyat}
+                onClick={() => sar(async () => {
+                  const r = await reforgeGear(secili.id, 'reroll');
+                  setView(r.gear); onChange(r.progress);
+                })}>
+                RECAST · {yenidenFiyat.toLocaleString('en-US')} GOLD
+              </PixelButton>
+              <div style={{ fontSize: 10.5, color: C.boneFaint, marginTop: 5, lineHeight: 1.5 }}>
+                Same rarity, new affixes — banes included.
+              </div>
+            </div>
+
+            {progress.gold < yenidenFiyat && (
+              <div style={{ fontSize: 10.5, color: C.bloodSoft, marginTop: 6 }}>
+                You have {Math.floor(progress.gold).toLocaleString('en-US')} gold.
+              </div>
+            )}
+          </div>
+
           {/* ⚠️ Takılı parça parçalanamıyor ve SEBEBİ yazılı — düğmeyi sessizce
               gizlemek "neden yapamıyorum" sorusunu doğururdu. */}
           {secili.equipped && (

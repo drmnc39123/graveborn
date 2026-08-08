@@ -736,6 +736,19 @@ export async function salvageGear(ids: string[]): Promise<{
   return api('/gear/salvage', { method: 'POST', body: { ids } });
 }
 
+/**
+ * YENİDEN DÖVME — yükseltme ya da yeniden dizme.
+ *
+ * ⚠️ İstemci SADECE "hangi parça, hangi işlem" diyor. Ekleri sunucu üretiyor
+ * ve seed'i de sunucu seçiyor; buradan seed göndermek, beğenilen sonucu
+ * bulana kadar deneme yapmanın kapısı olurdu (bkz. backend/gear.reforgeGear).
+ */
+export async function reforgeGear(id: string, action: 'promote' | 'reroll'): Promise<{
+  item: GearItem; spent: number; gold: number; progress: Progress; gear: GearView;
+}> {
+  return api('/gear/reforge', { method: 'POST', body: { id, action } });
+}
+
 // ── DÜELLO (asenkron PvP) ─────────────────────────────────────────────
 // ⚠️ DEMO MODUNDA YOK. Düello başka bir oyuncunun SUNUCUDAKİ kaydına karşı
 // oynanıyor; demoda rakip diye bir şey yok ve sahte bir rakip uydurmak,
