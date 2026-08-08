@@ -277,12 +277,20 @@ olarak "oyuncular havuza koyuyor, havuzdan dağıtılıyor" mekanizması; bizim
 
 ---
 
-13. **Boss çeşitliliği.** 🔴 **SPRITE TARAFI VARLIK-ENGELLİ — kod değil,
-    satın alma işi.** Ölçüldü: diskte dedike boss sanatı YOK.
-    `boss_mini/mega/nightmare` = `monster 01/09/10` ve bunlar
-    mon_crab/mon_warrior/mon_hulk ile AYNI sheet'ler. Tek ücretsiz seçenek
-    4 hero sheet'ini "düşmüş şampiyon" boss'una çevirmek (CC0, tam animasyon
-    seti diskte) — kullanıcıya soruldu, karar bekliyor.
+13. **Boss çeşitliliği.** ✅ **BİTTİ — sanat tarafı dahil, para harcanmadan.**
+    Ölçüm doğruydu (diskte dedike boss sanatı yoktu; `boss_mini/mega/nightmare`
+    = `monster 01/09/10` = mon_crab/mon_warrior/mon_hulk ile aynı sheet'ler)
+    ama "varlık-engelli" HÜKMÜ YANLIŞTI: envanter eksik sayılmıştı. Oyuncu her
+    koşuda 4 kahramandan yalnızca birini oynuyor, diğer üçünün TAM animasyon
+    seti (CC0) boşta duruyordu.
+
+    Boss'lar artık **düşmüş şampiyon** — senden önce inip geri dönmemiş
+    kahramanlar. Anlatı bedava: oyuncu silüeti karakter seçim ekranından
+    zaten tanıyor. Arketip → kahraman eşlemesi tematik (warden→Fire Knight,
+    keeper→Metal Bladekeeper, choir→Water Priestess, harrower→Leaf Ranger);
+    silüet saldırının ne olacağını ele verir. Telegraf artık sprite'ta da
+    görünüyor — öncesinde boss dekordu, oyuncu sadece yerdeki daireye
+    bakıyordu. Motor hiç değişmedi (saf çizim katmanı).
 
     ✅ **DAVRANIŞ tarafı BİTTİ:** 4 arketip (`warden` kaç · `keeper` boss'a
     KOŞ · `choir` boşluğu bul · `harrower` erken dönme) + arketipten bağımsız

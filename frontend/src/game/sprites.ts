@@ -177,6 +177,19 @@ const FALLEN: Record<BossArchetype, { hero: string; sp: string; spFrames: number
 const FALLEN_H = { boss_mini: 110, boss_mega: 140, boss_nightmare: 175 } as const;
 export type BossTier = keyof typeof FALLEN_H;
 
+/**
+ * ⚠️ `contentRatio` ve `anchorY` KAHRAMANIN KENDİ DEĞERLERİ — ve bu, sezgiye
+ * aykırı göründüğü için tarayıcıda alfa sınır kutusu ÖLÇÜLEREK doğrulandı:
+ *
+ *   kare yüksekliği 128 · ayak hizası idle/run/sp_atk'te BİREBİR y=126
+ *   içerik oranı  idle 0.344 → sp_atk 0.711 (warden)
+ *
+ * Yani `sp_atk` karesinin sınır kutusu iki kat uzun, AMA fark tamamen YUKARI
+ * taşan efektten geliyor (ayak altında hiç piksel yok). `contentRatio`'nun işi
+ * KARAKTERİ boyutlandırmak; karakterin boyu animasyonlar arasında değişmiyor.
+ * Buraya ölçülen 0.711'i yazmak boss'u telegraf sırasında YARI BOYUNA
+ * düşürürdü — "daha doğru sayı" gibi görünen tam tersi bir hata.
+ */
 function fallenArt(h: HeroDef, sp: string, spFrames: number, drawHeight: number): ActorArt {
   return {
     drawHeight,

@@ -323,11 +323,15 @@ export function stageById(id: number): StageDef | undefined {
  * tek faz eşiği. Yani 3. bölümün boss'uyla 25. bölümün boss'u aynı dövüştü;
  * oyuncunun verdiği karar hiç değişmiyordu.
  *
- * ⚠️ ÇEŞİTLİLİK SPRITE'TA ARANMADI ve ARANAMAZ: diskte boss sanatı YOK.
- * `boss_mini/mega/nightmare` = monster 01/09/10 ve bunlar mon_crab /
- * mon_warrior / mon_hulk ile AYNI sheet'ler. Görsel çeşitlilik yeni varlık
- * satın almadan mümkün değil. Ama asıl eksik zaten görsel değildi: oyuncu
- * boss'a bakmıyor, boss'un NE YAPACAĞINA bakıyor.
+ * ⚠️ ÇEŞİTLİLİK ÖNCE DAVRANIŞTA ARANDI, SPRITE'TA DEĞİL — ve sırası buydu:
+ * oyuncu boss'a bakmıyor, boss'un NE YAPACAĞINA bakıyor. Arketipler tek bir
+ * görsel dosya eklenmeden yazıldı.
+ *
+ * Görsel taraf SONRADAN çözüldü (bkz. sprites.ts FALLEN_ART): boss'lar artık
+ * "düşmüş şampiyon" — diskte boşta duran 3 kahramanın CC0 setleri. Bu
+ * yorumun eski hâlindeki "yeni varlık satın almadan mümkün değil" hükmü
+ * YANLIŞTI; envanter eksik sayılmıştı. Her arketip AYRI silüet kullanır ve
+ * eşleme tematiktir: silüet, saldırının ne olacağını ele verir.
  *
  * ⚠️ HER ARKETİP KIRMIZI ÇİZGİYE UYAR: saldırı DURARAK yapılır, hareket her
  * zaman kovalamadır. Hiçbir arketip mesafe tutmaz, geri çekilmez, kaçmaz —
@@ -729,7 +733,27 @@ export function challengeRating(stageId: number, depth: number, asc = 0): number
   // derinliğini geçmeye başladı, yani tablo kolay bölümü farmlamayı
   // ödüllendiriyordu. Sıralama ekseni "yere serilmesi gereken toplam iş"tir;
   // hayatta kalmak da o işin parçası.
-  return def.enemyCount * def.hpMul * (def.damageMul ?? 1);
+  //
+  // ⚠️ ROSTER'IN TABAN CANI DA SAYILIYOR. `hpMul` bir ÇARPAN, zorluk değil:
+  // çarptığı taban roster'dan gelir. Bu eksik olduğunda bölüm 21 (imp/rogue/
+  // bird, ortalama 34 can) bölüm 20 ile (grave_knight ailesi, ortalama 155
+  // can) neredeyse aynı puanı veriyordu. 7 seedlik kampanya ölçümü ikisinin
+  // aynı OLMADIĞINI gösterdi: b20 ortanca 18,3 dk, b21 ortanca 6,0 dk. Yani
+  // tablo yumuşak roster'lı bölümü farmlamayı ödüllendiriyordu — daha önce
+  // kapatılan "kolay bölümü farmla" açığının roster üzerinden açılmış ikinci
+  // kapısı. `def.enemies` descent'in GERÇEK havuzu (poolSize ile kırpılmış).
+  //
+  // ⚠️ BU ÖLÇÜ ZORLUĞUN TAMAMI DEĞİL, yalnızca TABLO EKSENİ. Aynı ölçüm
+  // toplam canın geçen süreyi tek başına belirlemediğini de gösterdi (b21
+  // 2,96M can → 6 dk, b13 1,6M can → 16,8 dk). Bölüm dengesini buradan
+  // ayarlamayın; onun ölçü aleti `campaign.test.mts` ve birimi DAKİKA.
+  const roster = def.enemies
+    .map((id) => ENEMIES.find((e) => e.id === id))
+    .filter(Boolean) as (typeof ENEMIES)[number][];
+  const rosterHp = roster.length
+    ? roster.reduce((sum, e) => sum + e.hp, 0) / roster.length
+    : 1;
+  return def.enemyCount * def.hpMul * rosterHp * (def.damageMul ?? 1);
 }
 
 // ── GOLD MUSLUĞU ──────────────────────────────────────────────────────
