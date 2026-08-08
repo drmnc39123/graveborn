@@ -5,7 +5,7 @@
 import { C } from '@/lib/theme';
 import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
 import type { Game, Hero } from './engine';
-import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
+import { BULLET, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey, FX, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
 import { weaponArt } from './combatArt';
@@ -355,10 +355,29 @@ function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
   for (let i = 0; i < g.enemies.length; i++) {
     const e = g.enemies[i];
     if (e.art) {
-      const art = ENEMY_ART[e.art];
-      // vuruş anında 'hit' animasyonu varsa onu oynat
-      const anim = e.hitFlash > 0 && art?.anims.hit ? 'hit' : 'walk';
-      if (art && drawActor(ctx, art, anim, e.animT, e.x, e.y, e.facingRight)) continue;
+      // ── DÜŞMÜŞ ŞAMPİYON: boss'un görseli ARKETİPİNDEN gelir ────────
+      // Boyut kademeden (`e.art` = boss_mini/mega/nightmare), silüet
+      // arketipten. Eşleşme yoksa eski canavar sprite'ına düşer — yeni bir
+      // boss kademesi eklenirse oyun kırılmaz, sadece eski görünür.
+      const art = (e.boss && FALLEN_ART[fallenKey(e.boss.arch, e.art)]) || ENEMY_ART[e.art];
+      let anim = 'walk';
+      if (e.boss) {
+        // ⚠️ SIRA ÖNEMLİ. Giriş > telegraf > vuruş > koşu. Telegrafı vuruş
+        // flaşının altına koymak en okunaklı anı yutardı: boss tam kurulum
+        // yaparken oyuncu ona vurur ve sprite sürekli `hit`e sıçrar.
+        if (e.boss.intro > 0) anim = 'idle';
+        else if (e.boss.telegraph > 0) anim = 'attack';
+        else if (e.hitFlash > 0) anim = 'hit';
+      } else if (e.hitFlash > 0 && art?.anims.hit) {
+        anim = 'hit';
+      }
+      // ⚠️ `attack`/`hit` DÖNGÜSÜZ (loop:false) → `animT` sürekli artarsa son
+      // karede donar. Telegraf kendi süresini biliyor; animasyonu telegrafın
+      // BAŞINDAN saydırıyoruz ki kurulum her seferinde baştan oynasın.
+      const t = e.boss && anim === 'attack'
+        ? Math.max(0, BOSS.telegraphSec * BOSS_ARCH[e.boss.arch].telegraphMul - e.boss.telegraph)
+        : e.animT;
+      if (art && drawActor(ctx, art, anim, t, e.x, e.y, e.facingRight)) continue;
     }
     if (e.hitFlash > 0) { flashing.push(e); continue; }
     let arr = byColor.get(e.color);

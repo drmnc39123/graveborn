@@ -12,7 +12,7 @@ import { TICK } from './config.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ENEMY_ART } from './sprites.js';
+import { ENEMY_ART, FALLEN_ART } from './sprites.js';
 import { pumpFx, resetFx, shakeOffset, takeFreeze } from './fx.js';
 
 const FAIL: string[] = [];
@@ -187,6 +187,48 @@ console.log('\n[8] Ölüm animasyonu — dosyalar GERÇEKTEN var mı');
     .map(([id]) => id);
   check('ölüm animasyonu döngüye GİRMİYOR', donguyeGiren.length === 0,
     donguyeGiren.join(', ') || 'hepsi loop:false');
+
+  // ── DÜŞMÜŞ ŞAMPİYONLAR ────────────────────────────────────────────
+  // ⚠️ Boss sanatı `sequence` — yani her KARE ayrı dosya. Kare sayısını bir
+  // fazla yazmak 404 üretir ve `drawActor` sessizce false döner: boss
+  // görünmez olur, kimse sebebini anlamaz. Bu yüzden burada şablon açılıp
+  // HER KARE tek tek manifest'e soruluyor; "dosya var mı" değil, "18 karenin
+  // 18'i de var mı".
+  const eksikKare: string[] = [];
+  const eksikAnim: string[] = [];
+  const donenBiris: string[] = [];
+  for (const [key, art] of Object.entries(FALLEN_ART)) {
+    for (const ad of ['walk', 'idle', 'attack', 'hit', 'death']) {
+      const a = art.anims[ad];
+      if (!a) { eksikAnim.push(`${key}.${ad}`); continue; }
+      // saldırı/hasar/ölüm bir KEZ oynar — döngüye girerse boss sonsuza
+      // kadar kurulum yapıyor ya da sürekli ölüyor görünür
+      if ((ad === 'attack' || ad === 'hit' || ad === 'death') && a.loop !== false) donenBiris.push(`${key}.${ad}`);
+      for (let i = 1; i <= a.frames; i++) {
+        const src = a.src.replace('{i}', String(i));
+        if (!mevcut.has(src)) eksikKare.push(src);
+      }
+    }
+  }
+  const arketipler = new Set(Object.keys(FALLEN_ART).map((k) => k.split('_')[1]));
+  check('4 boss arketipinin de görseli VAR', arketipler.size === 4,
+    `${[...arketipler].join(', ')} · ${Object.keys(FALLEN_ART).length} kayıt`);
+  check('boss animasyonlarının hepsi tanımlı', eksikAnim.length === 0, eksikAnim.join(', ') || 'tamam');
+  check('boss sprite KARELERİNİN HEPSİ diskte', eksikKare.length === 0,
+    eksikKare.length ? `${eksikKare.length} eksik: ${eksikKare.slice(0, 3).join(', ')}` : 'hepsi var');
+  check('tek seferlik boss animasyonları döngüye GİRMİYOR', donenBiris.length === 0,
+    donenBiris.join(', ') || 'tamam');
+
+  // ⚠️ SİLÜET AYRIŞMASI: dört arketip AYRI kahramandan gelmeli. Aynı
+  // kahramana iki arketip düşerse boss çeşitliliği görsel olarak ölür ve
+  // bu sessizce olur — kod çalışır, test yeşil kalır, sadece oyun sıkıcıdır.
+  const dizinler = new Set(
+    Object.entries(FALLEN_ART)
+      .filter(([k]) => k.endsWith('_boss_mega'))
+      .map(([, a]) => a.anims.walk.src.split('/')[3]),
+  );
+  check('her arketip AYRI kahraman silüeti kullanıyor', dizinler.size === 4,
+    [...dizinler].join(', '));
 }
 
 console.log('\n[9] Leş havuzu');

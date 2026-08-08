@@ -7,6 +7,8 @@
 //   'sequence' → frame başına ayrı PNG (LuizMelo kahraman paketleri: 288×128)
 
 import { DEFAULT_HERO, heroById } from './heroes';
+import type { HeroDef } from './heroes';
+import type { BossArchetype } from './config';
 
 export type AnimKind = 'sheet' | 'sequence' | 'grid';
 
@@ -140,6 +142,74 @@ export const ENEMY_ART: Record<string, ActorArt> = {
     },
   },
 };
+
+// ── DÜŞMÜŞ ŞAMPİYONLAR (boss sanatı) ─────────────────────────────────
+//
+// ÖLÇÜLEN SORUN: diskte dedike boss sanatı YOK. `boss_mini/mega/nightmare`
+// = monster 01/09/10 ve bunlar mon_crab / mon_warrior / mon_hulk ile AYNI
+// sheet'ler. Yani 23 boss, sürüdeki sıradan bir düşmanın büyütülmüşüydü;
+// tek "bu farklı" sinyali boyuttu. Davranış tarafı (4 arketip + mezar
+// küresi) çözülmüştü ama boss'a BAKINCA hâlâ bir yaratık görünüyordu.
+//
+// ÇÖZÜM PARA HARCAMADAN: diskte 4 kahramanın TAM animasyon seti duruyor
+// (CC0, LuizMelo) ve oyuncu bunlardan yalnızca birini oynuyor — diğer üçü
+// her koşuda boşta. Boss'lar artık "düşmüş şampiyon": senden önce buraya
+// inmiş ve geri dönmemiş kahramanlar. Anlatı bedavaya geliyor, çünkü
+// oyuncu o silüeti zaten TANIYOR — kendi karakter seçim ekranından.
+//
+// ⚠️ ARKETİP → KAHRAMAN EŞLEMESİ TEMATİK, KEYFİ DEĞİL. Silüet, boss'un ne
+// yapacağını ELE VERMELİ; oyuncunun öğreneceği şey bu:
+//   warden   yer darbesi (KAÇ)        → Fire Knight     ağır kılıç indirir
+//   keeper   halka, merkez güvenli    → Metal Bladekeeper dönerek savurur
+//   choir    çembersel yaylım (BOŞLUK)→ Water Priestess  büyü yağdırır
+//   harrower çifte darbe (ERKEN DÖNME)→ Leaf Ranger      hızlı ardışık vurur
+//
+// ⚠️ `sp_atk` HeroDef'te YOK — oyuncu onu kullanmıyor. Kare sayıları diskte
+// SAYILARAK bulundu, tahmin edilmedi.
+const FALLEN: Record<BossArchetype, { hero: string; sp: string; spFrames: number }> = {
+  warden: { hero: 'knight', sp: 'sp_atk_{i}.png', spFrames: 18 },
+  keeper: { hero: 'bladekeeper', sp: '10_sp_atk_{i}.png', spFrames: 11 },
+  choir: { hero: 'priestess', sp: 'sp_atk_{i}.png', spFrames: 32 },
+  harrower: { hero: 'ranger', sp: 'sp_atk_{i}.png', spFrames: 17 },
+};
+
+/** Boss kademesi → çizim boyu. Eski `boss_mini/mega/nightmare` ile aynı. */
+const FALLEN_H = { boss_mini: 110, boss_mega: 140, boss_nightmare: 175 } as const;
+export type BossTier = keyof typeof FALLEN_H;
+
+function fallenArt(h: HeroDef, sp: string, spFrames: number, drawHeight: number): ActorArt {
+  return {
+    drawHeight,
+    contentRatio: h.contentRatio,
+    anchorY: h.anchorY,
+    flipByVelocity: true,
+    anims: {
+      // Boss KOVALAR (kırmızı çizgi) — varsayılan hâli koşmaktır.
+      walk: SEQ(`/art/heroes/${h.dir}/${h.run}`, h.runFrames, 10),
+      // Giriş sekansında hareketsiz durur.
+      idle: SEQ(`/art/heroes/${h.dir}/${h.idle}`, h.idleFrames, 7),
+      // ⚠️ TELEGRAF = `attack`. Boss'un en okunaklı anı bu: tehlike halkası
+      // belirirken sprite de KURULUM yapmalı. Yoksa oyuncu yalnızca yerdeki
+      // daireye bakar ve boss dekor olur. `loop: false` — kurulum bir kez.
+      attack: { ...SEQ(`/art/heroes/${h.dir}/${sp}`, spFrames, 14), loop: false },
+      hit: { ...SEQ(`/art/heroes/${h.dir}/${h.hurt}`, h.hurtFrames, 16), loop: false },
+      death: { ...SEQ(`/art/heroes/${h.dir}/${h.death}`, h.deathFrames, 12), loop: false },
+    },
+  };
+}
+
+/** `fallen_<arketip>_<kademe>` → ActorArt. Görseller kahramanlarla ORTAK,
+ *  `get()` src'ye göre önbelleklediği için ek indirme maliyeti yok. */
+export const FALLEN_ART: Record<string, ActorArt> = {};
+export function fallenKey(arch: BossArchetype, tier: string): string {
+  return `fallen_${arch}_${tier}`;
+}
+for (const [arch, f] of Object.entries(FALLEN) as [BossArchetype, typeof FALLEN[BossArchetype]][]) {
+  const h = heroById(f.hero);
+  for (const [tier, dh] of Object.entries(FALLEN_H)) {
+    FALLEN_ART[fallenKey(arch, tier)] = fallenArt(h, f.sp, f.spFrames, dh);
+  }
+}
 
 /**
  * Oyuncu görselleri karakterden türetilir. `heroes.ts` saf veri (DOM'suz),
@@ -322,6 +392,11 @@ export function preloadAll(heroId?: string) {
   const gerisi = () => {
     preload(hero);
     for (const art of Object.values(ENEMY_ART)) preload(art);
+    // ⚠️ DÜŞMÜŞ ŞAMPİYONLAR BİLEREK İKİNCİ AŞAMADA. Boss koşunun ilk
+    // saniyesinde ASLA sahnede olmaz (bkz. stage.toSpawn) — bunları ilk
+    // aşamaya koymak, oyuncunun dakikalar sonra göreceği 3 kahraman setini
+    // ilk kareyi geciktirmek pahasına indirmek olurdu.
+    for (const art of Object.values(FALLEN_ART)) preload(art);
   };
   const w = globalThis as unknown as { requestIdleCallback?: (cb: () => void) => void };
   if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(gerisi);
