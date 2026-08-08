@@ -20,6 +20,8 @@ import { cosmeticById } from '@/game/cosmetics';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
 import { AchievementsTab } from '@/components/AchievementsTab';
 import { achievementStates } from '@/game/achievements';
+import { armoury } from '@/game/unlocks';
+import { weaponArt } from '@/game/combatArt';
 import { streakAvailable } from '@/lib/gameSession';
 import { C, FONT, glass } from '@/lib/theme';
 
@@ -28,9 +30,15 @@ export function RecordsPanel({ progress, onChange, onError }: {
   onChange: (p: Progress) => void;
   onError: (msg: string) => void;
 }) {
-  const [tab, setTab] = useState<'record' | 'deeds' | 'history' | 'board'>('record');
+  const [tab, setTab] = useState<'record' | 'deeds' | 'armoury' | 'history' | 'board'>('record');
   // ⚠️ Rozet SERİYİ de sayıyor: alınabilir bir şey varken sekmenin sessiz
   // durması, günlük ödülün fark edilmemesinin en kolay yolu olurdu.
+  // Kilitli silah sayısı — sekmede rozet olarak. ⚠️ "Kazanılacak bir şey var"
+  // sinyali sessiz kalırsa oyuncu cephaneliğe hiç bakmaz.
+  const kilitli = useMemo(
+    () => armoury(progress).filter((r) => !r.unlocked).length,
+    [progress],
+  );
   const claimableCount = useMemo(
     () => achievementStates(progress).filter((s) => s.claimable).length
       + (streakAvailable(progress) ? 1 : 0),
@@ -43,6 +51,7 @@ export function RecordsPanel({ progress, onChange, onError }: {
         kicker="THE TAVERN" accent={C.boneDim}
         title={tab === 'record' ? 'Your record'
           : tab === 'deeds' ? 'Deeds and vigil'
+          : tab === 'armoury' ? 'What you may carry'
           : tab === 'history' ? 'Every road walked' : 'Deepest descents'}
       />
 
@@ -54,6 +63,14 @@ export function RecordsPanel({ progress, onChange, onError }: {
         <PixelButton variant="02A" scale={2} active={tab ==='deeds'} onClick={() => setTab('deeds')}
           style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
           DEEDS{claimableCount > 0 ? ` (${claimableCount})` : ''}
+        </PixelButton>
+        {/* ⚠️ CEPHANELİK BURADA, bölüm seçiminde DEĞİL. Tavern zaten
+            "ne kazandım" sorusunun sorulduğu yer; silah kilidi de kazanılan
+            bir şey. Bölüm seçimine koymak koşuya girmeden önceki ekranı
+            kalabalıklaştırırdı. */}
+        <PixelButton variant="02A" scale={2} active={tab ==='armoury'} onClick={() => setTab('armoury')}
+          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          ARMOURY{kilitli > 0 ? ` (${kilitli})` : ''}
         </PixelButton>
         {/* ⚠️ Koşu geçmişi AYRI BİR SAYFA (/profile) DEĞİL, Tavern'in bir
             sekmesi. Bu oyunda profil zaten burası; ayrı bir rota açmak aynı
@@ -70,8 +87,69 @@ export function RecordsPanel({ progress, onChange, onError }: {
 
       {tab === 'record' ? <MyRecord progress={progress} />
         : tab === 'deeds' ? <AchievementsTab progress={progress} onChange={onChange} onError={onError} />
+        : tab === 'armoury' ? <Armoury progress={progress} />
         : tab === 'history' ? <History />
         : <Leaderboard />}
+    </>
+  );
+}
+
+/**
+ * CEPHANELİK — hangi silahı taşıyabilirsin, hangisini nasıl kazanırsın.
+ *
+ * ⚠️ KİLİTLİ OLANLAR DA LİSTELENİR, adıyla ve koşuluyla. Gizleseydik açılış
+ * sistemi görünmez olurdu ve düzeltmeye çalıştığımız sorun aynen sürerdi:
+ * oyuncu neyi kazanabileceğini bilmiyor. Kilidin bir anlamı olması için
+ * hedefin GÖRÜNMESİ şart.
+ *
+ * ⚠️ Evrimler burada YOK. Onlar kilit değil, bir build hedefi (taban silah
+ * MAX + doğru pasif MAX + boss sandığı) ve ayrı bir kavram; aynı listeye
+ * koymak "bunu da açabilirim" sanılmasına yol açardı.
+ */
+function Armoury({ progress }: { progress: Progress }) {
+  const rows = useMemo(() => armoury(progress), [progress]);
+  const acik = rows.filter((r) => r.unlocked).length;
+
+  return (
+    <>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
+        Weapons appear as level-up choices once you have earned them. You can
+        carry six in a single run.
+      </p>
+
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 22, fontWeight: 900, color: C.candle }}>{acik}</span>
+        <span style={{ fontSize: 12, color: C.boneFaint }}>of {rows.length} unlocked</span>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {rows.map((r) => (
+          <Card key={r.id} dim={!r.unlocked}>
+            <div style={{ padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* İkon açıkken renkli, kilitliyken soluk — durum bir bakışta */}
+              <img src={weaponArt(r.id).icon} alt="" width={20} height={20}
+                style={{
+                  imageRendering: 'pixelated', flexShrink: 0,
+                  opacity: r.unlocked ? 1 : 0.28,
+                  filter: r.unlocked ? 'none' : 'grayscale(1)',
+                }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 800,
+                  color: r.unlocked ? C.bone : C.boneFaint }}>
+                  {r.name}
+                </span>
+                <span style={{ display: 'block', fontSize: 10.5, lineHeight: 1.45,
+                  color: C.boneFaint }}>
+                  {/* ⚠️ Kilitliyken NE OLDUĞU değil NASIL AÇILDIĞI yazıyor:
+                      oyuncunun burada ihtiyacı olan bilgi hedef, tanıtım değil. */}
+                  {r.unlocked ? r.desc : r.how}
+                </span>
+              </span>
+              {r.unlocked ? <Tag tone="gold">READY</Tag> : <Tag>LOCKED</Tag>}
+            </div>
+          </Card>
+        ))}
+      </div>
     </>
   );
 }

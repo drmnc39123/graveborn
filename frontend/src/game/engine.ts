@@ -267,6 +267,8 @@ export class Hero {
 export class Game {
   readonly seed: number;
   private rng: Rng;
+  /** null = kilit yok (bkz. constructor `allowedWeapons`) */
+  private allowedWeapons: Set<string> | null;
 
   /** birinci dövüşçü — per-oyuncu durumun tamamı burada */
   readonly hero: Hero;
@@ -436,9 +438,23 @@ export class Game {
      * ⚠️ 0'da HİÇBİR ÇARPAN uygulanmaz — eski seed'ler bit bit aynı.
      */
     ascension = 0,
+    /**
+     * Level-up havuzuna girebilecek TABAN silah id'leri (bkz. `unlocks.ts`).
+     *
+     * ⚠️ VARSAYILAN `null` = HEPSİ AÇIK. Bu bilinçli: motorun eski
+     * çağrıları (testler, mühür koşusu, sunucu doğrulaması) davranış
+     * değiştirmesin. Kilit bir OYUNCU ilerlemesi kavramı; motor onu
+     * bilmiyor, sadece verilen listeye uyuyor.
+     *
+     * ⚠️ Motor `Progress` ALMIYOR ve almamalı — DOM'suz ve saf kalması
+     * sunucuda koşabilmesinin şartı. Kilidi dışarıda çözüp buraya sadece
+     * sonucu vermek o sınırı koruyor.
+     */
+    allowedWeapons: readonly string[] | null = null,
   ) {
     this.seed = seed;
     this.rng = createRng(seed);
+    this.allowedWeapons = allowedWeapons ? new Set(allowedWeapons) : null;
     const hero = heroById(heroId);
     // Karakter eğilimi Forge bonuslarıyla AYNI kanaldan geçer — ayrı bir kod
     // yolu yok, ikisi toplanır. Sunucu da aynı fonksiyonu çalıştırabilir.
@@ -2127,6 +2143,10 @@ export class Game {
     if (h.weapons.length < MAX_WEAPONS) {
       for (const def of WEAPONS) {
         if (h.weapons.some((w) => w.def.id === def.id)) continue;
+        // ⚠️ KİLİTLİ SİLAH HAVUZA GİRMEZ. Girip de "kilitli" diye
+        // gösterilseydi kart yerini işgal eder, oyuncuya seçemeyeceği bir
+        // seçenek sunardı — üç karttan biri boşa giderdi.
+        if (this.allowedWeapons && !this.allowedWeapons.has(def.id)) continue;
         pool.push({ kind: 'weapon-new', id: `w:${def.id}`, name: def.name, desc: def.desc });
       }
     }

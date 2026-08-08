@@ -38,6 +38,7 @@ import {
 import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
 import { GEAR, SLOT_NAME, affixText, rarityOf } from '@/game/gear';
 import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
+import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
@@ -78,6 +79,8 @@ type Payout = {
   wilderness: Settled['wilderness'];
   /** düello koşusuysa: kazandı mı, puan nasıl değişti */
   duel: Settled['duel'];
+  /** bu koşuda AÇILAN silahlar (bkz. game/unlocks.ts) */
+  unlocked: string[];
   /**
    * Bu koşuda bölüm temizlendi mi.
    *
@@ -214,6 +217,10 @@ export default function PlayPage() {
           progressGold: r.progressGold, dropGold: r.dropGold,
           eventGold: r.eventGold, paidRange: r.paidRange,
           wager: r.wager, wilderness: r.wilderness ?? null, duel: r.duel ?? null,
+          // ⚠️ ÖNCE/SONRA farkından TÜRETİLİYOR — "yeni açıldı" diye bir
+          // bayrak saklanmıyor. Kazanılan şey kazanıldığı AN söylenmezse
+          // oyuncu kartı bir sonraki koşuda görür ve "bu ne zaman geldi" der.
+          unlocked: newlyUnlocked(base, r.progress),
         });
       })
       .catch(() => setNote('Koşu kaydedilemedi — ödül işlenmedi.'));
@@ -326,6 +333,11 @@ export default function PlayPage() {
           ascension={screen.ticket.ascension}
           aura={p.equipped.aura ?? null}
           permanent={runBonus(p.upgrades, screen.ticket)}
+          // ⚠️ Kilit İLERLEMEDEN TÜRETİLİYOR, kayıtta saklanmıyor
+          // (bkz. game/unlocks.ts). Boss odasına verilmiyor: orası ayrı bir
+          // uçtan başlıyor ve gold ödemiyor; oyuncuyu orada da kısıtlamak
+          // haftalık boss'u sebepsiz zorlaştırırdı.
+          allowedWeapons={unlockedWeapons(p)}
           duelTarget={screen.mode === 'duel' ? screen.ticket.duel?.target : undefined}
           onFinish={finishRun}
         />
@@ -568,6 +580,31 @@ export default function PlayPage() {
                 </div>
               )}
             </div>
+
+            {/* ── AÇILAN SİLAH ──
+                ⚠️ EN ÜSTTE ve GOLD SATIRLARINDAN AYRI. Bir silah kazanmak
+                bu ekrandaki en büyük olay; gold dökümünün arasına sıkışsaydı
+                oyuncu kaçırırdı. Kilit sisteminin işe yaramasının şartı
+                kazanımın GÖRÜNMESİ (bkz. game/unlocks.ts). */}
+            {payout.unlocked.length > 0 && (
+              <div style={{
+                marginTop: 14, padding: '12px 13px', borderRadius: 9,
+                background: 'linear-gradient(180deg, rgba(239,167,46,0.18), rgba(0,0,0,0.28))',
+                border: `1px solid ${C.candle}77`,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.4, color: C.candle }}>
+                  {payout.unlocked.length > 1 ? 'NEW WEAPONS' : 'NEW WEAPON'}
+                </div>
+                {payout.unlocked.map((id) => (
+                  <div key={id} style={{ fontSize: 15, fontWeight: 900, color: C.bone, marginTop: 5 }}>
+                    {weaponName(id)}
+                  </div>
+                ))}
+                <div style={{ fontSize: 10.5, color: C.boneFaint, marginTop: 6, lineHeight: 1.5 }}>
+                  It will start appearing when you level up.
+                </div>
+              </div>
+            )}
 
             {/* ⚠️ BAHİS AYRI KUTUDA. Yukarıdaki satırlar GOLD sayıyor; bahis
                 toz ödüyor. Aynı listeye koymak "+45" satırını gold sanmaya

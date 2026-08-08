@@ -21,6 +21,8 @@ import { Game } from './engine.js';
 import { STAGES, TICK } from './config.js';
 import { FORGE, permanentBonus } from './forge.js';
 import { seedFromString } from './rng.js';
+import { emptyProgress } from './progress.js';
+import { unlockedWeapons } from './unlocks.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -97,7 +99,20 @@ for (const st of STAGES) {
   const sureler: number[] = [];
   let biten = 0;
   for (let k = 0; k < SEED_SAYISI; k++) {
-    const g: any = new Game(seedFromString(`camp-${st.id}-${k}`), st, permFor(st.id) as any, 'campaign');
+    // ⚠️ SİLAH KİLİDİ MODELLENİYOR — testin ADI "kampanya İLK GEÇİŞİ".
+    // Önce tüm silahlar açık varsayılıyordu ve bu ölçümü olduğundan HIZLI
+    // gösteriyordu: gerçek ilk geçişte oyuncunun elinde 25. bölümde bile
+    // kampanyayla açılabilen silahlar var, hepsi değil. Ölçüm neyi iddia
+    // ediyorsa onu ölçmeli.
+    // ⚠️ `depthPaid` BOŞ: saf kampanya oyuncusu Descent'e hiç inmemiş sayılır,
+    // yani derinliğe bağlı silahlar (toll, soul) kapalı. Bu bilinçli olarak
+    // EN KÖTÜ hâl — gerçek oyuncu daha hızlı bitirir.
+    const oGunkuIlerleme = {
+      ...emptyProgress(),
+      cleared: Object.fromEntries(STAGES.filter((x) => x.id < st.id).map((x) => [x.id, true])),
+    };
+    const g: any = new Game(seedFromString(`camp-${st.id}-${k}`), st, permFor(st.id) as any,
+      'campaign', undefined, 1, 0, unlockedWeapons(oGunkuIlerleme));
     g.setViewport(1280, 720);
     const max = Math.round(TAVAN_SN / TICK);
     for (let i = 0; i < max; i++) {
