@@ -250,6 +250,33 @@ sorusuna cevap veriyor.
     o oranda bir "öncelik hedefi" karar değil arka plandır. `weight` alanı
     eklendi (haberci 0,28 · bölünen 0,45 · patlayıcı 0,5).
 
+### FAZ R6 — EKONOMİNİN DÖNMESİ (AFK Heroes tablosundan)
+Kullanıcının paylaştığı 45 günlük özet ölçüldü ve oranlara çevrildi:
+
+| ölçü | değer | ne diyor |
+|---|---|---|
+| harcanan / kazanılan | 3,7× | sink ağırlıklı ekonomi |
+| cüzdan → dövüşe giren | %56 | bağlanan cüzdanın yarısı hiç oynamıyor |
+| ilan → satış | %11 | defter boğulmuş, ilanların %89'u ölü |
+| **parçalama / satış** | **131×** | eşyanın gerçek gideri MARKET DEĞİL |
+| düello / oyuncu | 63 | PvP asıl tutucu |
+| canavar / oyuncu | 654.000 | **idle oyun imzası** — bizim türümüz değil |
+
+✅ **Ekipmana yatırım (The Reforge)** — 152.529 "enhancement" satırından
+çıktı. Bizde ekipman düşüyor ve parçalanıyordu ama YÜKSELTİLMİYORDU.
+TEMPER (kademe atlatır, sonlu) + RECAST (ekleri yeniden dizer, SONSUZ).
+
+✅ Parçalama zaten vardı · ✅ ilan sınırı zaten vardı (`MAX_ACTIVE_LISTINGS`
+= 10, Kintara ile aynı) · ✅ demo modu %56 dönüşüm sorununu adresliyor.
+
+⚠️ **KOPYALANMAYACAK OLAN:** aynı oyun daha önce ölçüldü ve `TOKEN.md`'de
+duruyor — 6.000 aktif, 5.305 ÖDEYEN kullanıcı ve token tepeden **%90 aşağı**.
+Etkileşim başarısı token başarısı DEĞİL. Harcanan/kazanılan 3,7× oranı tam
+olarak "oyuncular havuza koyuyor, havuzdan dağıtılıyor" mekanizması; bizim
+`market.ts` bilerek SIFIR emisyonla yazıldı ve öyle kalmalı.
+
+---
+
 13. **Boss çeşitliliği.** 🔴 **SPRITE TARAFI VARLIK-ENGELLİ — kod değil,
     satın alma işi.** Ölçüldü: diskte dedike boss sanatı YOK.
     `boss_mini/mega/nightmare` = `monster 01/09/10` ve bunlar
