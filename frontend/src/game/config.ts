@@ -32,7 +32,11 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
 // Boss kodu serbestçe değişebilir, mühür yeşil kalır, ama koşu sonucu
 // (ve dolayısıyla düello tekrarı) kayar. Kör nokta `sim.test.mts` [10B]/[10C]
 // ile kapatıldı: dört arketip de ayrı ayrı yakınsama sınavına giriyor.
-export const SIM_VERSION = 4;
+//
+// v5: MEZAR KÜRESİ — boss'un arketipten bağımsız ikinci yeteneği. Yine rng
+// değişikliği DEĞİL (hedef ve yelpaze açısı sabit), ama artık her boss
+// dövüşünde fazladan mermiler var ve sonuç kayıyor.
+export const SIM_VERSION = 5;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -410,6 +414,34 @@ export const BOSS = {
   /** 2. fazda hız ve saldırı sıklığı çarpanı */
   phase2Speed: 1.22,
   phase2Cd: 0.68,
+
+  // ── İKİNCİ YETENEK: MEZAR KÜRESİ ──
+  //
+  // ⚠️ ARKETİPTEN BAĞIMSIZ, KENDİ SAYACINDA. Dört arketibin dördü de bunu
+  // kullanıyor ve telegraf sırasında bile atıyor. Sebep tasarım: boss'un tek
+  // saldırısı olduğunda dövüş "telegrafı bekle, kaç, geri gel" ritmine
+  // kilitleniyordu — arada oyuncunun yapacağı hiçbir şey yoktu. Küre o boşluğu
+  // dolduruyor: yavaş, büyük, okunur, ama sürekli.
+  //
+  // ⚠️ YAVAŞ ve BÜYÜK olması ŞART. Hızlı bir mermi, telegrafı olmayan bir
+  // saldırıdır — kaçınılması refleks meselesi olur ve boss "haksız" hissettirir.
+  // Bu hızda küre oyuncudan yavaş: kaçmak her zaman mümkün, ama yer değiştirmek
+  // gerekiyor. Öğrenilebilir baskı, ceza değil.
+  //
+  // ⚠️ Boss'u HAREKET ETTİRMİYOR — küre atarken de kovalamaya devam ediyor.
+  // Durup atsaydı bu bir kiting biçimi olur ve bölüm kilitlenme riskine girerdi.
+  /** küreler arası bekleme (2. fazda `phase2Cd` ile kısalır) */
+  orbCd: 4.5,
+  /** ⚠️ Oyuncunun taban hızından (PLAYER.speed) YAVAŞ olmalı */
+  orbSpeed: 92,
+  /** okçu okundan belirgin büyük — "bu boss'un saldırısı" demek için */
+  orbRadius: 17,
+  /** temas darbesinden zayıf: küre baskı kurar, koşuyu bitirmez */
+  orbDamageMul: 0.9,
+  orbLifeSec: 5,
+  /** 2. fazda tek küre yerine yelpaze — kaç küre ve aralarındaki açı */
+  orbPhase2Count: 3,
+  orbSpreadRad: 0.3,
 } as const;
 
 export const DESCENT = {

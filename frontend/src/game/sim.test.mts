@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Game } from './engine.js';
 import {
-  BEHAVIOR, BOSS_ARCH, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES,
+  BEHAVIOR, BOSS, BOSS_ARCH, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES,
   MAX_WEAPONS, PASSIVES, PLAYER,
   SIM_VERSION, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
   descentStage, rareDropChance, stageById,
@@ -1092,6 +1092,7 @@ for (const arch of ARCHS) {
   let fazDegisti = false;
   let mermiGoruldu = 0;
   let dogruArketip = false;
+  let kureGoruldu = false;
 
   const ticks = Math.round(600 / TICK);   // 10 dakika bütçe
   for (let i = 0; i < ticks; i++) {
@@ -1110,6 +1111,8 @@ for (const arch of ARCHS) {
       if (boss.boss.telegraph > 0) telegrafGoruldu = true;
       if (boss.boss.phase === 1) fazDegisti = true;
       mermiGoruldu = Math.max(mermiGoruldu, g.enemyShots.length);
+      // Mezar küresi ARKETİPTEN BAĞIMSIZ — dördünde de görülmeli
+      if (g.enemyShots.some((s) => s.radius >= BOSS.orbRadius)) kureGoruldu = true;
     }
   }
 
@@ -1121,6 +1124,10 @@ for (const arch of ARCHS) {
   check(`${arch}: bölüm 10 dakikada BİTİYOR`, g.phase === 'won',
     `${g.phase} · ${Math.round(g.time)} sn`);
   check(`${arch}: telegraf + faz çalışıyor`, telegrafGoruldu && fazDegisti);
+  // ⚠️ Küre arketipten BAĞIMSIZ ikinci yetenek: dördünde de atılmalı.
+  // Atılmasaydı `warden` dışındaki arketiplerde sessizce kaybolmuş olurdu —
+  // telegraf dalı erken `return` ediyor ve küre oraya konsaydı tam da öyle olurdu.
+  check(`${arch}: mezar küresi atılıyor`, kureGoruldu);
   // `choir` gerçekten mermi üretiyor mu — üretmiyorsa arketip sadece bir
   // isim olur ve sessizce `warden`a döner.
   if (arch === 'choir') {
@@ -1161,6 +1168,14 @@ console.log('\n[10C] keeper: merkez GERÇEKTEN güvenli mi');
         g.px = boss.x + nokta(boss.radius, boss.boss.slamR, ic);
         g.py = boss.y;
         g.iframe = 0;
+        // ⚠️ MERMİLER TEMİZLENİYOR — bu ölçüm SADECE HALKAYI soruyor.
+        // Temizlenmeden 103 hasar okundu ve test "merkez güvenli değil" dedi;
+        // oysa o hasar MEZAR KÜRESİNDENDİ. Gerçek oyuncu küreyi görüp yana
+        // kayar (küre 92 px/sn, oyuncu 165 — ~0,9 sn tepki penceresi), ama bu
+        // ölçüm oyuncuyu her tick aynı noktaya ışınlayıp dokunulmazlığını da
+        // siliyor, yani kaçmayı YAPISAL OLARAK imkânsız kılıyor. Ölçülmek
+        // istenen şey o değil: soru "halka merkezi vuruyor mu".
+        g.enemyShots.length = 0;
         const once = g.hp;
         g.step();
         if (g.hp < once) toplam += once - g.hp;

@@ -63,6 +63,8 @@ export interface Enemy {
      * darbeden sonra ERKEN DÖNENİ cezalandırmak için var.
      */
     followUp: number;
+    /** mezar küresine kalan süre — arketipten BAĞIMSIZ ikinci yetenek */
+    orbCd: number;
   };
 
   // ── davranış durumu ──
@@ -795,6 +797,9 @@ export class Game {
         // biniyor; tam yarıçapta olsalardı kaçınmak imkânsızlaşırdı).
         slamR: BOSS.slamRadius * BOSS_ARCH[bossArchetypeOf(st.def)].radiusMul,
         arch: bossArchetypeOf(st.def), atkNo: 0, followUp: 0,
+        // ⚠️ İlk küre HEMEN atılmıyor: giriş sekansının hemen ardından gelen
+        // bir mermi, oyuncunun boss'u daha görmeden vurulması demekti.
+        orbCd: BOSS.orbCd,
       },
     });
     this.events.add('boss');
@@ -952,6 +957,18 @@ export class Game {
     const hiz = b.phase === 1 ? sp * BOSS.phase2Speed : sp;
     const A = BOSS_ARCH[b.arch];
 
+    // ── İKİNCİ YETENEK: MEZAR KÜRESİ ──
+    // ⚠️ TELEGRAF DALINDAN ÖNCE ve ondan BAĞIMSIZ. Aşağıdaki telegraf bloğu
+    // erken `return` ediyor; küre oraya konsaydı boss saldırı hazırlarken
+    // küre atamaz, yani tam da baskının gerektiği anda susardı.
+    // ⚠️ Boss bu sırada DURMUYOR — küre kovalamanın üstüne biniyor. Durarak
+    // atsaydı bu bir kiting biçimi olur ve bölüm kilitlenme riskine girerdi.
+    b.orbCd -= dt;
+    if (b.orbCd <= 0) {
+      this.bossOrb(e, b);
+      b.orbCd = BOSS.orbCd * (b.phase === 1 ? BOSS.phase2Cd : 1);
+    }
+
     // ── `harrower`ın İKİNCİ darbesi ──
     // ⚠️ TELEGRAFSIZ ve bu kasıtlı: ikinci darbenin tamamı "ilk darbeden
     // sonra erken dönen"i cezalandırmak için var. Ona da kaçma penceresi
@@ -1046,6 +1063,38 @@ export class Game {
         // WARDEN: taban kalıp — merkezden yayılan disk, karşılığı KAÇ.
         this.bossStrike(e, b.slamR, BOSS.slamDamageMul * A.damageMul, 0);
     }
+  }
+
+  /**
+   * MEZAR KÜRESİ — boss'un ikinci yeteneği, arketipten bağımsız.
+   *
+   * Yavaş, büyük ve okunur. Oyuncudan yavaş olduğu için kaçmak HER ZAMAN
+   * mümkün; ama yer değiştirmeyi zorluyor, yani "telegrafı bekle, kaç, geri
+   * gel" ritminin arasındaki ölü zamanı dolduruyor.
+   *
+   * ⚠️ HEDEF ATIŞ ANINDA KİLİTLENİR, küre TAKİP ETMEZ. Takip etseydi
+   * kaçınmak imkânsız olurdu ve yavaşlığın hiçbir anlamı kalmazdı.
+   */
+  private bossOrb(e: Enemy, b: NonNullable<Enemy['boss']>) {
+    const tg = this.target(e.x, e.y);
+    const dx = tg.px - e.x, dy = tg.py - e.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const taban = Math.atan2(dy, dx);
+    // 2. fazda yelpaze — ⚠️ açı RNG'den değil, sabit aralıktan
+    const n = b.phase === 1 ? BOSS.orbPhase2Count : 1;
+    for (let i = 0; i < n; i++) {
+      if (this.enemyShots.length >= BEHAVIOR.ranged.maxAlive) break;
+      const ang = taban + (i - (n - 1) / 2) * BOSS.orbSpreadRad;
+      this.enemyShots.push({
+        x: e.x, y: e.y,
+        vx: Math.cos(ang) * BOSS.orbSpeed,
+        vy: Math.sin(ang) * BOSS.orbSpeed,
+        damage: e.damage * BOSS.orbDamageMul,
+        radius: BOSS.orbRadius,
+        life: BOSS.orbLifeSec,
+      });
+    }
+    this.events.add('eshot');
   }
 
   /**

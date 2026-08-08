@@ -567,6 +567,27 @@ function drawEnemyShots(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
   }
   ctx.fill();
+
+  // ── MEZAR KÜRESİ: boss mermisi okçu okundan AYRILMALI ──
+  // ⚠️ Aynı renk + aynı şekil, sadece daha büyük olsaydı oyuncu onu "yakın
+  // bir ok" sanardı — ve boss mermisi ok gibi ihmal edilecek bir şey değil.
+  // Ayrım BOYUTTAN türüyor (ayrı bir tür alanı eklemeye gerek yok): okçu oku
+  // 7 px, küre 17 px. Eşik ikisinin arasında.
+  const KURE = 12;
+  let kureVar = false;
+  for (let i = 0; i < g.enemyShots.length; i++) {
+    if (g.enemyShots[i].radius < KURE) continue;
+    if (!kureVar) { kureVar = true; ctx.beginPath(); }
+    const s = g.enemyShots[i];
+    ctx.moveTo(s.x + s.radius * 0.45, s.y);
+    ctx.arc(s.x, s.y, s.radius * 0.45, 0, Math.PI * 2);
+  }
+  if (kureVar) {
+    // İç çekirdek — kürenin kendi ağırlığı olsun, düz bir daire gibi durmasın
+    ctx.fillStyle = C.candle;
+    ctx.fill();
+    ctx.fillStyle = C.blood;
+  }
   ctx.strokeStyle = C.bloodSoft;
   ctx.lineWidth = 1.5;
   ctx.beginPath();

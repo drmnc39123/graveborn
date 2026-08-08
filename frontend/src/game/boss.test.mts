@@ -8,7 +8,7 @@
 // Çalıştır:  npx tsx src/game/boss.test.mts
 
 import {
-  BOSS, BOSS_ARCH, DESCENT, STAGES,
+  BEHAVIOR, BOSS, BOSS_ARCH, DESCENT, PLAYER, STAGES,
   archetypeAt, bossArchetypeOf, descentStage,
   type BossArchetype,
 } from './config.js';
@@ -110,6 +110,35 @@ check('tek yaylım mermisi taban darbeden zayıf',
 // ⚠️ Kayma SIFIR OLMAMALI: her yaylım aynı açıdan çıksaydı oyuncu tek bir
 // noktada durup hiç vurulmadan bekleyebilirdi.
 check('yaylım açısı her seferinde kayıyor', BOSS_ARCH.choir.spinPerVolley > 0);
+
+console.log('\n[5] Mezar küresi — ikinci yetenek');
+{
+  // ⚠️ EN ÖNEMLİ KURAL: küre OYUNCUDAN YAVAŞ olmalı. Hızlı bir mermi,
+  // telegrafı olmayan bir saldırıdır — kaçınmak refleks meselesine döner ve
+  // boss "haksız" hissettirir. Yavaşlık burada bir denge ayarı değil,
+  // arketiplerin tamamını adil tutan şeyin ta kendisi.
+  console.log(`     küre ${BOSS.orbSpeed} px/sn · oyuncu ${PLAYER.speed} px/sn`);
+  check('küre oyuncudan YAVAŞ (kaçmak her zaman mümkün)', BOSS.orbSpeed < PLAYER.speed,
+    `${BOSS.orbSpeed} < ${PLAYER.speed}`);
+  check('küre okçu okundan BÜYÜK (görsel ayrım)', BOSS.orbRadius > BEHAVIOR.ranged.shotRadius,
+    `${BOSS.orbRadius} > ${BEHAVIOR.ranged.shotRadius}`);
+  // ⚠️ Küre baskı kurar, koşuyu bitirmez — temas darbesinden zayıf olmalı.
+  check('küre yer darbesinden zayıf', BOSS.orbDamageMul < BOSS.slamDamageMul,
+    `${BOSS.orbDamageMul} < ${BOSS.slamDamageMul}`);
+  // Menzil = hız × ömür. Telegraf yarıçapını aşmalı ki uzaktan da baskı olsun,
+  // ama sonsuz sürmemeli (ekranı kalıcı mermiyle doldurmasın).
+  const menzil = BOSS.orbSpeed * BOSS.orbLifeSec;
+  console.log(`     küre menzili ${Math.round(menzil)} px · telegraf yarıçapı ${BOSS.slamRadius}`);
+  check('küre menzili telegraf alanından geniş', menzil > BOSS.slamRadius, `${Math.round(menzil)}`);
+  check('küre ömrü sınırlı', BOSS.orbLifeSec <= 8, `${BOSS.orbLifeSec} sn`);
+  // 2. faz yelpazesi mermi tavanını tek başına doldurmamalı.
+  check('yelpaze mermi tavanını doldurmuyor',
+    BOSS.orbPhase2Count < BEHAVIOR.ranged.maxAlive / 4, `${BOSS.orbPhase2Count}`);
+  check('yelpaze açısı pozitif', BOSS.orbSpreadRad > 0);
+  // ⚠️ 4-5 saniyelik ritim: daha sık olsaydı küre "sürekli mermi yağmuru"na
+  // döner ve telegrafın okunmasını engellerdi.
+  check('küre ritmi 3-6 sn arasında', BOSS.orbCd >= 3 && BOSS.orbCd <= 6, `${BOSS.orbCd} sn`);
+}
 
 console.log('\n' + '─'.repeat(62));
 if (hata) { console.log(`✗ ${hata} ölçüm sınırın dışında`); process.exit(1); }
