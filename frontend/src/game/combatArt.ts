@@ -175,7 +175,7 @@ export const WEAPON_ART: Record<string, WeaponArt> = {
     tint: BONE,
   },
 
-  // ── R5/12: TAKİP · TUZAK · IŞIN ──
+  // ── R5/12: TAKİP · TUZAK ──
   // ⚠️ Atlas boyutları ÖLÇÜLDÜ (768×576 = 12 sütun × 9 satır), varsayılmadı.
   // Dosya başlığındaki uyarı tam da bu: 252 atlasın 188'i 12 sütun DEĞİL ve
   // yanlış varsayım kareyi kaydırır ya da atlas dışına taşar.
@@ -190,11 +190,6 @@ export const WEAPON_ART: Record<string, WeaponArt> = {
     impact: fx('1020', 5, 56),     // yerden yukarı patlama, altın
     tint: CANDLE,
   },
-  ray: {                           // beam — tutulan ışık
-    icon: `${ICO}/glow.png`,
-    impact: fx('1022', 4, 30),     // ince sürekli yanma, altın
-    tint: CANDLE,
-  },
   lost: {                          // soul → kusursuz takip
     icon: `${ICO}/ice_spell.png`,
     bullet: bullet('3', 4, 19),
@@ -205,11 +200,6 @@ export const WEAPON_ART: Record<string, WeaponArt> = {
     icon: `${ICO}/fortify_spell.png`,
     impact: fx('1020', 7, 74),   // ⚠️ satır 8 MOR, 7'ye alındı
     tint: BLOOD,
-  },
-  dawn: {                          // ray → neredeyse sönmeyen ışın
-    icon: `${ICO}/healing_spell.png`,
-    impact: fx('1033', 4, 38),
-    tint: CANDLE,
   },
 };
 

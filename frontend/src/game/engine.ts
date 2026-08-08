@@ -128,29 +128,6 @@ export interface Projectile {
   wid?: string;
 }
 
-/**
- * IŞIN — oyundaki tek SÜREKLİ hasar kaynağı.
- *
- * ⚠️ AÇI ATIŞ ANINDA KİLİTLENİR, kaynak oyuncuyu TAKİP EDER. İkisi birden
- * takip etseydi silah "her yeri tarayan bedava alan" olurdu; ikisi birden
- * sabit olsaydı oyuncu ışını bırakıp gitmek zorunda kalırdı. Bu hâliyle
- * oyuncu bir yön SEÇİYOR, sonra o yönü taşıyarak yürüyor.
- */
-export interface Beam {
-  /** kaynak — her frame oyuncuya güncellenir */
-  x: number; y: number;
-  /** ⚠️ atışta kilitlenir, bir daha değişmez */
-  angle: number;
-  range: number; width: number;
-  damage: number;
-  life: number; maxLife: number;
-  /** hasar aralığı ve sayacı */
-  tick: number; tickCd: number;
-  owner: Hero;
-  /** aynı tikte aynı düşmana iki kez vurmasın */
-  hit: Set<Enemy>;
-  wid?: string;
-}
 
 /** Zincir silahının kozmetik yayı — render her frame boşaltır, simülasyona girmez */
 export interface Arc { x1: number; y1: number; x2: number; y2: number }
@@ -363,8 +340,6 @@ export class Game {
   arcs: Arc[] = [];
   gems: Gem[] = [];
   hitZones: HitZone[] = [];
-  /** açık ışınlar — bkz. Beam */
-  beams: Beam[] = [];
   /**
    * Sahnedeki HABERCİLER — her tick tazelenen küçük bir liste.
    *
@@ -630,7 +605,6 @@ export class Game {
     this.fire(this.hero, dt);            // 4 desen: aimed / sweep / orbit / aura
     if (r && r.alive) this.fire(r, dt);
     this.updateHitZones(dt);  // sweep hitbox'ları
-    this.updateBeams(dt);     // sürekli ışınlar
     this.moveProjectiles(dt);
     this.collideProjectiles();
     this.reapDead();          // TÜM hasar kaynaklarından sonra tek temizlik
@@ -1479,10 +1453,6 @@ export class Game {
         w.cd = this.wCooldown(h, w);
         h.atkT = 0.30;
         this.fireMine(h, w);
-      } else if (def.pattern === 'beam') {
-        w.cd = this.wCooldown(h, w);
-        h.atkT = 0.30;
-        this.fireBeam(h, w);
       }
     }
   }
@@ -1608,87 +1578,6 @@ export class Game {
     }
   }
 
-  /**
-   * IŞIN — oyundaki tek SÜREKLİ hasar kaynağı.
-   *
-   * ⚠️ Hedef ARAMAZ, bakılan yöne açılır (boomerang gibi). Otomatik nişan
-   * alsaydı "hep en iyi silah" olur ve build seçimi yine ölürdü.
-   */
-  private fireBeam(h: Hero, w: OwnedWeapon) {
-    const def = w.def;
-    const alan = this.wArea(h, w);
-    const life = (def.beamLifeSec ?? 1.1) * h.stats.duration;
-    // ⚠️ AÇI HAREKET YÖNÜNDEN, `facingRight`ten DEĞİL.
-    //
-    // İlk sürüm `facingRight ? 0 : Math.PI` yazıyordu ve ölçüm bunu yakaladı:
-    // [8D]'de 30 kill ile sınıfının en zayıfı oldu (Grave Lash 73). Sebep
-    // denge değil TASARIM hatasıydı — oyuncuya "yön seç" diyen bir silahın
-    // yalnızca İKİ seçeneği vardı: sol ve sağ. Sürünün büyük kısmı dikey
-    // geldiğinde ışın boşluğa açılıyordu.
-    //
-    // ⚠️ Otomatik nişan HÂLÂ YOK: açı hedeften değil OYUNCUNUN GİRDİSİNDEN
-    // geliyor. Silahın kimliği "sen yön seçersin" olarak duruyor, sadece
-    // seçebileceği yön sayısı 2'den sonsuza çıkıyor. Duruyorsa (girdi yok)
-    // son baktığı yöne açılır.
-    const gx = h.inx, gy = h.iny;
-    const aci = (gx * gx + gy * gy) > 1e-6
-      ? Math.atan2(gy, gx)
-      : (h.facingRight ? 0 : Math.PI);
-    this.beams.push({
-      x: h.px, y: h.py,
-      angle: aci,
-      range: (def.beamRange ?? 340) * alan,
-      width: (def.beamWidth ?? 20) * alan,
-      damage: this.wDamage(h, w),
-      life, maxLife: life,
-      tick: def.beamTickSec ?? 0.16,
-      tickCd: 0,
-      owner: h,
-      hit: new Set<Enemy>(),
-      wid: def.id,
-    });
-  }
-
-  /**
-   * Işınları ilerlet. Kaynak oyuncuyu TAKİP EDER, açı KİLİTLİ kalır.
-   *
-   * Çarpışma: düşmanın ışın DOĞRU PARÇASINA uzaklığı. Sadece uç noktayı ya da
-   * tek bir daireyi kontrol etmek, ışının ortasındaki düşmanları ıskalardı —
-   * sürekli hasarın anlamı tam olarak hat boyunca herkesi vurmak.
-   */
-  private updateBeams(dt: number) {
-    for (let i = this.beams.length - 1; i >= 0; i--) {
-      const b = this.beams[i];
-      b.x = b.owner.px;
-      b.y = b.owner.py;
-
-      b.tickCd -= dt;
-      if (b.tickCd <= 0) {
-        b.tickCd = b.tick;
-        b.hit.clear();
-        const dx = Math.cos(b.angle), dy = Math.sin(b.angle);
-        // Sorgu ışının ORTASINDAN yapılıyor: uç noktadan sorsaydık kaynağa
-        // yakın düşmanlar ızgara sorgusuna hiç girmezdi.
-        const mx = b.x + dx * b.range / 2, my = b.y + dy * b.range / 2;
-        const cand = this.grid.query(mx, my, b.range / 2 + b.width, this.scratch);
-        for (let j = 0; j < cand.length; j++) {
-          const e = cand[j];
-          if (e.hp <= 0 || b.hit.has(e)) continue;
-          // düşmanın ışın üzerindeki izdüşümü [0, range] aralığına kırpılır
-          const px = e.x - b.x, py = e.y - b.y;
-          const t = Math.max(0, Math.min(b.range, px * dx + py * dy));
-          const cx = px - dx * t, cy = py - dy * t;
-          const rr = b.width / 2 + e.radius;
-          if (cx * cx + cy * cy > rr * rr) continue;
-          b.hit.add(e);
-          this.damageEnemy(b.owner, e, b.damage, b.wid);
-        }
-      }
-
-      b.life -= dt;
-      if (b.life <= 0) this.swapRemove(this.beams, i);
-    }
-  }
 
   private fireBoomerang(h: Hero, w: OwnedWeapon) {
     const def = w.def;

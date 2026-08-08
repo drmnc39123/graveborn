@@ -186,7 +186,7 @@ check(`simülasyon mührü (SIM_VERSION ${SIM_VERSION})`, seal === SIM_SEAL,
     (g as unknown as { rollOffers: (h: unknown) => void }).rollOffers(g.hero);
     dizi.push(g.offers.map((o) => o.id).join('+'));
   }
-  const POOL_SEAL = '1fde9e22';
+  const POOL_SEAL = '6f9424d0';
   const poolSeal = fnv1a(dizi.join('|'));
   const gorulen = new Set(dizi.join('|').split(/[|+]/));
   const eksik = WEAPONS.filter((w) => !gorulen.has(`w:${w.id}`)).map((w) => w.id);
@@ -581,9 +581,7 @@ console.log('\n[3C] Nadir düşüş');
   };
   const x = runRare(4242);
   const y = runRare(4242);
-  const z = runRare(9999);
   check('aynı seed aynı nadir gold', x.gold === y.gold, `${x.gold} = ${y.gold}`);
-  check('farklı seed farklı nadir gold', x.gold !== z.gold, `${x.gold} vs ${z.gold}`);
   check('düşüş NADİR (kill başına maaş değil)', x.gold < x.kills,
     `${x.gold} gold / ${x.kills} kill`);
   // ⚠️ ÇOK SEED — tek seed'e "gold düşmeli" dedirtmek YAZI-TURA.
@@ -598,6 +596,13 @@ console.log('\n[3C] Nadir düşüş');
   check('düşüş mekanizması ÇALIŞIYOR (6 seedin en az biri)', dusen > 0,
     `${dusen}/6 seed düşüş verdi`);
   check('ama HER koşuda düşmüyor (gerçekten nadir)', dusen < 6, `${dusen}/6`);
+  // ⚠️ "FARKLI SEED FARKLI SONUÇ" DA TEK ÇİFTE BAĞLIYDI (4242 vs 9999) ve
+  // aynı tuzağa düştü: ikisi de 0 verince "determinizm bozuk" diye kırmızı
+  // yandı. Oysa düşüş nadir; iki koşunun ikisinin de sıfır olması sıradan bir
+  // sonuç. Soru tek çiftle değil KÜME ile sorulmalı: seed sonucu gerçekten
+  // değiştiriyor mu?
+  check('seed sonucu DEĞİŞTİRİYOR (6 seed hepsi aynı değil)',
+    new Set(cokSeed).size > 1, `${new Set(cokSeed).size} farklı değer`);
   // ihtimal derinlikle iyileşmeli — derin oyuncu üretici olmalı
   check('düşüş ihtimali derinlikle artıyor', rareDropChance(30) > rareDropChance(0),
     `${rareDropChance(0).toFixed(4)} → ${rareDropChance(30).toFixed(4)}`);
@@ -799,7 +804,6 @@ console.log('\n[8D] Silah güç dengesi (1. bölüm, 60 sn, tek silah, dairesel 
     // oyuncunun baktığı yönü umursamıyor (auto), `beam` umursuyor
     // (directional). Yanlış sınıflamak, sınıf farkını denge sorunu sanmak olur.
     homing: 'auto', mine: 'auto',
-    beam: 'directional',
   };
   const rows = WEAPONS.map((w) => ({ name: w.name, kills: killsWith(w), cls: CLASS[w.pattern] }))
     .sort((a, b) => b.kills - a.kills);
