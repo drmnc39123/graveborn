@@ -12,9 +12,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Game } from './engine.js';
 import {
-  BEHAVIOR, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES, MAX_WEAPONS, PASSIVES,
+  BEHAVIOR, BOSS_ARCH, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES,
+  MAX_WEAPONS, PASSIVES, PLAYER,
   SIM_VERSION, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
   descentStage, rareDropChance, stageById,
+  type BossArchetype, type StageDef,
 } from './config.js';
 import { ENEMY_ART } from './sprites.js';
 import { HEROES } from './heroes.js';
@@ -1064,14 +1066,32 @@ console.log('\n[10] Boss / sandık / evrim');
 // düşmanken kiting yaparsa bölüm SONSUZA KADAR bitmez. Repo bu tuzağa bir kez
 // düştü (Ossuary Halls, 25 dakika, hiç bitmedi) ve orada kaçanlar normal
 // düşmanlardı — boss tek başına çok daha kolay kilitler.
-console.log('\n[10B] Boss yakınsama garantisi');
-{
-  const g = new Game(seedFromString('boss-yakinsama'), STAGES[2]);  // ilk boss'lu bölüm
+// ⚠️ DÖRT ARKETİPİN DÖRDÜ DE SINANIR, sadece tabandaki `warden` değil.
+// Tek arketiple koşan bir test hiçbir şey ifade etmezdi: kilitlenme riski
+// tam olarak YENİ eklenen kalıplarda. Biri mesafe tutarsa bölüm sonsuza
+// kadar bitmez ve oyuncu koşusunu (ve gold'unu) kaybeder.
+const ARCHS: readonly BossArchetype[] = ['warden', 'keeper', 'choir', 'harrower'];
+
+console.log('\n[10B] Boss yakınsama garantisi — DÖRT ARKETİP');
+for (const arch of ARCHS) {
+  // Arketip ZORLANIYOR, sıraya güvenilmiyor: yeni bir boss bölümü eklenince
+  // sıra kayar ve test sessizce başka bir kalıbı ölçmeye başlardı.
+  const base = STAGES[2];
+  const st: StageDef = { ...base, boss: { ...base.boss!, archetype: arch } };
+  // ⚠️ SEED DÖRT ARKETİPTE DE AYNI — bu bir detay değil, ölçümün kendisi.
+  // İlk denemede seed arketip adından türetiliyordu; `warden` koşusu 10
+  // dakikada bölümü bitiremedi ve test "warden kilitleniyor" dedi. Oysa
+  // kilitlenen bir şey yoktu: diğer üçü aynı bölümü 148/217/177 sn'de
+  // bitirdi, tek fark seed'di. (`curve.test.mts`'te öğrenilen aynı ders:
+  // tek seed yazı-turadır.) Aynı seed'le değişen TEK şey arketip oluyor.
+  const g = new Game(seedFromString('boss-yakinsama'), st);
   g.setViewport(1280, 720);
   let enYakin = Infinity;
   let bossGoruldu = false;
   let telegrafGoruldu = false;
   let fazDegisti = false;
+  let mermiGoruldu = 0;
+  let dogruArketip = false;
 
   const ticks = Math.round(600 / TICK);   // 10 dakika bütçe
   for (let i = 0; i < ticks; i++) {
@@ -1085,21 +1105,84 @@ console.log('\n[10B] Boss yakınsama garantisi');
     const boss = g.enemies.find((e) => e.boss);
     if (boss?.boss) {
       bossGoruldu = true;
+      dogruArketip = boss.boss.arch === arch;
       enYakin = Math.min(enYakin, Math.hypot(boss.x - g.px, boss.y - g.py));
       if (boss.boss.telegraph > 0) telegrafGoruldu = true;
       if (boss.boss.phase === 1) fazDegisti = true;
+      mermiGoruldu = Math.max(mermiGoruldu, g.enemyShots.length);
     }
   }
 
-  check('boss sahneye geldi', bossGoruldu);
+  check(`${arch}: sahneye geldi ve doğru arketiple doğdu`, bossGoruldu && dogruArketip);
   // ⚠️ ASIL TEST: boss oyuncuya YAKLAŞABİLİYOR mu? Mesafe tutsaydı bu sayı
   // hiç düşmez ve bölüm asla bitmezdi.
-  check('boss oyuncuya YAKLAŞIYOR (kiting yapmıyor)', enYakin < 140,
+  check(`${arch}: YAKLAŞIYOR (kiting yapmıyor)`, enYakin < 140,
     `en yakın ${Math.round(enYakin)} px`);
-  check('bölüm 10 dakika içinde BİTİYOR', g.phase === 'won',
+  check(`${arch}: bölüm 10 dakikada BİTİYOR`, g.phase === 'won',
     `${g.phase} · ${Math.round(g.time)} sn`);
-  check('telegraf çalışıyor (saldırı hazırlanıyor)', telegrafGoruldu);
-  check('boss faz değiştirdi (canı yarıya inince)', fazDegisti);
+  check(`${arch}: telegraf + faz çalışıyor`, telegrafGoruldu && fazDegisti);
+  // `choir` gerçekten mermi üretiyor mu — üretmiyorsa arketip sadece bir
+  // isim olur ve sessizce `warden`a döner.
+  if (arch === 'choir') {
+    check('choir: gerçekten yaylım atıyor', mermiGoruldu > 0, `${mermiGoruldu} mermi`);
+  }
+}
+
+// ── 10C) KEEPER'IN GÜVENLİ MERKEZİ ──
+// ⚠️ Bu arketibin TAMAMI bu kuralda. Merkez güvenli değilse `keeper`,
+// `warden`ın daha uzun telegraflı bir kopyasıdır — yani çeşitlilik diye
+// eklenen şey hiçbir şey eklememiş olur.
+console.log('\n[10C] keeper: merkez GERÇEKTEN güvenli mi');
+{
+  const base = STAGES[2];
+  const st: StageDef = { ...base, boss: { ...base.boss!, archetype: 'keeper' } };
+
+  /**
+   * Oyuncuyu boss'a göre belirli bir MESAFEYE ışınlayıp aldığı hasarı topla.
+   *
+   * ⚠️ MESAFE, ORAN DEĞİL — ve bu ilk ölçümün düzeltilmesi. İlk hâli oyuncuyu
+   * `slamR * 0.15`e koyuyordu; o nokta güvenli halkanın içindeydi ama boss'un
+   * GÖVDESİNİN de içindeydi, yani oyuncu her tick TEMAS hasarı yiyordu.
+   * Test 17.963 hasar görüp "merkez güvenli değil" dedi — oysa ölçtüğü şey
+   * halka değil, boss'a sarılmaktı. Sonda `bosluk` ile gövdeden uzak,
+   * güvenli çemberin içinde bir nokta seçiliyor.
+   */
+  function halkaHasari(nokta: (bossR: number, slamR: number, ic: number) => number): number {
+    const g = new Game(seedFromString('keeper-merkez'), st);
+    g.setViewport(1280, 720);
+    let toplam = 0;
+    const ticks = Math.round(600 / TICK);
+    for (let i = 0; i < ticks; i++) {
+      if (g.phase === 'levelup') g.choose(g.offers[0].id);
+      if (g.phase !== 'running') break;
+      const boss = g.enemies.find((e) => e.boss);
+      if (boss?.boss) {
+        const ic = boss.boss.slamR * BOSS_ARCH.keeper.innerMul;
+        g.px = boss.x + nokta(boss.radius, boss.boss.slamR, ic);
+        g.py = boss.y;
+        g.iframe = 0;
+        const once = g.hp;
+        g.step();
+        if (g.hp < once) toplam += once - g.hp;
+        g.hp = g.stats.maxHp;
+      } else {
+        g.hp = g.stats.maxHp;
+        g.setInput(Math.cos(i * TICK * 0.7), Math.sin(i * TICK * 0.7));
+        g.step();
+      }
+    }
+    return toplam;
+  }
+
+  // Güvenli nokta: gövdeye değmeyecek kadar uzak, iç çemberin içinde kalacak
+  // kadar yakın — ikisinin ortası.
+  const iceride = halkaHasari((bossR, _s, ic) => (bossR + PLAYER.radius + 6 + ic) / 2);
+  const disarida = halkaHasari((_b, slamR) => slamR * 0.85);
+  // ⚠️ Karşılaştırmalı ölçüm: "merkezde hasar yok" tek başına bir şey
+  // kanıtlamaz — halka HİÇ vurmuyor olabilirdi. İkinci sayı ölçümü anlamlı
+  // kılıyor.
+  check('güvenli merkezde hasar YOK', iceride === 0, `${iceride}`);
+  check('dış bantta hasar VAR (ölçüm anlamlı)', disarida > 0, `${disarida}`);
 }
 
 // Evrim ŞARTLARI: eksik pasifle evrim OLMAMALI, tam şartla OLMALI

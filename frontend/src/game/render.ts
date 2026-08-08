@@ -3,7 +3,7 @@
 // Kural: aynı renkteki nesneler tek path'te toplanır (ctx durum değişimi pahalı).
 
 import { C } from '@/lib/theme';
-import { PLAYER, RUN, WEAPON } from './config';
+import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
 import type { Game, Hero } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FX, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
@@ -283,19 +283,41 @@ function drawBossBars(ctx: CanvasRenderingContext2D, g: Game) {
 
     // ── TELEGRAF: "buradan çık" mesajı yarım saniyede okunmalı.
     //    Dolan daire = kalan süre.
+    //
+    // ⚠️ `keeper` HALKASI DİSKTEN AYRI ÇİZİLMEK ZORUNDA. Tehlike alanı aynı
+    // görünüp farklı davranırsa arketip bir çeşitlilik değil, bir TUZAK olur:
+    // oyuncu öğrendiği refleksle (kaç) tam da vurulacağı yere koşar. Güvenli
+    // merkez BOŞ bırakılıyor — "içerisi boyanmamış" tek bakışta okunuyor.
     if (b.telegraph > 0) {
-      const dolu = 1 - b.telegraph / 0.9;
+      const A = BOSS_ARCH[b.arch];
+      const sure = BOSS.telegraphSec * A.telegraphMul;
+      const dolu = 1 - b.telegraph / sure;
+      const ic = b.arch === 'keeper' && 'innerMul' in A ? b.slamR * A.innerMul : 0;
       ctx.save();
       ctx.fillStyle = `rgba(160,18,38,${(0.10 + dolu * 0.22).toFixed(3)})`;
       ctx.beginPath();
       ctx.arc(e.x, e.y, b.slamR, 0, Math.PI * 2);
-      ctx.fill();
+      if (ic > 0) {
+        // Deliği ters yönde çizip 'evenodd' ile oyuyoruz — güvenli merkez
+        // boyanmadan kalıyor.
+        ctx.arc(e.x, e.y, ic, 0, Math.PI * 2, true);
+      }
+      ctx.fill(ic > 0 ? 'evenodd' : 'nonzero');
       // kenar: dolan yay — süre bittiğinde tam tur
       ctx.strokeStyle = C.blood;
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(e.x, e.y, b.slamR, -Math.PI / 2, -Math.PI / 2 + dolu * Math.PI * 2);
       ctx.stroke();
+      if (ic > 0) {
+        // Güvenli çemberin kenarı — "buraya gir" çizgisi tehlike renginde
+        // DEĞİL: aynı renk, "buradan çık"la karışırdı.
+        ctx.strokeStyle = C.ice;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, ic, 0, Math.PI * 2);
+        ctx.stroke();
+      }
       ctx.restore();
     }
 

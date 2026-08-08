@@ -20,7 +20,19 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
 // v3: 16 düşmanın 12'sine gerçek davranış verildi (+`swarm` +`circler`).
 // Bu bir rng değişikliği DEĞİL — düşmanlar farklı yürüdüğü için farklı
 // zamanlarda ölüyor, akış aynı kalsa da sonuç kayıyor. Mühür yine de yenilendi.
-export const SIM_VERSION = 3;
+//
+// v4: BOSS ARKETİPLERİ (bkz. BOSS_ARCH). Yine bir rng değişikliği DEĞİL —
+// hiçbir arketip `rng.next()` çağırmıyor, saldırı ve açı seçimi saldırı
+// sayacından türüyor. Ama boss'lu bölümlerin SONUCU kayıyor.
+//
+// ⚠️ BURADA ÖLÇÜLEN BİR ŞEY VAR VE YAZILMASI GEREKİYOR: `SIM_SEAL` bu
+// değişiklikte HİÇ KIRILMADI ve bu bir "sorun yok" işareti DEĞİL, mührün
+// KÖR NOKTASI. Mühür 60 saniyelik bir koşuyu özetliyor; boss ilk kez
+// dakikalar sonra geliyor, yani mühür boss davranışını hiç görmüyor.
+// Boss kodu serbestçe değişebilir, mühür yeşil kalır, ama koşu sonucu
+// (ve dolayısıyla düello tekrarı) kayar. Kör nokta `sim.test.mts` [10B]/[10C]
+// ile kapatıldı: dört arketip de ayrı ayrı yakınsama sınavına giriyor.
+export const SIM_VERSION = 4;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -74,7 +86,15 @@ export interface StageDef {
    */
   damageMul?: number;
   /** Bölüm sonunda boss gelir mi (kalan düşman 0'a inince) */
-  boss?: { hp: number; speed: number; damage: number; radius: number; art: string; label: string };
+  boss?: {
+    hp: number; speed: number; damage: number; radius: number; art: string; label: string;
+    /**
+     * Dövüş kalıbı. YAZILMAZSA bölümün kampanyadaki boss SIRASINDAN türer
+     * (bkz. `bossArchetypeOf`) — 23 bölüme elle arketip yazmak, yeni bir
+     * boss eklendiğinde sırayı sessizce bozardı.
+     */
+    archetype?: BossArchetype;
+  };
 }
 
 export const STAGES: readonly StageDef[] = [
@@ -278,6 +298,103 @@ export function stageById(id: number): StageDef | undefined {
  * okunabilirlik: oyuncu kalıbı öğrenebilmeli, zar atılırsa öğrenilecek bir
  * şey kalmaz.
  */
+/**
+ * BOSS ARKETİPLERİ — "23 boss, tek dövüş" sorununun cevabı.
+ *
+ * ÖLÇÜLEN SORUN: boss kimliği YALNIZCA can ve boyuttu. Motor boss'u sabit
+ * `behavior: 'chase'` ile yaratıyordu, tek saldırısı vardı (yer darbesi) ve
+ * tek faz eşiği. Yani 3. bölümün boss'uyla 25. bölümün boss'u aynı dövüştü;
+ * oyuncunun verdiği karar hiç değişmiyordu.
+ *
+ * ⚠️ ÇEŞİTLİLİK SPRITE'TA ARANMADI ve ARANAMAZ: diskte boss sanatı YOK.
+ * `boss_mini/mega/nightmare` = monster 01/09/10 ve bunlar mon_crab /
+ * mon_warrior / mon_hulk ile AYNI sheet'ler. Görsel çeşitlilik yeni varlık
+ * satın almadan mümkün değil. Ama asıl eksik zaten görsel değildi: oyuncu
+ * boss'a bakmıyor, boss'un NE YAPACAĞINA bakıyor.
+ *
+ * ⚠️ HER ARKETİP KIRMIZI ÇİZGİYE UYAR: saldırı DURARAK yapılır, hareket her
+ * zaman kovalamadır. Hiçbir arketip mesafe tutmaz, geri çekilmez, kaçmaz —
+ * boss sahnedeki tek düşmanken kiting bölümü sonsuza kadar kilitler
+ * (Ossuary Halls, 25 dakika, hiç bitmedi).
+ *
+ * ⚠️ ARKETİP SEÇİMİ RNG KULLANMAZ — boss sırasına göre döner. Oyuncu "bu
+ * boss halka atıyor" diye öğrenebilmeli; zar atılsaydı öğrenilecek bir şey
+ * kalmazdı. Aynı gerekçe saldırı sırasında da geçerli (bkz. BOSS).
+ */
+export type BossArchetype =
+  /** yer darbesi — merkezden yayılan disk. Karşılığı: KAÇ. (taban kalıp) */
+  | 'warden'
+  /** halka — dış bantta vurur, MERKEZ GÜVENLİ. Karşılığı: BOSS'A KOŞ. */
+  | 'keeper'
+  /** yaylım — dururken çembersel mermi yağmuru. Karşılığı: BOŞLUĞU BUL. */
+  | 'choir'
+  /** çifte darbe — küçük ve hızlı, sonra büyük. Karşılığı: ERKEN DÖNME. */
+  | 'harrower';
+
+/**
+ * Arketip ayarları. Hepsi `BOSS` tabanının ÜSTÜNE çarpan olarak biniyor —
+ * böylece boss'un genel dengesini tek yerden ayarlamak mümkün kalıyor.
+ */
+export const BOSS_ARCH = {
+  warden: { telegraphMul: 1, damageMul: 1, radiusMul: 1 },
+  keeper: {
+    // ⚠️ Daha UZUN telegraf: oyuncunun güvenli bölgeye girmesi için mesafe
+    // KAPATMASI gerekiyor, kaçması değil. Kaçmak her zaman daha hızlıdır;
+    // aynı süreyi vermek bu arketipi haksız yere en zoru yapardı.
+    telegraphMul: 1.45,
+    damageMul: 1,
+    /** dış çeper geniş — kaçarak çıkmak zor, içeri girmek kolay olsun */
+    radiusMul: 1.25,
+    /**
+     * Güvenli iç yarıçap oranı — bu oranın ALTINDA kalan hiç hasar almaz.
+     * ⚠️ Boss'un kendi gövdesinden büyük olmalı, yoksa "güvenli bölge"
+     * boss'un içi olur ve oraya girmek imkânsızlaşır.
+     */
+    innerMul: 0.42,
+  },
+  choir: {
+    telegraphMul: 1.15,
+    damageMul: 1,
+    radiusMul: 1,
+    /** aynı anda çıkan mermi sayısı — çember eşit bölünür */
+    shots: 12,
+    shotSpeed: 118,
+    /** tek mermi ÖLDÜRMEMELİ — kalıbı öğrenmek için hayatta kalmak gerek */
+    shotDamageMul: 0.5,
+    shotRadius: 7,
+    shotLifeSec: 2.6,
+    /**
+     * Çemberin açısal kayması. ⚠️ SIFIR OLMAMALI: her yaylım aynı açıdan
+     * çıksaydı oyuncu tek bir noktada durup hiç vurulmadan bekleyebilirdi.
+     * RNG değil, saldırı sayacından türeyen sabit kayma — determinizm korunur.
+     */
+    spinPerVolley: 0.26,
+  },
+  harrower: {
+    telegraphMul: 0.62,
+    damageMul: 0.7,
+    radiusMul: 0.58,
+    /** ikinci darbe: gecikme + hasar/yarıçap çarpanı */
+    secondDelaySec: 0.55,
+    secondDamageMul: 1.35,
+    secondRadiusMul: 1.15,
+  },
+} as const;
+
+const ARCH_ORDER: readonly BossArchetype[] = ['warden', 'keeper', 'choir', 'harrower'];
+
+/**
+ * Sıradaki arketip — boss SIRASINDAN türer, RNG'den değil.
+ *
+ * ⚠️ 0. HER ZAMAN `warden`. Oyuncunun ilk gördüğü boss taban kalıbı
+ * öğretmeli: "kırmızı daire = kaç". `keeper` bu refleksi TERSİNE çeviriyor
+ * ve tersine çevirmenin anlamlı olması için önce refleksin kurulması gerek.
+ */
+export function archetypeAt(index: number): BossArchetype {
+  const i = Number.isFinite(index) ? Math.max(0, Math.floor(index)) : 0;
+  return ARCH_ORDER[i % ARCH_ORDER.length];
+}
+
 export const BOSS = {
   /** giriş: dokunulmaz, hareketsiz, isim kartı görünür */
   introSec: 2.0,
@@ -504,9 +621,37 @@ export function descentStage(stageId: number, depth: number, asc = 0): StageDef 
       radius: src.radius,
       art: src.art,
       label: `${src.label} · Depth ${d}`,
+      // ⚠️ İNİŞTE ARKETİP DERİNLİKTEN TÜRER, bölümden değil. `base.boss`'un
+      // arketipi miras alınsaydı bir oyuncu aynı bölümü inerken hep aynı
+      // dövüşü görürdü — inişin tamamı tek bir boss kalıbı olurdu.
+      // `tier - 1` çünkü ilk boss `bossEvery`inci derinlikte (tier 1) ve
+      // oyuncunun ilk gördüğü kalıp `warden` olmalı.
+      archetype: archetypeAt(tier - 1),
     };
   }
   return def;
+}
+
+/**
+ * Kampanyada bu bölüm kaçıncı boss — arketip sırası buradan türer.
+ * Modül yüklenirken bir kez hesaplanıyor.
+ */
+const CAMPAIGN_BOSS_INDEX: ReadonlyMap<number, number> = (() => {
+  const m = new Map<number, number>();
+  let n = 0;
+  for (const s of STAGES) if (s.boss) m.set(s.id, n++);
+  return m;
+})();
+
+/**
+ * Bir bölümün boss dövüş kalıbı.
+ *
+ * ⚠️ TEK KAYNAK. Motor da arayüz de testler de buradan sorar; arketipi
+ * çağrı yerinde hesaplamak, iki yerde iki farklı boss dövüşü demekti.
+ */
+export function bossArchetypeOf(def: StageDef): BossArchetype {
+  if (!def.boss) return 'warden';
+  return def.boss.archetype ?? archetypeAt(CAMPAIGN_BOSS_INDEX.get(def.id) ?? 0);
 }
 
 /**

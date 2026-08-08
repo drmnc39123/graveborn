@@ -8,12 +8,13 @@
 import { createRng, type Rng } from './rng';
 import { SpatialHash } from './spatial';
 import {
-  BOSS, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
+  BOSS, BOSS_ARCH, CHEST_RADIUS, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
-  WEAPONS, ASCENSION, BEHAVIOR, ascensionDropMul, descentStage, rareDropAmount, rareDropChance,
-  startLevelFor, weaponById,
+  WEAPONS, ASCENSION, BEHAVIOR, ascensionDropMul, bossArchetypeOf, descentStage, rareDropAmount,
+  rareDropChance, startLevelFor, weaponById,
   weaponCooldownAt, weaponCountAt, weaponDamageAt, xpForLevel,
-  type Behavior, type EnemyType, type PassiveDef, type StageDef, type StatKey, type WeaponDef,
+  type Behavior, type BossArchetype, type EnemyType, type PassiveDef, type StageDef,
+  type StatKey, type WeaponDef,
 } from './config';
 import { DEFAULT_HERO, heroById, mergeStats } from './heroes';
 
@@ -42,6 +43,26 @@ export interface Enemy {
     telegraph: number;
     /** telegraf/darbe yarıçapı */
     slamR: number;
+    /**
+     * Dövüş kalıbı (bkz. config BOSS_ARCH). Boss'un can/boyut dışında bir
+     * kimliği olmasını sağlayan tek alan — bölümün boss SIRASINDAN türer,
+     * RNG'den değil.
+     */
+    arch: BossArchetype;
+    /**
+     * Kaçıncı saldırı. İki işi var, ikisi de RNG'siz olmak zorunda:
+     * `choir` yaylımının açısal kayması buradan türüyor (her yaylım aynı
+     * açıdan çıksaydı oyuncu tek noktada durup hiç vurulmadan bekleyebilirdi)
+     * ve `harrower`ın ikinci darbesi buradan zamanlanıyor.
+     */
+    atkNo: number;
+    /**
+     * `harrower`ın ikinci darbesine kalan süre; 0 = bekleyen darbe yok.
+     * ⚠️ AYRI SAYAÇ ŞART: `telegraph`i yeniden kullanmak ikinci darbeyi de
+     * "kaçılabilir bir telegraf" yapardı — oysa ikinci darbenin tamamı ilk
+     * darbeden sonra ERKEN DÖNENİ cezalandırmak için var.
+     */
+    followUp: number;
   };
 
   // ── davranış durumu ──
@@ -768,7 +789,12 @@ export class Game {
       boss: {
         label: b.label, evolutionChest: true,
         intro: BOSS.introSec, phase: 0, atkCd: BOSS.atkCd,
-        telegraph: 0, slamR: BOSS.slamRadius,
+        telegraph: 0,
+        // ⚠️ Yarıçap ARKETİPE GÖRE. `keeper` daha geniş (kaçarak çıkmak zor,
+        // içeri girmek kolay olsun), `harrower` daha dar (iki darbe üst üste
+        // biniyor; tam yarıçapta olsalardı kaçınmak imkânsızlaşırdı).
+        slamR: BOSS.slamRadius * BOSS_ARCH[bossArchetypeOf(st.def)].radiusMul,
+        arch: bossArchetypeOf(st.def), atkNo: 0, followUp: 0,
       },
     });
     this.events.add('boss');
@@ -924,6 +950,21 @@ export class Game {
       this.events.add('boss');
     }
     const hiz = b.phase === 1 ? sp * BOSS.phase2Speed : sp;
+    const A = BOSS_ARCH[b.arch];
+
+    // ── `harrower`ın İKİNCİ darbesi ──
+    // ⚠️ TELEGRAFSIZ ve bu kasıtlı: ikinci darbenin tamamı "ilk darbeden
+    // sonra erken dönen"i cezalandırmak için var. Ona da kaçma penceresi
+    // verilseydi arketip, `warden`ın iki kez tekrarından ibaret olurdu.
+    // Boss bu sırada DURMAZ — kovalamaya devam eder, yani kiting yok.
+    if (b.followUp > 0) {
+      b.followUp -= dt;
+      if (b.followUp <= 0) {
+        const R = b.slamR * ('secondRadiusMul' in A ? A.secondRadiusMul : 1);
+        const M = BOSS.slamDamageMul * ('secondDamageMul' in A ? A.secondDamageMul : 1);
+        this.bossStrike(e, R, M, 0);
+      }
+    }
 
     // ── telegraf: darbe hazırlanıyor. Boss DURUR — bu kiting değil, oyuncuya
     //    kaçma penceresi; süre dolunca hemen kovalamaya dönüyor.
@@ -931,18 +972,8 @@ export class Game {
       b.telegraph -= dt;
       e.animT += dt;
       if (b.telegraph <= 0) {
-        // ⚠️ DARBE EN YAKIN DÖVÜŞÇÜYE. Solo'da bu her zaman birinci
-        // dövüşçü; 1v1'de boss kimin yanındaysa onu vurur.
-        const tg = this.target(e.x, e.y);
-        const dist = Math.hypot(tg.px - e.x, tg.py - e.y);
-        if (dist <= b.slamR && tg.iframe <= 0) {
-          const taken = Math.max(1, Math.round(e.damage * BOSS.slamDamageMul) - tg.stats.armor);
-          tg.hp -= taken;
-          tg.iframe = PLAYER.iframeSec;
-          this.events.add('hurt');
-          tg.hurtT = 0.32;
-          if (this.hurts.length < 4) this.hurts.push({ amount: taken });
-        }
+        b.atkNo += 1;
+        this.bossResolve(e, b, A);
         b.atkCd = BOSS.atkCd * (b.phase === 1 ? BOSS.phase2Cd : 1);
       }
       return;
@@ -957,9 +988,84 @@ export class Game {
     // anlamsız hem oyuncuya bedava kaçış verir.
     b.atkCd -= dt;
     if (b.atkCd <= 0 && d < b.slamR * 1.6) {
-      b.telegraph = BOSS.telegraphSec;
+      b.telegraph = BOSS.telegraphSec * A.telegraphMul;
       this.events.add('charge');
     }
+  }
+
+  /**
+   * Telegraf dolunca ne oluyor — ARKETİPİN TAMAMI BURADA.
+   *
+   * ⚠️ Hiçbir dal boss'u HAREKET ETTİRMEZ ya da geri çekmez. Arketipler
+   * saldırının ŞEKLİNİ değiştiriyor, boss'un mesafe politikasını değil:
+   * hareket her zaman kovalama kalır (bkz. config BOSS başlığındaki kırmızı
+   * çizgi — kiting bölümü sonsuza kadar kilitler).
+   */
+  private bossResolve(
+    e: Enemy, b: NonNullable<Enemy['boss']>, A: (typeof BOSS_ARCH)[BossArchetype],
+  ) {
+    switch (b.arch) {
+      case 'keeper': {
+        // HALKA: dış bantta vurur, MERKEZ GÜVENLİ — `warden`ın tam tersi.
+        // Oyuncu kaçmayı öğrendikten sonra bu arketip onu boss'a KOŞMAYA
+        // zorluyor; çeşitliliğin asıl kaynağı sayı değil, bu ters karar.
+        const inner = b.slamR * ('innerMul' in A ? A.innerMul : 0.42);
+        this.bossStrike(e, b.slamR, BOSS.slamDamageMul * A.damageMul, inner);
+        break;
+      }
+      case 'choir': {
+        // YAYLIM: dururken çembersel mermi. Boss yerinde kalıyor, yani
+        // menzilli DEĞİL — mesafe tutmuyor, sadece bir saldırı yapıyor.
+        const n = 'shots' in A ? A.shots : 12;
+        const dmg = e.damage * ('shotDamageMul' in A ? A.shotDamageMul : 0.5);
+        // ⚠️ Kayma SALDIRI SAYACINDAN türüyor, RNG'den değil: hem determinizm
+        // korunuyor hem her yaylım bir öncekinin boşluklarını kapatıyor.
+        const spin = b.atkNo * ('spinPerVolley' in A ? A.spinPerVolley : 0.26);
+        const sp = 'shotSpeed' in A ? A.shotSpeed : 118;
+        for (let i = 0; i < n; i++) {
+          if (this.enemyShots.length >= BEHAVIOR.ranged.maxAlive) break;
+          const ang = spin + (i / n) * Math.PI * 2;
+          this.enemyShots.push({
+            x: e.x, y: e.y,
+            vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+            damage: dmg,
+            radius: 'shotRadius' in A ? A.shotRadius : 7,
+            life: 'shotLifeSec' in A ? A.shotLifeSec : 2.6,
+          });
+        }
+        this.events.add('eshot');
+        break;
+      }
+      case 'harrower':
+        // ÇİFTE DARBE: küçük ve hızlı, sonra büyük. İlki şimdi, ikincisi
+        // `followUp` ile — telegrafsız (bkz. yukarıdaki not).
+        this.bossStrike(e, b.slamR, BOSS.slamDamageMul * A.damageMul, 0);
+        b.followUp = 'secondDelaySec' in A ? A.secondDelaySec : 0.55;
+        break;
+      default:
+        // WARDEN: taban kalıp — merkezden yayılan disk, karşılığı KAÇ.
+        this.bossStrike(e, b.slamR, BOSS.slamDamageMul * A.damageMul, 0);
+    }
+  }
+
+  /**
+   * Bir alan darbesini uygula.
+   *
+   * `inner > 0` ise HALKA: iç yarıçapın altında kalan hiç hasar almaz.
+   * Tek bir yerde toplandı çünkü dört arketip de aynı üç şeyi doğru yapmak
+   * zorunda: EN YAKIN dövüşçüyü hedefle (1v1'de boss kimin yanındaysa onu
+   * vurur), `iframe`e saygı göster, hasar sayısını kuyruğa yaz.
+   */
+  private bossStrike(e: Enemy, radius: number, damageMul: number, inner: number) {
+    const tg = this.target(e.x, e.y);
+    const dist = Math.hypot(tg.px - e.x, tg.py - e.y);
+    if (dist > radius || dist < inner || tg.iframe > 0) return;
+    const taken = Math.max(1, Math.round(e.damage * damageMul) - tg.stats.armor);
+    tg.hp -= taken;
+    tg.iframe = PLAYER.iframeSec;
+    this.events.add('hurt');
+    tg.hurtT = 0.32;
+    if (this.hurts.length < 4) this.hurts.push({ amount: taken });
   }
 
   /** Menzilli: tercih ettiği mesafeyi korur, arada ok atar. */
