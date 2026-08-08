@@ -225,9 +225,41 @@ sorusuna cevap veriyor.
     `createMany` → ~15 sorgu.
 
 ### FAZ R5 — İÇERİK HACMİ
-11. **Kampanya 10 → 20+ bölüm.** 1,5 saat çok kısa.
-12. **Silah 16 → 30+**, düşman 16 → 30+, evrim yolları çeşitlensin.
-13. **Boss çeşitliliği.** Şu an 8 bölüm boss'u aynı üç sprite'ı paylaşıyor.
+11. ~~**Kampanya 10 → 20+ bölüm.**~~ ✅ **25 bölüm** — bu madde yazıldığında
+    zaten geçersizmiş, ölçülmedi varsayıldı. Ölçülen ilk geçiş süresi
+    **2,8 saat** (25 bölümün ortancaları toplamı), 1,5 saat değil.
+
+12. ~~**Silah 16 → 30+, düşman 16 → 30+.**~~ ✅ Silah **8 taban + 8 evrim →
+    11 taban + 11 evrim (22)**, düşman **16 → 21**, davranış **6 → 9**.
+
+    ⚠️ **SAYIYI ARTIRMAK TEK BAŞINA İŞE YARAMAZ** — bu maddenin kendisi
+    yanıltıcıydı. Aynı mermiyi başka renkte atan bir silah seçeneği değil
+    LİSTEYİ uzatır. Eklenen her şey yeni bir KARAR getiriyor:
+    · `homing` kaçanı vurur · `mine` tek "önceden düşün" silahı ·
+      `beam` tek SÜREKLİ hasar kaynağı
+    · `exploder` NEREDE öldürdüğün · `splitter` HANGİ SIRAYLA ·
+      `herald` ÖNCE HANGİSİNİ (oyunun ilk hedef-önceliği kararı)
+
+    ⚠️ Sanat kısıtı yoktu: diskte **252 efekt atlası** var, `combatArt`
+    8'ini kullanıyordu. Düşman tarafında ise 16 sprite'ın 16'sı da
+    kullanımdaydı — yeni tipler sprite PAYLAŞIYOR ve bu bilinçli: ayrımları
+    zaten görselde değil davranışta.
+
+    ⚠️ **Özel düşman NADİR olmalı.** Doğma seçimi `rng.pick` ile düzgün
+    dağılımdı, yani 6 tipli bir bölümde haberci sürünün ALTIDA BİRİYDİ —
+    o oranda bir "öncelik hedefi" karar değil arka plandır. `weight` alanı
+    eklendi (haberci 0,28 · bölünen 0,45 · patlayıcı 0,5).
+
+13. **Boss çeşitliliği.** 🔴 **SPRITE TARAFI VARLIK-ENGELLİ — kod değil,
+    satın alma işi.** Ölçüldü: diskte dedike boss sanatı YOK.
+    `boss_mini/mega/nightmare` = `monster 01/09/10` ve bunlar
+    mon_crab/mon_warrior/mon_hulk ile AYNI sheet'ler. Tek ücretsiz seçenek
+    4 hero sheet'ini "düşmüş şampiyon" boss'una çevirmek (CC0, tam animasyon
+    seti diskte) — kullanıcıya soruldu, karar bekliyor.
+
+    ✅ **DAVRANIŞ tarafı BİTTİ:** 4 arketip (`warden` kaç · `keeper` boss'a
+    KOŞ · `choir` boşluğu bul · `harrower` erken dönme) + arketipten bağımsız
+    **mezar küresi**. Boss kimliği artık can+boyut değil.
 
 ---
 
