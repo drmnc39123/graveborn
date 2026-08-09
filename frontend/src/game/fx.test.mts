@@ -12,7 +12,8 @@ import { TICK } from './config.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ENEMY_ART, FALLEN_ART } from './sprites.js';
+import { ENEMY_ART, FALLEN_ART, PET_ART } from './sprites.js';
+import { PETS } from './pets.js';
 import { pumpFx, resetFx, shakeOffset, takeFreeze } from './fx.js';
 
 const FAIL: string[] = [];
@@ -229,6 +230,48 @@ console.log('\n[8] Ölüm animasyonu — dosyalar GERÇEKTEN var mı');
   );
   check('her arketip AYRI kahraman silüeti kullanıyor', dizinler.size === 4,
     [...dizinler].join(', '));
+
+  // ── PET GÖRSELLERİ (THE BINDING) ──────────────────────────────────
+  // ⚠️ Aynı sinsi hata sınıfı: `strip7` yerine `strip9` yazmak 404 üretir,
+  // `drawActor` sessizce false döner ve pet HİÇ GÖRÜNMEZ. Boss sanatında
+  // yaşandı, burada da yaşanmasın.
+  const petEksik: string[] = [];
+  const petDonguye: string[] = [];
+  for (const [key, art] of Object.entries(PET_ART)) {
+    for (const [ad, a] of Object.entries(art.anims)) {
+      // tek seferlik animasyonlar döngüye girmemeli — pet sürekli saldırıyor
+      // görünürse oyuncu bekleme ritmini gözle takip edemez
+      if (['attack', 'cast', 'bless', 'death'].includes(ad) && a.loop !== false) {
+        petDonguye.push(`${key}.${ad}`);
+      }
+      if (a.kind === 'sequence') {
+        for (let i = 1; i <= a.frames; i++) {
+          if (!mevcut.has(a.src.replace('{i}', String(i)))) petEksik.push(a.src);
+        }
+      } else if (!mevcut.has(a.src)) {
+        petEksik.push(`${key}.${ad}: ${a.src}`);
+      }
+    }
+  }
+  check('her pet için görsel TANIMLI', Object.keys(PET_ART).length === PETS.length,
+    `${Object.keys(PET_ART).length} görsel / ${PETS.length} pet`);
+  const artEksik = PETS.filter((p) => !PET_ART[p.art]).map((p) => `${p.id}→${p.art}`);
+  check('pets.ts art anahtarları PET_ART ile EŞLEŞİYOR', artEksik.length === 0,
+    artEksik.join(', ') || 'tamam');
+  check('pet sprite dosyaları diskte', petEksik.length === 0,
+    petEksik.length ? `${petEksik.length} eksik: ${petEksik.slice(0, 3).join(', ')}` : 'hepsi var');
+  check('tek seferlik pet animasyonları döngüye GİRMİYOR', petDonguye.length === 0,
+    petDonguye.join(', ') || 'tamam');
+
+  // ⚠️ Channeler ve warden rollerinin görsel karşılığı OLMAK ZORUNDA. Bu iki
+  // satır (`blast1`, `levelup`) bugüne kadar hiç kullanılmamıştı; rol
+  // eklenip animasyon eklenmezse pet büyü yaparken hareketsiz durur.
+  const rolAnim: Record<string, string> = { channeler: 'cast', warden: 'bless', striker: 'attack' };
+  const animsiz = PETS.filter((p) => {
+    const ad = rolAnim[p.role];
+    return ad && !PET_ART[p.art]?.anims[ad];
+  }).map((p) => `${p.id}(${p.role})`);
+  check('her rolün görsel karşılığı VAR', animsiz.length === 0, animsiz.join(', ') || 'tamam');
 }
 
 console.log('\n[9] Leş havuzu');

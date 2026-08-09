@@ -49,7 +49,14 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
 // v8: IŞIN (beam) KALDIRILDI — kullanıcı kararı, görsel beğenilmedi.
 // Taban silah 11 → 10. Ayrıca kampanya düşman sayıları %20 artırıldı
 // (silahlar oyuncuyu güçlendirince ilk geçiş 3,3 saatten 2,8'e düşmüştü).
-export const SIM_VERSION = 9;
+// v10: PET SİSTEMİ (THE BINDING). Motor artık yoldaş taşıyabiliyor ve
+// yoldaş `damageEnemy` çağırıyor — yani RNG akışını kaydırabilir.
+// ⚠️ AMA MÜHÜR KIRILMADI ve bu tesadüf değil: `Game`'in `pets` parametresi
+// VARSAYILAN BOŞ (`allowedWeapons: null` ile aynı duruş). Pet'siz koşu tek
+// bir fazladan `rng.next()` bile tüketmiyor, bit bit eskisiyle aynı.
+// Sürüm yine de artıyor çünkü oyunun DAVRANIŞI değişti ve bunu sürüm
+// numarası söylemeli.
+export const SIM_VERSION = 10;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */

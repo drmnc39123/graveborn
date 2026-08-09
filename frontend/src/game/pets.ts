@@ -17,6 +17,7 @@
 // düşmandır. Karışıklık artık kusur değil, oyunun anlattığı şey.
 
 import type { Rarity } from './cosmetics';
+import type { StatKey } from './config';
 
 /**
  * ROL = KİMLİK, NADİRLİK = TAVAN.
@@ -214,14 +215,23 @@ export function collectionTotalCost(): number {
 // ⚠️ TAVAN HEDEFİ: tek maxlı legendary ≈ oyuncu hasarının 1/3'ü, mythic ≈
 // yarısı. İki yuva dolu olsa bile toplam katkı oyuncunun kendi hasarının
 // altında kalır — pet çarpan değil, destek.
+//
+// ⚠️ `share` = OYUNCUNUN SANİYELİK HASARININ ORANI. Vuruş başına oran DEĞİL.
+// Bu ayrım bir kez karıştı ve sessiz bir denge hatası üretiyordu: aynı sayı
+// vuruş başına okunduğunda, beklemesi uzun olan channeler otomatik olarak
+// striker'dan güçlü çıkıyordu. Tek anlam:
+//
+//     pet saniyelik hasarı = share × oyuncunun toplam saniyelik hasarı
+//     vuruş başına hasar    = share × oyuncu DPS × cd
+//
+// Böylece `cd` yalnızca RİTMİ belirliyor, gücü değil — 2 saniyede bir küçük
+// vuran pet ile 5 saniyede bir büyük vuran pet aynı güçte, farklı hissiyatta.
 export const ROLE_BASE = {
   striker: { cd: 2.2, share: 0.07, perLevel: 0.0035, radius: 0 },
-  // ⚠️ CHANNELER TEK HEDEFTEN DÜŞÜK OLMALI ve öyle: 0,096/sn karşı 0,153/sn.
-  // Sebebi patlamanın YARIÇAPTAKİ HERKESE vurması — 400 düşmanlı bir sahnede
-  // aynı `share` tek hedefle asla eşdeğer değil. İlk sayı (0,15 + 0,0055)
-  // bunu hesaba katmıyordu ve legendary'de oyuncunun %59'unu her düşmana
-  // basıyordu.
-  channeler: { cd: 5.0, share: 0.12, perLevel: 0.0045, radius: 96 },
+  // ⚠️ CHANNELER STRIKER'DAN DÜŞÜK OLMAK ZORUNDA (0,24 karşı 0,336). Sebebi
+  // patlamanın YARIÇAPTAKİ HERKESE vurması: 400 düşmanlı bir sahnede aynı
+  // saniyelik oran tek hedefle asla eşdeğer değil, kat kat fazlası olur.
+  channeler: { cd: 5.0, share: 0.06, perLevel: 0.00225, radius: 96 },
   /** warden'da `share` maxHp'nin yüzdesi — hasar değil iyileşme */
   warden: { cd: 8.0, share: 0.03, perLevel: 0.0012, radius: 0 },
   /**
@@ -290,6 +300,50 @@ export function petEffect(def: PetDef, level: number, mythic = false): PetEffect
     // çarpan; `share` kadar dikkat ister.
     radius: b.radius > 0 ? b.radius * (1 + lv * 0.01) * (mythic ? 1.15 : 1) : 0,
   };
+}
+
+// ── KOŞUYA GİREN BİÇİM ────────────────────────────────────────────────
+//
+// ⚠️ MOTOR `PetDef` GÖRMEZ, `RunPet` GÖRÜR. Sebep motorun saflığı: motor
+// nadirlik, seviye, füzyon, gold gibi ilerleme kavramlarını bilmemeli —
+// bunlar `Progress`e ait ve `Progress` motora hiç girmiyor (aynı gerekçeyle
+// `allowedWeapons` da dışarıda çözülüp içeri sadece sonuç olarak veriliyor).
+// Motorun ihtiyacı olan tek şey: ne yapacağı, ne kadar sık, ne kadar güçlü.
+export interface RunPet {
+  /** `sprites.ts` PET_ART anahtarı — motor içeriğini bilmez, sadece taşır */
+  art: string;
+  role: PetRole;
+  cd: number;
+  share: number;
+  radius: number;
+}
+
+export function toRunPet(def: PetDef, level: number, mythic = false): RunPet {
+  const e = petEffect(def, level, mythic);
+  return { art: def.art, role: def.role, cd: e.cd, share: e.share, radius: e.radius };
+}
+
+/**
+ * FORAGER'IN KATKISI — motora DEĞİL, `permanent` kanalına gider.
+ *
+ * ⚠️ NEDEN AYRI: forager savaşmıyor, sadece istatistik veriyor. Motora
+ * "her karede greed'i şu kadar artır" dedirtmek, zaten var olan bir kanalı
+ * (Forge'un `permanent`'ı) ikinci kez yazmak olurdu. Aynı yoldan geçmesi
+ * ayrıca ŞART: sunucu nadir gold tavanını `permanentBonus(...).greed`
+ * üzerinden kuruyor; forager başka bir yoldan gelseydi sunucu onu göremez
+ * ve dürüst oyuncuyu haksız yere kırpardı.
+ */
+export function petStatBonus(pets: readonly RunPet[]): Partial<Record<StatKey, number>> {
+  let greed = 0, magnet = 0;
+  for (const p of pets) {
+    if (p.role !== 'forager') continue;
+    greed += p.share;
+    magnet += p.radius;
+  }
+  const out: Partial<Record<StatKey, number>> = {};
+  if (greed) out.greed = greed;
+  if (magnet) out.magnet = magnet;
+  return out;
 }
 
 // ── İKİNCİ YUVA ───────────────────────────────────────────────────────

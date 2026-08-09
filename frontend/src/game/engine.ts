@@ -17,6 +17,7 @@ import {
   type StatKey, type WeaponDef,
 } from './config';
 import { DEFAULT_HERO, heroById, mergeStats } from './heroes';
+import type { RunPet } from './pets';
 
 export interface Enemy {
   /**
@@ -258,10 +259,41 @@ export class Hero {
   /** ⚠️ Ölü dövüşçü simülasyona KATILMAZ (hareket/ateş/hasar/toplama yok) */
   alive = true;
 
+  /**
+   * BAĞLANMIŞ YOLDAŞLAR (bkz. pets.ts).
+   *
+   * ⚠️ VARSAYILAN BOŞ ve bu KRİTİK. `damageEnemy` HER vuruşta `rng.next()`
+   * tüketiyor (kritik zarı); pet bir kez vursa RNG akışı kayar ve `SIM_SEAL`
+   * kırılırdı. Boş dizi hiç vurmuyor → pet'siz koşu bit bit eskisiyle aynı.
+   * `allowedWeapons: null` ile birebir aynı duruş.
+   *
+   * ⚠️ Bu dizi FORAGER İÇERMEZ. Forager savaşmıyor; katkısı `permanent`
+   * kanalından geçiyor (bkz. `petStatBonus`). Motorun her karede greed
+   * hesaplaması için bir sebep yok ve o kanal ayrıca sunucunun da okuduğu yer.
+   */
+  pets: PetState[] = [];
+
   constructor(heroId: string, permanent: Partial<Record<StatKey, number>>) {
     this.heroId = heroId;
     this.permanent = permanent;
   }
+}
+
+/**
+ * Bir pet'in koşu içindeki durumu.
+ *
+ * ⚠️ `anim` / `animT` / `animLeft` SADECE SUNUM — `atkT`/`hurtT` ile aynı
+ * sınıfta. Mühür bunları hash'e ALMAZ; render okur, mantık okumaz.
+ */
+export interface PetState {
+  readonly def: RunPet;
+  x: number; y: number;
+  /** bir sonraki eyleme kalan süre */
+  cd: number;
+  anim: 'walk' | 'attack' | 'cast' | 'bless';
+  animT: number;
+  animLeft: number;
+  facingRight: boolean;
 }
 
 export class Game {
@@ -385,6 +417,16 @@ export class Game {
   hurts: { amount: number }[] = [];
 
   /**
+   * Pet alan patlamaları — SADECE ÇİZİM İÇİN.
+   *
+   * ⚠️ Hasar zaten `damageEnemy` ile uygulandı; bu kuyruk yalnızca "nerede
+   * patladı" bilgisini render'a taşıyor. Diğer kozmetik kuyruklarla aynı
+   * kural: tavanı UZUNLUK KONTROLÜYLE korunuyor, `rng` ya da zamanla değil.
+   * Headless sunucuda kimse boşaltmıyor — tavan orada da tutmalı.
+   */
+  petBlasts: { x: number; y: number; r: number }[] = [];
+
+  /**
    * Ses ipuçları. Set kullanılıyor çünkü aynı frame'de 200 ölüm olsa da
    * tek 'kill' sesi çalınacak — dizi olsaydı sınırsız büyürdü.
    * Ses katmanı her frame boşaltır; simülasyonu ETKİLEMEZ.
@@ -451,6 +493,23 @@ export class Game {
      * sonucu vermek o sınırı koruyor.
      */
     allowedWeapons: readonly string[] | null = null,
+    /**
+     * Koşuya giren BAĞLANMIŞ YOLDAŞLAR (bkz. pets.ts `RunPet`).
+     *
+     * ⚠️ VARSAYILAN BOŞ — `allowedWeapons: null` ile aynı gerekçe: motorun
+     * eski çağrıları (mühür koşusu, kampanya ölçümü, sunucu doğrulaması)
+     * davranış değiştirmesin. Pet vurmaya başladığı anda `damageEnemy`
+     * fazladan `rng.next()` tüketir ve aynı seed BAŞKA koşu üretir; bu
+     * kabul edilebilir bir değişiklik AMA sadece oyuncu gerçekten pet
+     * taşıyorsa.
+     *
+     * ⚠️ Motor nadirlik/seviye/füzyon/gold BİLMEZ. Onlar `Progress`e ait ve
+     * `Progress` motora hiç girmiyor — dışarıda çözülüp buraya yalnızca
+     * sonuç (`RunPet`) veriliyor.
+     *
+     * ⚠️ FORAGER BURAYA VERİLMEZ; katkısı `permanent` üzerinden gelir.
+     */
+    pets: readonly RunPet[] = [],
   ) {
     this.seed = seed;
     this.rng = createRng(seed);
@@ -459,6 +518,16 @@ export class Game {
     // Karakter eğilimi Forge bonuslarıyla AYNI kanaldan geçer — ayrı bir kod
     // yolu yok, ikisi toplanır. Sunucu da aynı fonksiyonu çalıştırabilir.
     this.hero = new Hero(hero.id, mergeStats(hero.stats, permanent));
+    this.hero.pets = pets
+      .filter((p) => p.role !== 'forager')
+      .map((def) => ({
+        def, x: 0, y: 0,
+        // ⚠️ İLK EYLEM HEMEN DEĞİL. Koşunun ilk karesinde pet vursaydı,
+        // oyuncu daha hareket etmeden ekranda açıklanamayan bir hasar
+        // görürdü. Yarım bekleme, "yanımda bir şey var" sinyalini de veriyor.
+        cd: def.cd * 0.5,
+        anim: 'walk' as const, animT: 0, animLeft: 0, facingRight: true,
+      }));
     // Verilen stageDef sadece "hangi bölümün merdiveni" bilgisini taşır,
     // descent'te asıl tanım descentStage()'ten gelir
     this.ascension = Math.max(0, Math.min(ASCENSION.max, Math.floor(ascension)));
@@ -549,6 +618,120 @@ export class Game {
   private wDamage(h: Hero, w: OwnedWeapon) {
     return weaponDamageAt(w.def, w.level) * h.stats.might;
   }
+
+  /**
+   * Oyuncunun TOPLAM saniyelik hasarı — pet gücünün çıpası.
+   *
+   * ⚠️ NEDEN TOPLAM DPS, "en güçlü silah" DEĞİL: pet katkısı build'in
+   * tamamına oranlanmalı. Tek silaha oranlansaydı, çok silahlı bir oyuncuda
+   * pet görünmez, tek silahlı bir oyuncuda ezici olurdu — aynı `share`
+   * sayısı iki build'de bambaşka anlama gelirdi.
+   *
+   * ⚠️ RNG TÜKETMEZ, sadece okur. Saf hesap.
+   */
+  private heroDps(h: Hero): number {
+    let dps = 0;
+    for (let i = 0; i < h.weapons.length; i++) {
+      const w = h.weapons[i];
+      // ⚠️ Bekleme 0'a bölünmeye karşı korunuyor: `cooldown` istatistiği
+      // yeterince düşerse gerçek bir koşuda sıfıra yaklaşabiliyor ve
+      // Infinity hasar üretirdi.
+      dps += this.wDamage(h, w) / Math.max(0.05, this.wCooldown(h, w));
+    }
+    return dps;
+  }
+
+  /**
+   * BAĞLANMIŞ YOLDAŞLAR (bkz. pets.ts).
+   *
+   * ⚠️ RNG KULLANMAZ. Hedef seçimi `nearestEnemyTo` (mesafeye göre, eşitlikte
+   * ızgara sırasına göre belirli), zamanlama bekleme sayacı. Tek rastgelelik
+   * `damageEnemy` içindeki kritik zarı ve o zaten HER vuruşta atılıyor.
+   *
+   * ⚠️ PET `enemies` DİZİSİNE GİRMEZ. Ölmekte olan düşman dersinin aynısı:
+   * motora giren her varlık çarpışma, ızgara ve temizlik yollarının hepsine
+   * girer; pet bunların hiçbirine ait değil.
+   */
+  private updatePets(h: Hero, dt: number) {
+    // ⚠️ ERKEN ÇIKIŞ ŞART: pet'i olmayan koşuda tek satır bile çalışmamalı ki
+    // `SIM_SEAL` bit bit korunsun.
+    if (!h.pets.length) return;
+
+    const dps = this.heroDps(h);
+    for (let i = 0; i < h.pets.length; i++) {
+      const p = h.pets[i];
+
+      // ── TAKİP ── oyuncunun iki yanında, yaylı. Sabit ofset yerine yay,
+      // pet'in oyuncuya yapışık görünmesini engelliyor; koşarken geride
+      // kalıp durunca yetişiyor, yani "canlı" duruyor.
+      const hedefX = h.px + (i === 0 ? -34 : 34);
+      const hedefY = h.py + 24;
+      const k = Math.min(1, dt * 6);
+      const oncekiX = p.x;
+      p.x += (hedefX - p.x) * k;
+      p.y += (hedefY - p.y) * k;
+      if (Math.abs(p.x - oncekiX) > 0.01) p.facingRight = p.x > oncekiX;
+
+      // ── SUNUM ── animasyon sayacı; mantığı beslemez
+      p.animT += dt;
+      if (p.animLeft > 0) {
+        p.animLeft -= dt;
+        if (p.animLeft <= 0) { p.anim = 'walk'; p.animT = 0; }
+      }
+
+      // ── EYLEM ──
+      p.cd -= dt;
+      if (p.cd > 0) continue;
+
+      const d = p.def;
+      if (d.role === 'warden') {
+        // ⚠️ Ölü oyuncuyu diriltmez — diriliş ayrı bir sistem (Second Burial)
+        // ve pet onun yerine geçmemeli.
+        if (h.alive && h.hp < h.stats.maxHp) {
+          h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.maxHp * d.share);
+          p.cd = d.cd;
+          p.anim = 'bless'; p.animT = 0; p.animLeft = 0.8;
+        } else {
+          // Canı doluysa bekleme SIFIRLANMAZ — bir sonraki karede tekrar
+          // bakılır, yoksa tam dolu oyuncuda iyileşme sonsuza kadar ertelenir
+          p.cd = 0;
+        }
+        continue;
+      }
+
+      // striker / channeler — hedef yoksa bekleme sıfırlanmaz, menzile giren
+      // ilk düşmana hemen vurulur (pet "hazır bekliyor" hissi)
+      const menzil = d.role === 'channeler' ? 340 : 260;
+      const hedef = this.nearestEnemyTo(p.x, p.y, menzil);
+      if (!hedef) { p.cd = 0; continue; }
+
+      // vuruş başına hasar = share × oyuncu DPS × bekleme (bkz. pets.ts)
+      const vurus = dps * d.share * d.cd;
+      if (d.role === 'striker') {
+        this.damageEnemy(h, hedef, vurus, 'pet');
+        p.anim = 'attack';
+      } else {
+        // ⚠️ ALAN HASARI HEDEFİN ÜSTÜNDE PATLAR, pet'in üstünde değil —
+        // yoksa pet'ten uzaktaki sürü hiç vurulmaz ve rol anlamsızlaşır.
+        const r2 = d.radius * d.radius;
+        const cand = this.grid.query(hedef.x, hedef.y, d.radius, this.scratch);
+        for (let j = 0; j < cand.length; j++) {
+          const e = cand[j];
+          if (e.hp <= 0) continue;
+          const dx = e.x - hedef.x, dy = e.y - hedef.y;
+          if (dx * dx + dy * dy > r2) continue;
+          this.damageEnemy(h, e, vurus, 'pet');
+        }
+        p.anim = 'cast';
+        // ⚠️ TAVAN: headless sunucuda bu kuyruğu kimse boşaltmıyor. Diğer
+        // kozmetik kuyrukların kuralının aynısı — uzunluk kontrolü, zaman ya
+        // da rng örneklemesi DEĞİL.
+        if (this.petBlasts.length < 24) this.petBlasts.push({ x: hedef.x, y: hedef.y, r: d.radius });
+      }
+      p.animT = 0; p.animLeft = 0.55;
+      p.cd = d.cd;
+    }
+  }
   /** Silahın o seviyedeki bekleme süresi — Cooldown istatistiği uygulanır */
   private wCooldown(h: Hero, w: OwnedWeapon) {
     return weaponCooldownAt(w.def, w.level) * h.stats.cooldown;
@@ -620,6 +803,11 @@ export class Game {
     this.moveEnemies(dt);
     this.fire(this.hero, dt);            // 4 desen: aimed / sweep / orbit / aura
     if (r && r.alive) this.fire(r, dt);
+    // ⚠️ Pet'ler silahlardan SONRA: ikisi de `damageEnemy` çağırıyor ve
+    // `reapDead` ikisinin ardından tek seferde temizliyor. Araya girseydi
+    // aynı karede iki kez ölüm işlenebilirdi.
+    this.updatePets(this.hero, dt);
+    if (r && r.alive) this.updatePets(r, dt);
     this.updateHitZones(dt);  // sweep hitbox'ları
     this.moveProjectiles(dt);
     this.collideProjectiles();

@@ -143,6 +143,80 @@ export const ENEMY_ART: Record<string, ActorArt> = {
   },
 };
 
+// ── PET GÖRSELLERİ (THE BINDING) ──────────────────────────────────────
+//
+// Pet, öldürüp ruhunu bağladığın düşmandır (bkz. pets.ts). Yani görsel
+// kaynağı da düşman sheet'leri — ve bu bilinçli, kurgu varlığı doğruluyor.
+//
+// ⚠️ TOPDOWN SHEET'İN İKİ SATIRI BUGÜNE KADAR HİÇ KULLANILMADI: `blast1` (7)
+// ve `levelup` (9). Channeler'ın büyüsü ve warden'ın kutsaması tam olarak
+// bunlar — "skill atan pet" için tek dosya indirmeye gerek yok.
+//
+// ⚠️ PET DÜŞMANDAN KÜÇÜK ÇİZİLİR. Aynı sheet kullanıldığı için tek okunaklı
+// ayrım boyut ve konum: pet oyuncunun yanında duruyor ve daha küçük. Boyut
+// aynı zamanda NADİRLİĞİ de söylüyor — legendary pet gözle daha iri.
+const PET_ROW = { ...MON_ROW, cast: 7, bless: 9 } as const;
+
+/** Topdown sheet'ten pet — `monster()`in pet varyantı, iki ek animasyonla */
+const petMonster = (file: string, contentRatio: number, anchorY: number, drawHeight: number): ActorArt => {
+  const src = `/art/enemies/topdown/${file}.png`;
+  const g = (row: number, fps: number, loop = true): AnimDef =>
+    ({ kind: 'grid', src, frames: 8, fps, loop, frameW: 80, frameH: 80, row });
+  return {
+    drawHeight, contentRatio, anchorY, flipByVelocity: true,
+    anims: {
+      walk: g(PET_ROW.walk, 10),
+      idle: g(PET_ROW.idle, 7),
+      hit: g(PET_ROW.hit, 16),
+      // ⚠️ `loop: false` — saldırı, büyü ve kutsama BİR KEZ oynar. Döngüye
+      // girerlerse pet sürekli saldırıyor gibi görünür ve oyuncu bekleme
+      // süresini gözle takip edemez; oysa pet'in ritmi okunabilir olmalı.
+      attack: g(PET_ROW.attack, 14, false),
+      cast: g(PET_ROW.cast, 12, false),
+      bless: g(PET_ROW.bless, 12, false),
+      death: g(PET_ROW.death, 14, false),
+    },
+  };
+};
+
+/** MutterPixel şeridinden pet — tek menzilli tam set (Bone Archer) */
+const petStrip = (base: string, n: number, contentRatio: number, anchorY: number, drawHeight: number): ActorArt => ({
+  drawHeight, contentRatio, anchorY, flipByVelocity: true,
+  anims: {
+    walk: SHEET(`${base}_walk_strip${n}.png`, n, 10),
+    idle: SHEET(`${base}_idle_strip${n}.png`, n, 7),
+    hit: { ...SHEET(`${base}_hit_strip${n}.png`, n, 16), loop: false },
+    attack: { ...SHEET(`${base}_attack_strip${n}.png`, n, 12), loop: false },
+    death: { ...SHEET(`${base}_death_strip${n}.png`, n, 12), loop: false },
+  },
+});
+
+/**
+ * `pets.ts` PetDef.art → görsel. ⚠️ contentRatio/anchorY değerleri düşman
+ * kayıtlarından ALINDI (aynı sheet, aynı alfa sınır kutusu) — yeniden
+ * ölçmeye gerek yok, ama uydurmaya da yok.
+ *
+ * ⚠️ BOYUT NADİRLİĞİ SÖYLÜYOR: common 26 → legendary 36. Oyuncu pet'ini
+ * yükselttiğinde bunu ekranda görmeli; sayı panelde kalırsa his oluşmaz.
+ */
+export const PET_ART: Record<string, ActorArt> = {
+  pet_imp: petMonster('05', 0.562, 0.775, 26),
+  pet_wretch: petMonster('08', 0.575, 0.788, 26),
+  pet_slim: petMonster('03', 0.612, 0.8, 26),
+
+  pet_rogue: petMonster('06', 0.538, 0.738, 29),
+  pet_bird: petMonster('07', 0.662, 0.812, 29),
+  pet_horned: petMonster('00', 0.612, 0.788, 29),
+
+  pet_crab: petMonster('01', 0.675, 0.838, 32),
+  pet_fiend: petMonster('04', 0.662, 0.812, 32),
+  pet_archer: petStrip('/art/enemies/undead/spr_Bone_Archer', 7, 0.875, 0.938, 32),
+
+  pet_brute: petMonster('02', 0.55, 0.762, 36),
+  pet_warrior: petMonster('09', 0.662, 0.812, 36),
+  pet_hulk: petMonster('10', 0.562, 0.75, 36),
+};
+
 // ── DÜŞMÜŞ ŞAMPİYONLAR (boss sanatı) ─────────────────────────────────
 //
 // ÖLÇÜLEN SORUN: diskte dedike boss sanatı YOK. `boss_mini/mega/nightmare`
