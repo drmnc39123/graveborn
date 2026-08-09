@@ -42,7 +42,7 @@ import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
-import { installAudioUnlock, play } from '@/game/sfx';
+import { installAudioUnlock, installUiClickSound, play } from '@/game/sfx';
 import { getMode, getWallet } from '@/lib/session';
 import {
   buyUpgrade, engineModeOf, finishBossRun, finishRun as settleRun, loadSessionProgress,
@@ -130,6 +130,8 @@ export default function PlayPage() {
    * duyulmaz, sebebi de görünmezdi.
    */
   useEffect(() => installAudioUnlock(), []);
+  // ⚠️ Tıklama sesi TEK NOKTADAN — bkz. sfx.installUiClickSound başlığı.
+  useEffect(() => installUiClickSound(), []);
   /**
    * ⚠️ HER HATA MESAJI BURADAN GEÇİYOR — reddedilme sesi de burada.
    *

@@ -12,7 +12,7 @@
 // LİSANS: Franuka RPG UI pack — ticari kullanım serbest, ANCAK Credits'te
 // franuka.itch.io bağlantısı ZORUNLU. (ATTRIBUTION.md)
 
-import { play } from '@/game/sfx';
+
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { C, FONT } from '@/lib/theme';
 
@@ -195,15 +195,13 @@ export function PixelButton({
     <button
       title={title}
       disabled={disabled}
-      onClick={() => {
-        // ⚠️ SES BURADA, çağıranda DEĞİL. Arayüzde 60+ düğme var; her birine
-        // elle ses eklemek er ya da geç eksik kalırdı ve "bazı düğmeler ses
-        // çıkarıyor" en kötü hâl olurdu — ya hepsi ya hiçbiri.
-        // ⚠️ `disabled` düğme zaten `onClick` almıyor (tarayıcı engelliyor),
-        // o yüzden ayrı bir kontrol gerekmiyor.
-        play('click');
-        onClick?.();
-      }}
+      // ⚠️ TIKLAMA SESİ ARTIK BURADA DEĞİL — `sfx.installUiClickSound()`.
+      // Buradaki eski yorum kuralı doğru koymuştu ("ya hepsi ya hiçbiri") ama
+      // ölçüm kuralın çiğnendiğini gösterdi: PixelButton'dan geçmeyen 82 ham
+      // <button> vardı ve hiçbiri ses çıkarmıyordu. Ses tek bir delege
+      // dinleyiciye taşındı; böylece kural bileşene bağlı kalmıyor ve yeni
+      // eklenen düğme de kendiliğinden sese kavuşuyor.
+      onClick={onClick}
       onPointerDown={() => setDown(true)}
       onPointerUp={() => setDown(false)}
       onPointerLeave={() => { setDown(false); setHover(false); }}

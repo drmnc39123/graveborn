@@ -94,6 +94,38 @@ export function installAudioUnlock(): () => void {
   return kaldir;
 }
 
+/**
+ * HER DÜĞMEYE TIKLAMA SESİ — tek bir delege dinleyiciyle.
+ *
+ * ⚠️ NEDEN BURADA VE NEDEN DELEGE. `kit.tsx`'teki PixelButton kendi sesini
+ * çalıyordu ve oradaki yorum kuralı doğru koymuştu: "ya hepsi ya hiçbiri,
+ * bazı düğmeler ses çıkarıyor en kötü hâl". Ama ölçüm kuralın ÇİĞNENDİĞİNİ
+ * gösterdi: arayüzde PixelButton'dan geçmeyen 82 ham `<button>` var ve
+ * hiçbiri ses çıkarmıyordu. 82 çağrı yerine bir dinleyici; yeni eklenen
+ * düğme de kendiliğinden sese kavuşuyor, kimse unutamıyor.
+ *
+ * ⚠️ `pointerdown`, `click` DEĞİL. Tıklama sesi BASMA anına ait — bırakma
+ * anına koymak gecikmeli hissettiriyor. Ayrıca eylem sesleri (`buy`, `equip`)
+ * `click` üzerinde çalışıyor, yani ikisi zamanda doğal olarak ayrışıyor:
+ * bas → tık, bırak → sonuç. Aynı ana bindirilseydi ses çamurlaşırdı.
+ *
+ * ⚠️ Devre dışı düğme ses ÇIKARMAZ. `pointerdown` devre dışı düğmede de
+ * ateşlenebiliyor (tarayıcı yalnızca `click`i engelliyor), o yüzden elle
+ * kontrol ediliyor — yoksa basılamayan düğme basılmış gibi ses verirdi.
+ */
+export function installUiClickSound(): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const bas = (e: PointerEvent) => {
+    const hedef = e.target as Element | null;
+    const dugme = hedef?.closest?.('button');
+    if (!dugme || (dugme as HTMLButtonElement).disabled) return;
+    if (dugme.getAttribute('aria-disabled') === 'true') return;
+    play('click');
+  };
+  window.addEventListener('pointerdown', bas, true); // yakalama: durdurulsa da duyulsun
+  return () => window.removeEventListener('pointerdown', bas, true);
+}
+
 export function setSoundEnabled(on: boolean) { enabled = on; }
 export function isSoundEnabled() { return enabled; }
 
