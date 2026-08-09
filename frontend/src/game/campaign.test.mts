@@ -150,28 +150,37 @@ function permFor(butce: number) {
 // b10'unkinden azdı), 5→6 ise eğri yeniden şekillendirilirken YENİ AÇILDI.
 // İkisi de düzeltildi; bu kontrol tekrar açılmasını engelliyor.
 {
-  // 🔴 ÖLÇÜT ÖNCE `enemyCount × hpMul` İDİ ve DÜŞMANIN TABAN CANINI SAYMIYORDU.
-  // Bu yüzden yeşil yanarken gerçek eğri bir hız treniydi:
+  // 🔴 BU KONTROL EMEKLİYE AYRILDI. Ölçütü "sahneye çıkan toplam can"dı
+  // (adet × çarpan × roster ortalaması) ve bir öncekinden büyük olması
+  // isteniyordu. Gerekçesi makuldü — o zamanki veri destekliyordu:
   //   b17 3,43M can → 18,8 dk   ·   b21 0,85M can → 6,9 dk
-  // 21. bölüm `imp, rogue, bird, fiend, dire_rat` kullanıyordu — yani 1-6.
-  // bölümün düşmanları (ortalama 34 can), 17. bölüm ise 203. Aynı `hpMul`
-  // ile bunlar bambaşka bölümler.
-  // Gerçek ölçüt SAHNEYE ÇIKAN TOPLAM CAN: adet × çarpan × roster ortalaması.
-  const toplamCan = (st: typeof STAGES[number]) => {
-    const roster = st.enemies
-      .map((id) => ENEMIES.find((e) => e.id === id))
-      .filter((e): e is NonNullable<typeof e> => !!e);
-    const ort = roster.reduce((a, e) => a + e.hp, 0) / Math.max(1, roster.length);
-    return st.enemyCount * st.hpMul * ort;
-  };
-  const kirik: string[] = [];
+  //
+  // ⚠️ SONRA ÜÇ ÖLÇÜM AYNI ŞEYİ SÖYLEDİ: TOPLAM CAN SÜREYİ BELİRLEMİYOR.
+  //   1) b21'in `hpMul`'u 5,5 KAT artırıldı → süre 5,8 dk'dan 6,0 dk'ya çıktı.
+  //      Yani +%450 can, +%3 süre.
+  //   2) Menzilli düşman içeren bölümlerin canı yakın dövüş bölümlerinin
+  //      2,37 KATI ama süreleri yalnızca 1,32 katı.
+  //   3) En yavaş 6 bölümün 5'i menzilli; en hızlı 6'nın HEPSİ yakın dövüş.
+  // Süreyi belirleyen şey can değil ROSTER BİLEŞİMİ (özellikle menzilli
+  // düşmanın varlığı) — oyuncu onları kovalamak zorunda kalıyor.
+  //
+  // ⚠️ BU BİR EŞİK GEVŞETMESİ DEĞİL, ÇÜRÜTÜLEN BİR VEKİLİN YERİNE DOĞRUDAN
+  // ÖLÇÜMÜ KOYMAK. Kontrolün korumaya çalıştığı şey "bir sonraki bölüm
+  // öncekinden kolay olmasın"dı; o soru artık DAKİKA cinsinden ve gerçek
+  // koşulardan cevaplanıyor (aşağıdaki çukur testi). Vekil ucuzdu ama
+  // yanlıştı: onu tutmak, dengeyi süreye göre değil cana göre ayarlamaya
+  // zorluyordu ve iki tur boyunca tam olarak bu yüzden hedef kaçırıldı.
+  //
+  // Aritmetik tarafta korunmaya değer TEK şey kaldı: hasar çarpanı geri
+  // gitmemeli. O gerçekten monoton, kurulum gereği ve bedava doğrulanıyor.
+  const hasarKirik: string[] = [];
   for (let i = 1; i < STAGES.length; i++) {
-    if (toplamCan(STAGES[i]) <= toplamCan(STAGES[i - 1])) {
-      kirik.push(`${STAGES[i - 1].id}→${STAGES[i].id}`);
+    if ((STAGES[i].damageMul ?? 1) < (STAGES[i - 1].damageMul ?? 1)) {
+      hasarKirik.push(`${STAGES[i - 1].id}→${STAGES[i].id}`);
     }
   }
-  check('GERÇEK zorluk (toplam can) HER bölümde artıyor', kirik.length === 0,
-    kirik.length ? kirik.join(' ') : `${STAGES.length} bölüm`);
+  check('hasar çarpanı hiçbir bölümde GERİ GİTMİYOR', hasarKirik.length === 0,
+    hasarKirik.length ? hasarKirik.join(' ') : `${STAGES.length} bölüm`);
 }
 
 console.log(`\n═══ KAMPANYA — ${STAGES.length} BÖLÜM ═══\n`);
@@ -301,6 +310,34 @@ check(`TÜM bölümler bitirilebiliyor (${SEED_SAYISI} seedin en az ${Math.ceil(
   console.log(`     kampanya geneli ortanca ${(genel / 60).toFixed(1)} dk · sivrilik eşiği ${(Math.max(12 * 60, genel * 1.6) / 60).toFixed(1)} dk`);
   check('hiçbir bölüm akranlarından SİVRİLMİYOR', sivri.length === 0,
     sivri.length ? `sivri: ${sivri.join(', ')}` : 'tamam');
+
+  // ── ÇUKUR: sivriliğin SİMETRİĞİ ──────────────────────────────────
+  //
+  // Yukarıda emekliye ayrılan "toplam can artmalı" kontrolünün korumak
+  // istediği şey buydu: bir bölüm akranlarının yanında hız yatağı olmasın,
+  // yoksa oyuncu "ilerledim ama rahatladım" der ve merdiven anlamını yitirir.
+  // Fark şu ki bu, canla değil DAKİKAYLA ve gerçek koşulardan ölçülüyor.
+  //
+  // ⚠️ EŞİK UYDURULMADI, sivrilik kuralının simetriği alındı: sivri = genel
+  // ortancanın 1,6 KATI üstü, çukur = 1,6 KATI altı. Aynı gürültü bağışıklığı
+  // (bkz. yukarıdaki iki kümeli dağılım notu) burada da geçerli.
+  //
+  // ⚠️ TABANA EN YAKIN BÖLÜM RAPORLANIYOR — çünkü kontrolün payı dar olabilir
+  // ve "yeşil ama kıl payı" ile "yeşil ve rahat" arasındaki farkı görmeden
+  // denge değişikliği yapmak yanılmaya davetiye. Bu satır kırmızı yanmadan
+  // önce uyarır.
+  // ⚠️ AÇILIŞ RAMPASI (b1-b4) HARİÇ. İlk dört bölüm 1,4 · 2,0 · 3,0 · 4,0
+  // dakika ve bu KASITLI: oyuncu daha silahını seçmeden 9 dakikalık bir
+  // bölüme sokulamaz. Kontrol ilk hâlinde onları çukur sayıp kırmızı yandı —
+  // ölçü doğruydu, KAPSAMI yanlıştı. "Akranlarının altında" kuralı ancak
+  // akranı olan bölümler için anlamlı.
+  const RAMPA = 4;
+  const cukurEsigi = genel / 1.6;
+  const cukur = idler.filter((id, i) => id > RAMPA && ortancalar[i] < cukurEsigi);
+  const enDusukIdx = ortancalar.indexOf(Math.min(...ortancalar.filter((_, i) => idler[i] > RAMPA)));
+  console.log(`     çukur eşiği ${(cukurEsigi / 60).toFixed(1)} dk · tabana en yakın: b${idler[enDusukIdx]} (${(ortancalar[enDusukIdx] / 60).toFixed(1)} dk)`);
+  check('hiçbir bölüm akranlarının ALTINDA ÇUKUR değil', cukur.length === 0,
+    cukur.length ? `çukur: ${cukur.join(', ')}` : 'tamam');
 }
 // ⚠️ Kullanıcının şikâyetiydi: "10 bölümde oyun mu biter". Ölçülen hedef.
 check('kampanya ilk geçişi 3 saatten uzun', toplamSn > 3 * 3600,

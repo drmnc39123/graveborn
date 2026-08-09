@@ -49,7 +49,7 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
 // v8: IŞIN (beam) KALDIRILDI — kullanıcı kararı, görsel beğenilmedi.
 // Taban silah 11 → 10. Ayrıca kampanya düşman sayıları %20 artırıldı
 // (silahlar oyuncuyu güçlendirince ilk geçiş 3,3 saatten 2,8'e düşmüştü).
-export const SIM_VERSION = 8;
+export const SIM_VERSION = 9;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -148,7 +148,7 @@ export const STAGES: readonly StageDef[] = [
   // undead/vermin'e kayıyor — sürü görsel olarak da değişiyor.
   {
     id: 6, name: 'The Sunken Ossuary', enemyCount: 960, firstClearGold: 4200,
-    spawnRate: 5.4, maxAlive: 220, enemies: ['fiend', 'crab', 'rat', 'dire_rat', 'warrior', 'bloat', 'husk'],
+    spawnRate: 5.4, maxAlive: 220, enemies: ['fiend', 'crab', 'dire_rat', 'warrior', 'bone_thrall', 'husk'],
     hpMul: 3.78, speedMul: 1.2, damageMul: 1.2,
     boss: { hp: 45_000, speed: 50, damage: 44, radius: 54, art: 'boss_mega', label: 'The Drowned Choir' },
   },
@@ -166,7 +166,7 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 9, name: 'The Iron Vigil', enemyCount: 1200, firstClearGold: 5300,
-    spawnRate: 7.4, maxAlive: 350, enemies: ['grave_knight', 'bone_archer', 'warrior', 'hulk'],
+    spawnRate: 7.4, maxAlive: 350, enemies: ['brute', 'bone_archer', 'warrior', 'hulk'],
     hpMul: 4.32, speedMul: 1.32, damageMul: 1.7,
     boss: { hp: 96_000, speed: 56, damage: 66, radius: 60, art: 'boss_nightmare', label: 'The Iron Vigil' },
   },
@@ -214,7 +214,7 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 13, name: 'The Drowned Gate', enemyCount: 1320, firstClearGold: 7200,
-    spawnRate: 7.4, maxAlive: 340, enemies: ['crab', 'fiend', 'bone_thrall', 'wretch'],
+    spawnRate: 7.4, maxAlive: 340, enemies: ['crab', 'fiend', 'bone_thrall', 'bone_archer'],
     hpMul: 5.5, speedMul: 1.42, damageMul: 2.8,
     boss: { hp: 137_000, speed: 58, damage: 100, radius: 62, art: 'boss_mega', label: 'The Gatekeeper' },
   },
@@ -226,25 +226,25 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 15, name: 'The Rat Cathedral', enemyCount: 1380, firstClearGold: 8400,
-    spawnRate: 8.0, maxAlive: 380, enemies: ['rat', 'dire_rat', 'wretch', 'imp'],
+    spawnRate: 8.0, maxAlive: 380, enemies: ['rat', 'dire_rat', 'bone_archer', 'bone_thrall'],
     hpMul: 7.01, speedMul: 1.46, damageMul: 3.4,
     boss: { hp: 153_000, speed: 64, damage: 118, radius: 58, art: 'boss_mini', label: 'The Litter Mother' },
   },
   {
     id: 16, name: 'Emberglass Wastes', enemyCount: 1440, firstClearGold: 9100,
-    spawnRate: 8.0, maxAlive: 390, enemies: ['fiend', 'horned', 'bird', 'brute'],
+    spawnRate: 8.0, maxAlive: 390, enemies: ['fiend', 'horned', 'brute', 'herald', 'hulk'],
     hpMul: 7.58, speedMul: 1.48, damageMul: 3.8,
     boss: { hp: 161_000, speed: 62, damage: 128, radius: 66, art: 'boss_mega', label: 'Glasswalker' },
   },
   {
     id: 17, name: 'The Sunless Vault', enemyCount: 1440, firstClearGold: 9800,
-    spawnRate: 8.0, maxAlive: 400, enemies: ['bone_thrall', 'bone_archer', 'grave_knight', 'hulk'],
+    spawnRate: 8.0, maxAlive: 400, enemies: ['bone_thrall', 'bone_archer', 'grave_knight', 'brute'],
     hpMul: 8.03, speedMul: 1.50, damageMul: 4.2,
     boss: { hp: 169_000, speed: 60, damage: 140, radius: 72, art: 'boss_nightmare', label: 'The Vaultkeeper' },
   },
   {
     id: 18, name: 'Carrionfield', enemyCount: 1500, firstClearGold: 10600,
-    spawnRate: 8.0, maxAlive: 410, enemies: ['bird', 'crab', 'rogue', 'wretch', 'rat'],
+    spawnRate: 8.0, maxAlive: 410, enemies: ['bird', 'crab', 'rat', 'bone_archer', 'herald'],
     hpMul: 8.64, speedMul: 1.52, damageMul: 4.6,
     boss: { hp: 177_000, speed: 66, damage: 152, radius: 60, art: 'boss_mini', label: 'The Carrion Choir' },
   },
@@ -256,13 +256,13 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 20, name: 'The Pale Procession', enemyCount: 1560, firstClearGold: 12300,
-    spawnRate: 8.0, maxAlive: 420, enemies: ['skeleton', 'bone_thrall', 'bone_archer', 'grave_knight'],
+    spawnRate: 8.0, maxAlive: 420, enemies: ['skeleton', 'bone_thrall', 'bone_archer', 'hulk'],
     hpMul: 9.76, speedMul: 1.56, damageMul: 5.4,
     boss: { hp: 193_000, speed: 64, damage: 182, radius: 68, art: 'boss_mega', label: 'The Pale Marshal' },
   },
   {
     id: 21, name: 'Where the Wood Ends', enemyCount: 1560, firstClearGold: 13300,
-    spawnRate: 8.0, maxAlive: 420, enemies: ['imp', 'rogue', 'bird', 'fiend', 'dire_rat'],
+    spawnRate: 8.0, maxAlive: 420, enemies: ['bird', 'fiend', 'dire_rat', 'bone_archer', 'grave_knight'],
     hpMul: 10.27, speedMul: 1.58, damageMul: 5.8,
     boss: { hp: 201_000, speed: 68, damage: 200, radius: 64, art: 'boss_mini', label: 'The Last Root' },
   },
@@ -274,7 +274,7 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 23, name: 'The Furnace Below', enemyCount: 1620, firstClearGold: 15500,
-    spawnRate: 8.0, maxAlive: 420, enemies: ['brute', 'hulk', 'horned', 'crab', 'warrior'],
+    spawnRate: 8.0, maxAlive: 420, enemies: ['brute', 'hulk', 'crab', 'warrior', 'bone_herald'],
     hpMul: 11.49, speedMul: 1.62, damageMul: 6.5,
     boss: { hp: 217_000, speed: 64, damage: 242, radius: 78, art: 'boss_mega', label: 'The Bellows' },
   },
