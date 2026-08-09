@@ -41,10 +41,22 @@ export const viewport: Viewport = {
  * yok — "biraz daha kalın" diye 800/900 yazmanın karşılığı yok, tek karar
  * kalın mı değil mi.
  *
- * ⚠️ AMA ŞU AN AĞIRLIK HİÇBİR BİLGİ TAŞIMIYOR: arayüzdeki 275 `fontWeight`
- * kullanımının 239'u 900, yalnızca 2'si 400. Her şey kalınsa hiçbir şey
- * vurgulanmış olmuyor. Kontrast isteniyorsa yapılacak iş ağırlık EKLEMEK
- * değil, gövde metnini 400'e ÇEKMEK.
+ * ⚠️ "HER ŞEY KALIN" ŞÜPHESİ ÖLÇÜLDÜ ve DOĞRULANMADI — bu not, aynı yanlış
+ * teşhisin üçüncü kez konulmasını önlemek için duruyor.
+ *
+ * Kaynak kodda sayınca tablo korkutucu görünüyor: 275 `fontWeight`
+ * kullanımının 239'u 900, yalnızca 2'si 400. Ama KAYNAK SAYMAK YANLIŞ ALET.
+ * Çalışan arayüzde render edilen metin ölçüldüğünde tablo tersine dönüyor:
+ *
+ *   Reliquary  125 metin · %78 kalın · uzun düz metin kalın: 0
+ *   Forge      240 metin · %65 kalın · uzun düz metin kalın: 0
+ *
+ * Yani o 900'ler ETİKETLERE, öğe adlarına, değerlere, çiplere ve düğme
+ * yazılarına düşüyor — kalının doğru olduğu yerler. Gövde metni (açıklamalar,
+ * yardım satırları, alt başlıklar) ZATEN 400. Hiyerarşi çalışıyor.
+ *
+ * Sonuç: toplu bir "900 → 400" taraması YAPILMAMALI; düzeltilecek bir şey
+ * yok, tarama çalışan hiyerarşiyi bozardı.
  *
  * ⚠️ İkinci bir aileyi kalın olarak eşleştirme denemesi YAPILMADI: Silkscreen
  * ve Pixellari'nin oranları farklı, karışım tutarsız görünürdü.
