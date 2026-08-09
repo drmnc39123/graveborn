@@ -13,7 +13,8 @@ import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { eventMul, eventWindow } from '@game/events';
-import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun } from './reward.js';
+import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun, maxKills, applyKills } from './reward.js';
+import { PetError, bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from './pets.js';
 import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, deedList, vaultState } from './crypt.js';
@@ -111,6 +112,7 @@ for (const yol of [
   '/achievement/claim', '/streak/claim', '/cosmetic/equip',
   '/guild/create', '/guild/join', '/guild/leave', '/guild/donate', '/guild/upgrade',
   '/gear/equip', '/gear/unequip', '/gear/salvage', '/gear/reforge',
+  '/pets/bind', '/pets/upgrade', '/pets/fuse', '/pets/equip', '/pets/slot',
   '/skills/set', '/duel/start', '/duel/find',
   '/arena/queue', '/quests/claim', '/follow', '/tickets', '/tickets/reply',
 ]) app.use(yol, paraLimiti);
@@ -811,11 +813,22 @@ app.post('/run/finish', wrap(async (req, res) => {
   // ⚠️ SIRA ÖNEMLİ: `saved` DİZİNİN İLK ELEMANI. Defter kaydını başa koymak
   // `saved`'a oyuncu satırı yerine defter satırını verirdi ve yanıt sessizce
   // bozulurdu — oyuncu güncellemesi hep 0. sırada kalmalı.
+  // ── THE BINDING: tip bazlı öldürme sayacı ──
+  // ⚠️ İDDİA KIRPILIYOR (bkz. maxKills/applyKills). Bu sayaç pet bağlamanın
+  // "parayla alınamaz" koşulu; kırpılmasaydı istemci tek koşuda bütün
+  // legendary pet'lerin kill eşiğini uydurabilirdi.
+  const killTavani = maxKills(run.mode, run.stageId, s.progress ? paidDepth(s.progress, run.stageId) : 0, run.ascension);
+  const yeniKills = applyKills(before.kills ?? {}, (body.data as { killsByType?: unknown }).killsByType, killTavani);
+
+  // ⚠️ SIRA ÖNEMLİ: `saved` DİZİNİN İLK ELEMANI. Defter kaydını başa koymak
+  // `saved`'a oyuncu satırı yerine defter satırını verirdi ve yanıt sessizce
+  // bozulurdu — oyuncu güncellemesi hep 0. sırada kalmalı.
   const [saved] = await prisma.$transaction([
     prisma.player.update({
       where: { wallet },
       data: {
         ...fromProgress(s.progress),
+        kills: yeniKills,
         // ⚠️ `increment` kullanılıyor: `fromProgress` toz alanını koşu
         // ÖNCESİ değerle yazıyor, üstüne düz atama yapmak eşzamanlı bir
         // Reliquary çekilişini silebilirdi.
@@ -1110,6 +1123,36 @@ app.post('/gear/reforge', wrap(async (req, res) => {
     throw e;
   }
 }));
+
+// ── THE BINDING (pet sistemi — bkz. pets.ts) ──
+//
+// ⚠️ DÖRT UÇ, TEK DESEN: hepsi `pets.ts`teki saf kuralı çağırıyor, hiçbiri
+// kural YAZMIYOR. Aynı sayıyı iki yerde tutmak ayrışma riskidir.
+//
+// ⚠️ Gold harcayan üçü `withLedger` üzerinden gidiyor (kasa payı + "gold
+// harca" görevi + `rev` ile yarış kapatma); kuşanma bedelsiz olduğu için
+// deftere yazmıyor — sıfır gold'luk satırlar ekonomi panosunu kirletirdi.
+const petUcu = (
+  isim: string,
+  calistir: (wallet: string, req: express.Request) => Promise<unknown>,
+) => app.post(`/pets/${isim}`, wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    const out = await calistir(wallet, req);
+    res.json({ ...(out as object), progress: toProgress(await getOrCreatePlayer(wallet)) });
+  } catch (e) {
+    if (e instanceof PetError) { res.status(e.status).json({ error: e.message }); return; }
+    if (e instanceof YarisHatasi) { res.status(409).json({ error: 'es_zamanli_degisim' }); return; }
+    throw e;
+  }
+}));
+
+petUcu('bind', (w, req) => bindPet(w, req.body?.pet));
+petUcu('upgrade', (w, req) => upgradePet(w, req.body?.pet));
+petUcu('fuse', (w, req) => fusePet(w, req.body?.pet));
+petUcu('equip', (w, req) => equipPets(w, req.body?.pets));
+petUcu('slot', (w) => buyPetSlot(w));
 
 // ── BECERİ AĞACI ──
 //

@@ -33,9 +33,15 @@ export type LedgerKind =
                      // ve hiçbir şey ÜRETMEYEN bir sink.
   | 'guild'          // lonca kurma + hazine bağışı. ⚠️ GERİ ÇEKİLEMEZ —
                      // çekilebilseydi lonca oyuncular arası transfer kanalı olurdu.
-  | 'reforge';       // ekipman yükseltme + yeniden dizme. ⚠️ SONSUZ SINK ve
+  | 'reforge'        // ekipman yükseltme + yeniden dizme. ⚠️ SONSUZ SINK ve
                      // hiçbir şey ÜRETMİYOR: gold gidiyor, karşılığında
                      // oyuncunun ZATEN sahip olduğu parça yeniden diziliyor.
+  | 'pet';           // bağlama + yükseltme + füzyon + ikinci yuva.
+                     // ⚠️ Reforge'un AKSİNE bu SONLU bir sink ve GÜÇ SATIYOR.
+                     // Kabul edilebilir olmasının tek sebebi TAVANI olması
+                     // (bkz. pets.ts PET_CAP): tavansız olsaydı gold sınırsız
+                     // güce çevrilir ve "derinlik parayla aşılamaz" duruşu
+                     // çökerdi. Sonsuz sink Ossuary olarak KALIYOR.
 
 export interface LedgerEntry {
   wallet: string;

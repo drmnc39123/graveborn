@@ -15,6 +15,7 @@ import {
 } from '@game/config';
 import { CHARMS, CHARM_SLOTS } from '@game/charms';
 import { permanentBonus } from '@game/forge';
+import { PETS, petCap, petEffect } from '@game/pets';
 
 /**
  * BU OYUNCUNUN nadir düşüş çarpanı — yapısal tavan bunu saymak ZORUNDA.
@@ -43,7 +44,104 @@ export function greedCeiling(p: Progress): number {
     .sort((a, b) => b - a)
     .slice(0, CHARM_SLOTS)
     .reduce((s, v) => s + v, 0);
-  return 1 + forge + passive + charm;
+  // ⚠️ FORAGER PET'İ DE SAYILMAK ZORUNDA. Forager `greed` veriyor ve o katkı
+  // `permanent` kanalından geçiyor — yani oyuncunun GERÇEK greed'inin
+  // parçası. Buraya eklenmezse tavan gerçek kazancın ALTINDA kalır ve
+  // DÜRÜST oyuncu haksız yere kırpılır. Yalancıyı değil dürüstü cezalandıran
+  // bir tavan, tavansızlıktan daha kötüdür.
+  return 1 + forge + passive + charm + petGreedCeiling(p);
+}
+
+/**
+ * Forager pet'lerinden gelebilecek EN YÜKSEK greed.
+ *
+ * ⚠️ SAHİP OLDUKLARINDAN türetiliyor — hiç pet bağlamamış oyuncunun tavanı
+ * büyümüyor. Global sabit bir pay bırakmak, bu fonksiyonun başındaki notta
+ * anlatılan hatanın (yalancıya dürüstün 2,1 katını veren sabit tavan) pet
+ * üzerinden birebir tekrarı olurdu.
+ *
+ * ⚠️ Anlık seviye DEĞİL, o pet'in ULAŞABİLECEĞİ tavan kullanılıyor: burası
+ * bir üst sınır hesabı. Anlık kuşanıma bakmak, koşu sırasında pet
+ * değiştirmeyi doğrulanması gereken ikinci bir sayıya çevirirdi.
+ */
+function petGreedCeiling(p: Progress): number {
+  const sahip = p.pets ?? {};
+  const fused = p.petFused ?? [];
+  const paylar: number[] = [];
+  for (const def of PETS) {
+    if (def.role !== 'forager') continue;
+    if ((sahip[def.id] ?? 0) <= 0) continue;
+    const mythic = fused.includes(def.id);
+    paylar.push(petEffect(def, petCap(def, mythic), mythic).share);
+  }
+  const yuva = p.petSlot2 ? 2 : 1;
+  return paylar.sort((a, b) => b - a).slice(0, yuva).reduce((s, v) => s + v, 0);
+}
+
+/**
+ * BU KOŞUDA EN FAZLA KAÇ DÜŞMAN ÖLDÜRÜLEBİLİRDİ — kill iddiasının tavanı.
+ *
+ * ⚠️ NİYE ŞART: kill sayacı pet bağlamanın "parayla alınamaz" koşulu
+ * (bkz. pets.ts BIND). İstemci "999.999 brute öldürdüm" diyebilseydi bütün
+ * legendary pet'ler ilk koşuda açılır ve o koşul kâğıt üzerinde kalırdı.
+ *
+ * ⚠️ `maxRareGold` ile AYNI DESEN: koşuyu yeniden simüle etmiyoruz (DoS
+ * yüzeyi), "en fazla ne mümkündü" sorusunu kapalı formda cevaplıyoruz.
+ * Burada tavan daha da net çünkü düşman sayısı sabit — şansa bağlı değil.
+ */
+export function maxKills(
+  mode: string, stageId: number, deepestCleared: number, ascension = 0,
+): number {
+  const st = stageById(stageId);
+  if (!st) return 0;
+  if (mode === 'campaign') return st.enemyCount + (st.boss ? 1 : 0);
+
+  let toplam = 0;
+  const top = Math.max(0, Math.floor(deepestCleared)) + 1;
+  for (let d = 1; d <= top; d++) {
+    const def = descentStage(stageId, d, ascension);
+    toplam += def.enemyCount + (def.boss ? 1 : 0);
+  }
+  return toplam;
+}
+
+/**
+ * Koşunun tip bazlı öldürme sayacını ilerlemeye EKLE.
+ *
+ * ⚠️ TOPLAM `maxKills` İLE KIRPILIYOR — tek tip için değil, hepsinin
+ * toplamı için. Tip başına kırpmak yetmezdi: 20 tipin her birine tavan
+ * kadar yazan bir yalancı 20 kat kazanırdı.
+ *
+ * ⚠️ KIRPMA ORANTILI, kesme DEĞİL. Sadece fazlasını atsaydık yalancı yine
+ * tavana kadar dolu alırdı; orantılı küçültme iddiayı geçerli bir koşunun
+ * ölçeğine indiriyor ve dürüst oyuncuya hiç dokunmuyor (onun toplamı zaten
+ * tavanın altında).
+ */
+export function applyKills(
+  before: Record<string, number>,
+  claim: unknown,
+  cap: number,
+): Record<string, number> {
+  if (!claim || typeof claim !== 'object') return before;
+  const gelen: Record<string, number> = {};
+  let toplam = 0;
+  for (const [k, v] of Object.entries(claim as Record<string, unknown>)) {
+    const n = Math.floor(Number(v));
+    if (!Number.isFinite(n) || n <= 0) continue;
+    // ⚠️ Boss `typeId: 'boss'` ile geliyor ve hiçbir pet ondan bağlanmıyor —
+    // taşımak zararsız, ayrı bir dal açmak sadece istisna yaratırdı.
+    gelen[k] = n;
+    toplam += n;
+  }
+  if (toplam <= 0) return before;
+
+  const oran = toplam > cap ? cap / toplam : 1;
+  const out = { ...before };
+  for (const [k, v] of Object.entries(gelen)) {
+    const eklenecek = Math.floor(v * oran);
+    if (eklenecek > 0) out[k] = (out[k] ?? 0) + eklenecek;
+  }
+  return out;
 }
 
 /** İstemcinin koşu sonunda gönderdiği iddia — HİÇBİRİ doğrudan kabul edilmez */

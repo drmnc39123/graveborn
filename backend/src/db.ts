@@ -12,6 +12,8 @@ export function toProgress(p: {
   cosmetics?: unknown; equipped?: unknown; dust?: number;
   ossuary?: number; wager?: unknown;
   achievements?: unknown; streak?: unknown;
+  kills?: unknown; pets?: unknown; petLevels?: unknown;
+  petFused?: unknown; equippedPets?: unknown; petSlot2?: boolean;
 }): Progress {
   const obj = <T,>(v: unknown): T => (v && typeof v === 'object' ? (v as T) : ({} as T));
   return {
@@ -39,6 +41,16 @@ export function toProgress(p: {
       last: typeof (p.streak as { last?: unknown })?.last === 'string'
         ? ((p.streak as { last: string }).last) : '',
     },
+    // ── THE BINDING ──
+    // ⚠️ Ham JSON taşınıyor; kırpma ve doğrulama saf fonksiyonların işi
+    // (frontend `normalize`, sunucu `pets.ts`). Buradaki tek iş TAŞIMAK —
+    // aynı kuralı iki yerde yazmak ayrışma riskidir.
+    kills: obj<Record<string, number>>(p.kills),
+    pets: obj<Record<string, number>>(p.pets),
+    petLevels: obj<Record<string, number>>(p.petLevels),
+    petFused: Array.isArray(p.petFused) ? (p.petFused as string[]) : [],
+    equippedPets: Array.isArray(p.equippedPets) ? (p.equippedPets as string[]) : [],
+    petSlot2: p.petSlot2 === true,
   };
 }
 
