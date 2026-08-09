@@ -427,6 +427,16 @@ export class Game {
   petBlasts: { x: number; y: number; r: number }[] = [];
 
   /**
+   * Düşman tipi → bu koşuda öldürülen sayı. Pet bağlamanın oynanış koşulu
+   * buradan besleniyor (bkz. pets.ts BIND).
+   *
+   * ⚠️ Tavanı YOK ve olmamalı: bu bir kozmetik kuyruk değil, koşunun ÖZETİ.
+   * Sözlük en fazla düşman tipi kadar anahtar tutar (21) — sınırsız büyüyen
+   * bir dizi değil.
+   */
+  killsByType: Record<string, number> = {};
+
+  /**
    * Ses ipuçları. Set kullanılıyor çünkü aynı frame'de 200 ölüm olsa da
    * tek 'kill' sesi çalınacak — dizi olsaydı sınırsız büyürdü.
    * Ses katmanı her frame boşaltır; simülasyonu ETKİLEMEZ.
@@ -2133,6 +2143,16 @@ export class Game {
     // öldürmeler birinci oyuncuya yazılıyordu. 1v1'de skor tablosunun
     // tamamı bu tek satıra bakıyor.
     h.kills += 1;
+    // ⚠️ TİP BAZINDA SAYAÇ — pet bağlamanın "parayla alınamaz" dayanağı
+    // (bkz. pets.ts BIND). Sadece SAYIYOR: rng tüketmiyor, dengeye
+    // dokunmuyor, mühür bunu hash'e almıyor. Sunucu koşu özetinden okuyup
+    // `Progress.kills`e ekliyor; yani sayacın kendisi de istemci iddiası
+    // değil, doğrulanmış koşunun çıktısı.
+    //
+    // ⚠️ Boss `typeId: 'boss'` ile geliyor ve bilerek sayılıyor — hiçbir pet
+    // boss'tan bağlanmıyor, o yüzden zararsız; ayrı bir dal açmak sadece
+    // okunması gereken bir istisna yaratırdı.
+    this.killsByType[e.typeId] = (this.killsByType[e.typeId] ?? 0) + 1;
     this.stage.killed += 1;
     this.rollRareGold();
     this.gems.push({ x: e.x, y: e.y, xp: e.xp, life: GEM.lifeSec });
@@ -2431,6 +2451,7 @@ export class Game {
       durationSec: Math.round(this.time),
       level: this.level,
       kills: this.kills,
+      killsByType: this.killsByType,
       rareGold: Math.floor(this.rareGold),
       outcome: this.phase,
     };

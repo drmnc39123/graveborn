@@ -5,7 +5,7 @@
 import { C } from '@/lib/theme';
 import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
 import type { Game, Hero } from './engine';
-import { BULLET, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey, FX, playerArt } from './sprites';
+import { BULLET, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey, FX, PET_ART, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
 import { weaponArt } from './combatArt';
@@ -21,6 +21,7 @@ const MAX_FX = 90; // ekranda aynı anda en fazla; sürü ölümünde çizim pat
 /** Yeni run başlarken çağrılır — modül seviyesindeki efektler önceki run'dan taşmasın. */
 export function resetEffects() {
   deathFx.length = 0;
+  petFx.length = 0;   // yeni koşuya önceki koşunun patlamaları taşmasın
   artTime = 0;
   resetFx();
   resetStageGround(); // yeni bölüm gelirse chunk önbelleği geçersiz
@@ -168,6 +169,7 @@ export function render(
   ctx.translate(cx - focus.px + sh.x, cy - focus.py + sh.y);
 
   pumpEffects(g, dt);
+  pumpPetFx(g, dt);
 
   drawStageGround(ctx, g.stage.def.id, focus.px, focus.py, w, h);
   drawStageDecor(ctx, g.stage.def.id, focus.px, focus.py, w, h);
@@ -188,6 +190,10 @@ export function render(
   // ⚠️ Hayaletler OYUNCUNUN ALTINDA: kendi karakterin her zaman en üstte
   // kalmalı, kalabalıkta seni örten bir hayalet oyunu oynanamaz yapardı.
   drawGhosts(ctx, ghosts);
+  // ⚠️ Pet OYUNCUDAN ÖNCE — kendi karakterin her zaman en üstte kalmalı.
+  drawPetFx(ctx);
+  drawPets(ctx, g.hero);
+  if (g.rival) drawPets(ctx, g.rival);
   drawCosmeticAura(ctx, g, auraId);  // halenin ALTINDA kalması gereken tek şey oyuncu
   // ⚠️ RAKİP ÖNCE ÇİZİLİYOR: üst üste geldiklerinde KENDİ karakterin
   // üstte kalmalı, yoksa kalabalıkta kendini kaybediyorsun.
@@ -652,6 +658,82 @@ function drawEnemyShots(ctx: CanvasRenderingContext2D, g: Game) {
  * yalnızca `g.px/py`'yi (yani birinci dövüşçüyü) çiziyordu — arena maçında
  * RAKİP HİÇ GÖRÜNMÜYORDU. Aynı fonksiyon iki kez çağrılıyor.
  */
+/**
+ * BAĞLANMIŞ YOLDAŞLAR (bkz. pets.ts).
+ *
+ * ⚠️ OYUNCUNUN ALTINDA ÇİZİLİR. Kendi karakterin her zaman en üstte kalmalı;
+ * yanındaki yaratık seni örterse kalabalıkta kendini kaybedersin — hayalet
+ * çiziminde alınan dersin aynısı.
+ *
+ * ⚠️ Pet sprite'ı düşman sprite'ıyla AYNI paketten geliyor (kurgu gereği:
+ * bağladığın düşman). Karışmasın diye üç ayrı sinyal var: daha küçük
+ * çiziliyor, oyuncuya yapışık duruyor ve ayağında bir bağ halkası var.
+ */
+function drawPets(ctx: CanvasRenderingContext2D, h: Hero) {
+  if (!h.pets.length) return;
+  for (let i = 0; i < h.pets.length; i++) {
+    const p = h.pets[i];
+
+    // bağ halkası — "bu benim" sinyali, sprite'tan bağımsız okunuyor
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = C.ice;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + 3, 11, 4.5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    const art = PET_ART[p.def.art];
+    if (art && drawActor(ctx, art, p.anim, p.animT, p.x, p.y, p.facingRight)) continue;
+
+    // görsel gelmediyse daire — oyun asla boş kare vermez
+    ctx.fillStyle = C.ice;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * Pet alan patlamaları. Motor "nerede patladı"yı kuyruğa atıyor, hasar zaten
+ * uygulandı — burası sadece görünürlük. Kuyruk BURADA boşaltılıyor (tek
+ * boşaltma noktası kuralı).
+ */
+const petFx: { x: number; y: number; r: number; t: number }[] = [];
+const PET_FX_SURE = 0.34;
+
+function pumpPetFx(g: Game, dt: number) {
+  for (let i = 0; i < g.petBlasts.length; i++) {
+    if (petFx.length >= 24) break;
+    const b = g.petBlasts[i];
+    petFx.push({ x: b.x, y: b.y, r: b.r, t: 0 });
+  }
+  g.petBlasts.length = 0;
+  for (let i = petFx.length - 1; i >= 0; i--) {
+    petFx[i].t += dt;
+    if (petFx[i].t >= PET_FX_SURE) { petFx[i] = petFx[petFx.length - 1]; petFx.pop(); }
+  }
+}
+
+function drawPetFx(ctx: CanvasRenderingContext2D) {
+  if (!petFx.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineWidth = 2;
+  for (let i = 0; i < petFx.length; i++) {
+    const f = petFx[i];
+    const k = f.t / PET_FX_SURE;
+    // dışa açılan tek halka — sürü ortasında okunaklı, ekranı doldurmuyor
+    ctx.globalAlpha = (1 - k) * 0.55;
+    ctx.strokeStyle = C.ice;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y, f.r * (0.35 + k * 0.65), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
 function drawPlayer(ctx: CanvasRenderingContext2D, g: Game, h: Hero) {
   // dokunulmazlık penceresinde yanıp söner
   const blink = h.iframe > 0 && Math.floor(h.iframe * 14) % 2 === 0;

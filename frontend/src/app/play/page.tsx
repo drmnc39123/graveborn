@@ -37,7 +37,7 @@ import {
 } from '@/game/config';
 import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
 import { GEAR, SLOT_NAME, affixText, rarityOf } from '@/game/gear';
-import { loadProgress, paidDepth, type Progress, type RunResult } from '@/game/progress';
+import { loadProgress, resolveRunPets, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
@@ -312,6 +312,9 @@ export default function PlayPage() {
           timeLimitSec={BOSS_RUN_SEC}
           livePresence
           permanent={permanentBonus(p.upgrades)}
+          // ⚠️ Boss odasında pet YOK — silah kilidiyle aynı gerekçe: orası
+          // ayrı bir uçtan başlıyor, gold ödemiyor ve hasar tablosu ortak.
+          // Pet'li/pet'siz oyuncuyu aynı tabloda yarıştırmak haksız olurdu.
           onFinish={finishBoss}
         />
       </div>
@@ -335,6 +338,10 @@ export default function PlayPage() {
           ascension={screen.ticket.ascension}
           aura={p.equipped.aura ?? null}
           permanent={runBonus(p.upgrades, screen.ticket)}
+          // ⚠️ Pet'ler İLERLEMEDEN türetiliyor (bkz. resolveRunPets): sahip
+          // olmadığını takamaz, yuvası yoksa taşıyamaz. Silah kilidiyle aynı
+          // duruş — motor `Progress` görmüyor, sadece çözülmüş sonucu alıyor.
+          pets={resolveRunPets(p)}
           // ⚠️ Kilit İLERLEMEDEN TÜRETİLİYOR, kayıtta saklanmıyor
           // (bkz. game/unlocks.ts). Boss odasına verilmiyor: orası ayrı bir
           // uçtan başlıyor ve gold ödemiyor; oyuncuyu orada da kısıtlamak

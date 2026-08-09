@@ -21,6 +21,7 @@ import {
   PULL_COST, RARITY, cosmeticById, resolvePull, rollCosmetic,
   type CosmeticSlot, type PullResult,
 } from './cosmetics';
+import { petById, toRunPet, FUSE_COPIES, MYTHIC_CAP, type RunPet } from './pets';
 
 const KEY = 'graveborn:progress:v2';
 const KEY_V1 = 'graveborn:progress:v1';
@@ -72,6 +73,32 @@ export interface Progress {
    * parasını kaybederdi; koşu bitince düşseydi kaybeden çıkıp kaçardı.
    */
   wager: WagerTicket | null;
+
+  // ── THE BINDING (bkz. pets.ts) ──────────────────────────────────────
+  /**
+   * Düşman tipi → o tipten öldürülen toplam sayı.
+   *
+   * ⚠️ PET'İN "PARAYLA ALINAMAZ" YANI TAM OLARAK BURASI. Bağlama hem gold
+   * hem kill istiyor; kill sayacı olmasaydı gold tek koşul olur ve balina
+   * koleksiyonu açılışta satın alırdı.
+   */
+  kills: Record<string, number>;
+  /**
+   * Pet id → kaç kez bağlandığı (0 = hiç).
+   *
+   * ⚠️ SAYI, boolean DEĞİL: füzyon dört kopya istiyor ve her kopya kill
+   * eşiğini yeniden doldurmayı gerektiriyor. Boolean olsaydı füzyonun
+   * oynanış bedeli yazılamazdı.
+   */
+  pets: Record<string, number>;
+  /** Pet id → seviye */
+  petLevels: Record<string, number>;
+  /** Füzyondan geçmiş pet id'leri — MYTHIC olanlar */
+  petFused: string[];
+  /** Koşuya girecek pet'ler, yuva sırasına göre */
+  equippedPets: string[];
+  /** İkinci yuva açıldı mı — bir kez satın alınır (bkz. SLOT2) */
+  petSlot2: boolean;
 }
 
 export function emptyProgress(): Progress {
@@ -80,7 +107,31 @@ export function emptyProgress(): Progress {
     firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO, charms: [],
     cosmetics: [], equipped: {}, dust: 0, ossuary: 0, wager: null,
     achievements: [], streak: { days: 0, last: '' },
+    kills: {}, pets: {}, petLevels: {}, petFused: [], equippedPets: [], petSlot2: false,
   };
+}
+
+/**
+ * Kayıttan koşuya girecek pet'leri çöz.
+ *
+ * ⚠️ SAHİP OLMADIĞINI TAKAMAZ ve YUVASI YOKSA TAŞIYAMAZ. Kayıt elle
+ * düzenlenebilir (`cleanEquipped`teki kozmetik dersinin aynısı) — ama burada
+ * bahis kozmetik değil GÜÇ: takılamayan bir pet'i takmak doğrudan hasar
+ * kazancı olurdu. Sunucu da `/run/start`ta aynı kontrolü yapar; bu, istemci
+ * tarafındaki ilk kapı.
+ */
+export function resolveRunPets(p: Progress): RunPet[] {
+  const yuva = p.petSlot2 ? 2 : 1;
+  const out: RunPet[] = [];
+  for (const id of (p.equippedPets ?? []).slice(0, yuva)) {
+    const def = petById(id);
+    if (!def) continue;
+    if ((p.pets?.[id] ?? 0) <= 0) continue;          // hiç bağlanmamış
+    const mythic = (p.petFused ?? []).includes(id);
+    const lv = Math.max(0, Math.floor(p.petLevels?.[id] ?? 0));
+    out.push(toRunPet(def, lv, mythic));
+  }
+  return out;
 }
 
 /** Elle düzenlenmiş kayda karşı bahis biletini doğrula — hepsi ya da hiçbiri */
@@ -154,8 +205,53 @@ function normalize(p: Partial<Progress>): Progress {
       days: Math.max(0, Math.floor(Number(p.streak?.days) || 0)),
       last: typeof p.streak?.last === 'string' ? p.streak.last : '',
     },
+    // ── THE BINDING ──
+    // ⚠️ Bu alanlar da SONRADAN eklendi; tılsım ve kozmetiklerdeki gerekçenin
+    // aynısı geçerli — eksiklikleri zararsız, boşa düşer, ayrı şema sürümü
+    // gerektirmez. Eski kayıt açıldığında oyuncu sadece "hiç pet bağlamamış"
+    // olur.
+    kills: sayacSozlugu(p.kills),
+    // ⚠️ Kopya sayısı FUSE_COPIES ile kırpılıyor: kayıt elle düzenlenebilir
+    // ve "brute: 99" yazmak füzyonu bedavaya getirmenin en kolay yolu olurdu.
+    pets: sayacSozlugu(p.pets, FUSE_COPIES, (id) => !!petById(id)),
+    petLevels: sayacSozlugu(p.petLevels, MYTHIC_CAP, (id) => !!petById(id)),
+    petFused: Array.isArray(p.petFused)
+      ? [...new Set(p.petFused.filter((id) => typeof id === 'string' && petById(id)?.rarity === 'legendary'))]
+      : [],
+    equippedPets: [],   // aşağıda sahiplik ve yuvaya göre doldurulur
+    petSlot2: p.petSlot2 === true,
   };
   out.equipped = cleanEquipped(p.equipped, out.cosmetics);
+  // ⚠️ SAHİP OLMADIĞINI TAKAMAZ ve YUVASI YOKSA TAŞIYAMAZ. Kozmetikte bu bir
+  // prestij meselesiydi; burada doğrudan GÜÇ — takılamayan pet'i takmak
+  // hasar kazancı olurdu.
+  out.equippedPets = Array.isArray(p.equippedPets)
+    ? [...new Set(p.equippedPets.filter((id): id is string =>
+        typeof id === 'string' && (out.pets[id] ?? 0) > 0))].slice(0, out.petSlot2 ? 2 : 1)
+    : [];
+  return out;
+}
+
+/**
+ * Elle düzenlenmiş kayda karşı sayı sözlüğü temizleyici.
+ *
+ * ⚠️ TEK YERDE: `kills`, `pets` ve `petLevels` aynı saldırı yüzeyini
+ * paylaşıyor (JSON'a istediğin sayıyı yaz). Üç ayrı yerde yazılsaydı biri
+ * er ya da geç kırpmayı unuturdu.
+ */
+function sayacSozlugu(
+  raw: unknown,
+  tavan = Number.MAX_SAFE_INTEGER,
+  gecerliId: (id: string) => boolean = () => true,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!gecerliId(k)) continue;
+    const n = Math.floor(Number(v));
+    if (!Number.isFinite(n) || n <= 0) continue;
+    out[k] = Math.min(tavan, n);
+  }
   return out;
 }
 

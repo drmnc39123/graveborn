@@ -18,6 +18,7 @@ function dailySeed() {
 import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
+import type { RunPet } from '@/game/pets';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
@@ -42,7 +43,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, duelTarget, allowedWeapons, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, duelTarget, allowedWeapons, pets, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -68,6 +69,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * ⚠️ Verilmezse kilit YOK — motorun varsayılanı "hepsi açık".
    */
   allowedWeapons?: readonly string[];
+  /**
+   * Koşuya giren bağlanmış yoldaşlar (bkz. pets.ts).
+   * ⚠️ Verilmezse pet YOK — motorun eski davranışı bit bit korunur.
+   */
+  pets?: readonly RunPet[];
   /**
    * Takılı kozmetik hale (cosmetics.ts id). SADECE GÖRÜNÜR — motora hiç
    * girmez, `render`'a ayrı parametre olarak veriliyor. Denge etkisi yok.
@@ -169,7 +175,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
 
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
-    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth, ascension, allowedWeapons ?? null);
+    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth, ascension, allowedWeapons ?? null, pets ?? []);
     gameRef.current = game;
     // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
     // üretimini kıstığı için oyunu gerçek zamanda oynayıp level-up/ölüm gibi
