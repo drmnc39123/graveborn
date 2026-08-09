@@ -24,11 +24,27 @@ export const viewport: Viewport = {
  * • Pixellari (Zacchary Dempsey-Plante) — hem gövde hem başlık. Düz, süssüz,
  *   gerçek küçük harfli bir piksel font. Kullanıcının kendi seçimi.
  *
- * ⚠️ TEK AĞIRLIK — KALIN YÜZÜ YOK ve tarayıcı SENTETİK de üretmiyor.
- * Ölçüldü: 400 / 700 / 900 aynı genişliği veriyor (131 px). Yani arayüzdeki
- * `fontWeight: 900` kullanımları ETKİSİZ; hiyerarşi punto ve renkten geliyor.
- * Bunları temizlemeye gerek yok (zararsız) ama "kalın yapayım" diye ağırlık
- * artırmak da işe yaramaz — vurgu isteniyorsa punto ya da renk değişmeli.
+ * ⚠️ DOSYADA TEK AĞIRLIK VAR ama TARAYICI SENTETİK KALIN ÜRETİYOR.
+ *
+ * ⚠️ BURADA BİR ÖLÇÜM HATASI VARDI, DÜZELTİLDİ. Eski not "400/700/900 aynı
+ * genişliği veriyor, `fontWeight: 900` ETKİSİZ" diyordu. Genişlik ölçüsü
+ * YANLIŞ ALETTİ: Chromium bu fontta sentetik kalını ilerlemeyi (advance)
+ * büyütmeden çiziyor, o yüzden genişlik hiç kıpırdamıyor. Doğru alet
+ * MÜREKKEP: aynı metnin opak piksel sayısı.
+ *
+ *   400 → 4.524 piksel · 700 → 6.464 piksel  (+%42,9)
+ *   (kontrol: sistem sans-serif aynı testte +%26,7 — yani alet sağlam)
+ *
+ * Yani `fontWeight` ÇALIŞIYOR ve vurgu için kullanılabilir.
+ *
+ * ⚠️ SENTEZ İKİLİ: 700 ile 900 BİREBİR AYNI (ikisi de 6.464). Ara kademe
+ * yok — "biraz daha kalın" diye 800/900 yazmanın karşılığı yok, tek karar
+ * kalın mı değil mi.
+ *
+ * ⚠️ AMA ŞU AN AĞIRLIK HİÇBİR BİLGİ TAŞIMIYOR: arayüzdeki 275 `fontWeight`
+ * kullanımının 239'u 900, yalnızca 2'si 400. Her şey kalınsa hiçbir şey
+ * vurgulanmış olmuyor. Kontrast isteniyorsa yapılacak iş ağırlık EKLEMEK
+ * değil, gövde metnini 400'e ÇEKMEK.
  *
  * ⚠️ İkinci bir aileyi kalın olarak eşleştirme denemesi YAPILMADI: Silkscreen
  * ve Pixellari'nin oranları farklı, karışım tutarsız görünürdü.
