@@ -27,7 +27,7 @@ import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
 import { ChatPanel } from '@/components/ChatPanel';
-import { Panel, PixelButton } from '@/components/ui/kit';
+import { Panel, PixelButton, type PanelStyle } from '@/components/ui/kit';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
@@ -91,6 +91,37 @@ type Payout = {
    * almamışken. Bir oyuncunun göreceği en kötü ilk mesaj.
    */
   cleared: boolean;
+};
+
+/**
+ * PANEL ÇERÇEVESİ — her kapının kendi kimliği.
+ *
+ * 🔴 ON ÜÇ ÇERÇEVE VAR ve HEPSİ 07A KULLANIYORDU. Kullanıcının şikâyeti
+ * buydu: dokuz farklı yere giriyorsun, dokuzu da aynı pembe kutu.
+ *
+ * ⚠️ SEÇİMİ ÖLÇÜM DARALTTI, GÖZ KARAR VERDİ — ve ilk ölçüm YANLIŞ BÖLGEYİ
+ * ölçtü. Önce çerçevelerin DOLGU parlaklığına bakıldı ve karartma katmanı
+ * ona göre ayarlandı; ekranda hiçbir şey değişmedi. Sebep: karartma içerik
+ * kutusunu kaplıyor, 48 px'lik KENARLIĞI değil — yani panelin "açık"
+ * görünmesine sebep olan şey dolgu değil ÇERÇEVENİN KENDİSİYDİ.
+ *
+ * Kenarlık parlaklığı (algılanan, 0-255) doğru ölçü çıktı:
+ *   07A  86,4 · 01B 104,3 · 02B 110,2 · 05A 126,6   ← gotik palete uyumlu
+ *   03A 131,0 · 08A 136,6 · 06A 141,9 · 04B 147,9   ← sınırda
+ *   04A 167,5 · 04C 216,2                           ← parlak, kullanılamaz
+ *
+ * Eşleme ANLAMLA ve yalnızca uyumlu olanlardan: tezgâh ahşap, beceri soğuk,
+ * market turkuaz (para), geri kalan mezarlık sarmaşığı.
+ */
+const PANEL_CERCEVE: Record<string, PanelStyle> = {
+  shop: '05A',       // PEDLAR'S STALL — ahşap kalas, tezgâh
+  paths: '01B',      // YOUR PATHS — soğuk mavi-gri, zihinsel
+  market: '02B',     // MARKETPLACE — turkuaz, para
+  exchange: '02B',
+  // ⚠️ Forge 06A, Reliquary 03A, Gear 08A DENENDİ ve GERİ ALINDI: üçü de
+  // kenarlık parlaklığında sınırın üstünde ve ekranda panel soluk, çerçeve
+  // cılız duruyordu (06A yalnızca köşe braketi çiziyor, gövde boş kalıyor).
+  // Kimlik uğruna tema bozulmaz — geri kalan hepsi 07A.
 };
 
 export default function PlayPage() {
@@ -661,7 +692,7 @@ export default function PlayPage() {
               bile panel 65 px'te başlıyor ve rıhtımın altına giriyordu.
               Hizalama üstten olunca panel boşluğun ALTINDA kalmayı garanti
               ediyor; maxHeight de ölçülen rıhtıma göre. */}
-          <Panel variant="07A" scale={3} pad={6} onClick={(e) => e.stopPropagation()}
+          <Panel variant={(panel && PANEL_CERCEVE[panel]) || '07A'} scale={3} pad={6} onClick={(e) => e.stopPropagation()}
             style={{ width: '100%', maxWidth: 560, maxHeight: `calc(100vh - ${dockH + 48}px)`, overflowY: 'auto' }}>
             {/* Panel içinde ikinci bir bina sırası YOK — navbar panelin üstünde
                 (zIndex 6) ve açıkken de tıklanabilir kalıyor. İki sıra hem

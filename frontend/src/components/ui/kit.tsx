@@ -102,6 +102,32 @@ const PANEL_ANIM = `@keyframes gb-panel-in {
   to   { opacity: 1; transform: translateY(0); }
 }`;
 
+/**
+ * ÇERÇEVE BAŞINA KARARTMA — ölçülen dolgu parlaklığından türetildi.
+ *
+ * ⚠️ SAYILAR GÖZ KARARI DEĞİL. 13 çerçevenin merkez dolgu karosu PIL ile
+ * ölçüldü (algılanan parlaklık, 0-255):
+ *   07A  97,9  ← EN KOYU, referans
+ *   02B 140,9 · 08A 148,6 · 01B 168,9 · 03A/04B/05A/06A 170,0
+ *   01C/02A/04A 191,2 · 01A 208,5 · 04C 249,4
+ *
+ * 07A için 0,72 doğru kabul edildi (ekranda onaylandı). Geri kalanı aynı
+ * ALGILANAN koyuluğu verecek şekilde çözüldü:  a = 1 − 0,28·97,9 / L
+ *
+ * ⚠️ Tek bir sabit kullanmak, panellere kimlik verilince iç zemini
+ * soluklaştırıyordu — aynı örtü farklı zeminlerde farklı koyuluk üretir.
+ */
+const KARARTMA: Partial<Record<PanelStyle, number>> = {
+  '07A': 0.72,
+  '02B': 0.81,
+  '08A': 0.82,
+  '01B': 0.84,
+  '03A': 0.84, '04B': 0.84, '05A': 0.84, '06A': 0.84,
+  '01C': 0.86, '02A': 0.86, '04A': 0.86,
+  '01A': 0.87,
+  '04C': 0.89,
+};
+
 export function Panel({
   children, variant = '07A', scale = 3, pad = 14, style, onClick,
 }: {
@@ -157,12 +183,18 @@ export function Panel({
             pembe-mor okunuyordu ve daha kötüsü, KARTLAR ZEMİNDEN AYRIŞMIYORDU
             — kart ile panel aynı yüzey gibi görünüyordu. Kartın zeminini
             koyultmak tek başına çözmedi, çünkü sorun kartta değil ARKASINDAKİ
-            yüzeydeydi. 0,72'de çerçevenin sarmaşık ve doku detayı hâlâ
+            yüzeydeydi. Karartmada çerçevenin sarmaşık ve doku detayı hâlâ
             görünüyor (tamamen kapatmak Franuka çerçevesini boşa harcardı) ama
-            içerik artık koyu bir zeminin üstünde duruyor. */}
+            içerik artık koyu bir zeminin üstünde duruyor.
+
+            🔴 SONRA SABİT 0,72 DE YETMEDİ — ve sebebi ölçüldü: o değer YALNIZCA
+            07A için doğruydu. Panellere kendi kimlikleri verilince (ahşap,
+            metal, altın) iç zemin soluklaştı, çünkü 07A dolgusu 97,9 parlaklıkta
+            ama diğerleri 141-249 arasında. Aynı örtü farklı zeminlerde farklı
+            koyuluk üretir; örtü ÇERÇEVEYE GÖRE olmalı. */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'rgba(11,8,14,0.72)',
+          background: `rgba(11,8,14,${KARARTMA[variant] ?? 0.78})`,
         }} />
         <div style={{ position: 'relative' }}>{children}</div>
       </div>
