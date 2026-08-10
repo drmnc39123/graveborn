@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { joinChat, type ChatHandle, type ChatMessage } from '@/lib/chat';
 import { getMode } from '@/lib/session';
+import { PixelButton, BTN } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export function ChatPanel() {
@@ -133,17 +134,11 @@ export function ChatPanel() {
                 color: C.bone, fontFamily: FONT.ui, fontSize: 11.5, outline: 'none',
               }}
             />
-            <button onClick={gonder} disabled={!bagli || !metin.trim()}
-              style={{
-                all: 'unset', cursor: bagli && metin.trim() ? 'pointer' : 'default',
-                padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 900,
-                color: bagli && metin.trim() ? '#1a0508' : C.boneFaint,
-                background: bagli && metin.trim()
-                  ? `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`
-                  : 'rgba(227,216,192,0.07)',
-              }}>
+            <PixelButton variant={BTN.action} scale={2} onClick={gonder}
+              disabled={!bagli || !metin.trim()}
+              style={{ flexShrink: 0, fontSize: 11, letterSpacing: 0.6 }}>
               SAY
-            </button>
+            </PixelButton>
           </div>
         </>
       )}

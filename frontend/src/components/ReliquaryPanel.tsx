@@ -354,28 +354,26 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
                   </div>
                 </div>
 
+                {/* ⚠️ Takmak güçlü, çıkarmak sıradan: aynı düğme iki iş yapıyor
+                    ama ekranın önerdiği hep TAKMAK olmalı. Satın alma düğmesinde
+                    minWidth şart: doku kenarlığı scale 2'de 64px yiyor, "12,000
+                    DUST" gibi uzun bir etiket sabit taban olmadan kırpılır.
+
+                    ⚠️ Bu yorum ternary'nin DIŞINDA duruyor. Süslü parantezli
+                    JSX yorumu bir ifadedir ve ternary dalının başına konamaz —
+                    QuestPanel'i tam olarak böyle kırmıştım. */}
                 {have ? (
-                  <button onClick={() => equip(def.slot, on ? null : def.id)} disabled={busy}
-                    style={{
-                      all: 'unset', cursor: busy ? 'default' : 'pointer', flexShrink: 0,
-                      padding: '7px 11px', borderRadius: 6, fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8,
-                      color: on ? C.boneDim : '#ffd9df',
-                      background: on ? 'rgba(255,255,255,0.06)' : 'rgba(160,18,38,0.4)',
-                      border: `1px solid ${on ? 'rgba(255,255,255,0.14)' : 'rgba(228,101,122,0.5)'}`,
-                    }}>
+                  <PixelButton variant={on ? BTN.action : BTN.strong} scale={2} disabled={busy}
+                    onClick={() => equip(def.slot, on ? null : def.id)}
+                    style={{ flexShrink: 0, minWidth: 120, fontSize: 10.5, letterSpacing: 0.8 }}>
                     {on ? 'REMOVE' : 'WEAR'}
-                  </button>
+                  </PixelButton>
                 ) : (
-                  <button onClick={() => dustBuy(def.id)} disabled={busy || !affordable}
-                    style={{
-                      all: 'unset', cursor: affordable && !busy ? 'pointer' : 'default', flexShrink: 0,
-                      padding: '7px 11px', borderRadius: 6, fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8,
-                      opacity: affordable ? 1 : 0.4,
-                      color: C.ice, background: 'rgba(138,151,163,0.14)',
-                      border: '1px solid rgba(138,151,163,0.4)',
-                    }}>
+                  <PixelButton variant={BTN.buy} scale={2} disabled={busy || !affordable}
+                    onClick={() => dustBuy(def.id)}
+                    style={{ flexShrink: 0, minWidth: 150, fontSize: 10.5, letterSpacing: 0.8 }}>
                     {cost.toLocaleString('en-US')} DUST
-                  </button>
+                  </PixelButton>
                 )}
               </div>
             </Card>
