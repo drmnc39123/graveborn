@@ -19,16 +19,17 @@ import {
 import { RARITY } from '@/game/cosmetics';
 import type { Progress } from '@/game/progress';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
+import { Icon, IconText, type IconName } from '@/components/ui/kit';
 import { bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
 import { C, FONT, glass } from '@/lib/theme';
 
 /** Rolün oyuncuya ne yaptığı — tek cümle, oyun terimiyle */
-const ROL_METNI: Record<string, { ad: string; ne: string; renk: string }> = {
-  striker: { ad: 'STRIKER', ne: 'Strikes the nearest enemy', renk: C.blood },
-  channeler: { ad: 'CHANNELER', ne: 'Blasts everything around it', renk: C.candle },
-  warden: { ad: 'WARDEN', ne: 'Mends your wounds', renk: C.ok },
-  forager: { ad: 'FORAGER', ne: 'Finds more gold, pulls it further', renk: C.ice },
+const ROL_METNI: Record<string, { ad: string; ne: string; renk: string; ikon: IconName }> = {
+  striker: { ad: 'STRIKER', ne: 'Strikes the nearest enemy', renk: C.blood, ikon: 'damage' },
+  channeler: { ad: 'CHANNELER', ne: 'Blasts everything around it', renk: C.candle, ikon: 'magic' },
+  warden: { ad: 'WARDEN', ne: 'Mends your wounds', renk: C.ok, ikon: 'heal' },
+  forager: { ad: 'FORAGER', ne: 'Finds more gold, pulls it further', renk: C.ice, ikon: 'magnet' },
 };
 
 /**
@@ -109,9 +110,9 @@ export function PetPanel({ progress, onChange, onError }: {
         ...glass(10), padding: '9px 12px', marginBottom: 10, fontFamily: FONT.ui,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>
+        <IconText name="gold" scale={1} style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>
           {Math.floor(progress.gold).toLocaleString('en-US')} GOLD
-        </span>
+        </IconText>
         <span style={{ fontSize: 10.5, color: C.boneFaint, textAlign: 'right' }}>
           {takili.length}/{yuva} carried
           {!progress.petSlot2 && ` · second slot at depth ${SLOT2.depth}`}
@@ -180,11 +181,11 @@ export function PetPanel({ progress, onChange, onError }: {
                     }}>
                     {mythic ? 'MYTHIC' : rar.label}
                   </span>
-                  <Tag tone="dim">{rol.ad}</Tag>
+                  <Tag tone="dim"><Icon name={rol.ikon} style={{ marginRight: 3 }} />{rol.ad}</Tag>
                   {takiliMi && <Tag tone="ok">CARRIED</Tag>}
                 </div>
                 <div style={{ fontSize: 10.5, color: C.boneFaint, marginTop: 3 }}>{def.blurb}</div>
-                <div style={{ fontSize: 11, color: rol.renk, marginTop: 4 }}>{rol.ne}</div>
+                <IconText name={rol.ikon} style={{ fontSize: 11, color: rol.renk, marginTop: 4 }}>{rol.ne}</IconText>
               </div>
 
               <div style={{ textAlign: 'right', minWidth: 150, fontFamily: FONT.ui }}>
@@ -193,9 +194,14 @@ export function PetPanel({ progress, onChange, onError }: {
                     {/* ⚠️ NEDEN ALAMIYORUM — eksik olan koşul gösteriliyor.
                         İkisi de eksikse önce kill yazılıyor: gold sonradan
                         toplanabilir, kill oynamayı gerektirir. */}
-                    <div style={{ fontSize: 10.5, color: kill >= gerekenKill ? C.ok : C.boneFaint }}>
+                    {/* ⚠️ Kafatası ikonu burada BEZEME DEĞİL: bağlamanın gold
+                        dışında ikinci bir koşulu olduğunu tek bakışta söyleyen
+                        şey o. Salt metinken oyuncu bu satırı okumadan düğmeye
+                        basıp "çalışmıyor" sanıyordu. */}
+                    <IconText name="skull" dim={kill < gerekenKill}
+                      style={{ fontSize: 10.5, color: kill >= gerekenKill ? C.ok : C.boneFaint, justifyContent: 'flex-end' }}>
                       {kill.toLocaleString('en-US')} / {gerekenKill.toLocaleString('en-US')} slain
-                    </div>
+                    </IconText>
                     <button
                       disabled={kill < gerekenKill || progress.gold < bindGold || busy !== null}
                       onClick={() => calistir(def.id, 'buy', () => bindPet(def.id))}

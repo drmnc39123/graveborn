@@ -14,6 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ENEMY_ART, FALLEN_ART, PET_ART } from './sprites.js';
 import { PETS } from './pets.js';
+import { ICON, iconSrc, type IconName } from '../lib/icons.js';
 import { pumpFx, resetFx, shakeOffset, takeFreeze } from './fx.js';
 
 const FAIL: string[] = [];
@@ -272,6 +273,31 @@ console.log('\n[8] Ölüm animasyonu — dosyalar GERÇEKTEN var mı');
     return ad && !PET_ART[p.art]?.anims[ad];
   }).map((p) => `${p.id}(${p.role})`);
   check('her rolün görsel karşılığı VAR', animsiz.length === 0, animsiz.join(', ') || 'tamam');
+}
+
+console.log('\n[8b] Mini ikonlar — dosyalar GERÇEKTEN var mı');
+{
+  // ⚠️ AYNI SİNSİ SINIF: yanlış numara → 404 → CSS `background-image`
+  // sessizce hiçbir şey çizmez. Hata yok, uyarı yok, sadece boşluk. 32 ikonun
+  // iki varyantı da (Normal/Outline) tek tek manifest'e soruluyor.
+  const iyol = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../public/art/manifest.json');
+  const im = JSON.parse(fs.readFileSync(iyol, 'utf8')) as { items: { src: string }[] };
+  const ivar = new Set(im.items.map((i) => i.src));
+
+  const eksik: string[] = [];
+  for (const ad of Object.keys(ICON) as IconName[]) {
+    for (const dim of [false, true]) {
+      if (!ivar.has(iconSrc(ad, dim))) eksik.push(`${ad}${dim ? ' (dim)' : ''}`);
+    }
+  }
+  check('her mini ikon dosyası MEVCUT', eksik.length === 0,
+    eksik.length ? `${eksik.length} eksik: ${eksik.slice(0, 3).join(', ')}` : `${Object.keys(ICON).length} ikon × 2 varyant`);
+
+  // ⚠️ İKİ İSİM AYNI DOSYAYA BAKMAMALI. Bakarsa panelde iki farklı kavram
+  // aynı resmi gösterir ve bu SESSİZ bir tasarım hatasıdır — kod çalışır,
+  // test yeşil kalır, sadece oyuncu iki şeyi ayırt edemez.
+  const num = Object.values(ICON);
+  check('ikon numaraları BENZERSİZ', new Set(num).size === num.length, `${new Set(num).size}/${num.length}`);
 }
 
 console.log('\n[9] Leş havuzu');

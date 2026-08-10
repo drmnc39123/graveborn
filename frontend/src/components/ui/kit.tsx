@@ -15,6 +15,7 @@
 
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { C, FONT } from '@/lib/theme';
+import { iconSrc, type IconName } from '@/lib/icons';
 
 const KIT = '/art/ui/kit';
 
@@ -392,6 +393,72 @@ export function Slot({ type = 'Empty', variant = '02', scale = 2, children, titl
         </div>
       )}
     </div>
+  );
+}
+
+// ── MİNİ İKONLAR ──────────────────────────────────────────────────────
+//
+// 96 dosya (32 ikon × Normal/Outline/Selected), hepsi 16×16 — ve bugüne kadar
+// kodda HİÇ geçmiyorlardı. Paneller salt metindi; sayıların yanında ne
+// olduğunu söyleyen bir işaret yoktu.
+//
+// ⚠️ İSİMLER ANLAMLA VERİLİYOR, DOSYA NUMARASIYLA DEĞİL. `Icon_05` yazmak,
+// altı ay sonra "05 neydi" sorusunu ve tek tek dosya açmayı garantiler.
+// Eşleme kontakt sayfası ÜRETİLİP GÖZLE OKUNARAK yapıldı, tahminle değil —
+// bu projede sprite'ı adına göre yargılamak daha önce yanılttı.
+// Eşleme `lib/icons.ts`te — saf veri, test edilebilir olsun diye ayrı
+// (React bileşeni node testinden içe aktarılamıyor).
+export { ICON, type IconName } from '@/lib/icons';
+
+/**
+ * 16×16 mini ikon.
+ *
+ * ⚠️ `scale` TAM SAYI (bkz. `int` başlığı) — kesirli ölçek piksel sanatı
+ * titretir ve kullanıcı bunu ilk bakışta yakalamıştı.
+ *
+ * ⚠️ `dim` varyantı ayrı bir DOSYA (`_Outline`), CSS `opacity` DEĞİL.
+ * Saydamlık ikonu soluklaştırır ama okunaklılığını da düşürür; paketin kendi
+ * dış-hat çizimi 16 pikselde çok daha net kalıyor.
+ */
+export function Icon({ name, scale = 1, dim = false, title, style }: {
+  name: IconName;
+  scale?: number;
+  dim?: boolean;
+  title?: string;
+  style?: CSSProperties;
+}) {
+  const s = 16 * int(scale);
+  return (
+    <span
+      title={title}
+      role="img"
+      aria-label={name}
+      style={{
+        display: 'inline-block', width: s, height: s, flexShrink: 0,
+        verticalAlign: 'text-bottom',
+        backgroundImage: `url("${iconSrc(name, dim)}")`,
+        backgroundSize: '100% 100%',
+        ...pixel,
+        ...style,
+      }}
+    />
+  );
+}
+
+/** İkon + metin — panellerde en sık tekrar eden kalıp, tek yerde dursun */
+export function IconText({ name, children, scale = 1, dim = false, gap = 5, style }: {
+  name: IconName;
+  children: ReactNode;
+  scale?: number;
+  dim?: boolean;
+  gap?: number;
+  style?: CSSProperties;
+}) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap, ...style }}>
+      <Icon name={name} scale={scale} dim={dim} />
+      {children}
+    </span>
   );
 }
 
