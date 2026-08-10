@@ -124,6 +124,28 @@ const PANEL_CERCEVE: Record<string, PanelStyle> = {
   // Kimlik uğruna tema bozulmaz — geri kalan hepsi 07A.
 };
 
+/**
+ * PANEL GENİŞLİĞİ — işin gerektirdiği kadar.
+ *
+ * ⚠️ HEPSİ 560 px'E KİLİTLİYDİ, tek bir satırda. Bir emir defteri için bu
+ * dar: fiyat, miktar, birim fiyat, satıcı ve eylem aynı satıra sığmıyor,
+ * kartlar alt alta diziliyor ve KIYASLAMA — bir marketin tek işi —
+ * imkânsız hâle geliyordu.
+ *
+ * ⚠️ Genişlik ANLAMLA veriliyor, "daha büyük daha iyi" diye değil:
+ * bir ayar paneli 1100 px'de sağı boş bir tarla olurdu.
+ *
+ * ⚠️ Franuka çerçevesi 9-slice + `fill` — orta karo yatayda tekrarlıyor,
+ * yani genişlik riski yok (bkz. kit.tsx `nineSlice`).
+ */
+const PANEL_GENISLIK: Record<string, number> = {
+  market: 1100,      // emir defteri — kıyaslama için sütun gerekiyor
+  exchange: 1100,    // aynı kabuk (içi token'a kadar kilitli)
+  reliquary: 720,    // dört sekme + ızgara
+  quests: 720,       // karakter vitrini + bölüm listesi
+  duel: 720,         // iki sıralama tablosu
+};
+
 export default function PlayPage() {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: 'hub' });
@@ -699,7 +721,14 @@ export default function PlayPage() {
               Hizalama üstten olunca panel boşluğun ALTINDA kalmayı garanti
               ediyor; maxHeight de ölçülen rıhtıma göre. */}
           <Panel variant={(panel && PANEL_CERCEVE[panel]) || '07A'} scale={3} pad={6} onClick={(e) => e.stopPropagation()}
-            style={{ width: '100%', maxWidth: 560, maxHeight: `calc(100vh - ${dockH + 48}px)`, overflowY: 'auto' }}>
+            style={{
+              width: '100%',
+              maxWidth: (panel && PANEL_GENISLIK[panel]) || 560,
+              // ⚠️ `dockH` ÖLÇÜLEN değer, sabit sayı DEĞİL — 78 px sabiti
+              // 9. düğme satırı sardırınca panelin ilk 31 pikselini örtmüştü.
+              maxHeight: `calc(100vh - ${dockH + 48}px)`,
+              overflowY: 'auto',
+            }}>
             {/* Panel içinde ikinci bir bina sırası YOK — navbar panelin üstünde
                 (zIndex 6) ve açıkken de tıklanabilir kalıyor. İki sıra hem
                 gereksizdi hem panelin içinde sarıp dağınık duruyordu. */}
