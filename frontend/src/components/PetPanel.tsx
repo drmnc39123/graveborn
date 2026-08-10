@@ -17,12 +17,82 @@ import {
   bindKillsNeeded, petCap, petEffect, petLevelCost, type PetDef,
 } from '@/game/pets';
 import { RARITY } from '@/game/cosmetics';
+import { PET_ART } from '@/game/sprites';
 import type { Progress } from '@/game/progress';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import { Icon, IconText, type IconName } from '@/components/ui/kit';
 import { bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
 import { C, FONT, glass } from '@/lib/theme';
+
+/**
+ * PET PORTRESİ — kartın asıl eksik parçasıydı.
+ *
+ * 🔴 Panel ilk sürümde pet'lerin RESMİNİ HİÇ göstermiyordu: 12 kart metin +
+ * küçük bir stat ikonuydu. Bir koleksiyon ekranının topladığın şeyi
+ * göstermemesi, ekranın kendi işini yapmaması demek.
+ *
+ * ⚠️ SPRITE SAYFASINDAN TEK KARE KIRPILIYOR, ayrı portre dosyası YOK —
+ * öyle bir dosya da yok. Topdown sayfaları 640×1440, yani 80px'lik 8 sütun ×
+ * 18 satır; ilk kare (0,0) idle duruşu. Bone Archer şerit: 224×32, 7 kare.
+ *
+ * ⚠️ BOYUTLAR ÖLÇÜLDÜ, MANİFEST'E GÜVENİLMEDİ — `manifest.json` bone archer
+ * şeridini 32×32 yazıyor (kare boyutu), dosya ise 224×32. Manifest'e göre
+ * kırpsaydık portre tek bir iskeletin yedide birini gösterirdi.
+ */
+const TOPDOWN_SAYFA = { w: 640, h: 1440 };   // 8 sütun × 18 satır, 80px kare
+
+/**
+ * ⚠️ SIKI KIRPMA — 80×80'lik karenin TAMAMI değil.
+ *
+ * Ölçüldü: 11 topdown yaratığın hiçbiri karesini doldurmuyor, dolgu oranı
+ * %10,6 ile %22,6 arasında ve içerik hep aynı bölgede — x 17-62, y 12-66.
+ * Kareyi olduğu gibi göstermek 60 px'lik kutuda ~27 px'lik bir yaratık
+ * demekti; "resim var ama küçücük" tam olarak paneli basit gösteren şeydi.
+ *
+ * Ortak kutu 56×56 ve (12,10)'dan başlıyor: her yaratığı payla içine alıyor,
+ * hiçbirini kesmiyor. Pet başına ayrı kutu YAZILMADI — sayılar birbirine
+ * yeterince yakın ve on iki sabit, tek sabitten daha kırılgan olurdu.
+ */
+const KIRP = { x: 12, y: 10, boy: 56 };
+
+function PetPortrait({ artKey, size, bagli }: { artKey: string; size: number; bagli: boolean }) {
+  const a = PET_ART[artKey]?.anims.idle ?? PET_ART[artKey]?.anims.walk;
+
+  let kare: React.CSSProperties = {};
+  if (a?.kind === 'grid') {
+    // Kutu `boy` kaynak pikselini `size` ekran pikselinde gösterecek
+    const olcek = size / KIRP.boy;
+    kare = {
+      backgroundSize: `${TOPDOWN_SAYFA.w * olcek}px ${TOPDOWN_SAYFA.h * olcek}px`,
+      backgroundPosition: `${-KIRP.x * olcek}px ${-KIRP.y * olcek}px`,
+    };
+  } else if (a?.kind === 'sheet') {
+    // ⚠️ ŞERİTTE KIRPMA YOK: Bone Archer karesini %43,8 dolduruyor ve içerik
+    // kutusu (2,2)-(29,29), yani zaten sıkı. Aynı kırpmayı uygulamak onu
+    // kesip başını uçururdu.
+    kare = {
+      backgroundSize: `${(a.frames ?? 1) * 100}% 100%`,
+      backgroundPosition: '0% 0%',
+    };
+  }
+  const arka = a?.src ?? '';
+
+  return (
+    <span style={{
+      width: size, height: size, flexShrink: 0, borderRadius: 7,
+      display: 'block', position: 'relative', overflow: 'hidden',
+      backgroundImage: `url("${arka}")`,
+      backgroundRepeat: 'no-repeat',
+      imageRendering: 'pixelated',
+      ...kare,
+      // ⚠️ BAĞLANMAMIŞ PET SİLUET. Koleksiyon oyunlarının kuralı: sahip
+      // olmadığını GÖSTER ama VERME. Gizleseydik oyuncu neyi kaçırdığını
+      // bilmez, tam renkli gösterseydik bağlamanın anlamı kalmazdı.
+      filter: bagli ? 'none' : 'grayscale(1) brightness(0.32) contrast(1.4)',
+    }} />
+  );
+}
 
 /** Rolün oyuncuya ne yaptığı — tek cümle, oyun terimiyle */
 const ROL_METNI: Record<string, { ad: string; ne: string; renk: string; ikon: IconName }> = {
@@ -161,8 +231,36 @@ export function PetPanel({ progress, onChange, onError }: {
 
         return (
           <Card key={def.id} accent={mythic}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <div style={{ minWidth: 190 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+              {/* ── PORTRE ── kartın ilk okunan şeyi bu olmalı, metin değil */}
+              <div style={{
+                position: 'relative', flexShrink: 0,
+                padding: 4, borderRadius: 9,
+                // ⚠️ ÇERÇEVE NADİRLİK RENGİNDE ve MYTHIC'te altın. Rozet zaten
+                // yazıyor ama 12 kartlık bir listede oyuncu ÖNCE renge bakar,
+                // sonra okur — çerçeve o taramayı ücretsiz yapıyor.
+                border: `1px solid ${mythic ? C.candle : rar.color}${bagli ? '66' : '22'}`,
+                background: bagli
+                  ? `radial-gradient(circle at 50% 35%, ${mythic ? C.candle : rar.color}22, rgba(10,8,12,0.55) 70%)`
+                  : 'rgba(10,8,12,0.5)',
+              }}>
+                <PetPortrait artKey={def.art} size={60} bagli={bagli} />
+                {/* Seviye rozeti portrenin üstünde — "kaçıncı seviyede" sorusu
+                    kartın en sık sorulanı ve en uzağındaydı. */}
+                {bagli && (
+                  <span style={{
+                    position: 'absolute', right: -3, bottom: -3,
+                    fontSize: 9, fontWeight: 900, lineHeight: 1,
+                    padding: '3px 5px', borderRadius: 5,
+                    color: '#0d0b12', background: mythic ? C.candle : rar.color,
+                    border: '1px solid rgba(0,0,0,0.45)',
+                  }}>
+                    {lv}
+                  </span>
+                )}
+              </div>
+
+              <div style={{ minWidth: 170, flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 900, color: C.bone }}>{def.name}</span>
                   {/* ⚠️ NADİRLİK ROZETİ `Tag` DEĞİL — `Tag`in beş sabit tonu var ve
