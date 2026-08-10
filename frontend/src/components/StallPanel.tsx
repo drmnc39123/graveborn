@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { CHARMS, CHARM_SLOTS, charmById, type CharmDef } from '@/game/charms';
 import type { Progress } from '@/game/progress';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
-import { Icon, IconText } from '@/components/ui/kit';
+import { BTN, Icon, IconText, PixelButton } from '@/components/ui/kit';
 import { statIcon } from '@/lib/icons';
 import { buyCharm } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
@@ -118,16 +118,12 @@ export function StallPanel({ progress, onChange }: {
                     </div>
                   )}
                 </div>
-                <button onClick={() => buy(c)} disabled={!can}
-                  style={{
-                    flexShrink: 0, minWidth: 92, padding: '9px 12px', borderRadius: 9, border: 'none',
-                    cursor: can ? 'pointer' : 'default', fontWeight: 900, fontSize: 12.5,
-                    color: can ? '#1a0508' : C.boneFaint,
-                    background: can ? `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})` : 'rgba(255,255,255,0.06)',
-                    boxShadow: can ? `0 3px 12px ${C.candle}44` : 'none',
-                  }}>
+                <PixelButton
+                  variant={BTN.buy} scale={2}
+                  onClick={() => buy(c)} disabled={!can}
+                  style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 900, minWidth: 0, padding: '0 10px' }}>
                   {c.cost.toLocaleString('en-US')} G
-                </button>
+                </PixelButton>
               </div>
             </Card>
           );

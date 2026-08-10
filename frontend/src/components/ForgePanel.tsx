@@ -7,7 +7,7 @@
 import { useMemo } from 'react';
 import { FORGE, costOf, effectText, spentOn, spentOnOne, type ForgeUpgrade } from '@/game/forge';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
-import { Icon, IconText } from '@/components/ui/kit';
+import { BTN, Icon, IconText, PixelButton } from '@/components/ui/kit';
 import { statIcon } from '@/lib/icons';
 import type { Progress } from '@/game/progress';
 import { buyUpgrade } from '@/lib/gameSession';
@@ -87,18 +87,15 @@ export function ForgePanel({
                     <div style={{ fontSize: 11.5, color: C.boneDim, marginTop: 3 }}>{u.desc} per level</div>
                   </div>
 
-                  <button onClick={() => buy(u)} disabled={!can}
-                    style={{
-                      flexShrink: 0, minWidth: 96, padding: '9px 12px', borderRadius: 9, border: 'none',
-                      cursor: can ? 'pointer' : 'default', fontWeight: 900, fontSize: 12.5,
-                      color: maxed ? C.boneFaint : can ? '#1a0508' : C.boneFaint,
-                      background: maxed ? 'rgba(255,255,255,0.06)'
-                        : can ? `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`
-                        : 'rgba(255,255,255,0.06)',
-                      boxShadow: can ? `0 3px 12px ${C.candle}44` : 'none',
-                    }}>
-                    {maxed ? '✓ MAX' : `${cost.toLocaleString('en-US')} G`}
-                  </button>
+                  {/* ⚠️ Franuka dokusu — düz gradyan bir dikdörtgen "düğme gibi"
+                      durmuyordu. Altın varyantı (BTN.buy) gold harcayan her yerde aynı:
+                      oyuncu okumadan önce ne olduğunu bilsin. */}
+                  <PixelButton
+                    variant={BTN.buy} scale={2}
+                    onClick={() => buy(u)} disabled={!can}
+                    style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 900, minWidth: 0, padding: '0 10px' }}>
+                    {maxed ? 'MAX' : `${cost.toLocaleString('en-US')} G`}
+                  </PixelButton>
                 </div>
 
                 {/* Şu an → sonra. Alımın ne kazandırdığı açıkça görünsün. */}

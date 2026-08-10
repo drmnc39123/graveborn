@@ -9,6 +9,7 @@
 // parseFloat/Number kullanılmıyor.
 
 import { useCallback, useEffect, useState } from 'react';
+import { BTN, PixelButton } from '@/components/ui/kit';
 import {
   cancelGoldListing, fetchListings, fetchMyListings, listGold,
   marketAvailable, type Listing,
@@ -226,16 +227,13 @@ export function MarketPanel({
             </label>
           </div>
 
-          <button onClick={submit} disabled={busy}
-            style={{
-              width: '100%', marginTop: 9, padding: '9px 12px', borderRadius: 9, border: 'none',
-              cursor: busy ? 'default' : 'pointer', fontWeight: 900, fontSize: 13,
-              color: busy ? C.boneFaint : '#1a0508',
-              background: busy ? 'rgba(255,255,255,0.06)'
-                : `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`,
-            }}>
-            {busy ? 'WORKING…' : 'LIST FOR SALE'}
-          </button>
+          {/* ⚠️ BTN.strong — ilan açmak gold'u ESCROW'a kilitliyor, yani
+              geri dönüşü olan ama ağır bir eylem. Altın doku "satın alıyorsun"
+              der ve yanıltırdı. */}
+          <PixelButton variant={BTN.strong} scale={2} onClick={submit} disabled={busy}
+            style={{ fontSize: 12, fontWeight: 900, minWidth: 0, padding: '0 14px' }}>
+            LIST IT
+          </PixelButton>
 
           <div style={{ fontSize: 10.5, color: C.boneFaint, marginTop: 7, lineHeight: 1.45 }}>
             Listed gold leaves your balance immediately and waits in escrow. Cancel any time to get

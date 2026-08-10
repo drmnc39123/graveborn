@@ -22,7 +22,7 @@ import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSes
 import { play } from '@/game/sfx';
 import { CryptSection } from '@/components/CryptSection';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
-import { pixel } from '@/components/ui/kit';
+import { pixel, BTN, PixelButton } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 import { OssuarySection } from '@/components/OssuarySection';
 import { WagerSection } from '@/components/WagerSection';
@@ -257,25 +257,14 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
               </div>
             </div>
 
-            <button
-              onClick={pull}
-              disabled={!canPull}
-              style={{
-                all: 'unset', boxSizing: 'border-box', cursor: canPull ? 'pointer' : 'default',
-                padding: '11px 16px', borderRadius: 8, textAlign: 'center', minWidth: 132,
-                opacity: canPull ? 1 : 0.45,
-                background: canPull
-                  ? 'linear-gradient(180deg, rgba(160,18,38,0.5), rgba(120,12,28,0.34))'
-                  : 'rgba(255,255,255,0.05)',
-                border: `1px solid ${canPull ? 'rgba(228,101,122,0.6)' : 'rgba(255,255,255,0.12)'}`,
-              }}>
-              <div style={{ fontSize: 12, fontWeight: 900, letterSpacing: 1, color: canPull ? '#ffd9df' : C.boneFaint }}>
-                {busy ? 'OPENING…' : 'OPEN'}
-              </div>
-              <div style={{ fontSize: 10.5, color: C.candle, marginTop: 2 }}>
-                {PULL_COST.toLocaleString('en-US')} gold
-              </div>
-            </button>
+            {/* ⚠️ Panelin ASIL eylemi — altın doku (BTN.buy) burada en çok
+                hak edilmiş yer: gacha çekilişi gold harcıyor ve panelin merkezi. */}
+            <PixelButton
+              variant={BTN.buy} scale={3}
+              onClick={pull} disabled={!canPull}
+              style={{ fontSize: 13, fontWeight: 900, letterSpacing: 1, minWidth: 0, padding: '0 16px' }}>
+              OPEN · {PULL_COST.toLocaleString('en-US')} G
+            </PixelButton>
           </div>
 
           {/* Sonuç — açılma bitince belirir */}

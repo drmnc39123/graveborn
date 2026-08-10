@@ -11,6 +11,7 @@
 // sözü verip vermemek en kolay güven kaybı olurdu.
 
 import { useCallback, useEffect, useState } from 'react';
+import { BTN, PixelButton } from '@/components/ui/kit';
 import { BOSS_RUN_SEC, bossProgress } from '@/game/worldBoss';
 import { fetchWorldBoss, worldBossAvailable, type BossState } from '@/lib/gameSession';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
@@ -118,22 +119,10 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
           {(() => {
             const kapali = state.defeated || !canEnter;
             return (
-              <button onClick={enter} disabled={kapali}
-                style={{
-                  all: 'unset', boxSizing: 'border-box', display: 'block', width: '100%',
-                  marginTop: 13, padding: '12px 14px', borderRadius: 8, textAlign: 'center',
-                  cursor: kapali ? 'default' : 'pointer', opacity: kapali ? 0.45 : 1,
-                  background: kapali
-                    ? 'rgba(255,255,255,0.05)'
-                    : 'linear-gradient(180deg, rgba(160,18,38,0.55), rgba(120,12,28,0.36))',
-                  border: `1px solid ${kapali ? 'rgba(255,255,255,0.12)' : 'rgba(228,101,122,0.65)'}`,
-                  fontSize: 12.5, fontWeight: 900, letterSpacing: 1,
-                  color: kapali ? C.boneFaint : '#ffd9df',
-                }}>
-                {state.defeated ? 'IT IS ALREADY DOWN'
-                  : !canEnter ? 'CONNECT A WALLET TO GO IN'
-                  : `GO IN · ${Math.round(BOSS_RUN_SEC / 60)} MINUTES`}
-              </button>
+              <PixelButton variant={BTN.strong} scale={3} onClick={enter} disabled={kapali}
+                style={{ fontSize: 13, fontWeight: 900, letterSpacing: 1, minWidth: 0, padding: '0 18px' }}>
+                ENTER THE ROOM
+              </PixelButton>
             );
           })()}
           {/* ⚠️ Demo oyuncusu NEDEN giremediğini bilmeli — sadece soluk bir
