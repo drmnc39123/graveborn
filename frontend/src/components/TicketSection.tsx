@@ -13,6 +13,8 @@ import { TICKET } from '@/game/tickets';
 import { fetchTickets, openTicket, replyTicket, type TicketView } from '@/lib/gameSession';
 import { getMode } from '@/lib/session';
 import { CardSection } from '@/components/ui/cards';
+import { PixelButton, BTN } from '@/components/ui/kit';
+import { panelUnlocked, isTestMode, TEST_TICKETS } from '@/lib/testMode';
 import { C, FONT, glass } from '@/lib/theme';
 
 const girdi = {
@@ -32,9 +34,15 @@ export function TicketSection({ onError }: { onError: (m: string) => void }) {
   const yukle = useCallback(() => {
     fetchTickets().then(setList).catch(() => setList([]));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  // ⚠️ TEST MODUNDA SAHTE LİSTE. Bir önceki denemede paneli açıp veriyi
+  // vermemiştim: `list` null kaldı ve panel sonsuza kadar "Reading your
+  // tickets…" yazdı. Kilidi açmak yetmiyor, verisini de vermek gerekiyor.
+  useEffect(() => {
+    if (isTestMode()) { setList(TEST_TICKETS as unknown as TicketView[]); return; }
+    if (getMode() === 'wallet') yukle();
+  }, [yukle]);
 
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <CardSection label="Support" tone={C.ice}>
         <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.55 }}>
@@ -127,22 +135,16 @@ export function TicketSection({ onError }: { onError: (m: string) => void }) {
                               maxLength={TICKET.bodyMax} placeholder="Add something…"
                               onKeyDown={(e) => e.stopPropagation()}
                               style={girdi} />
-                            <button
+                            {/* ⚠️ scale 2 = 32px yükseklik, girdiyle aynı hizada durur. */}
+                            <PixelButton variant={BTN.action} scale={2}
                               disabled={busy || cevap.trim().length < 2}
                               onClick={() => sar(async () => {
                                 await replyTicket(t.id, cevap);
                                 setCevap('');
                               })}
-                              style={{
-                                all: 'unset', cursor: 'pointer', padding: '7px 12px',
-                                borderRadius: 6, fontSize: 11, fontWeight: 900,
-                                color: cevap.trim().length < 2 ? C.boneFaint : '#1a0508',
-                                background: cevap.trim().length < 2
-                                  ? 'rgba(227,216,192,0.07)'
-                                  : `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`,
-                              }}>
+                              style={{ flexShrink: 0, fontSize: 11, letterSpacing: 0.6 }}>
                               SEND
-                            </button>
+                            </PixelButton>
                           </div>
                         )}
                       </div>
@@ -169,23 +171,15 @@ export function TicketSection({ onError }: { onError: (m: string) => void }) {
                 placeholder="What happened? The more exact, the faster we can check it."
                 onKeyDown={(e) => e.stopPropagation()}
                 style={{ ...girdi, resize: 'vertical', lineHeight: 1.5 }} />
-              <button
+              <PixelButton variant={BTN.strong} scale={3}
                 disabled={busy || konu.trim().length < 3 || govde.trim().length < 10}
                 onClick={() => sar(async () => {
                   await openTicket(konu, govde);
                   setKonu(''); setGovde('');
                 })}
-                style={{
-                  all: 'unset', cursor: 'pointer', textAlign: 'center',
-                  padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 900,
-                  letterSpacing: 1,
-                  color: konu.trim().length < 3 || govde.trim().length < 10 ? C.boneFaint : '#1a0508',
-                  background: konu.trim().length < 3 || govde.trim().length < 10
-                    ? 'rgba(227,216,192,0.07)'
-                    : `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`,
-                }}>
+                style={{ width: '100%', fontSize: 12, letterSpacing: 1 }}>
                 SEND A TICKET
-              </button>
+              </PixelButton>
               {/* ⚠️ Cüzdanın zaten bize geldiği YAZILI olmalı: oyuncu
                   "kim olduğumu nereden bileceksiniz" diye sormasın. */}
               <div style={{ fontSize: 10.5, color: C.boneFaint, lineHeight: 1.5 }}>

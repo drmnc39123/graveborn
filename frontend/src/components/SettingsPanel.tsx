@@ -17,6 +17,7 @@ import { loadSettings, saveSettings, type Settings } from '@/game/settings';
 import { setVolume } from '@/game/sfx';
 import { resetHints } from '@/game/tutorial';
 import { Card, CardSection, PanelHead } from '@/components/ui/cards';
+import { PixelButton, BTN } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 
 /** Ayarları yükle ve motora/ses zincirine uygula — açılışta bir kez çağrılır */
@@ -150,15 +151,10 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
               Each one shows once. Bring them back if you missed something.
             </span>
           </span>
-          <button onClick={() => { resetHints(); setFlash('Hints will show again next run.'); }}
-            style={{
-              all: 'unset', cursor: 'pointer', flexShrink: 0,
-              padding: '7px 11px', borderRadius: 6, fontSize: 10.5, fontWeight: 900,
-              letterSpacing: 0.8, color: C.ice,
-              background: 'rgba(138,151,163,0.14)', border: '1px solid rgba(138,151,163,0.4)',
-            }}>
+          <PixelButton variant={BTN.action} scale={2} style={{ flexShrink: 0, fontSize: 10.5, letterSpacing: 0.8 }}
+            onClick={() => { resetHints(); setFlash('Hints will show again next run.'); }}>
             SHOW AGAIN
-          </button>
+          </PixelButton>
         </div>
         {flash && (
           <div style={{ padding: '7px 12px', borderTop: '1px solid rgba(255,255,255,0.08)',

@@ -16,7 +16,19 @@
 
 import { useEffect, useState } from 'react';
 import { fetchEvent, type EventState } from '@/lib/gameSession';
+import { Icon } from '@/components/ui/kit';
+import type { IconName } from '@/lib/icons';
 import { C, FONT } from '@/lib/theme';
+
+// ⚠️ İKON `effect`TEN TÜRETİLİYOR, `EventDef`e alan EKLENMEDİ. Sebebi:
+// etkinliğin ne yaptığını zaten `effect` söylüyor; ayrı bir `icon` alanı
+// olsaydı ikisi zamanla ayrışır ve şerit gold ikonuyla boss bonusu
+// duyurabilirdi. Türetilmiş olan yalan söyleyemez.
+const ETKI_IKON: Record<string, IconName> = {
+  dropGold: 'gold',
+  bossDamage: 'skull',
+  questDust: 'gem',
+};
 
 /** "2g 4s" / "6s 12d" / "9d" — kaba ama okunur */
 function kalan(ms: number): string {
@@ -84,6 +96,9 @@ export function EventBanner({ onOpen }: { onOpen?: () => void }) {
     >
       {/* ⚠️ Canlı/yaklaşan ayrımı RENKTEN ÖNCE METİNLE veriliyor: rengi tek
           başına okumak, renk körü bir oyuncu için hiçbir şey söylemez. */}
+      <Icon name={ETKI_IKON[st.event.effect] ?? 'star'} scale={1}
+        dim={!canli} style={{ flexShrink: 0 }} />
+
       <span style={{
         flexShrink: 0, fontSize: 9, fontWeight: 900, letterSpacing: 1.4,
         padding: '3px 7px', borderRadius: 5,

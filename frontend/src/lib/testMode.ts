@@ -194,3 +194,28 @@ export const TEST_CRYPT = {
   vault: { balance: 84_500, owners: 37, totalWeight: 96 },
   me: { tier: 2, claimedWeek: 31 },
 };
+
+/**
+ * ⚠️ `TicketView[]` — destek bölümü. Boş dizi de geçerli bir durum ama
+ * o zaman SADECE form görünür; asıl düzeltilecek yer (cevaplanmış talep
+ * rozeti, mesaj balonları) görünmezdi. Bu yüzden bir tanesi cevaplanmış.
+ */
+export const TEST_TICKETS = [
+  {
+    id: 't1',
+    subject: 'My run ended at depth 31 but the gold never arrived',
+    status: 'answered' as const,
+    messages: [
+      { fromAdmin: false, body: 'The run screen showed 4,180 gold but my balance did not move.', at: '2026-08-09T18:02:00Z' },
+      { fromAdmin: true, body: 'We found it — the run settled twice and the second one was rejected. The gold is on your account now, sorry for the scare.', at: '2026-08-09T20:15:00Z' },
+    ],
+  },
+  {
+    id: 't2',
+    subject: 'Guild invite does nothing',
+    status: 'open' as const,
+    messages: [
+      { fromAdmin: false, body: 'I press accept and the panel just closes.', at: '2026-08-10T07:40:00Z' },
+    ],
+  },
+];

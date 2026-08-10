@@ -16,6 +16,7 @@
 // SONRADAN öğrenip şaşırdığı şeyler. Sürpriz, kural değildir.
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DUEL, duelTier } from '@/game/duel';
 import { stageById } from '@/game/config';
 import { HEROES, heroById, type HeroDef } from '@/game/heroes';
@@ -23,6 +24,7 @@ import { Portrait } from '@/components/HeroPicker';
 import { weaponById } from '@/game/config';
 import { PATTERN_TEXT } from '@/components/ui/cards';
 import type { DuelRow } from '@/lib/gameSession';
+import { PixelButton, BTN } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
 
 const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
@@ -45,10 +47,23 @@ export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, o
   const hero = heroById(myHero);
   const tozKaldi = Math.max(0, DUEL.dailyRewarded - rewardedToday);
 
-  return (
+  // ⚠️ PORTAL — GÖVDEYE TAŞINIYOR, panelin içinde DEĞİL.
+  //
+  // Brifing `DuelPanel`in DOM'unda duruyordu ve `position:absolute` ile
+  // panelin kaydırma kutusuna hapsolmuştu: ekranda YAN YANA İKİ KAYDIRMA
+  // ÇUBUĞU çıkıyordu ve maçın en önemli kararı bir panelin içine sıkışmış
+  // küçük bir kutuydu.
+  //
+  // ⚠️ `position: fixed` TEK BAŞINA YETMEZDİ: `glass()` `backdrop-filter`
+  // kullanıyor ve backdrop-filter'lı bir ata, `fixed` çocukları için
+  // kapsayıcı blok üretir — yani kaplama yine panele göre konumlanırdı.
+  // Portal, DOM ağacından çıkardığı için bu tuzağın tamamen dışında.
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div onClick={onCancel}
       style={{
-        position: 'absolute', inset: 0, zIndex: 9,
+        position: 'fixed', inset: 0, zIndex: 60,
         background: 'rgba(8,6,5,0.90)',
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         padding: '24px 16px', overflowY: 'auto', fontFamily: FONT.ui,
@@ -113,7 +128,6 @@ export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, o
           </div>
         </div>
 
-        {/* ── KAHRAMAN SEÇİMİ ── */}
         {/* ── KAHRAMAN SEÇİMİ ──
             ⚠️ DÖRDÜ DE YAN YANA VE PORTRELİ. İlk sürüm düz metin kartıydı ve
             oyuncu kimi seçtiğini GÖREMİYORDU. Bir dövüş oyununda karakter
@@ -173,30 +187,26 @@ export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, o
         </Section>
 
         <div style={{ display: 'flex', gap: 7, marginTop: 16 }}>
-          <button onClick={() => { if (!busy) { setBusy(true); onEnter(); } }}
-            disabled={busy}
-            style={{
-              all: 'unset', flex: '2 1 180px', boxSizing: 'border-box', cursor: busy ? 'default' : 'pointer',
-              padding: '12px 14px', borderRadius: 8, textAlign: 'center',
-              fontSize: 13, fontWeight: 900, letterSpacing: 1.4, color: '#ffd9df',
-              background: 'linear-gradient(180deg, rgba(160,18,38,0.55), rgba(120,12,28,0.38))',
-              border: '1px solid rgba(228,101,122,0.6)',
-              opacity: busy ? 0.6 : 1,
-            }}>
+          {/* ⚠️ ORAN 2:1 KORUNDU. Düellonun kabulü ile vazgeçişi eşit
+              genişlikte olsaydı ekran hangisini beklediğini söylemezdi. */}
+          <PixelButton variant={BTN.strong} scale={3} disabled={busy}
+            onClick={() => { if (!busy) { setBusy(true); onEnter(); } }}
+            style={{ flex: '2 1 180px', fontSize: 13, letterSpacing: 1.4 }}>
             {busy ? 'DESCENDING…' : 'ANSWER THEM'}
-          </button>
-          <button onClick={onCancel}
-            style={{
-              all: 'unset', flex: '1 1 90px', boxSizing: 'border-box', cursor: 'pointer',
-              padding: '12px 14px', borderRadius: 8, textAlign: 'center',
-              fontSize: 12, fontWeight: 900, letterSpacing: 1, color: C.boneDim,
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-            }}>
+          </PixelButton>
+          {/* ⚠️ SABİT 170px, esneme YOK. PixelButton 48×16'lık dokuyu yatayda
+              dilimliyor: scale 3'te SADECE kenarlık 2×48 = 96px yer yiyor.
+              `flex: 1 1 90px` yazılmıştı ve metin "NOT Y…" diye kırpıldı —
+              Tavern sekmelerinde ölçülen hatanın aynısı. Taban, kenarlık +
+              metin genişliğinden büyük olmak ZORUNDA. */}
+          <PixelButton variant={BTN.action} scale={3} onClick={onCancel}
+            style={{ flex: '0 0 170px', fontSize: 12, letterSpacing: 1 }}>
             NOT YET
-          </button>
+          </PixelButton>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

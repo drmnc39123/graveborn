@@ -12,6 +12,8 @@
 // desteklemiyor). ⚠️ MOR YOK.
 
 import type { CSSProperties, ReactNode } from 'react';
+import type { IconName } from '@/lib/icons';
+import { Icon } from '@/components/ui/kit';
 import { C, FONT } from '@/lib/theme';
 
 /** Kartın gövdesi — koyu zemin, ince kenar, hover'da canlanır */
@@ -111,13 +113,22 @@ export function Pips({ value, max = 5, title }: { value: number; max?: number; t
  * karşılaştırma değil. Karakterler ancak yan yana ölçülebildiklerinde seçim
  * sunar; çubuk bunu bir bakışta veriyor.
  */
-export function DeltaBar({ label, pct }: { label: string; pct: number }) {
+export function DeltaBar({ label, pct, icon }: {
+  label: string; pct: number;
+  /** ⚠️ İSTEĞE BAĞLI. İkonsuz çağrı hâlâ geçerli — çubuk hizası ikonun
+   *  varlığına bağlı DEĞİL, yoksa aynı listede bazı satırlar kayardı. */
+  icon?: IconName;
+}) {
   const clamped = Math.max(-1, Math.min(1, pct / 0.35)); // ±%35 = tam çubuk
   const iyi = pct >= 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <span style={{ flex: '0 0 108px', fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, color: C.boneFaint }}>
-        {label.toUpperCase()}
+      <span style={{ flex: '0 0 108px', display: 'flex', alignItems: 'center', gap: 5,
+        fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, color: C.boneFaint }}>
+        {icon && <Icon name={icon} scale={1} />}
+        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {label.toUpperCase()}
+        </span>
       </span>
       <span style={{ position: 'relative', flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.07)' }}>
         {/* orta çizgi — sıfır noktası görünür olmalı */}

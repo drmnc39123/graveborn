@@ -19,7 +19,7 @@ import { seedFromString } from '@/game/rng';
 import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import type { RunPet } from '@/game/pets';
-import { C, FONT, glass, ctaButton } from '@/lib/theme';
+import { C, FONT, glass } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton, BTN } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';

@@ -93,18 +93,3 @@ export const candleGradientText = {
   WebkitTextFillColor: 'transparent',
   backgroundClip: 'text',
 } as const;
-
-/** Ana CTA butonu */
-export function ctaButton(enabled = true) {
-  return {
-    padding: '12px 26px',
-    borderRadius: 12,
-    fontWeight: 900,
-    fontSize: 15,
-    letterSpacing: 0.3,
-    border: 'none',
-    cursor: enabled ? 'pointer' : 'default',
-    color: enabled ? '#1a0508' : C.boneFaint,
-    background: enabled ? `linear-gradient(180deg, ${C.bloodSoft}, ${C.blood})` : 'rgba(227,216,192,0.08)',
-  } as const;
-}

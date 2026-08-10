@@ -27,7 +27,7 @@ import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
 import { ChatPanel } from '@/components/ChatPanel';
-import { Panel, PixelButton, type PanelStyle } from '@/components/ui/kit';
+import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
@@ -42,7 +42,7 @@ import { loadProgress, resolveRunPets, paidDepth, type Progress, type RunResult 
 import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
-import { C, FONT, glass, ctaButton } from '@/lib/theme';
+import { C, FONT, glass } from '@/lib/theme';
 import { installAudioUnlock, installUiClickSound, play } from '@/game/sfx';
 import { getMode, getWallet } from '@/lib/session';
 import {
@@ -497,8 +497,10 @@ export default function PlayPage() {
               </div>
             )}
 
-            <button onClick={() => setPayout(null)}
-              style={{ ...ctaButton(true), marginTop: 18, width: '100%' }}>Back to the village</button>
+            <PixelButton variant={BTN.strong} scale={3} onClick={() => setPayout(null)}
+              style={{ marginTop: 18, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
+              Back to the village
+            </PixelButton>
           </div>
         </div>
       )}
@@ -567,8 +569,10 @@ export default function PlayPage() {
               </div>
             )}
 
-            <button onClick={() => setPayout(null)}
-              style={{ ...ctaButton(true), marginTop: 16, width: '100%' }}>Back to the village</button>
+            <PixelButton variant={BTN.strong} scale={3} onClick={() => setPayout(null)}
+              style={{ marginTop: 16, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
+              Back to the village
+            </PixelButton>
           </div>
         </div>
       )}
@@ -673,8 +677,10 @@ export default function PlayPage() {
                 </div>
               </div>
             )}
-            <button onClick={() => setPayout(null)}
-              style={{ ...ctaButton(true), marginTop: 18, width: '100%' }}>Continue</button>
+            <PixelButton variant={BTN.strong} scale={3} onClick={() => setPayout(null)}
+              style={{ marginTop: 18, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
+              Continue
+            </PixelButton>
           </div>
         </div>
       )}

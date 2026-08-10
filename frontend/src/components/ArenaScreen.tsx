@@ -20,7 +20,7 @@ import { Portrait } from '@/components/HeroPicker';
 import {
   joinArena, leaveQueue, pollQueue, type ArenaEnd, type ArenaHandle,
 } from '@/lib/arenaClient';
-import { C, FONT, glass, ctaButton } from '@/lib/theme';
+import { C, FONT, glass } from '@/lib/theme';
 
 const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
 
@@ -311,10 +311,15 @@ function Result({ setup, end, onAgain, onExit }: {
           </div>
         )}
 
-        <button onClick={onAgain} style={{ ...ctaButton(true), width: '100%' }}>AGAIN</button>
-        <button onClick={onExit} style={{ ...ctaButton(false), width: '100%', marginTop: 8 }}>
+        {/* ⚠️ AGAIN güçlü, çıkış sıradan: maç sonunda asıl istenen tekrar
+            oynamak. İkisi de aynı ağırlıkta olsaydı ekran hangisini
+            önerdiğini söylemezdi. */}
+        <PixelButton variant={BTN.strong} scale={3} onClick={onAgain}
+          style={{ width: '100%', fontSize: 13, letterSpacing: 1 }}>AGAIN</PixelButton>
+        <PixelButton variant={BTN.action} scale={2} onClick={onExit}
+          style={{ width: '100%', marginTop: 8, fontSize: 11, letterSpacing: 0.8 }}>
           BACK TO THE VILLAGE
-        </button>
+        </PixelButton>
       </div>
     </div>
   );

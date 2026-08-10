@@ -20,7 +20,8 @@
 import { useState } from 'react';
 import { STAGES } from '@/game/config';
 import type { Progress } from '@/game/progress';
-import { C, FONT, glass, ctaButton } from '@/lib/theme';
+import { PixelButton, BTN } from '@/components/ui/kit';
+import { C, FONT, glass } from '@/lib/theme';
 
 /**
  * Oyuncu HİÇ koşu bitirdi mi.
@@ -67,12 +68,15 @@ export function FirstRun({ onBegin, onDismiss }: {
           up what falls.
         </div>
 
-        <button
+        {/* ⚠️ Oyunun İLK düğmesi — dokusu en güçlü olan bu olmalı. İkinci
+            satır düz metin kalıyor: iki dokulu düğme yan yana konsaydı
+            "hangisi asıl" sorusu geri gelirdi. */}
+        <PixelButton variant={BTN.strong} scale={4}
           onClick={() => { if (!busy) { setBusy(true); onBegin(); } }}
           disabled={busy}
-          style={{ ...ctaButton(true), width: '100%', opacity: busy ? 0.6 : 1 }}>
+          style={{ width: '100%', fontSize: 15, letterSpacing: 1.2 }}>
           {busy ? 'DESCENDING…' : 'GO'}
-        </button>
+        </PixelButton>
         <button onClick={onDismiss}
           style={{
             all: 'unset', cursor: 'pointer', display: 'block', width: '100%',

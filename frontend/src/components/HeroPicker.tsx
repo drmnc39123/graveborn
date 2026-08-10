@@ -7,6 +7,7 @@
 import { HEROES, heroById, type HeroDef } from '@/game/heroes';
 import { weaponById } from '@/game/config';
 import { Card, CardSection, DeltaBar, PATTERN_TEXT, Tag } from '@/components/ui/cards';
+import { STAT_ICON } from '@/lib/icons';
 import { C } from '@/lib/theme';
 
 /**
@@ -140,7 +141,7 @@ function HeroCard({ hero }: { hero: HeroDef }) {
               // ⚠️ `cooldown` TERS ÇALIŞIR: negatif değer daha HIZLI saldırı
               // demek. Ham sayıyı göstermek oyuncuya "eksi = kötü" dedirtirdi.
               const gosterilen = b.key === 'cooldown' ? -v : v;
-              return <DeltaBar key={b.key} label={b.label} pct={gosterilen} />;
+              return <DeltaBar key={b.key} label={b.label} pct={gosterilen} icon={STAT_ICON[b.key]} />;
             })}
           </div>
         </CardSection>
