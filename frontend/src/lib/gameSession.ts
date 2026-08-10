@@ -9,6 +9,7 @@
 // sadece taşır. Demo modunda ise ilerleme localStorage'da ve ekonomiye
 // hiç karışmaz (bkz. session.ts).
 
+import { isTestMode, TEST_QUESTS, TEST_GEAR, TEST_GUILDS, TEST_FOLLOWS } from './testMode';
 import {
   allowedStartDepth, applyRunResult, loadProgress, paidDepth, saveProgress,
   buyWithDust as localDustBuy,
@@ -684,6 +685,8 @@ export interface GuildState {
 }
 
 export async function fetchGuilds(): Promise<GuildState> {
+  // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
+  if (isTestMode()) return TEST_GUILDS as never;
   const out = await api<Omit<GuildState, 'wallet'>>('/guild');
   return { ...out, wallet: getWallet() };
 }
@@ -719,6 +722,8 @@ export interface GearView {
 }
 
 export async function fetchGear(): Promise<GearView> {
+  // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
+  if (isTestMode()) return TEST_GEAR as never;
   return api<GearView>('/gear');
 }
 
@@ -827,6 +832,8 @@ export interface FollowRow {
 export interface FollowState { rows: FollowRow[]; max: number }
 
 export async function fetchFollows(): Promise<FollowState> {
+  // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
+  if (isTestMode()) return TEST_FOLLOWS as never;
   return api<FollowState>('/follow');
 }
 
@@ -851,6 +858,8 @@ export interface QuestState {
 }
 
 export async function fetchQuests(): Promise<QuestState> {
+  // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
+  if (isTestMode()) return TEST_QUESTS as never;
   return api<QuestState>('/quests');
 }
 

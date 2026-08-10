@@ -9,6 +9,7 @@
 // çevrimiçi olduğu an; onu aşağıda aratmak listeyi ölü içeriğe çevirir.
 
 import { useCallback, useEffect, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
 import { heroById } from '@/game/heroes';
 import { duelTier } from '@/game/duel';
 import { Portrait } from '@/components/HeroPicker';
@@ -33,17 +34,17 @@ export function FollowPanel({ onChallenge, onError }: {
   const yukle = useCallback(() => {
     fetchFollows().then(setSt).catch(() => setErr(true));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => { if (panelUnlocked(getMode())) yukle(); }, [yukle]);
 
   // ⚠️ Çevrimiçi durumu CANLI olmalı — 20 saniyede bir tazeleniyor.
   // Tek seferlik okuma, listeyi açtıktan bir dakika sonra yalan söylerdi.
   useEffect(() => {
-    if (getMode() !== 'wallet') return;
+    if (!panelUnlocked(getMode())) return;
     const id = setInterval(yukle, 20_000);
     return () => clearInterval(id);
   }, [yukle]);
 
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <PanelHead kicker="THE WATCH" title="Keep an eye on people" accent={C.ice}
         sub="Watching lives in the village ledger, not on your device. Connect a wallet to keep a list." />

@@ -6,6 +6,7 @@
 // en kritik anda (katılma kararı) fazladan bir tıklama koymak olurdu.
 
 import { useCallback, useEffect, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
 import { GUILD_COST, NAME_MAX, TAG_MAX, guildGrowth, nextGuildLevel } from '@/game/guild';
 import type { Progress } from '@/game/progress';
 import {
@@ -32,11 +33,11 @@ export function GuildPanel({ progress, onChange, onError }: {
   const yukle = useCallback(() => {
     fetchGuilds().then(setState).catch(() => setErr(true));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => { if (panelUnlocked(getMode())) yukle(); }, [yukle]);
 
   // ⚠️ Demo modunda lonca YOK: sunucu kaydı gerektiriyor. Sahte bir lonca
   // listesi göstermek, olmayan bir topluluğu varmış gibi göstermek olurdu.
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <>
         <PanelHead kicker="THE GUILDS" title="Nobody stands alone" accent={C.ice}

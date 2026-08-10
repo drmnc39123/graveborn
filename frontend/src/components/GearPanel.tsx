@@ -12,6 +12,7 @@
 // söylemenin en sessiz yolu.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
 import {
   GEAR_SLOTS, SLOT_BLURB, SLOT_NAME, affixText, gearScore, rarityOf,
   type GearItem, type GearSlot,
@@ -21,10 +22,22 @@ import { equipGear, fetchGear, reforgeGear, salvageGear, unequipGear, type GearV
 import { promotePreview, rerollCost } from '@/game/reforge';
 import { getMode } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
-import { PixelButton } from '@/components/ui/kit';
+import { PixelButton, Slot } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
 
 type Owned = GearItem & { equipped: boolean };
+
+/**
+ * OYUN YUVASI → FRANUKA YUVA GÖRSELİ.
+ *
+ * ⚠️ Kit'te 11 tipli yuva var (Headgear/Armor/Weapon/Footwear/Necklace…) ve
+ * bugüne kadar HİÇ kullanılmıyorlardı. Manken beş etiketten ibaretti: kutu
+ * yok, ikon yok, boş yuva ile dolu yuva arasında görsel fark yok. Bir ekipman
+ * ekranının en çok bakılan yeri manken; orası metin listesi olamaz.
+ */
+const YUVA_GORSEL: Record<string, 'Headgear' | 'Armor' | 'Weapon' | 'Footwear' | 'Necklace'> = {
+  skull: 'Headgear', shroud: 'Armor', grasp: 'Weapon', tread: 'Footwear', sigil: 'Necklace',
+};
 
 export function GearPanel({ progress, onChange, onError }: {
   progress: Progress;
@@ -40,7 +53,7 @@ export function GearPanel({ progress, onChange, onError }: {
   const yukle = useCallback(() => {
     fetchGear().then(setView).catch(() => setErr(true));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => { if (panelUnlocked(getMode())) yukle(); }, [yukle]);
 
   const takili = useMemo(() => {
     const m = {} as Partial<Record<GearSlot, Owned>>;
@@ -65,7 +78,7 @@ export function GearPanel({ progress, onChange, onError }: {
     [secili],
   );
 
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <PanelHead kicker="THE WILDERNESS" title="Nothing here is bought" accent={C.ice}
         sub="Gear is found, not purchased — and it is rolled on the server, not on your device. Connect a wallet to carry it." />
@@ -132,11 +145,17 @@ export function GearPanel({ progress, onChange, onError }: {
                   : 'linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.28))',
                 boxShadow: acik ? `0 0 0 2px ${C.candle}88` : 'none',
               }}>
-              <span style={{
-                fontSize: 9, fontWeight: 900, letterSpacing: 1.3,
-                color: r ? r.color : C.boneFaint,
-              }}>
-                {SLOT_NAME[slot].toUpperCase()}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {/* ⚠️ Yuva görseli TAKILI OLSA DA OLMASA DA çizilir — boş yuva
+                    "burada bir şey OLMALI" demeli. Sadece doluyken göstermek,
+                    eksiği gizlemek olurdu. */}
+                <Slot type={it ? YUVA_GORSEL[slot] : 'Empty'} variant="02" scale={2} />
+                <span style={{
+                  fontSize: 9, fontWeight: 900, letterSpacing: 1.3,
+                  color: r ? r.color : C.boneFaint,
+                }}>
+                  {SLOT_NAME[slot].toUpperCase()}
+                </span>
               </span>
               {it ? (
                 <>

@@ -10,6 +10,7 @@
 // zorunda kalmamalı.
 
 import { useCallback, useEffect, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
 import { BTN, PixelButton } from '@/components/ui/kit';
 import { QUESTS } from '@/game/quests';
 import type { Progress } from '@/game/progress';
@@ -30,9 +31,9 @@ export function QuestPanel({ onChange, onError }: {
   const yukle = useCallback(() => {
     fetchQuests().then(setSt).catch(() => setErr(true));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => { if (panelUnlocked(getMode())) yukle(); }, [yukle]);
 
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <PanelHead kicker="TODAY" title="Three things, every day" accent={C.candle}
         sub="Daily work is tracked on the server from what you actually did. Connect a wallet to be given any." />
