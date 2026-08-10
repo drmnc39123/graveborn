@@ -137,6 +137,15 @@ export function SkillPanel({ progress, onChange, onError }: {
                       width: 3, alignSelf: 'stretch', borderRadius: 2,
                       background: acik ? b.color : 'rgba(255,255,255,0.12)',
                     }} />
+                    {/* ⚠️ İKON DÜĞÜMÜN KENDİ `stats`INDAN TÜRETİLİYOR, ayrı bir
+                        alan EKLENMEDİ. Ne yaptığını zaten `stats` söylüyor;
+                        elle yazılmış ikinci bir `icon` alanı zamanla ondan
+                        ayrışır ve düğüm hasar ikonuyla zırh satardı.
+                        (EventBanner'da aynı gerekçeyle aynı yol seçildi.)
+                        Panel turunda ikonsuz kalan TEK ada burasıydı — Forge,
+                        Stall, Gear, karakter künyesi hepsi ikonlu. */}
+                    <Icon name={statIcon(Object.keys(n.stats)[0] ?? '')}
+                      dim={kilitli || !acik} style={{ flexShrink: 0 }} />
                     <span style={{ minWidth: 0, flex: 1 }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{

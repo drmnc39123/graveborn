@@ -335,12 +335,23 @@ export function PetPanel({ progress, onChange, onError }: {
                 // ⚠️ NEDEN ALAMIYORUM — eksik olan koşul, sayısıyla. Kafatası
                 // ikonu bezeme DEĞİL: bağlamanın gold dışında ikinci bir koşulu
                 // olduğunu tek bakışta söyleyen şey o.
+                // ⚠️ KOŞUL SAĞLANINCA KESİR GÖSTERİLMİYOR. Eskiden her iki
+                // durumda da "X / Y slain" yazıyordu ve şart aşılınca ekranda
+                // "400 / 150 slain" çıkıyordu — 1'i geçen bir kesir, yeşil
+                // bile olsa HATA gibi okunuyor. Gerçek sayı korunuyor (kaç
+                // öldürdüğün bilgi), ama sonucu kesir değil KELİME söylüyor.
                 <IconText name="skull" dim={kill < gerekenKill}
                   style={{ fontSize: 11, color: kill >= gerekenKill ? C.ok : C.boneFaint }}>
-                  {kill.toLocaleString('en-US')} / {gerekenKill.toLocaleString('en-US')} slain
-                  {kill < gerekenKill && <span style={{ color: C.boneFaint }}>
-                    {' '}· {(gerekenKill - kill).toLocaleString('en-US')} more
-                  </span>}
+                  {kill >= gerekenKill ? (
+                    <>{kill.toLocaleString('en-US')} slain · enough</>
+                  ) : (
+                    <>
+                      {kill.toLocaleString('en-US')} / {gerekenKill.toLocaleString('en-US')} slain
+                      <span style={{ color: C.boneFaint }}>
+                        {' '}· {(gerekenKill - kill).toLocaleString('en-US')} more
+                      </span>
+                    </>
+                  )}
                 </IconText>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -390,7 +401,9 @@ export function PetPanel({ progress, onChange, onError }: {
                       variant={BTN.action} scale={2}
                       disabled={kill < gerekenKill || progress.gold < bindGold || busy !== null}
                       onClick={() => calistir(def.id, 'buy', () => bindPet(def.id))}
-                      title={`${kill.toLocaleString('en-US')} / ${gerekenKill.toLocaleString('en-US')} slain`}
+                      title={kill >= gerekenKill
+                        ? `${kill.toLocaleString('en-US')} slain — enough`
+                        : `${kill.toLocaleString('en-US')} / ${gerekenKill.toLocaleString('en-US')} slain`}
                       style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 8px' }}>
                       +1 COPY
                     </PixelButton>
