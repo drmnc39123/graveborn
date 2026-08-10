@@ -83,6 +83,27 @@ const ICE: [number, number, number] = [138, 151, 163];
  * Bütün mesele buydu: 16 silah tek mermiyle çiziliyordu. Test bunu zorluyor.
  */
 export const WEAPON_ART: Record<string, WeaponArt> = {
+  /**
+   * ── YOLDAŞ (silah değil, ama bir VURUŞ KAYNAĞI) ──
+   *
+   * ⚠️ NİYE BURADA: `damageEnemy` her vuruşa bir `wid` yazıyor ve `fx.ts`
+   * o `wid` ile `weaponArt()`e soruyor. Yani bu tablo aslında "silah
+   * görselleri" değil, VURUŞ KAYNAĞI GÖRSELLERİ. Pet buraya konmayınca
+   * `weaponArt('pet')` yedeğe (shard) düşüyordu: yoldaşın vuruşu sıradan
+   * bir silah vuruşundan AYIRT EDİLEMİYORDU. Ölçüldü, tahmin değil.
+   *
+   * ⚠️ Burada durmasının ikinci faydası: bu dosyanın bütün korumaları
+   * (mor satır yasağı, atlas taşması, (atlas,satır) benzersizliği, manifest
+   * varlığı) pet'e de kendiliğinden uygulanıyor.
+   *
+   * Atlas 1022 hiçbir silah tarafından kullanılmıyor; satır 3 mor değil.
+   */
+  pet: {
+    icon: `${ICO}/thorn_vine_spell.png`,
+    impact: fx('1022', 3, 34),
+    tint: CANDLE,
+  },
+
   // ── TABAN SİLAHLAR ──
   shard: {                         // aimed — en yakına ateş
     icon: `${ICO}/attack_boost.png`,

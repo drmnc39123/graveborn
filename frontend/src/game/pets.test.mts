@@ -329,5 +329,49 @@ console.log('\n[10] MOTOR — pet gerçekten çalışıyor ve deterministik');
   }
 }
 
+
+// ── YOLDAŞ GÖRÜNÜRLÜĞÜ ────────────────────────────────────────────────
+//
+// ⚠️ NİYE VAR: kullanıcı "petler saldırmıyor gibi, vuruş efekti yok" dedi.
+// Ölçüm motorun HAKLI olduğunu gösterdi (striker 60 sn'de 17 vuruş, hasarın
+// %10,8'i) — eksik olan GÖRÜNÜRLÜKTÜ: striker 260 piksele anında vuruyordu
+// ve pet ile kurbanını bağlayan hiçbir çizgi yoktu; üstelik `weaponArt('pet')`
+// yedeğe düşüp vuruşu sıradan bir silah vuruşu gibi çiziyordu.
+//
+// Bu bölüm o görünürlüğü sayıyla koruyor.
+console.log('');
+console.log('[Y] Yoldaş görünürlüğü');
+{
+  const striker = PETS.find((p) => p.role === 'striker')!;
+  // ⚠️ SIRA: seed, stageDef, permanent, mode, heroId, startDepth, ascension,
+  // allowedWeapons, pets — pet DOKUZUNCU. Beşinciye (heroId) verip "pet sıfır
+  // hasar veriyor" diye yanlış ölçüm çıkardım; parametreyi saymak şart.
+  const g = new Game(4242, undefined, undefined, undefined, undefined, 1, 0, null,
+    [toRunPet(striker, 10)]);
+  g.setViewport(1280, 720);
+
+  let vurus = 0, cizgi = 0;
+  for (let i = 0; i < 3600 && g.phase === 'running'; i++) {
+    g.step();
+    for (const h of g.hits) if (h.wid === 'pet') vurus++;
+    cizgi += g.petStrikes.length;
+    g.hits.length = 0; g.petStrikes.length = 0; g.petBlasts.length = 0;
+  }
+  check('striker gerçekten vuruyor', vurus > 0, `60 sn'de ${vurus} vuruş`);
+  check('HER striker vuruşunun bir çizgisi var', cizgi === vurus, `${cizgi} çizgi / ${vurus} vuruş`);
+
+  // ⚠️ TAVAN: headless sunucuda kuyrukları KİMSE boşaltmıyor. Sızarsa koşu
+  // uzadıkça bellek şişer — diğer kozmetik kuyrukların kuralının aynısı.
+  const g2 = new Game(4242, undefined, undefined, undefined, undefined, 1, 0, null,
+    [toRunPet(striker, 10)]);
+  g2.setViewport(1280, 720);
+  for (let i = 0; i < 3600 && g2.phase === 'running'; i++) g2.step();
+  check('boşaltılmayan çizgi kuyruğu tavanı aşmıyor', g2.petStrikes.length <= 24,
+    `${g2.petStrikes.length} / 24`);
+  check('boşaltılmayan koruma kuyruğu tavanı aşmıyor', g2.petWards.length <= 12,
+    `${g2.petWards.length} / 12`);
+}
+
+
 console.log(`\n${FAIL.length === 0 ? '✅ PET SİSTEMİ SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

@@ -669,27 +669,70 @@ function drawEnemyShots(ctx: CanvasRenderingContext2D, g: Game) {
  * bağladığın düşman). Karışmasın diye üç ayrı sinyal var: daha küçük
  * çiziliyor, oyuncuya yapışık duruyor ve ayağında bir bağ halkası var.
  */
+/**
+ * Kozmetik saat — SADECE çizim. Motora hiç girmiyor, `rng`ye dokunmuyor;
+ * yoldaş işaretinin nefes alması için tek ihtiyaç bu.
+ */
+let petT = 0;
+
 function drawPets(ctx: CanvasRenderingContext2D, h: Hero) {
   if (!h.pets.length) return;
   for (let i = 0; i < h.pets.length; i++) {
     const p = h.pets[i];
 
-    // bağ halkası — "bu benim" sinyali, sprite'tan bağımsız okunuyor
-    ctx.globalAlpha = 0.35;
-    ctx.strokeStyle = C.ice;
-    ctx.lineWidth = 1.5;
+    // ── "BU BENİM" İŞARETİ ──
+    //
+    // ⚠️ NİYE BU KADAR GÜÇLÜ: pet, düşmanlarla AYNI topdown sayfalarından
+    // çiziliyor — bu kurucu bir karar ("pet = bağladığın düşman"). Bedeli
+    // şu: sürünün ortasında yoldaş bir düşmandan AYIRT EDİLEMİYOR. Eski
+    // işaret alpha 0,35'lik ince bir buz elipsiydi ve zeminde kayboluyordu;
+    // oyuncunun gördüğü "yanımda yürüyen bir şey"di.
+    //
+    // Üç katman, üçü de sprite'tan BAĞIMSIZ okunuyor:
+    const nefes = 0.5 + 0.5 * Math.sin(petT * 2.6 + i * 1.7);
+
+    // 1) altında sıcak bir kuyu — kırmızı tonlu düşmanlardan ayırır
+    const g = ctx.createRadialGradient(p.x, p.y + 4, 0, p.x, p.y + 4, 18);
+    g.addColorStop(0, `rgba(239,167,46,${0.20 + nefes * 0.10})`);
+    g.addColorStop(1, 'rgba(239,167,46,0)');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.ellipse(p.x, p.y + 3, 11, 4.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(p.x, p.y + 4, 18, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2) bağ halkası — eskisinin aynısı ama görülebilir
+    ctx.globalAlpha = 0.55 + nefes * 0.2;
+    ctx.strokeStyle = C.candle;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y + 3, 12, 5, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
 
     const art = PET_ART[p.def.art];
-    if (art && drawActor(ctx, art, p.anim, p.animT, p.x, p.y, p.facingRight)) continue;
+    const cizildi = art
+      ? drawActor(ctx, art, p.anim, p.animT, p.x, p.y, p.facingRight)
+      : false;
+    if (!cizildi) {
+      // görsel gelmediyse daire — oyun asla boş kare vermez
+      ctx.fillStyle = C.ice;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
-    // görsel gelmediyse daire — oyun asla boş kare vermez
-    ctx.fillStyle = C.ice;
+    // 3) başının üstünde küçük bir elmas — türün en okunur "dost" sinyali.
+    //    ⚠️ SPRITE'IN ÜSTÜNE çiziliyor, altına değil; yoksa yoldaş kalabalığın
+    //    arkasına geçtiğinde işaret de kayboluyor ve tam ihtiyaç anında
+    //    işe yaramıyor.
+    const uy = p.y - 20 - nefes * 2;
+    ctx.fillStyle = C.candle;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
+    ctx.moveTo(p.x, uy - 4);
+    ctx.lineTo(p.x + 3, uy);
+    ctx.lineTo(p.x, uy + 4);
+    ctx.lineTo(p.x - 3, uy);
+    ctx.closePath();
     ctx.fill();
   }
 }
@@ -702,7 +745,18 @@ function drawPets(ctx: CanvasRenderingContext2D, h: Hero) {
 const petFx: { x: number; y: number; r: number; t: number }[] = [];
 const PET_FX_SURE = 0.34;
 
+// Striker vuruş çizgisi ve warden koruma darbesi — aynı kural, ayrı havuz.
+const petStrikeFx: { x0: number; y0: number; x1: number; y1: number; t: number }[] = [];
+const petWardFx: { x: number; y: number; t: number }[] = [];
+// ⚠️ ÖLÇÜLDÜ: silah çarpma efektleri 12 kare / 26 fps = 0,46 sn sürüyor.
+// İlk denemede 0,18 yazmıştım — pet zaten 4 kat daha SEYREK vuruyor
+// (60 sn'de 17'ye karşı 75), üstüne efekti 2,5 kat kısa olunca görünmezlik
+// katlanıyordu. 0,3 hâlâ bir kamçı gibi çakıyor ama fark ediliyor.
+const STRIKE_SURE = 0.3;
+const WARD_SURE = 0.5;      // uzun: iyileşme fark edilmeli
+
 function pumpPetFx(g: Game, dt: number) {
+  petT += dt;
   for (let i = 0; i < g.petBlasts.length; i++) {
     if (petFx.length >= 24) break;
     const b = g.petBlasts[i];
@@ -713,10 +767,32 @@ function pumpPetFx(g: Game, dt: number) {
     petFx[i].t += dt;
     if (petFx[i].t >= PET_FX_SURE) { petFx[i] = petFx[petFx.length - 1]; petFx.pop(); }
   }
+
+  for (let i = 0; i < g.petStrikes.length; i++) {
+    if (petStrikeFx.length >= 24) break;
+    const b = g.petStrikes[i];
+    petStrikeFx.push({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, t: 0 });
+  }
+  g.petStrikes.length = 0;
+  for (let i = petStrikeFx.length - 1; i >= 0; i--) {
+    petStrikeFx[i].t += dt;
+    if (petStrikeFx[i].t >= STRIKE_SURE) { petStrikeFx[i] = petStrikeFx[petStrikeFx.length - 1]; petStrikeFx.pop(); }
+  }
+
+  for (let i = 0; i < g.petWards.length; i++) {
+    if (petWardFx.length >= 12) break;
+    const b = g.petWards[i];
+    petWardFx.push({ x: b.x, y: b.y, t: 0 });
+  }
+  g.petWards.length = 0;
+  for (let i = petWardFx.length - 1; i >= 0; i--) {
+    petWardFx[i].t += dt;
+    if (petWardFx[i].t >= WARD_SURE) { petWardFx[i] = petWardFx[petWardFx.length - 1]; petWardFx.pop(); }
+  }
 }
 
 function drawPetFx(ctx: CanvasRenderingContext2D) {
-  if (!petFx.length) return;
+  if (!petFx.length && !petStrikeFx.length && !petWardFx.length) return;
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineWidth = 2;
@@ -730,6 +806,45 @@ function drawPetFx(ctx: CanvasRenderingContext2D) {
     ctx.arc(f.x, f.y, f.r * (0.35 + k * 0.65), 0, Math.PI * 2);
     ctx.stroke();
   }
+
+  // ── STRIKER VURUŞ ÇİZGİSİ ──
+  // ⚠️ Silah mermilerinden AYRIŞMALI: mermiler sprite, bu bir çizgi.
+  // Yoldaşın vuruşu "bir şey uçtu" değil "bir şey uzandı" gibi okunmalı.
+  for (let i = 0; i < petStrikeFx.length; i++) {
+    const f = petStrikeFx[i];
+    const k = f.t / STRIKE_SURE;
+    // çizgi hedeften geriye doğru siliniyor — yön duygusu veriyor
+    const gx = f.x0 + (f.x1 - f.x0) * k * 0.85;
+    const gy = f.y0 + (f.y1 - f.y0) * k * 0.85;
+    ctx.globalAlpha = (1 - k) * 0.9;
+    ctx.strokeStyle = C.candle;
+    ctx.lineWidth = 2.5 * (1 - k * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(gx, gy);
+    ctx.lineTo(f.x1, f.y1);
+    ctx.stroke();
+    // uçta küçük bir çakma
+    ctx.globalAlpha = (1 - k) * 0.7;
+    ctx.fillStyle = C.bone;
+    ctx.beginPath();
+    ctx.arc(f.x1, f.y1, 3 * (1 - k), 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // ── WARDEN KORUMA DARBESİ ──
+  // Oyuncunun üstünde YUKARI çıkan halka: hasar değil, koruma olduğu
+  // yönden anlaşılsın (patlamalar dışa açılıyor, bu yukarı süzülüyor).
+  for (let i = 0; i < petWardFx.length; i++) {
+    const f = petWardFx[i];
+    const k = f.t / WARD_SURE;
+    ctx.globalAlpha = (1 - k) * 0.5;
+    ctx.strokeStyle = C.ok;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(f.x, f.y - k * 22, 16 + k * 10, Math.PI * 0.15, Math.PI * 0.85, true);
+    ctx.stroke();
+  }
+
   ctx.restore();
   ctx.globalAlpha = 1;
 }

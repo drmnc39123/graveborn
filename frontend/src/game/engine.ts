@@ -427,6 +427,31 @@ export class Game {
   petBlasts: { x: number; y: number; r: number }[] = [];
 
   /**
+   * Pet VURUŞ ÇİZGİSİ — SADECE ÇİZİM İÇİN.
+   *
+   * ⚠️ NİYE VAR: striker 260 piksele kadar ANINDA vuruyordu. Hasar gerçekten
+   * uygulanıyordu (ölçüm: 60 sn'de 17 vuruş, hasarın %10,8'i) ama ekranda
+   * pet ile kurbanı birbirine bağlayan HİÇBİR ŞEY yoktu. Oyuncunun gördüğü
+   * "yanımda yürüyen bir şey" idi — tam olarak şikâyet de buydu.
+   *
+   * ⚠️ MERMİ NESNESİ YAPILMADI. Uçan bir mermi motora durum ve zamanlama
+   * ekler; `SIM_SEAL` mühürlü ve pet zaten `damageEnemy` üzerinden RNG
+   * tüketiyor. Çizgi tamamen kozmetik: hasar zaten uygulandı, bu kuyruk
+   * sadece "nereden nereye" bilgisini taşıyor.
+   */
+  petStrikes: { x0: number; y0: number; x1: number; y1: number }[] = [];
+
+  /**
+   * Warden koruma darbesi — SADECE ÇİZİM İÇİN.
+   *
+   * ⚠️ Warden'ın oyuncuya tek geri bildirimi can barının kıpırdamasıydı ve
+   * o da savaşın ortasında görülmüyor. İyileşme anında oyuncunun üstünde
+   * görünür bir darbe olmazsa warden "hiçbir şey yapmayan pet" olarak
+   * okunuyor.
+   */
+  petWards: { x: number; y: number }[] = [];
+
+  /**
    * Düşman tipi → bu koşuda öldürülen sayı. Pet bağlamanın oynanış koşulu
    * buradan besleniyor (bkz. pets.ts BIND).
    *
@@ -701,6 +726,7 @@ export class Game {
           h.hp = Math.min(h.stats.maxHp, h.hp + h.stats.maxHp * d.share);
           p.cd = d.cd;
           p.anim = 'bless'; p.animT = 0; p.animLeft = 0.8;
+          if (this.petWards.length < 12) this.petWards.push({ x: h.px, y: h.py });
         } else {
           // Canı doluysa bekleme SIFIRLANMAZ — bir sonraki karede tekrar
           // bakılır, yoksa tam dolu oyuncuda iyileşme sonsuza kadar ertelenir
@@ -720,6 +746,11 @@ export class Game {
       if (d.role === 'striker') {
         this.damageEnemy(h, hedef, vurus, 'pet');
         p.anim = 'attack';
+        // ⚠️ Tavan UZUNLUK kontrolüyle — zaman ya da rng örneklemesi
+        // determinizmi bozar (diğer kozmetik kuyrukların kuralı).
+        if (this.petStrikes.length < 24) {
+          this.petStrikes.push({ x0: p.x, y0: p.y, x1: hedef.x, y1: hedef.y });
+        }
       } else {
         // ⚠️ ALAN HASARI HEDEFİN ÜSTÜNDE PATLAR, pet'in üstünde değil —
         // yoksa pet'ten uzaktaki sürü hiç vurulmaz ve rol anlamsızlaşır.
