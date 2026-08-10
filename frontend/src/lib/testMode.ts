@@ -210,6 +210,10 @@ export const TEST_TICKETS = [
     id: 't1',
     subject: 'My run ended at depth 31 but the gold never arrived',
     status: 'answered' as const,
+    // ⚠️ `TicketView` createdAt/bumpedAt taşıyor — sahte veri gerçek şekle
+    // uymazsa panel test modunda başka, cüzdan modunda başka çizer.
+    createdAt: '2026-08-09T18:02:00Z',
+    bumpedAt: '2026-08-09T20:15:00Z',
     messages: [
       { fromAdmin: false, body: 'The run screen showed 4,180 gold but my balance did not move.', at: '2026-08-09T18:02:00Z' },
       { fromAdmin: true, body: 'We found it — the run settled twice and the second one was rejected. The gold is on your account now, sorry for the scare.', at: '2026-08-09T20:15:00Z' },
@@ -219,6 +223,8 @@ export const TEST_TICKETS = [
     id: 't2',
     subject: 'Guild invite does nothing',
     status: 'open' as const,
+    createdAt: '2026-08-10T07:40:00Z',
+    bumpedAt: '2026-08-10T07:40:00Z',
     messages: [
       { fromAdmin: false, body: 'I press accept and the panel just closes.', at: '2026-08-10T07:40:00Z' },
     ],

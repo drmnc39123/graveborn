@@ -23,6 +23,24 @@ const girdi = {
   color: C.bone, fontFamily: FONT.ui, fontSize: 12, outline: 'none',
 };
 
+/**
+ * "3d ago" / "5h ago" / "just now" — kaba ama okunur.
+ *
+ * ⚠️ NİYE VAR: talep satırında konu ve durum vardı, TARİH YOKTU. Cevap
+ * bekleyen oyuncunun ilk sorusu "ne zamandır bekliyorum"; sunucu `createdAt`
+ * gönderiyordu ve arayüz onu hiç okumuyordu.
+ */
+function yas(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (!Number.isFinite(ms) || ms < 0) return '';
+  const dk = Math.floor(ms / 60_000);
+  if (dk < 2) return 'just now';
+  if (dk < 60) return `${dk}m ago`;
+  const sa = Math.floor(dk / 60);
+  if (sa < 24) return `${sa}h ago`;
+  return `${Math.floor(sa / 24)}d ago`;
+}
+
 export function TicketSection({ onError }: { onError: (m: string) => void }) {
   const [list, setList] = useState<TicketView[] | null>(null);
   const [konu, setKonu] = useState('');
@@ -95,6 +113,11 @@ export function TicketSection({ onError }: { onError: (m: string) => void }) {
                         color: C.bone, overflow: 'hidden', textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap' }}>
                         {t.subject}
+                      </span>
+                      {/* ⚠️ Tarih durumun SOLUNDA ve soluk: asıl bilgi hâlâ
+                          "cevap geldi mi", yaş ikincil. */}
+                      <span style={{ fontSize: 10, color: C.boneFaint, flexShrink: 0 }}>
+                        {yas(t.createdAt)}
                       </span>
                       <span style={{ fontSize: 10, color: bekliyor ? C.candle : C.boneFaint }}>
                         {bekliyor ? 'ANSWERED' : t.status.toUpperCase()}
