@@ -15,11 +15,14 @@ import { BTN, Panel, PixelButton } from '@/components/ui/kit';
 import { ARENA, type ArenaSetup } from '@/game/arena';
 import { render, resetEffects } from '@/game/render';
 import { heroById } from '@/game/heroes';
-import { duelTier } from '@/game/duel';
 import { Portrait } from '@/components/HeroPicker';
 import {
   joinArena, leaveQueue, pollQueue, type ArenaEnd, type ArenaHandle,
 } from '@/lib/arenaClient';
+import { MenuBackground } from '@/components/MenuBackground';
+import { duelTier } from '@/game/duel';
+import { fetchPvpSeason, type PvpSeasonState } from '@/lib/gameSession';
+import { isTestMode, TEST_PVP_SEASON } from '@/lib/testMode';
 import { C, FONT, glass } from '@/lib/theme';
 
 const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
@@ -33,6 +36,14 @@ type Durum =
 export function ArenaScreen({ onExit }: { onExit: () => void }) {
   const [durum, setDurum] = useState<Durum>({ k: 'idle' });
   const [hata, setHata] = useState<string | null>(null);
+  // ⚠️ Sezon SÜS: gelmezse lobi eskisi gibi çalışmaya devam eder, hata
+  // göstermez. Kuyruğa girmeyi bir sıralama isteğine bağlamak, sunucu
+  // yavaşladığında maç bulmayı da engellerdi.
+  const [sezon, setSezon] = useState<PvpSeasonState | null>(null);
+  useEffect(() => {
+    if (isTestMode()) { setSezon(TEST_PVP_SEASON as unknown as PvpSeasonState); return; }
+    fetchPvpSeason().then(setSezon).catch(() => { /* süs */ });
+  }, []);
 
   // ── KUYRUK ──
   useEffect(() => {
@@ -79,6 +90,16 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
       justifyContent: 'center', padding: 20, fontFamily: FONT.ui }}>
+      {/* ⚠️ ARKA PLAN EKLENDİ. Lobi düpedüz SİYAHTI — oyunun en boş ekranıydı
+          ve "yüklenmedi" gibi okunuyordu, oysa her panelin arkasında köy var.
+          Yeni varlık ÜRETİLMEDİ: ana sayfanın `MenuBackground`u zaten gerçek
+          köy haritasını süzülerek çiziyor ve tek kullanıcısı vardı. */}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+        <MenuBackground />
+      </div>
+      {/* ⚠️ Karartma ŞART: panel metni köyün üstünde okunmuyordu. */}
+      <div style={{ position: 'absolute', inset: 0, zIndex: 0,
+        background: 'radial-gradient(ellipse at center, rgba(8,6,5,0.55), rgba(8,6,5,0.88) 70%)' }} />
       {/* 🔴 LOBİ OYUNUN GERİ KALANINA HİÇ BENZEMİYORDU: düz yuvarlak bir kutu,
           Franuka çerçevesi yok, ham düğmeler. Oyunun her yeri piksel çerçeveliyken
           burası başka bir uygulamadan alınmış gibi duruyordu.
@@ -86,7 +107,8 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
           buraya ait değil — ve 02B, kenarlık parlaklığı 110 ile gotik palete
           uyumlu dört çerçeveden biri. */}
       <Panel variant="02B" scale={3} pad={10}
-        style={{ width: '100%', maxWidth: 420, textAlign: 'center' }}>
+        style={{ width: '100%', maxWidth: 420, textAlign: 'center',
+          position: 'relative', zIndex: 1 }}>
         <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.6, color: C.blood }}>
           THE PIT
         </div>
@@ -98,6 +120,32 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
             ? `Waiting ${durum.waited}s — the longer you wait, the wider the search.`
             : 'You and one other hunter drop into the same arena, against the same horde. You cannot hurt each other. The last one standing wins.'}
         </div>
+
+        {/* ⚠️ DURUŞ GÖRÜNÜR OLDU. Lobi oyuncuya kendisi hakkında HİÇBİR ŞEY
+            söylemiyordu: puanı yok, geçmişi yok. Yan kapıdaki DUELS paneli
+            bunların hepsini gösteriyor ve aynı sezon verisinden besleniyor —
+            rekabet ekranının "ben neredeyim"i söylememesi tuhaftı. */}
+        {sezon?.me && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+            marginBottom: 14, padding: '7px 10px', borderRadius: 8,
+            border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.32)',
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 1.4, color: C.boneFaint }}>
+              YOUR STANDING
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 900, color: duelTier(sezon.me.rating).color }}>
+              {duelTier(sezon.me.rating).name}
+            </span>
+            <span style={{ fontSize: 13, fontWeight: 900, color: C.bone,
+              fontVariantNumeric: 'tabular-nums' }}>
+              {sezon.me.rating}
+            </span>
+            <span style={{ fontSize: 10.5, color: C.boneFaint }}>
+              {sezon.me.wins}W {sezon.me.losses}L
+            </span>
+          </div>
+        )}
 
         {hata && (
           <div style={{ marginBottom: 12, fontSize: 11.5, color: C.bad }}>{hata}</div>
