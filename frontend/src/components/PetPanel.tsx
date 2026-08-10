@@ -20,7 +20,7 @@ import { RARITY } from '@/game/cosmetics';
 import { PET_ART } from '@/game/sprites';
 import type { Progress } from '@/game/progress';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
-import { Icon, IconText, type IconName } from '@/components/ui/kit';
+import { BTN, Icon, IconText, PixelButton, type IconName } from '@/components/ui/kit';
 import { bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
 import { C, FONT, glass } from '@/lib/theme';
@@ -89,7 +89,16 @@ function PetPortrait({ artKey, size, bagli }: { artKey: string; size: number; ba
       // ⚠️ BAĞLANMAMIŞ PET SİLUET. Koleksiyon oyunlarının kuralı: sahip
       // olmadığını GÖSTER ama VERME. Gizleseydik oyuncu neyi kaçırdığını
       // bilmez, tam renkli gösterseydik bağlamanın anlamı kalmazdı.
-      filter: bagli ? 'none' : 'grayscale(1) brightness(0.32) contrast(1.4)',
+      //
+      // 🔴 İLK DEĞERLER `grayscale(1) brightness(0.32)` İDİ ve EKRANDA
+      // SİMSİYAH KUTU ÇIKIYORDU — yaratığın SİLUETİ bile okunmuyordu, yani
+      // "resim ekledim" derken hiçbir şey eklenmemişti. Siluetin işi şekli
+      // GÖSTERMEK; karartmak değil. Şimdi soğuk bir hayalet tonu: gri değil
+      // mavimsi, parlaklık okunacak kadar açık.
+      filter: bagli
+        ? 'none'
+        : 'grayscale(0.85) brightness(0.78) contrast(1.15) sepia(0.25) hue-rotate(175deg) saturate(1.6)',
+      opacity: bagli ? 1 : 0.72,
     }} />
   );
 }
@@ -199,17 +208,13 @@ export function PetPanel({ progress, onChange, onError }: {
             A second collar — carry two at once.
             <span style={{ color: C.boneFaint }}> Depth {enDerin}/{SLOT2.depth}</span>
           </span>
-          <button
+          <PixelButton
+            variant={BTN.buy} scale={2}
             disabled={enDerin < SLOT2.depth || progress.gold < SLOT2.gold || busy !== null}
             onClick={() => calistir('slot', 'buy', buyPetSlot)}
-            style={{
-              all: 'unset', cursor: enDerin >= SLOT2.depth && progress.gold >= SLOT2.gold ? 'pointer' : 'not-allowed',
-              padding: '5px 12px', borderRadius: 6, fontSize: 11, fontWeight: 900,
-              background: enDerin >= SLOT2.depth && progress.gold >= SLOT2.gold ? C.candle : 'rgba(255,255,255,0.06)',
-              color: enDerin >= SLOT2.depth && progress.gold >= SLOT2.gold ? '#1a0508' : C.boneFaint,
-            }}>
+            style={{ fontSize: 11, fontWeight: 900, minWidth: 0, padding: '0 10px' }}>
             {SLOT2.gold.toLocaleString('en-US')} G
-          </button>
+          </PixelButton>
         </div>
       )}
 
@@ -239,10 +244,14 @@ export function PetPanel({ progress, onChange, onError }: {
                 // ⚠️ ÇERÇEVE NADİRLİK RENGİNDE ve MYTHIC'te altın. Rozet zaten
                 // yazıyor ama 12 kartlık bir listede oyuncu ÖNCE renge bakar,
                 // sonra okur — çerçeve o taramayı ücretsiz yapıyor.
-                border: `1px solid ${mythic ? C.candle : rar.color}${bagli ? '66' : '22'}`,
+                // 🔴 ZEMİN ÇOK AÇIKTI. Panelin kendisi pembe-mor; portre kutusu
+                // da yarı saydam olunca sprite zemine karışıyordu. Piksel sanat
+                // KOYU ve DÜZ bir zemin ister — yoksa kenarları erir.
+                border: `1px solid ${mythic ? C.candle : rar.color}${bagli ? '88' : '33'}`,
                 background: bagli
-                  ? `radial-gradient(circle at 50% 35%, ${mythic ? C.candle : rar.color}22, rgba(10,8,12,0.55) 70%)`
-                  : 'rgba(10,8,12,0.5)',
+                  ? `radial-gradient(circle at 50% 32%, ${mythic ? C.candle : rar.color}2e, #0a080e 72%)`
+                  : '#0a080e',
+                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.55)',
               }}>
                 <PetPortrait artKey={def.art} size={60} bagli={bagli} />
                 {/* Seviye rozeti portrenin üstünde — "kaçıncı seviyede" sorusu
@@ -279,14 +288,29 @@ export function PetPanel({ progress, onChange, onError }: {
                     }}>
                     {mythic ? 'MYTHIC' : rar.label}
                   </span>
-                  <Tag tone="dim"><Icon name={rol.ikon} style={{ marginRight: 3 }} />{rol.ad}</Tag>
+                  {/* 🔴 ROL ROZETİ KALDIRILDI — rol zaten aşağıdaki açıklama
+                      satırında ikonu ve rengiyle duruyordu, yani AYNI BİLGİ
+                      kartta iki kez vardı. Ekranda ölçüldü: ad + nadirlik +
+                      rol rozeti 170 px'lik sütuna sığmıyor ve rozet alt satıra
+                      kayıyordu; kart iki satırlık bir başlıkla şişiyordu.
+                      Tekrarı silmek hem yer açtı hem satır kaymasını bitirdi. */}
                   {takiliMi && <Tag tone="ok">CARRIED</Tag>}
                 </div>
-                <div style={{ fontSize: 10.5, color: C.boneFaint, marginTop: 3 }}>{def.blurb}</div>
-                <IconText name={rol.ikon} style={{ fontSize: 11, color: rol.renk, marginTop: 4 }}>{rol.ne}</IconText>
+                <div style={{ fontSize: 10.5, color: C.boneDim, marginTop: 3, lineHeight: 1.35 }}>{def.blurb}</div>
+                {/* 🔴 ROL SATIRI OKUNMUYORDU: rolün kendi rengi (koyu kırmızı,
+                    yeşil) panelin pembe-mor zemininde eriyordu. Renk ROZETTE
+                    kalıyor, cümle kemik renginde yazılıyor — renk kimliği
+                    kaybolmadan okunurluk geri geliyor. */}
+                <IconText name={rol.ikon}
+                  style={{ fontSize: 11, color: C.bone, marginTop: 5, fontWeight: 700 }}>
+                  <span style={{ borderLeft: `2px solid ${rol.renk}`, paddingLeft: 6 }}>
+                    <b style={{ color: rol.renk, letterSpacing: 0.5 }}>{rol.ad}</b>
+                    <span style={{ color: C.boneDim, fontWeight: 400 }}> · {rol.ne}</span>
+                  </span>
+                </IconText>
               </div>
 
-              <div style={{ textAlign: 'right', minWidth: 150, fontFamily: FONT.ui }}>
+              <div style={{ textAlign: 'right', minWidth: 124, fontFamily: FONT.ui }}>
                 {!bagli ? (
                   <>
                     {/* ⚠️ NEDEN ALAMIYORUM — eksik olan koşul gösteriliyor.
@@ -300,18 +324,13 @@ export function PetPanel({ progress, onChange, onError }: {
                       style={{ fontSize: 10.5, color: kill >= gerekenKill ? C.ok : C.boneFaint, justifyContent: 'flex-end' }}>
                       {kill.toLocaleString('en-US')} / {gerekenKill.toLocaleString('en-US')} slain
                     </IconText>
-                    <button
+                    <PixelButton
+                      variant={BTN.buy} scale={2}
                       disabled={kill < gerekenKill || progress.gold < bindGold || busy !== null}
                       onClick={() => calistir(def.id, 'buy', () => bindPet(def.id))}
-                      style={{
-                        all: 'unset', marginTop: 5, padding: '5px 12px', borderRadius: 6,
-                        fontSize: 11, fontWeight: 900,
-                        cursor: kill >= gerekenKill && progress.gold >= bindGold ? 'pointer' : 'not-allowed',
-                        background: kill >= gerekenKill && progress.gold >= bindGold ? C.ice : 'rgba(255,255,255,0.06)',
-                        color: kill >= gerekenKill && progress.gold >= bindGold ? '#0d0b12' : C.boneFaint,
-                      }}>
+                      style={{ marginTop: 6, fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
                       BIND · {bindGold.toLocaleString('en-US')} G
-                    </button>
+                    </PixelButton>
                   </>
                 ) : (
                   <>
@@ -330,66 +349,47 @@ export function PetPanel({ progress, onChange, onError }: {
                     )}
 
                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6, flexWrap: 'wrap' }}>
-                      <button
+                      <PixelButton
+                        variant={BTN.buy} scale={2}
                         disabled={lv >= tavan || progress.gold < yukseltmeBedeli || busy !== null}
                         onClick={() => calistir(def.id, 'buy', () => upgradePet(def.id))}
-                        style={{
-                          all: 'unset', padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 900,
-                          cursor: lv < tavan && progress.gold >= yukseltmeBedeli ? 'pointer' : 'not-allowed',
-                          background: lv < tavan && progress.gold >= yukseltmeBedeli ? C.candle : 'rgba(255,255,255,0.06)',
-                          color: lv < tavan && progress.gold >= yukseltmeBedeli ? '#1a0508' : C.boneFaint,
-                        }}>
+                        style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
                         {lv >= tavan ? 'MAX' : `LV ${lv + 1} · ${yukseltmeBedeli.toLocaleString('en-US')} G`}
-                      </button>
+                      </PixelButton>
 
                       {def.rarity === 'legendary' && !mythic && (
-                        <button
+                        <PixelButton
+                          variant={BTN.strong} scale={2}
                           disabled={!fuseHazir || progress.gold < FUSE_GOLD || busy !== null}
                           onClick={() => calistir(def.id, 'buy', () => fusePet(def.id))}
                           title={`Needs ${FUSE_COPIES} copies — bind it again to gather them`}
-                          style={{
-                            all: 'unset', padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 900,
-                            cursor: fuseHazir && progress.gold >= FUSE_GOLD ? 'pointer' : 'not-allowed',
-                            background: fuseHazir && progress.gold >= FUSE_GOLD ? C.blood : 'rgba(255,255,255,0.06)',
-                            color: fuseHazir && progress.gold >= FUSE_GOLD ? C.bone : C.boneFaint,
-                          }}>
+                          style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
                           FUSE → LV{MYTHIC_CAP}
-                        </button>
+                        </PixelButton>
                       )}
 
                       {/* Bir kopya daha — füzyon malzemesi */}
                       {def.rarity === 'legendary' && !mythic && kopya < FUSE_COPIES && (
-                        <button
+                        <PixelButton
+                          variant={BTN.action} scale={2}
                           disabled={kill < gerekenKill || progress.gold < bindGold || busy !== null}
                           onClick={() => calistir(def.id, 'buy', () => bindPet(def.id))}
                           title={`${kill.toLocaleString('en-US')} / ${gerekenKill.toLocaleString('en-US')} slain`}
-                          style={{
-                            all: 'unset', padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 900,
-                            cursor: kill >= gerekenKill && progress.gold >= bindGold ? 'pointer' : 'not-allowed',
-                            background: 'rgba(255,255,255,0.06)',
-                            color: kill >= gerekenKill && progress.gold >= bindGold ? C.ice : C.boneFaint,
-                          }}>
+                          style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
                           +1 COPY
-                        </button>
+                        </PixelButton>
                       )}
 
-                      <button
+                      <PixelButton
+                        variant={BTN.action} scale={2} active={takiliMi}
                         disabled={busy !== null}
                         onClick={() => calistir(def.id, 'equip', () => equipPets(
                           takiliMi ? takili.filter((x) => x !== def.id)
-                            // ⚠️ Yuva doluysa EN ESKİ çıkar. "Yer yok" deyip
-                            // reddetmek, oyuncuyu önce çıkarmaya zorlar ve iki
-                            // tıklık bir işi dört tıka çevirirdi.
                             : [...takili, def.id].slice(-yuva),
                         ))}
-                        style={{
-                          all: 'unset', padding: '5px 10px', borderRadius: 6, fontSize: 11, fontWeight: 900,
-                          cursor: 'pointer',
-                          background: takiliMi ? C.ok : 'rgba(255,255,255,0.06)',
-                          color: takiliMi ? '#0d0b12' : C.bone,
-                        }}>
+                        style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
                         {takiliMi ? 'CARRIED' : 'CARRY'}
-                      </button>
+                      </PixelButton>
                     </div>
                   </>
                 )}

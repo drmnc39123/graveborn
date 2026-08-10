@@ -34,12 +34,21 @@ export function Card({
       style={{
         position: 'relative',
         borderRadius: 10,
-        border: `1px solid ${accent ? `${C.candle}66` : 'rgba(255,255,255,0.09)'}`,
-        // Dikey degrade: kartlar düz kutu değil, üstten ışık alan bir yüzey
+        border: `1px solid ${accent ? `${C.candle}77` : 'rgba(255,255,255,0.10)'}`,
+        // Dikey degrade: kartlar düz kutu değil, üstten ışık alan bir yüzey.
+        //
+        // 🔴 ALT UÇ `rgba(0,0,0,0.30)` İDİ ve KART ZEMİNDEN AYRIŞMIYORDU.
+        // Sebep ölçülünce basit: panel çerçevesi (07A) pembe-mor ve üstündeki
+        // karartma katmanı 0,44 — yani kartın arkası zaten orta tonda bir
+        // mor. %30 siyah onu ancak bir tık koyultuyordu, ekranda kart ile
+        // panel aynı yüzey gibi okunuyordu. Kart bir YÜZEY olmalı; oyuncunun
+        // "burası ayrı bir şey" demesi kenarlıktan değil ZEMİNDEN gelir.
         background: accent
-          ? 'linear-gradient(180deg, rgba(239,167,46,0.10), rgba(0,0,0,0.34))'
-          : 'linear-gradient(180deg, rgba(255,255,255,0.045), rgba(0,0,0,0.30))',
-        boxShadow: accent ? `0 0 0 1px ${C.candle}22, 0 6px 18px rgba(0,0,0,0.35)` : '0 4px 14px rgba(0,0,0,0.3)',
+          ? 'linear-gradient(180deg, rgba(239,167,46,0.13), rgba(8,6,11,0.68))'
+          : 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(8,6,11,0.62))',
+        boxShadow: accent
+          ? `0 0 0 1px ${C.candle}2a, 0 6px 18px rgba(0,0,0,0.45)`
+          : '0 4px 14px rgba(0,0,0,0.42)',
         opacity: dim ? 0.58 : 1,
         cursor: clickable ? 'pointer' : 'default',
         overflow: 'hidden',

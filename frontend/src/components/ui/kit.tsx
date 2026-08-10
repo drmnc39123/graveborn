@@ -153,9 +153,16 @@ export function Panel({
           Sarmalayıcı normal akışta olduğu için yüksekliği İÇERİĞİN tamamı;
           `inset:0` artık gerçekten her yeri kaplıyor. */}
       <div style={{ position: 'relative', padding: pad, fontFamily: FONT.ui }}>
+        {/* 🔴 KARARTMA 0,44 İDİ ve YETMİYORDU. Ekranda ölçüldü: panel hâlâ
+            pembe-mor okunuyordu ve daha kötüsü, KARTLAR ZEMİNDEN AYRIŞMIYORDU
+            — kart ile panel aynı yüzey gibi görünüyordu. Kartın zeminini
+            koyultmak tek başına çözmedi, çünkü sorun kartta değil ARKASINDAKİ
+            yüzeydeydi. 0,72'de çerçevenin sarmaşık ve doku detayı hâlâ
+            görünüyor (tamamen kapatmak Franuka çerçevesini boşa harcardı) ama
+            içerik artık koyu bir zeminin üstünde duruyor. */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'rgba(16,12,18,0.44)',
+          background: 'rgba(11,8,14,0.72)',
         }} />
         <div style={{ position: 'relative' }}>{children}</div>
       </div>
@@ -169,6 +176,28 @@ export function Panel({
 
 export type ButtonStyle = '01A' | '01B' | '01C' | '01D' | '01E'
   | '02A' | '02B' | '02C' | '02D' | '02E' | '03A' | '03B' | '03C' | '03D' | '03E';
+
+/**
+ * DÜĞME SÖZLÜĞÜ — hangi eylem hangi dokuyu kullanır.
+ *
+ * ⚠️ VARYANTLAR GÖZLE SEÇİLDİ, adına göre değil: 15 varyantın hepsi PIL ile
+ * kontakt sayfasına dizilip bakıldı. Bulgular kodda kalsın —
+ *   01A nötr kahve · 02A KIRMIZI · 03A altın + mücevher (en gösterişli)
+ *   01B/02B/03B aynıların dar hâli
+ *   01C/02C/03C üzerinde "OK" YAZISI GÖMÜLÜ → özel metinle KULLANILAMAZ
+ *   01D/E · 02D/E · 03D/E ince süs şeritleri, düğme değil
+ *
+ * ⚠️ ANLAM DOKUYA BAĞLANIYOR ki oyuncu okumadan önce ne olduğunu bilsin:
+ * altın = gold harcıyorsun, kırmızı = geri dönüşü yok, kahve = sıradan.
+ */
+export const BTN = {
+  /** gold harcayan alım — altın, mücevherli */
+  buy: '03A',
+  /** geri dönüşsüz / ağır eylem (füzyon, satış, iptal) */
+  strong: '02A',
+  /** sıradan eylem (tak/çıkar, sekme, kapat) */
+  action: '01A',
+} as const;
 
 export function PixelButton({
   children, onClick, variant = '01A', scale = 2, disabled = false, active = false,
