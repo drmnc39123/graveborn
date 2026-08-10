@@ -20,6 +20,7 @@ import {
 import type { Progress } from '@/game/progress';
 import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
+import { Fade } from '@/components/ui/motion';
 import { CryptSection } from '@/components/CryptSection';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { pixel, BTN, PixelButton } from '@/components/ui/kit';
@@ -215,6 +216,9 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
         })}
       </div>
 
+      {/* ⚠️ Görünüm geçişi TEK sarmalayıcıda — dört dala ayrı ayrı
+          animasyon yazmak, biri unutulunca yarım bir geçiş bırakırdı. */}
+      <Fade keyed={view} slide>
       {view === 'monument' && (
         <OssuarySection progress={progress} onChange={onChange} onError={onError} />
       )}
@@ -388,6 +392,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
         </span>
       </CardSection>
       </>}
+      </Fade>
     </>
   );
 }

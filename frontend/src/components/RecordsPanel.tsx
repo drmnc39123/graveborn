@@ -10,6 +10,7 @@ import { STAGES, depthGold } from '@/game/config';
 import { FORGE, costOf, spentOn } from '@/game/forge';
 import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton, BTN } from '@/components/ui/kit';
+import { Fade } from '@/components/ui/motion';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import {
   fetchLeaderboard, fetchProfile, fetchSeasonBoard,
@@ -91,11 +92,16 @@ export function RecordsPanel({ progress, onChange, onError }: {
         </PixelButton>
       </div>
 
+      {/* ⚠️ Sekme geçişi TEK sarmalayıcıda — beş dala ayrı ayrı animasyon
+          yazmak, biri unutulunca yarım bir geçiş bırakırdı. */}
+      <Fade keyed={tab} slide>
       {tab === 'record' ? <MyRecord progress={progress} />
         : tab === 'deeds' ? <AchievementsTab progress={progress} onChange={onChange} onError={onError} />
         : tab === 'armoury' ? <Armoury progress={progress} />
         : tab === 'history' ? <History />
         : <Leaderboard />}
+      </Fade>
+
     </>
   );
 }

@@ -26,6 +26,7 @@ import {
 } from '@/lib/gameSession';
 import type { Progress } from '@/game/progress';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
+import { Fade } from '@/components/ui/motion';
 import { play } from '@/game/sfx';
 import { isTestMode, TEST_LISTINGS, TEST_MY_LISTINGS } from '@/lib/testMode';
 import { C, glass } from '@/lib/theme';
@@ -349,6 +350,9 @@ export function MarketPanel({
         </PixelButton>
       </div>
 
+      {/* ⚠️ Sekme geçişi tek sarmalayıcıda — iki dala ayrı ayrı animasyon
+          yazmak, biri eklenip diğeri unutulunca yarım bir geçiş bırakır. */}
+      <Fade keyed={sekme} slide>
       {sekme === 'browse' ? (
         <>
           {/* ── SIRALAMA + FİLTRE ── */}
@@ -531,6 +535,8 @@ export function MarketPanel({
           )}
         </>
       )}
+
+      </Fade>
 
       {err && (
         <div style={{

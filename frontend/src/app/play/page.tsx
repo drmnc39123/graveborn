@@ -28,7 +28,7 @@ import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
-import { motionOff } from '@/components/ui/motion';
+import { MotionStyles, Reveal, motionOff, useCountUpInt } from '@/components/ui/motion';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
@@ -41,6 +41,7 @@ import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldB
 import { GEAR, SLOT_NAME, affixText, rarityOf } from '@/game/gear';
 import { loadProgress, resolveRunPets, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
+import type { CSSProperties } from 'react';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, FONT, glass } from '@/lib/theme';
@@ -139,6 +140,19 @@ const PANEL_CERCEVE: Record<string, PanelStyle> = {
  * ⚠️ Franuka çerçevesi 9-slice + `fill` — orta karo yatayda tekrarlıyor,
  * yani genişlik riski yok (bkz. kit.tsx `nineSlice`).
  */
+/**
+ * EKRAN KÖKÜ — köy · boss odası · koşu üçü de aynı geçişi alıyor.
+ *
+ * ⚠️ Köyden koşuya geçiş SERT KESMEYDİ. Kısa bir belirme, "yükleniyor"
+ * demeden yüklenme anını yumuşatıyor.
+ * ⚠️ 180 ms'İ GEÇMEMELİ. Panelin 160 ms gerekçesinin aynısı: oyuncu bir
+ * oturumda onlarca kez koşuya giriyor; uzun geçiş her seferinde bekleme
+ * demek. Geçiş bir gösteri değil, bir dikiş.
+ * ⚠️ `motionOff()` burada TEK SEFER okunuyor (modül düzeyinde değil, render
+ * içinde) — ayar değişince yeniden değerlendirilsin.
+ */
+const EKRAN_GECIS_MS = 180;
+
 /** Kapanış animasyonunun süresi — `gb-panel-out` ile AYNI olmalı (kit.tsx) */
 const PANEL_KAPANIS_MS = 140;
 
@@ -219,6 +233,17 @@ export default function PlayPage() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
   const [note, setNoteRaw] = useState<string | null>(null);
+
+  /**
+   * ⚠️ ERKEN DÖNÜŞLERDEN ÖNCE tanımlı olmak zorunda: arena ve boss ekranları
+   * da bu kökü kullanıyor ve panel state'inden ÖNCE dönüyorlar.
+   * ⚠️ Render içinde okunuyor — `motionOff()` ayara bağlı ve ayar oturum
+   * ortasında değişebiliyor (Settings paneli). Modül düzeyinde donardı.
+   */
+  const EKRAN_KOK: CSSProperties = {
+    position: 'fixed', inset: 0,
+    animation: motionOff() ? undefined : `gb-fade ${EKRAN_GECIS_MS}ms ease-out both`,
+  };
 
   /**
    * ⚠️ SES BAĞLAMINI KÖYDE DE AÇ.
@@ -399,7 +424,8 @@ export default function PlayPage() {
     const p = progress ?? loadProgress();
     const def = bossOfWeek(bossWeek(new Date()));
     return (
-      <div style={{ position: 'fixed', inset: 0 }}>
+      <div style={EKRAN_KOK}>
+      <MotionStyles />
         {/* ⚠️ Tılsım YOK ve bu kasıtlı: tılsımlar koşu açılırken yanıyor ve
             boss odası ayrı bir uçtan başlıyor. Oyuncunun tılsımını burada
             harcatmak, descent için sakladığı şeyi sessizce yakmak olurdu. */}
@@ -425,7 +451,8 @@ export default function PlayPage() {
     const def = stageById(screen.stageId)!;
     const p = progress ?? loadProgress();
     return (
-      <div style={{ position: 'fixed', inset: 0 }}>
+      <div style={EKRAN_KOK}>
+      <MotionStyles />
         {/* ⚠️ Tılsımlar `progress.charms`'tan DEĞİL BİLETTEN okunur: koşu
             açılırken tüketildiler, kayıtta artık yoklar. Kayıttan okumak bu
             koşuyu tılsımsız başlatırdı. */}
@@ -455,9 +482,19 @@ export default function PlayPage() {
   }
 
   const acik = panel ?? kapanan;
+  /**
+   * KOŞU ÖDEMESİ — oyunun en büyük ödül anı.
+   *
+   * ⚠️ Bakiye sayacından DAHA YAVAŞ (700 ms). Bakiye bir arka plan bilgisi;
+   * bu ise oyuncunun koşusunun karşılığı ve üstünde durulmayı hak ediyor.
+   * ⚠️ `payout` yokken 0 — ekran açılınca 0'dan toplama sayıyor, yani ilk
+   * değer BURADA sayılmalı (bakiyenin tersine).
+   */
+  const odemeToplam = useCountUpInt(payout ? payout.progressGold + payout.dropGold : 0, 700);
 
   return (
-    <div style={{ position: 'fixed', inset: 0 }}>
+    <div style={EKRAN_KOK}>
+      <MotionStyles />
       <HubCanvas
         onEnterBuilding={onEnter}
         // Dövüş portalı doğrudan bölüm BAŞLATMAZ, seçim panelini açar.
@@ -652,9 +689,11 @@ export default function PlayPage() {
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 6 }}>THE VILLAGE SETTLES UP</div>
-            <div style={{ fontSize: 38, fontWeight: 900, color: C.candle, marginBottom: 14 }}>
-              +{payout.progressGold + payout.dropGold} <span style={{ fontSize: 16 }}>GOLD</span>
-            </div>
+            <Reveal>
+              <div style={{ fontSize: 38, fontWeight: 900, color: C.candle, marginBottom: 14 }}>
+                +{odemeToplam.toLocaleString('en-US')} <span style={{ fontSize: 16 }}>GOLD</span>
+              </div>
+            </Reveal>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 12.5, textAlign: 'left' }}>
               <Row
                 label={payout.paidRange
