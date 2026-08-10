@@ -48,7 +48,7 @@ export interface DockGroup {
 export const GROUPS: readonly DockGroup[] = [
   // Dövüş önce: oyuncunun oyuna girdiği yer en solda ve en görünür olmalı.
   { id: 'fight', label: 'FIGHT', color: '#a01226', members: ['quests', 'boss', 'duel', 'pit'] },
-  { id: 'power', label: 'POWER', color: '#efa72e', members: ['upgrade', 'paths', 'gear', 'shop'] },
+  { id: 'power', label: 'POWER', color: '#efa72e', members: ['upgrade', 'paths', 'gear', 'pets', 'shop'] },
   { id: 'spend', label: 'SPEND', color: '#5f9e4a', members: ['market', 'exchange', 'reliquary'] },
   { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['daily', 'watch', 'guild', 'tavern'] },
 ] as const;
@@ -71,6 +71,7 @@ export const BUILDINGS: readonly DockEntry[] = [
   // iki eksenin aynı aileden olduğunu okumadan görüyor.
   { id: 'paths', label: 'PATHS', sub: 'Your paths — skill points from the depths you reached' },
   { id: 'market', label: 'MARKET', sub: 'Marketplace — sell gold for $GRAVE' },
+  { id: 'pets', label: 'BINDING', sub: 'The Binding — what you killed, kept' },
   { id: 'exchange', label: 'EXCHANGE', sub: 'The Exchange — player order book' },
   // ⚠️ Sonda duruyor ama en dikkat çeken yer olmalı — haftalık, kaçırılırsa
   // bir daha o boss gelmiyor. Rozet/vurgu Faz 5 cilasında eklenecek.

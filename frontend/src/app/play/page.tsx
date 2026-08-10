@@ -11,6 +11,7 @@ import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
 import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
+import { PetPanel } from '@/components/PetPanel';
 import { ReliquaryPanel } from '@/components/ReliquaryPanel';
 import { WorldBossPanel } from '@/components/WorldBossPanel';
 import { GuildPanel } from '@/components/GuildPanel';
@@ -727,6 +728,12 @@ export default function PlayPage() {
               <MarketPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
+              />
+            ) : panel === 'pets' ? (
+              <PetPanel
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
               />
             ) : panel === 'shop' ? (
               <StallPanel

@@ -951,3 +951,50 @@ export async function buyGuildUpgrade(): Promise<MyGuild> {
     method: 'POST', body: {} });
   return guild;
 }
+
+// ── THE BINDING (pet) ─────────────────────────────────────────────────
+//
+// ⚠️ DEMO MODUNDA BAĞLAMA VE FÜZYON YOK, yalnızca yükseltme/kuşanma çalışır.
+// Sebep: bağlamanın koşulu KILL SAYACI ve o sayaç demo koşularından geliyor —
+// yani demoda pet açmak, ekonomiye girmeyen gold'la güç kazanmak olurdu.
+// `buyCharm`teki demo dalıyla aynı mantık değil: orada bahis kozmetik değil,
+// burada doğrudan hasar.
+//
+// ⚠️ HEPSİ SUNUCUNUN DÖNDÜĞÜ `progress`İ KULLANIYOR, yerel tahmini değil.
+// Fiyatı, kill eşiğini ve yuva sınırını sunucu doğruluyor; istemcinin
+// hesabını yazmak, iki yerde ayrışan bir ekonomi demek olurdu.
+
+export async function bindPet(id: string): Promise<Progress> {
+  const { progress } = await api<{ progress: Progress }>('/pets/bind', {
+    method: 'POST', body: { pet: id },
+  });
+  return progress;
+}
+
+export async function upgradePet(id: string): Promise<Progress> {
+  const { progress } = await api<{ progress: Progress }>('/pets/upgrade', {
+    method: 'POST', body: { pet: id },
+  });
+  return progress;
+}
+
+export async function fusePet(id: string): Promise<Progress> {
+  const { progress } = await api<{ progress: Progress }>('/pets/fuse', {
+    method: 'POST', body: { pet: id },
+  });
+  return progress;
+}
+
+export async function equipPets(ids: string[]): Promise<Progress> {
+  const { progress } = await api<{ progress: Progress }>('/pets/equip', {
+    method: 'POST', body: { pets: ids },
+  });
+  return progress;
+}
+
+export async function buyPetSlot(): Promise<Progress> {
+  const { progress } = await api<{ progress: Progress }>('/pets/slot', {
+    method: 'POST', body: {},
+  });
+  return progress;
+}
