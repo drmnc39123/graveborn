@@ -236,7 +236,20 @@ export function PetPanel({ progress, onChange, onError }: {
 
         return (
           <Card key={def.id} accent={mythic}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            {/* 🔴 KART TAMAMEN YENİDEN DİZİLDİ. Önceki hâli üç sütunu
+                `flexWrap` ile yan yana koyuyordu ve ekranda REZALET
+                görünüyordu: sağ sütunun içeriği (LV + etki + üç düğme)
+                genişleyince blok komple alta düşüyor, o kart bambaşka bir
+                düzene bürünüyordu. On iki kartın on ikisi farklı görünüyordu
+                — "hepsi kayık ve sığmıyor gibi" tam olarak buydu.
+
+                ⚠️ SARMA YERİNE SABİT RİTİM. Kart artık üç YATAY satır:
+                  1) portre + ad/nadirlik/rol   (portre sabit, metin esner)
+                  2) durum + etki (şimdi → sonra)
+                  3) düğmeler — HER ZAMAN kendi satırında, sağa yaslı
+                İçerik ne kadar uzarsa uzasın iskelet değişmiyor; kartlar
+                birbirinin aynısı okunuyor. */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               {/* ── PORTRE ── kartın ilk okunan şeyi bu olmalı, metin değil */}
               <div style={{
                 position: 'relative', flexShrink: 0,
@@ -269,7 +282,7 @@ export function PetPanel({ progress, onChange, onError }: {
                 )}
               </div>
 
-              <div style={{ minWidth: 170, flex: 1 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 13, fontWeight: 900, color: C.bone }}>{def.name}</span>
                   {/* ⚠️ NADİRLİK ROZETİ `Tag` DEĞİL — `Tag`in beş sabit tonu var ve
@@ -310,90 +323,102 @@ export function PetPanel({ progress, onChange, onError }: {
                 </IconText>
               </div>
 
-              <div style={{ textAlign: 'right', minWidth: 124, fontFamily: FONT.ui }}>
-                {!bagli ? (
-                  <>
-                    {/* ⚠️ NEDEN ALAMIYORUM — eksik olan koşul gösteriliyor.
-                        İkisi de eksikse önce kill yazılıyor: gold sonradan
-                        toplanabilir, kill oynamayı gerektirir. */}
-                    {/* ⚠️ Kafatası ikonu burada BEZEME DEĞİL: bağlamanın gold
-                        dışında ikinci bir koşulu olduğunu tek bakışta söyleyen
-                        şey o. Salt metinken oyuncu bu satırı okumadan düğmeye
-                        basıp "çalışmıyor" sanıyordu. */}
-                    <IconText name="skull" dim={kill < gerekenKill}
-                      style={{ fontSize: 10.5, color: kill >= gerekenKill ? C.ok : C.boneFaint, justifyContent: 'flex-end' }}>
-                      {kill.toLocaleString('en-US')} / {gerekenKill.toLocaleString('en-US')} slain
-                    </IconText>
+            </div>
+
+            {/* ── 2. SATIR: DURUM + ETKİ ──
+                Tam genişlik, sola yaslı. Sağ sütunda sıkışıp sarmıyor. */}
+            <div style={{
+              marginTop: 8, paddingTop: 8, fontFamily: FONT.ui,
+              borderTop: '1px solid rgba(255,255,255,0.07)',
+            }}>
+              {!bagli ? (
+                // ⚠️ NEDEN ALAMIYORUM — eksik olan koşul, sayısıyla. Kafatası
+                // ikonu bezeme DEĞİL: bağlamanın gold dışında ikinci bir koşulu
+                // olduğunu tek bakışta söyleyen şey o.
+                <IconText name="skull" dim={kill < gerekenKill}
+                  style={{ fontSize: 11, color: kill >= gerekenKill ? C.ok : C.boneFaint }}>
+                  {kill.toLocaleString('en-US')} / {gerekenKill.toLocaleString('en-US')} slain
+                  {kill < gerekenKill && <span style={{ color: C.boneFaint }}>
+                    {' '}· {(gerekenKill - kill).toLocaleString('en-US')} more
+                  </span>}
+                </IconText>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 900, color: C.boneFaint, letterSpacing: 0.6 }}>
+                    LV {lv}/{tavan}{kopya > 1 ? ` · ${kopya}/${FUSE_COPIES} COPIES` : ''}
+                  </span>
+                  {/* ⚠️ ŞİMDİ → SONRA. Sadece "yükselt" demek oyuncuya neyi satın
+                      aldığını söylemiyor; kartın asıl işi bu farkı göstermek. */}
+                  <span style={{ fontSize: 11, color: C.bone }}>
+                    {etkiMetni(def, lv, mythic)}
+                    {lv < tavan && (
+                      <span style={{ color: C.ok }}> → {etkiMetni(def, lv + 1, mythic)}</span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* ── 3. SATIR: DÜĞMELER ──
+                ⚠️ HER ZAMAN KENDİ SATIRINDA ve sağa yaslı. Metnin yanına
+                koymak, uzun etki cümlesi olan kartlarda düğmeleri alta
+                itiyordu ve her kart farklı görünüyordu. */}
+            <div style={{
+              display: 'flex', gap: 6, justifyContent: 'flex-end',
+              marginTop: 8, flexWrap: 'wrap',
+            }}>
+              {!bagli ? (
+                <PixelButton
+                  variant={BTN.buy} scale={2}
+                  disabled={kill < gerekenKill || progress.gold < bindGold || busy !== null}
+                  onClick={() => calistir(def.id, 'buy', () => bindPet(def.id))}
+                  style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 8px' }}>
+                  BIND · {bindGold.toLocaleString('en-US')} G
+                </PixelButton>
+              ) : (
+                <>
+                  <PixelButton
+                    variant={BTN.buy} scale={2}
+                    disabled={lv >= tavan || progress.gold < yukseltmeBedeli || busy !== null}
+                    onClick={() => calistir(def.id, 'buy', () => upgradePet(def.id))}
+                    style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 8px' }}>
+                    {lv >= tavan ? 'MAX' : `LV ${lv + 1} · ${yukseltmeBedeli.toLocaleString('en-US')} G`}
+                  </PixelButton>
+
+                  {def.rarity === 'legendary' && !mythic && kopya < FUSE_COPIES && (
                     <PixelButton
-                      variant={BTN.buy} scale={2}
+                      variant={BTN.action} scale={2}
                       disabled={kill < gerekenKill || progress.gold < bindGold || busy !== null}
                       onClick={() => calistir(def.id, 'buy', () => bindPet(def.id))}
-                      style={{ marginTop: 6, fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
-                      BIND · {bindGold.toLocaleString('en-US')} G
+                      title={`${kill.toLocaleString('en-US')} / ${gerekenKill.toLocaleString('en-US')} slain`}
+                      style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 8px' }}>
+                      +1 COPY
                     </PixelButton>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ fontSize: 10.5, color: C.boneFaint }}>
-                      LV {lv}/{tavan}{kopya > 1 ? ` · ${kopya}/${FUSE_COPIES} copies` : ''}
-                    </div>
-                    {/* ⚠️ ŞİMDİ → SONRA. Sadece "yükselt" demek, oyuncuya neyi
-                        satın aldığını söylemiyor; kartın işi tam olarak bu. */}
-                    <div style={{ fontSize: 11, color: C.bone, marginTop: 2 }}>
-                      {etkiMetni(def, lv, mythic)}
-                    </div>
-                    {lv < tavan && (
-                      <div style={{ fontSize: 10, color: C.ok, marginTop: 1 }}>
-                        → {etkiMetni(def, lv + 1, mythic)}
-                      </div>
-                    )}
+                  )}
 
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', marginTop: 6, flexWrap: 'wrap' }}>
-                      <PixelButton
-                        variant={BTN.buy} scale={2}
-                        disabled={lv >= tavan || progress.gold < yukseltmeBedeli || busy !== null}
-                        onClick={() => calistir(def.id, 'buy', () => upgradePet(def.id))}
-                        style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
-                        {lv >= tavan ? 'MAX' : `LV ${lv + 1} · ${yukseltmeBedeli.toLocaleString('en-US')} G`}
-                      </PixelButton>
+                  {def.rarity === 'legendary' && !mythic && (
+                    <PixelButton
+                      variant={BTN.strong} scale={2}
+                      disabled={!fuseHazir || progress.gold < FUSE_GOLD || busy !== null}
+                      onClick={() => calistir(def.id, 'buy', () => fusePet(def.id))}
+                      title={`Needs ${FUSE_COPIES} copies — bind it again to gather them`}
+                      style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 8px' }}>
+                      FUSE → LV{MYTHIC_CAP}
+                    </PixelButton>
+                  )}
 
-                      {def.rarity === 'legendary' && !mythic && (
-                        <PixelButton
-                          variant={BTN.strong} scale={2}
-                          disabled={!fuseHazir || progress.gold < FUSE_GOLD || busy !== null}
-                          onClick={() => calistir(def.id, 'buy', () => fusePet(def.id))}
-                          title={`Needs ${FUSE_COPIES} copies — bind it again to gather them`}
-                          style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
-                          FUSE → LV{MYTHIC_CAP}
-                        </PixelButton>
-                      )}
-
-                      {/* Bir kopya daha — füzyon malzemesi */}
-                      {def.rarity === 'legendary' && !mythic && kopya < FUSE_COPIES && (
-                        <PixelButton
-                          variant={BTN.action} scale={2}
-                          disabled={kill < gerekenKill || progress.gold < bindGold || busy !== null}
-                          onClick={() => calistir(def.id, 'buy', () => bindPet(def.id))}
-                          title={`${kill.toLocaleString('en-US')} / ${gerekenKill.toLocaleString('en-US')} slain`}
-                          style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
-                          +1 COPY
-                        </PixelButton>
-                      )}
-
-                      <PixelButton
-                        variant={BTN.action} scale={2} active={takiliMi}
-                        disabled={busy !== null}
-                        onClick={() => calistir(def.id, 'equip', () => equipPets(
-                          takiliMi ? takili.filter((x) => x !== def.id)
-                            : [...takili, def.id].slice(-yuva),
-                        ))}
-                        style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 6px' }}>
-                        {takiliMi ? 'CARRIED' : 'CARRY'}
-                      </PixelButton>
-                    </div>
-                  </>
-                )}
-              </div>
+                  <PixelButton
+                    variant={BTN.action} scale={2} active={takiliMi}
+                    disabled={busy !== null}
+                    onClick={() => calistir(def.id, 'equip', () => equipPets(
+                      takiliMi ? takili.filter((x) => x !== def.id)
+                        : [...takili, def.id].slice(-yuva),
+                    ))}
+                    style={{ fontSize: 10.5, fontWeight: 900, minWidth: 0, padding: '0 8px' }}>
+                    {takiliMi ? 'CARRIED' : 'CARRY'}
+                  </PixelButton>
+                </>
+              )}
             </div>
           </Card>
         );
