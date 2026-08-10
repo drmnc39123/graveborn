@@ -7,6 +7,7 @@
 // Faz 2'de dengelenen musluk/sink oranı bozulurdu.
 
 import { useCallback, useMemo, useState } from 'react';
+import { BTN, PixelButton } from '@/components/ui/kit';
 import { achievementStates } from '@/game/achievements';
 import { cosmeticById } from '@/game/cosmetics';
 import { streakReward, type Progress } from '@/game/progress';
@@ -66,20 +67,14 @@ export function AchievementsTab({ progress, onChange, onError }: {
                 : `Come back tomorrow for ${streakReward(progress.streak.days + 1)} dust. Miss a day and it starts over.`}
             </div>
           </div>
-          <button onClick={takeStreak} disabled={!canStreak || busy}
-            style={{
-              all: 'unset', boxSizing: 'border-box', cursor: canStreak && !busy ? 'pointer' : 'default',
-              padding: '10px 15px', borderRadius: 8, textAlign: 'center', minWidth: 108,
-              opacity: canStreak ? 1 : 0.42,
-              fontSize: 11.5, fontWeight: 900, letterSpacing: 1,
-              color: canStreak ? '#ffd9df' : C.boneFaint,
-              background: canStreak
-                ? 'linear-gradient(180deg, rgba(160,18,38,0.5), rgba(120,12,28,0.34))'
-                : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${canStreak ? 'rgba(228,101,122,0.6)' : 'rgba(255,255,255,0.12)'}`,
-            }}>
+          {/* ⚠️ BTN.action — günlük nöbet TOZ ödüyor, gold değil. Altın doku
+              iki ekonomiyi karıştırırdı (aynı kural Today panelinde de var). */}
+          <PixelButton
+            variant={BTN.action} scale={2} active={canStreak}
+            onClick={takeStreak} disabled={!canStreak || busy}
+            style={{ fontSize: 11.5, fontWeight: 900, letterSpacing: 0.9, minWidth: 0, padding: '0 12px' }}>
             {canStreak ? 'LIGHT IT' : 'KEPT TODAY'}
-          </button>
+          </PixelButton>
         </div>
         {flash && (
           <div style={{ padding: '8px 13px', borderTop: '1px solid rgba(255,255,255,0.08)',
@@ -134,15 +129,12 @@ export function AchievementsTab({ progress, onChange, onError }: {
                     {s.progress}/{s.def.goal}
                   </span>
                   {s.claimable && (
-                    <button onClick={() => take(s.def.id)} disabled={busy}
-                      style={{
-                        all: 'unset', cursor: busy ? 'default' : 'pointer', flexShrink: 0,
-                        padding: '5px 10px', borderRadius: 6,
-                        fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, color: '#ffd9df',
-                        background: 'rgba(160,18,38,0.42)', border: '1px solid rgba(228,101,122,0.5)',
-                      }}>
+                    <PixelButton
+                      variant={BTN.action} scale={2} active
+                      onClick={() => take(s.def.id)} disabled={busy}
+                      style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
                       CLAIM
-                    </button>
+                    </PixelButton>
                   )}
                 </div>
               </div>

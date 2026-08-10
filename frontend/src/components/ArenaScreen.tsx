@@ -11,6 +11,7 @@
 // olabilir; arena sabit 1280×720 simüle edip ekrana ölçekleniyor.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BTN, Panel, PixelButton } from '@/components/ui/kit';
 import { ARENA, type ArenaSetup } from '@/game/arena';
 import { render, resetEffects } from '@/game/render';
 import { heroById } from '@/game/heroes';
@@ -78,7 +79,14 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
       justifyContent: 'center', padding: 20, fontFamily: FONT.ui }}>
-      <div style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
+      {/* 🔴 LOBİ OYUNUN GERİ KALANINA HİÇ BENZEMİYORDU: düz yuvarlak bir kutu,
+          Franuka çerçevesi yok, ham düğmeler. Oyunun her yeri piksel çerçeveliyken
+          burası başka bir uygulamadan alınmış gibi duruyordu.
+          ⚠️ 02B (turkuaz): THE PIT bir ARENA, köyün mezarlık sarmaşığı (07A)
+          buraya ait değil — ve 02B, kenarlık parlaklığı 110 ile gotik palete
+          uyumlu dört çerçeveden biri. */}
+      <Panel variant="02B" scale={3} pad={10}
+        style={{ width: '100%', maxWidth: 420, textAlign: 'center' }}>
         <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.6, color: C.blood }}>
           THE PIT
         </div>
@@ -96,17 +104,27 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
         )}
 
         {durum.k === 'queue' ? (
-          <button onClick={() => { void leaveQueue(); setDurum({ k: 'idle' }); }}
-            style={{ ...ctaButton(false), width: '100%' }}>CANCEL</button>
+          <PixelButton variant={BTN.action} scale={3}
+            onClick={() => { void leaveQueue(); setDurum({ k: 'idle' }); }}
+            style={{ width: '100%', fontSize: 13, fontWeight: 900, letterSpacing: 1.3 }}>
+            CANCEL
+          </PixelButton>
         ) : (
           <>
-            <button onClick={() => { setHata(null); setDurum({ k: 'queue', waited: 0 }); }}
-              style={{ ...ctaButton(true), width: '100%' }}>FIND A MATCH</button>
-            <button onClick={onExit}
-              style={{ ...ctaButton(false), width: '100%', marginTop: 8 }}>BACK</button>
+            {/* ⚠️ BTN.strong — kuyruğa girmek bir MAÇ açıyor; taahhüt eden ama
+                gold harcamayan bir eylem, o yüzden altın DEĞİL. */}
+            <PixelButton variant={BTN.strong} scale={3}
+              onClick={() => { setHata(null); setDurum({ k: 'queue', waited: 0 }); }}
+              style={{ width: '100%', fontSize: 13, fontWeight: 900, letterSpacing: 1.3 }}>
+              FIND A MATCH
+            </PixelButton>
+            <PixelButton variant={BTN.action} scale={3} onClick={onExit}
+              style={{ width: '100%', marginTop: 8, fontSize: 13, fontWeight: 900, letterSpacing: 1.3 }}>
+              BACK
+            </PixelButton>
           </>
         )}
-      </div>
+      </Panel>
     </div>
   );
 }
