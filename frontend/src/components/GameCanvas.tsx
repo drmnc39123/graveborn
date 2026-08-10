@@ -20,7 +20,7 @@ import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import type { RunPet } from '@/game/pets';
 import { C, FONT, glass } from '@/lib/theme';
-import { Banner, Bar, Orb, Slot, PixelButton, BTN } from '@/components/ui/kit';
+import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
@@ -371,7 +371,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           // Eskiden sadece `name` taşınıyordu ve arayüz silahı tanıyamıyordu.
           weapons: game.weapons.map((w) => ({
             id: w.def.id, name: w.def.name, level: w.level,
-            cd: w.cd, cdMax: Math.max(0.001, w.def.cooldownSec),
+            cd: w.cd, cdMax: game.cooldownMaxOf(w),
           })),
           passives: game.passives.map((p) => ({ id: p.def.id, name: p.def.name, level: p.level })),
           revives: game.revives,
@@ -499,10 +499,18 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                     oyuncu neyi taşıdığını simgeden tanıyamıyordu. */}
                 {hud.weapons.map((w) => (
                   <div key={w.id} style={{ position: 'relative' }}>
-                    <Slot type="Weapon" variant="02" scale={2} title={`${w.name} L${w.level}`}>
-                      <img src={weaponArt(w.id).icon} alt="" width={22} height={22}
-                        style={{ imageRendering: 'pixelated', display: 'block' }} />
-                    </Slot>
+                    {/* ⚠️ SOĞUMA HALKASI SONUNDA BAĞLANDI. `cd`/`cdMax` motordan
+                        HUD durumuna kadar taşınıyordu ve son adımda ölüyordu:
+                        veri oradaydı, kimse ÇİZMİYORDU. `CooldownRing` de tam
+                        bu iş için yazılmış, hiçbir yerden çağrılmıyordu.
+                        Ölçüm: 34 "dışarıdan kullanılmayan" ihracat içinde
+                        oyuncuya bakan tek gerçek boşluk buydu. */}
+                    <CooldownRing pct={w.cd / w.cdMax} size={32}>
+                      <Slot type="Weapon" variant="02" scale={2} title={`${w.name} L${w.level}`}>
+                        <img src={weaponArt(w.id).icon} alt="" width={22} height={22}
+                          style={{ imageRendering: 'pixelated', display: 'block' }} />
+                      </Slot>
+                    </CooldownRing>
                     <span style={{
                       position: 'absolute', right: -2, bottom: -2, fontSize: 9, fontWeight: 900,
                       color: C.candle, textShadow: '0 1px 0 #000, 0 0 4px #000',

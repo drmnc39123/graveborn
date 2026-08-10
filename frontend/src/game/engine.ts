@@ -773,6 +773,19 @@ export class Game {
       p.cd = d.cd;
     }
   }
+  /**
+   * Arayüz için: bu silahın ŞU ANKİ tam soğuma süresi (seviye + istatistik).
+   *
+   * ⚠️ HUD `w.def.cooldownSec` (HAM TABAN) ile bölüyordu. `w.cd` ise gerçek
+   * soğumayla dolduruluyor — yani soğuma indirimi olan bir oyuncuda halka
+   * hiçbir zaman tamamlanmıyor, cezası olanda tavana yapışıyordu. Onluk
+   * atama noktasına ayrı ayrı `cdMax` yazmak yerine tek okuma noktası:
+   * sapması imkânsız.
+   */
+  cooldownMaxOf(w: OwnedWeapon): number {
+    return Math.max(0.001, this.wCooldown(this.hero, w));
+  }
+
   /** Silahın o seviyedeki bekleme süresi — Cooldown istatistiği uygulanır */
   private wCooldown(h: Hero, w: OwnedWeapon) {
     return weaponCooldownAt(w.def, w.level) * h.stats.cooldown;
