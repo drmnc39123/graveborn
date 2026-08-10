@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { panelUnlocked } from '@/lib/testMode';
-import { BTN, PixelButton } from '@/components/ui/kit';
+import { BTN, Icon, IconText, PixelButton } from '@/components/ui/kit';
 import { QUESTS } from '@/game/quests';
 import type { Progress } from '@/game/progress';
 import { claimQuest, fetchQuests, type QuestState } from '@/lib/gameSession';
@@ -77,6 +77,11 @@ export function QuestPanel({ onChange, onError }: {
                 opacity: q.claimed ? 0.55 : 1,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                  {/* ⚠️ İkon DURUM söylüyor: dolu yıldız bitti, soluk yıldız
+                      devam ediyor. Metni okumadan önce satırın hangi hâlde
+                      olduğu görünsün — üç görevlik bir listede bile bu fark
+                      "bugün ne kaldı" sorusunu bir bakışa indiriyor. */}
+                  <Icon name={q.done ? 'star' : 'starOff'} dim={!q.done} />
                   <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 900,
                     color: q.claimed ? C.boneFaint : C.bone,
                     textDecoration: q.claimed ? 'line-through' : 'none' }}>
@@ -125,28 +130,22 @@ export function QuestPanel({ onChange, onError }: {
         display: 'flex', alignItems: 'center', gap: 10,
       }}>
         <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 11.5, fontWeight: 900, color: C.bone }}>
+          <IconText name="gem" style={{ fontSize: 11.5, fontWeight: 900, color: C.bone }}>
             All three
-          </span>
+          </IconText>
           <span style={{ display: 'block', fontSize: 11, color: C.boneFaint }}>
             {st.bonus.claimed ? 'Taken. Come back tomorrow.'
               : st.bonus.ready ? 'Everything is done — take it.'
               : 'Claim all three to open this.'}
           </span>
         </span>
-        <button
+        <PixelButton
+          variant={BTN.action} scale={2} active={st.bonus.ready && !st.bonus.claimed}
           onClick={() => (st.bonus.ready && !st.bonus.claimed ? al('__bonus') : undefined)}
           disabled={!st.bonus.ready || st.bonus.claimed || busy}
-          style={{
-            all: 'unset', cursor: st.bonus.ready && !st.bonus.claimed ? 'pointer' : 'default',
-            padding: '7px 13px', borderRadius: 7, fontSize: 12, fontWeight: 900,
-            color: st.bonus.ready && !st.bonus.claimed ? '#1a0508' : C.boneFaint,
-            background: st.bonus.ready && !st.bonus.claimed
-              ? `linear-gradient(180deg, ${C.candleSoft}, ${C.candle})`
-              : 'rgba(227,216,192,0.07)',
-          }}>
+          style={{ fontSize: 12, fontWeight: 900, minWidth: 0, padding: '0 12px' }}>
           {st.bonus.claimed ? '✓' : `+${st.bonus.dust}`}
-        </button>
+        </PixelButton>
       </div>
 
       <div style={{ marginTop: 10, fontSize: 11, color: C.boneFaint, lineHeight: 1.55 }}>

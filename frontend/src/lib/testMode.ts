@@ -84,14 +84,19 @@ export const TEST_GEAR = {
   ],
 };
 
+// ⚠️ ŞEKİL `GuildSummary` İLE BİREBİR: id · name · TAG · level · members · CAP.
+// İlk sürümde `tag` ve `cap` YOKTU, `treasury` ise fazladan vardı (o `MyGuild`'e
+// ait). Ekranda sonucu şuydu: her satırın başında boş `[]` ve üye sayısı "14/"
+// diye yarım. Panelde hata sandım; şekli okuyunca sahte verinin eksik olduğu
+// çıktı — magnet olayının aynısı, üçüncü kez.
 export const TEST_GUILDS = {
-  cost: 5000,
+  cost: 25_000,
   wallet: 'TESTwa11et000000000000000000000000000000000',
   mine: null,
   list: [
-    { id: 'gu1', name: 'The Sunless Choir', members: 14, level: 3, treasury: 42_000 },
-    { id: 'gu2', name: 'Marrow & Ash', members: 8, level: 2, treasury: 11_500 },
-    { id: 'gu3', name: 'Gravebound', members: 27, level: 5, treasury: 180_400 },
+    { id: 'gu1', name: 'The Sunless Choir', tag: 'SUN', level: 3, members: 14, cap: 20 },
+    { id: 'gu2', name: 'Marrow & Ash', tag: 'ASH', level: 2, members: 8, cap: 15 },
+    { id: 'gu3', name: 'Gravebound', tag: 'GRV', level: 5, members: 27, cap: 30 },
   ],
 };
 
