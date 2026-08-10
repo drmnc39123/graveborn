@@ -11,6 +11,7 @@
 // "birazdan tekrar" der.
 
 import { useCallback, useEffect, useState } from 'react';
+import { BTN, PixelButton } from '@/components/ui/kit';
 import { panelUnlocked } from '@/lib/testMode';
 import { DUEL, duelTier } from '@/game/duel';
 import { stageById } from '@/game/config';
@@ -99,7 +100,11 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
           oyununa dönüyordu. Bu düğme PUAN YAKINLIĞINA göre eşleştiriyor —
           karşına dengin çıkıyor. Liste yine duruyor: kimi seçtiğini bilmek
           isteyen seçebilsin. */}
-      <button
+      {/* ⚠️ BTN.strong — eşleşme aramak bir KOŞU açıyor, yani geri dönüşü
+          olmayan bir taahhüt. Altın doku "gold harcıyorsun" der ve yanıltırdı;
+          burada harcanan gold değil, günün düello hakkı. */}
+      <PixelButton
+        variant={BTN.strong} scale={3}
         disabled={araniyor}
         onClick={() => {
           setAraniyor(true);
@@ -108,21 +113,9 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
             .catch((e) => onError(e instanceof Error ? e.message : 'No match found.'))
             .finally(() => setAraniyor(false));
         }}
-        style={{
-          all: 'unset', boxSizing: 'border-box', width: '100%', marginBottom: 13,
-          cursor: araniyor ? 'default' : 'pointer', textAlign: 'center',
-          padding: '13px 14px', borderRadius: 9,
-          fontSize: 13.5, fontWeight: 900, letterSpacing: 1.6, color: '#ffd9df',
-          background: 'linear-gradient(180deg, rgba(160,18,38,0.55), rgba(120,12,28,0.36))',
-          border: '1px solid rgba(228,101,122,0.6)',
-          opacity: araniyor ? 0.6 : 1,
-        }}>
+        style={{ width: '100%', marginBottom: 13, fontSize: 13, fontWeight: 900, letterSpacing: 1.4 }}>
         {araniyor ? 'LOOKING FOR SOMEONE…' : 'FIND A MATCH'}
-        <span style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: 0.4,
-          color: 'rgba(255,217,223,0.72)', marginTop: 3 }}>
-          the server picks someone near your standing
-        </span>
-      </button>
+      </PixelButton>
 
       {/* ── SEZON SIRALAMASI — KENDİ KARTINDA ──
           ⚠️ Koşu tablosundan AYRI. Düellonun puanı bambaşka bir eksende
@@ -260,20 +253,13 @@ function Row({ row, onChallenge, onError }: {
           </span>
           <span style={{ fontSize: 9, color: C.boneFaint, letterSpacing: 0.8 }}>DEPTH</span>
         </span>
-        <button
+        <PixelButton
+          variant={BTN.strong} scale={2}
+          disabled={!!row.blocker}
           onClick={() => (row.blocker ? onError(row.blocker) : onChallenge(row.id))}
-          style={{
-            all: 'unset', flexShrink: 0, cursor: 'pointer',
-            padding: '7px 11px', borderRadius: 7, fontSize: 11, fontWeight: 900,
-            letterSpacing: 0.8, textAlign: 'center',
-            color: row.blocker ? C.boneFaint : '#ffd9df',
-            background: row.blocker
-              ? 'rgba(255,255,255,0.05)'
-              : 'linear-gradient(180deg, rgba(160,18,38,0.45), rgba(120,12,28,0.32))',
-            border: `1px solid ${row.blocker ? 'rgba(255,255,255,0.12)' : 'rgba(228,101,122,0.55)'}`,
-          }}>
+          style={{ flexShrink: 0, fontSize: 11, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           ANSWER
-        </button>
+        </PixelButton>
       </div>
       {/* Engel varsa SEBEBİ kartın içinde — tıklamadan önce okunsun */}
       {row.blocker && (
