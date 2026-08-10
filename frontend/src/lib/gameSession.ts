@@ -244,9 +244,18 @@ export interface Listing {
 
 export const marketAvailable = () => isWallet();
 
-export async function fetchListings(): Promise<{ listings: Listing[]; tokenEnabled: boolean }> {
+/**
+ * ⚠️ `minGold`/`maxListings` SUNUCUDAN geliyor — panelde elle kopyalanmıştı
+ * (`MarketPanel.tsx`). İki kopya, biri değişince diğerinin sessizce yalan
+ * söylemesi demek: oyuncuya "min 50" yazıp sunucunun 100 istemesi.
+ * ⚠️ Opsiyonel bırakıldı: eski bir sunucu sürümü alan göndermezse panel
+ * kendi varsayılanına düşer, çökmez.
+ */
+export async function fetchListings(): Promise<{
+  listings: Listing[]; tokenEnabled: boolean; minGold?: number; maxListings?: number;
+}> {
   // Emir defteri herkese açık — demo oyuncusu da bakabilir, sadece satamaz.
-  return api<{ listings: Listing[]; tokenEnabled: boolean }>('/market/listings');
+  return api<{ listings: Listing[]; tokenEnabled: boolean; minGold?: number; maxListings?: number }>('/market/listings');
 }
 
 export async function fetchMyListings(): Promise<{ listings: Listing[]; escrowedGold: number }> {

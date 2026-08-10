@@ -230,3 +230,35 @@ export const TEST_TICKETS = [
     ],
   },
 ];
+
+/**
+ * ⚠️ `Listing[]` — emir defteri. Şekil `gameSession.ts`teki `Listing` ile
+ * BİREBİR: `priceGrave` METİN (2^53 tuzağı), `status`/`createdAt`/`buyer` var.
+ *
+ * ⚠️ BİRİM FİYATLAR KASITLI OLARAK DAĞINIK. Hepsi aynı olsaydı sıralama
+ * düğmeleri ekranda hiçbir şey değiştirmez ve "sıralama çalışıyor" diye
+ * yanlış bir izlenim verirdi. Aşağıda per-gold 1,90 ile 3,40 arasında;
+ * en ucuz `mk3` (1,90) ve BEST PRICE onu göstermeli.
+ *
+ * ⚠️ Miktarlar da dağınık (120 … 8.000) ki MIN/MAX GOLD filtresi ölçülebilsin.
+ */
+export const TEST_LISTINGS = [
+  { id: 'mk1', seller: 'Ashwa1ker00000000000000000000000000000000000', goldAmount: 500,
+    priceGrave: '1400', status: 'active', createdAt: '2026-08-10T09:00:00Z', buyer: null },
+  { id: 'mk2', seller: 'Cryptkeep3r000000000000000000000000000000000', goldAmount: 2500,
+    priceGrave: '8500', status: 'active', createdAt: '2026-08-10T11:20:00Z', buyer: null },
+  { id: 'mk3', seller: 'B0nesinger00000000000000000000000000000000000', goldAmount: 8000,
+    priceGrave: '15200', status: 'active', createdAt: '2026-08-09T18:05:00Z', buyer: null },
+  { id: 'mk4', seller: 'TESTwa11et000000000000000000000000000000000', goldAmount: 1200,
+    priceGrave: '3960', status: 'active', createdAt: '2026-08-11T07:40:00Z', buyer: null },
+  { id: 'mk5', seller: 'Gravebound00000000000000000000000000000000000', goldAmount: 120,
+    priceGrave: '408', status: 'active', createdAt: '2026-08-11T08:15:00Z', buyer: null },
+  { id: 'mk6', seller: 'Ashwa1ker00000000000000000000000000000000000', goldAmount: 3400,
+    priceGrave: '7480', status: 'active', createdAt: '2026-08-10T22:10:00Z', buyer: null },
+];
+
+/** ⚠️ Kendi ilanım — `mk4` defterde de var, "HIDE MINE" filtresi ölçülebilsin. */
+export const TEST_MY_LISTINGS = {
+  listings: [TEST_LISTINGS[3]],
+  escrowedGold: 1200,
+};

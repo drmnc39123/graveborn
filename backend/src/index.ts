@@ -34,7 +34,8 @@ import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
 import {
-  MarketError, cancelListing, createListing, escrowedGold, listActive, listMine, tokenEnabled,
+  MAX_ACTIVE_LISTINGS, MIN_GOLD, MarketError, cancelListing, createListing,
+  escrowedGold, listActive, listMine, tokenEnabled,
 } from './market.js';
 import { seedFromString } from '@game/rng';
 import { wagerPayout } from '@game/wager';
@@ -1420,6 +1421,12 @@ app.get('/market/listings', wrap(async (req, res) => {
   res.json({
     listings: await listActive(Number.isFinite(limit) ? limit : 50, Number.isFinite(offset) ? offset : 0),
     tokenEnabled: tokenEnabled(),
+    // ⚠️ KURALLAR SUNUCUDAN. `MIN_GOLD` ve `MAX_ACTIVE_LISTINGS` panelde ELLE
+    // KOPYALANMIŞTI (MarketPanel.tsx). İki kopya demek, biri değişince
+    // diğerinin sessizce yalan söylemesi demek: oyuncuya "min 50" yazıp
+    // sunucunun 100 istemesi. Tek kaynak burası.
+    minGold: MIN_GOLD,
+    maxListings: MAX_ACTIVE_LISTINGS,
   });
 }));
 
