@@ -88,9 +88,12 @@ export function QuestPanel({ onChange, onError }: {
                   {q.claimed ? (
                     <span style={{ fontSize: 11, fontWeight: 900, color: C.ok }}>✓</span>
                   ) : (
-                    {/* ⚠️ BTN.action — ödül TOZ, gold değil. Altın doku
-                        "gold harcıyorsun/kazanıyorsun" demek; toz ayrı bir para ve
-                        onu altın göstermek iki ekonomiyi karıştırırdı. */}
+                    // ⚠️ BTN.action — ödül TOZ, gold değil. Altın doku "gold
+                    // harcıyorsun/kazanıyorsun" demek; tozu altın göstermek iki
+                    // ekonomiyi karıştırırdı.
+                    // ⚠️ Bu yorum JSX yorumu ({/* */}) OLAMAZ: ternary'nin dalı
+                    // TEK bir ifade olmak zorunda, araya JSX yorumu koymak
+                    // derlemeyi kırıyor. Bir kez kırdı.
                     <PixelButton
                       variant={BTN.action} scale={2} active={q.done}
                       onClick={() => (q.done ? al(q.id) : undefined)}
