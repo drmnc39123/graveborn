@@ -55,13 +55,19 @@ export function RecordsPanel({ progress, onChange, onError }: {
           : tab === 'history' ? 'Every road walked' : 'Deepest descents'}
       />
 
+      {/* 🔴 SEKMELER KESİLİYORDU: "MY …", "DEE…", "ARM…". Sebep `flex: 1` ile
+          beş düğmeyi eşit bölmekti — `PixelButton` ölçek 2'de kenarlığa 64 px
+          harcıyor (48×16 varlığın 16'şar piksellik iki kenarı × 2), yani dar
+          bir sütunda metne yer kalmıyor ve `textOverflow: ellipsis` devreye
+          giriyor. Düğmeler artık DOĞAL genişlikte; sığmazsa `flexWrap` ikinci
+          satıra indiriyor. Okunmayan bir sekme, olmayan bir sekmedir. */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
         <PixelButton variant="02A" scale={2} active={tab ==='record'} onClick={() => setTab('record')}
-          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           MY RECORD
         </PixelButton>
         <PixelButton variant="02A" scale={2} active={tab ==='deeds'} onClick={() => setTab('deeds')}
-          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           DEEDS{claimableCount > 0 ? ` (${claimableCount})` : ''}
         </PixelButton>
         {/* ⚠️ CEPHANELİK BURADA, bölüm seçiminde DEĞİL. Tavern zaten
@@ -69,18 +75,18 @@ export function RecordsPanel({ progress, onChange, onError }: {
             bir şey. Bölüm seçimine koymak koşuya girmeden önceki ekranı
             kalabalıklaştırırdı. */}
         <PixelButton variant="02A" scale={2} active={tab ==='armoury'} onClick={() => setTab('armoury')}
-          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           ARMOURY{kilitli > 0 ? ` (${kilitli})` : ''}
         </PixelButton>
         {/* ⚠️ Koşu geçmişi AYRI BİR SAYFA (/profile) DEĞİL, Tavern'in bir
             sekmesi. Bu oyunda profil zaten burası; ayrı bir rota açmak aynı
             bilgiyi iki yerde göstermek olurdu. */}
         <PixelButton variant="02A" scale={2} active={tab ==='history'} onClick={() => setTab('history')}
-          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           HISTORY
         </PixelButton>
         <PixelButton variant="02A" scale={2} active={tab ==='board'} onClick={() => setTab('board')}
-          style={{ flex: 1, fontSize: 11, fontWeight: 900, letterSpacing: 1.2 }}>
+          style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           LEADERBOARD
         </PixelButton>
       </div>
@@ -285,11 +291,11 @@ function Leaderboard() {
   const secici = (
     <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
       <PixelButton variant="02A" scale={2} active={scope === 'all'} onClick={() => setScope('all')}
-        style={{ flex: 1, fontSize: 10.5, fontWeight: 900, letterSpacing: 1.1 }}>
+        style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 10px' }}>
         ALL-TIME
       </PixelButton>
       <PixelButton variant="02A" scale={2} active={scope === 'season'} onClick={() => setScope('season')}
-        style={{ flex: 1, fontSize: 10.5, fontWeight: 900, letterSpacing: 1.1 }}>
+        style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 10px' }}>
         THIS WEEK
       </PixelButton>
     </div>
