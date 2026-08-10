@@ -66,9 +66,27 @@ export function LevelUpCard({ offer, index, onPick, weapons, passives }: {
 }) {
   const silah = offer.kind.startsWith('weapon');
   const yeni = offer.kind.endsWith('new');
-  const def = silah ? weaponById(offer.id) : undefined;
+
+  // ⚠️ TEKLİF ID'Sİ ÖNEKLİ. Motor `w:lash` / `p:sinew` üretiyor
+  // (engine.ts `rollOffers`) çünkü silah ve pasif id'leri çakışabilir.
+  // Kart bu öneki SÖKMEDEN arama yapıyordu ve üç şey birden sessizce
+  // ölmüştü — hiçbiri hata vermediği için de kimse fark etmemişti:
+  //
+  //   weaponById('w:lash')            → undefined  ⇒ desen etiketi ve
+  //                                      "nasıl ateş eder" satırı hiç yok
+  //   weaponArt('w:lash')             → yedek ikon ⇒ her silah aynı ikon
+  //   EVOLUTIONS.find(e.weapon===...) → asla eşleşmez
+  //                                   ⇒ EVRİM İPUCU HİÇ GÖSTERİLMEDİ
+  //
+  // Sonuncusu en pahalısı: bu dosyanın kendi başlığı evrim ipucunu
+  // "oyuncunun bilmesi gereken en değerli bilgi" diye tarif ediyor.
+  //
+  // ⚠️ `onPick`e ÖNEKLİ id gitmeli — motorun `choose()` beklediği o.
+  const oz = offer.id.replace(/^[wp]:/, '');
+
+  const def = silah ? weaponById(oz) : undefined;
   const pat = def ? PATTERN_TEXT[def.pattern] : undefined;
-  const icon = silah ? weaponArt(offer.id).icon : passiveIcon(offer.id);
+  const icon = silah ? weaponArt(oz).icon : passiveIcon(oz);
 
   const lv = offer.level ?? 0;
   const sonraki = lv + 1;
@@ -84,7 +102,7 @@ export function LevelUpCard({ offer, index, onPick, weapons, passives }: {
     if (n1 > n0) deltas.push({ label: 'PROJECTILES', text: `+${n1 - n0}` });
   }
 
-  const evo = evolutionHint(offer.id, offer.kind, offer.level, weapons, passives);
+  const evo = evolutionHint(oz, offer.kind, offer.level, weapons, passives);
 
   return (
     <Card accent={silah && yeni} onClick={() => onPick(offer.id)}

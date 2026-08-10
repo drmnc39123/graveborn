@@ -499,7 +499,7 @@ export default function PlayPage() {
 
             <PixelButton variant={BTN.strong} scale={3} onClick={() => setPayout(null)}
               style={{ marginTop: 18, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
-              Back to the village
+              BACK TO THE VILLAGE
             </PixelButton>
           </div>
         </div>
@@ -571,7 +571,7 @@ export default function PlayPage() {
 
             <PixelButton variant={BTN.strong} scale={3} onClick={() => setPayout(null)}
               style={{ marginTop: 16, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
-              Back to the village
+              BACK TO THE VILLAGE
             </PixelButton>
           </div>
         </div>
@@ -679,7 +679,7 @@ export default function PlayPage() {
             )}
             <PixelButton variant={BTN.strong} scale={3} onClick={() => setPayout(null)}
               style={{ marginTop: 18, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
-              Continue
+              CONTINUE
             </PixelButton>
           </div>
         </div>

@@ -16,7 +16,7 @@ import { ENEMY_ART, FALLEN_ART, PET_ART } from './sprites.js';
 import { PETS } from './pets.js';
 import { ICON, STAT_ICON, iconSrc, type IconName } from '../lib/icons.js';
 import { FORGE } from './forge.js';
-import { PASSIVES } from './config.js';
+import { PASSIVES, WEAPONS, EVOLVED } from './config.js';
 import { pumpFx, resetFx, shakeOffset, takeFreeze } from './fx.js';
 
 const FAIL: string[] = [];
@@ -378,6 +378,52 @@ console.log('\n[10] Kritik vuruş — zar KOŞULSUZ atılıyor mu');
   check('crit=1 iken TÜM vuruşlar kritik', normalSayisi === 0 && kritikSayisi > 0,
     `${kritikSayisi} kritik / ${normalSayisi} normal`);
 }
+
+// ── [11] TEKLİF ID'Sİ ÖNEKLİ, ARAMA ÇIPLAK ────────────────────────────
+//
+// ⚠️ NİYE VAR: `rollOffers` teklif id'sini `w:lash` / `p:sinew` diye
+// önekliyor, ama `weaponById`/`weaponArt`/`EVOLUTIONS` ÇIPLAK id bekliyor.
+// LevelUpCard öneki sökmeden arıyordu; hiçbiri hata atmadığı, sadece
+// `undefined` döndüğü için kart sessizce eksik çizildi ve EVRİM İPUCU
+// oyunun ömrü boyunca HİÇ görünmedi.
+console.log('');
+console.log('[11] Teklif id öneki');
+{
+  const g = new Game(97531);
+  g.setViewport(1280, 720);
+  // ⚠️ SADECE ADIMLAMAK YETMİYOR: XP küreleri yerden TOPLANIYOR ve başsız
+  // simülasyonda oyuncu hareket etmiyor — 20.000 adımda tek seviye
+  // atlamadı. Seviye atlaması özel bir yolla değil, motorun kendi
+  // `addXp` yolundan tetikleniyor; başka türlüsü teklif havuzunu
+  // gerçekte olmayan bir durumdan üretirdi.
+  const ozel = g as unknown as { addXp(h: unknown, n: number): void; hero: unknown };
+  for (let i = 0; i < 400 && g.offers.length === 0; i++) {
+    g.step();
+    ozel.addXp(ozel.hero, 50);
+  }
+
+  check('level-up teklifleri üretildi', g.offers.length > 0, `${g.offers.length} teklif`);
+
+  let onekli = 0, eslesen = 0, hamEslesen = 0;
+  for (const o of g.offers) {
+    if (/^[wp]:/.test(o.id)) onekli++;
+    const oz = o.id.replace(/^[wp]:/, '');
+    const bul = (id: string) => o.kind.startsWith('weapon')
+      ? WEAPONS.some((w) => w.id === id) || EVOLVED.some((w) => w.id === id)
+      : PASSIVES.some((p) => p.id === id);
+    if (bul(oz)) eslesen++;
+    // ⚠️ ÇİFT TARAFLI ÖLÇÜM: öneki SÖKMEZSEN eşleşMEMELİ. Bu sayaç
+    // olmasaydı id'ler bir gün çıplağa dönse test yine geçer ve koruma
+    // sessizce anlamını yitirirdi.
+    if (bul(o.id)) hamEslesen++;
+  }
+  check("tüm teklif id'leri önekli", onekli === g.offers.length, `${onekli}/${g.offers.length}`);
+  check('öneki sökülen her id gerçek bir tanım buluyor', eslesen === g.offers.length,
+    `${eslesen}/${g.offers.length}`);
+  check('önekli id HAM hâliyle hiçbir tanımı bulMAMALI', hamEslesen === 0,
+    `${hamEslesen} yanlış eşleşme`);
+}
+
 
 console.log(`\n${FAIL.length === 0 ? '✅ EFEKT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
