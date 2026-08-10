@@ -370,6 +370,30 @@ console.log('[Y] Yoldaş görünürlüğü');
     `${g2.petStrikes.length} / 24`);
   check('boşaltılmayan koruma kuyruğu tavanı aşmıyor', g2.petWards.length <= 12,
     `${g2.petWards.length} / 12`);
+
+  // ── WARDEN: iyileşme ANINDA görünür bir darbe var mı ──
+  //
+  // ⚠️ HASAR ZORLANMAK ZORUNDA. İlk ölçümde warden 60 saniyede SIFIR eylem
+  // yaptı ve "warden bozuk" sandım; oysa o koşuda oyuncu hiç hasar
+  // ALMAMIŞTI, yani iyileştirecek bir şey yoktu. Warden'ı canı TAM oyuncuyla
+  // ölçmek, itfaiyeyi yangınsız binada test etmek gibi.
+  const warden = PETS.find((p) => p.role === 'warden')!;
+  const g3 = new Game(4242, undefined, undefined, undefined, undefined, 1, 0, null,
+    [toRunPet(warden, 10)]);
+  g3.setViewport(1280, 720);
+  const kahraman = (g3 as unknown as { hero: { hp: number; stats: { maxHp: number } } }).hero;
+  let darbe = 0, iyilesme = 0;
+  for (let i = 0; i < 3600 && g3.phase === 'running'; i++) {
+    kahraman.hp = Math.min(kahraman.hp, kahraman.stats.maxHp * 0.5);   // yarası hep açık
+    const onc = kahraman.hp;
+    g3.step();
+    if (kahraman.hp > onc) iyilesme++;
+    darbe += g3.petWards.length;
+    g3.petWards.length = 0;
+  }
+  check('warden yarası açık oyuncuyu iyileştiriyor', iyilesme > 0, `${iyilesme} iyileşme`);
+  check('HER iyileşmenin görünür bir darbesi var', darbe === iyilesme,
+    `${darbe} darbe / ${iyilesme} iyileşme`);
 }
 
 
