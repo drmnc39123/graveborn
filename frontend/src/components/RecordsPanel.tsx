@@ -9,7 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { STAGES, depthGold } from '@/game/config';
 import { FORGE, costOf, spentOn } from '@/game/forge';
 import { paidDepth, type Progress } from '@/game/progress';
-import { PixelButton } from '@/components/ui/kit';
+import { PixelButton, BTN } from '@/components/ui/kit';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import {
   fetchLeaderboard, fetchProfile, fetchSeasonBoard,
@@ -62,11 +62,11 @@ export function RecordsPanel({ progress, onChange, onError }: {
           giriyor. Düğmeler artık DOĞAL genişlikte; sığmazsa `flexWrap` ikinci
           satıra indiriyor. Okunmayan bir sekme, olmayan bir sekmedir. */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        <PixelButton variant="02A" scale={2} active={tab ==='record'} onClick={() => setTab('record')}
+        <PixelButton variant={BTN.strong} scale={2} active={tab ==='record'} onClick={() => setTab('record')}
           style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           MY RECORD
         </PixelButton>
-        <PixelButton variant="02A" scale={2} active={tab ==='deeds'} onClick={() => setTab('deeds')}
+        <PixelButton variant={BTN.strong} scale={2} active={tab ==='deeds'} onClick={() => setTab('deeds')}
           style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           DEEDS{claimableCount > 0 ? ` (${claimableCount})` : ''}
         </PixelButton>
@@ -74,18 +74,18 @@ export function RecordsPanel({ progress, onChange, onError }: {
             "ne kazandım" sorusunun sorulduğu yer; silah kilidi de kazanılan
             bir şey. Bölüm seçimine koymak koşuya girmeden önceki ekranı
             kalabalıklaştırırdı. */}
-        <PixelButton variant="02A" scale={2} active={tab ==='armoury'} onClick={() => setTab('armoury')}
+        <PixelButton variant={BTN.strong} scale={2} active={tab ==='armoury'} onClick={() => setTab('armoury')}
           style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           ARMOURY{kilitli > 0 ? ` (${kilitli})` : ''}
         </PixelButton>
         {/* ⚠️ Koşu geçmişi AYRI BİR SAYFA (/profile) DEĞİL, Tavern'in bir
             sekmesi. Bu oyunda profil zaten burası; ayrı bir rota açmak aynı
             bilgiyi iki yerde göstermek olurdu. */}
-        <PixelButton variant="02A" scale={2} active={tab ==='history'} onClick={() => setTab('history')}
+        <PixelButton variant={BTN.strong} scale={2} active={tab ==='history'} onClick={() => setTab('history')}
           style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           HISTORY
         </PixelButton>
-        <PixelButton variant="02A" scale={2} active={tab ==='board'} onClick={() => setTab('board')}
+        <PixelButton variant={BTN.strong} scale={2} active={tab ==='board'} onClick={() => setTab('board')}
           style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px' }}>
           LEADERBOARD
         </PixelButton>
@@ -290,11 +290,11 @@ function Leaderboard() {
 
   const secici = (
     <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-      <PixelButton variant="02A" scale={2} active={scope === 'all'} onClick={() => setScope('all')}
+      <PixelButton variant={BTN.strong} scale={2} active={scope === 'all'} onClick={() => setScope('all')}
         style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 10px' }}>
         ALL-TIME
       </PixelButton>
-      <PixelButton variant="02A" scale={2} active={scope === 'season'} onClick={() => setScope('season')}
+      <PixelButton variant={BTN.strong} scale={2} active={scope === 'season'} onClick={() => setScope('season')}
         style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 10px' }}>
         THIS WEEK
       </PixelButton>

@@ -6,6 +6,7 @@
 // aksine burada belirsizlik yok — ne kadar verirsen o kadar yükselir.
 
 import { useCallback, useState } from 'react';
+import { BTN, PixelButton } from '@/components/ui/kit';
 import { OSSUARY, ossuaryCost, ossuarySpent, ossuaryTier, ossuaryTierProgress } from '@/game/ossuary';
 import type { Progress } from '@/game/progress';
 import { raiseOssuary } from '@/lib/gameSession';
@@ -66,23 +67,14 @@ export function OssuarySection({ progress, onChange, onError }: {
             </div>
           </div>
 
-          <button onClick={raise} disabled={!canBuy}
-            style={{
-              all: 'unset', boxSizing: 'border-box', display: 'block', width: '100%',
-              marginTop: 13, padding: '11px 14px', borderRadius: 8, textAlign: 'center',
-              cursor: canBuy ? 'pointer' : 'default', opacity: canBuy ? 1 : 0.45,
-              background: canBuy
-                ? 'linear-gradient(180deg, rgba(160,18,38,0.5), rgba(120,12,28,0.34))'
-                : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${canBuy ? 'rgba(228,101,122,0.6)' : 'rgba(255,255,255,0.12)'}`,
-            }}>
-            <span style={{ fontSize: 12, fontWeight: 900, letterSpacing: 1, color: canBuy ? '#ffd9df' : C.boneFaint }}>
-              {busy ? 'LAYING STONE…' : 'LAY A STONE'}
-            </span>
-            <span style={{ fontSize: 11, color: C.candle, marginLeft: 8 }}>
-              {cost.toLocaleString('en-US')} gold
-            </span>
-          </button>
+          {/* ⚠️ BTN.buy — anıt taşı GOLD ile alınıyor. Ossuary ekonominin
+              tavansız sink'i; altın doku "burada gold gidiyor" der. */}
+          <PixelButton
+            variant={BTN.buy} scale={3}
+            onClick={raise} disabled={!canBuy}
+            style={{ width: '100%', marginTop: 13, fontSize: 12, fontWeight: 900, letterSpacing: 1 }}>
+            {busy ? 'LAYING STONE…' : `LAY A STONE · ${cost.toLocaleString('en-US')} G`}
+          </PixelButton>
         </div>
 
         <div style={{

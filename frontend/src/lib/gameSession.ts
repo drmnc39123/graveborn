@@ -11,7 +11,7 @@
 
 import {
   isTestMode, TEST_QUESTS, TEST_GEAR, TEST_GUILDS, TEST_FOLLOWS,
-  TEST_SKILLS, TEST_DUELS, TEST_PVP_SEASON,
+  TEST_SKILLS, TEST_DUELS, TEST_PVP_SEASON, TEST_BOSS, TEST_CRYPT,
 } from './testMode';
 import {
   allowedStartDepth, applyRunResult, loadProgress, paidDepth, saveProgress,
@@ -367,6 +367,8 @@ export const worldBossAvailable = () => isWallet();
  * Cüzdan kapısı BOSS ODASINA GİRMEKTE (`/boss/start`), izlemekte değil.
  */
 export async function fetchWorldBoss(): Promise<BossState> {
+  // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
+  if (isTestMode()) return TEST_BOSS as never;
   return api<BossState>('/worldboss');
 }
 
@@ -650,6 +652,8 @@ export interface CryptState {
 }
 
 export async function fetchCrypt(): Promise<CryptState> {
+  // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
+  if (isTestMode()) return TEST_CRYPT as never;
   return api<CryptState>('/crypt');
 }
 

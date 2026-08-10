@@ -159,3 +159,38 @@ export const TEST_PVP_SEASON = {
     { week: 30, rank: 7, rating: 1240, cosmetic: null, dust: 60 },
   ],
 };
+
+/**
+ * ⚠️ `BossState` — haftalık ortak boss. `art` alanı `sprites.ts` anahtarı
+ * olmalı, uydurma bir ad değil; yanlışsa panel boş bir kutu çizer.
+ */
+export const TEST_BOSS = {
+  week: 32,
+  bossId: 'wb_32',
+  name: 'The Unburied',
+  epithet: 'it remembers every grave',
+  art: 'fallen_warden_boss_nightmare',
+  hp: 4_180_000,
+  maxHp: 9_000_000,
+  endsAt: Date.parse('2026-08-14T00:00:00Z'),
+  defeated: false,
+  top: [
+    { wallet: 'B0nesinger00000000000000000000000000000000000', damage: 412_000 },
+    { wallet: 'Ashwa1ker00000000000000000000000000000000000', damage: 388_500 },
+    { wallet: 'TESTwa11et000000000000000000000000000000000', damage: 210_400 },
+    { wallet: 'Cryptkeep3r000000000000000000000000000000000', damage: 96_200 },
+  ],
+  me: { damage: 210_400, rank: 3 },
+};
+
+/** ⚠️ `CryptState` — kademe listesi + kasa + benim kademem. */
+export const TEST_CRYPT = {
+  week: 32,
+  tiers: [
+    { tier: 1, name: 'A Narrow Plot', cost: 12_000, weight: 1, blurb: 'Room enough for one.' },
+    { tier: 2, name: 'A Family Row', cost: 40_000, weight: 3, blurb: 'The stones lean together.' },
+    { tier: 3, name: 'A Sunken Vault', cost: 130_000, weight: 8, blurb: 'Below the frost line.' },
+  ],
+  vault: { balance: 84_500, owners: 37, totalWeight: 96 },
+  me: { tier: 2, claimedWeek: 31 },
+};

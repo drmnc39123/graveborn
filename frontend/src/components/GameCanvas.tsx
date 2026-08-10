@@ -20,7 +20,7 @@ import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import type { RunPet } from '@/game/pets';
 import { C, FONT, glass, ctaButton } from '@/lib/theme';
-import { Banner, Bar, Orb, Slot, PixelButton } from '@/components/ui/kit';
+import { Banner, Bar, Orb, Slot, PixelButton, BTN } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
@@ -457,7 +457,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 </button>
                 {/* Koşudan çıkış — oyuncu bir run'a kilitlenmemeli */}
                 {hud.phase === 'running' && (
-                  <PixelButton variant="02A" scale={2} onClick={() => setConfirmExit(true)}
+                  <PixelButton variant={BTN.strong} scale={2} onClick={() => setConfirmExit(true)}
                     style={{ pointerEvents: 'auto', minWidth: 76, fontSize: 10.5, fontWeight: 900, letterSpacing: 1 }}>
                     EXIT
                   </PixelButton>
@@ -601,11 +601,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
             <span style={{ color: C.candle }}>{Math.floor(hud.rareGold)} gold</span> found this run is yours either way.
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <PixelButton variant="01A" scale={2} onClick={() => setConfirmExit(false)}
+            <PixelButton variant={BTN.action} scale={2} onClick={() => setConfirmExit(false)}
               style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
               KEEP FIGHTING
             </PixelButton>
-            <PixelButton variant="02A" scale={2} onClick={finish}
+            <PixelButton variant={BTN.strong} scale={2} onClick={finish}
               style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
               LEAVE
             </PixelButton>
@@ -637,11 +637,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
             </span>
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <PixelButton variant="02A" scale={2} onClick={() => setRunId((n) => n + 1)}
+            <PixelButton variant={BTN.strong} scale={2} onClick={() => setRunId((n) => n + 1)}
               style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
               TRY AGAIN
             </PixelButton>
-            <PixelButton variant="01A" scale={2} onClick={finish}
+            <PixelButton variant={BTN.action} scale={2} onClick={finish}
               style={{ minWidth: 190, fontSize: 12, fontWeight: 900, letterSpacing: 1.2 }}>
               RETURN TO VILLAGE
             </PixelButton>

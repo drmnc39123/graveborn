@@ -7,12 +7,13 @@
 // tam olarak böyle şeylerin açıkça yazılmasıyla kuruluyor.
 
 import { useCallback, useEffect, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
 import { CRYPT_CUT, cryptShare, cryptTier, cryptUpgradeCost, nextCryptTier } from '@/game/crypt';
 import type { Progress } from '@/game/progress';
 import { buyCryptDeed, claimCrypt, fetchCrypt, type CryptState } from '@/lib/gameSession';
 import { getMode } from '@/lib/session';
 import { Card, CardSection, Tag } from '@/components/ui/cards';
-import { PixelButton } from '@/components/ui/kit';
+import { PixelButton, BTN } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
 
 export function CryptSection({ progress, onChange, onError }: {
@@ -27,10 +28,10 @@ export function CryptSection({ progress, onChange, onError }: {
   const yukle = useCallback(() => {
     fetchCrypt().then(setState).catch(() => setErr(true));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => { if (panelUnlocked(getMode())) yukle(); }, [yukle]);
 
   // ⚠️ Demo modunda sunucu yok — sahte kasa göstermek yerine dürüst ol.
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <Note>
         The Crypt is kept in the village ledger, not on your device. Connect a wallet
@@ -112,7 +113,8 @@ export function CryptSection({ progress, onChange, onError }: {
               <span style={{ fontSize: 13, fontWeight: 900, color: C.bone }}>{suanki?.name}</span>
               <Tag tone="gold">TIER {sahip}</Tag>
               <span style={{ marginLeft: 'auto' }}>
-                <PixelButton variant="02A" scale={2} disabled={!cekilebilir} onClick={cek}>
+                {/* ⚠️ BTN.strong — haftada BİR çekiliyor, geri alınamaz. */}
+                <PixelButton variant={BTN.strong} scale={2} disabled={!cekilebilir} onClick={cek}>
                   {cekilebilir ? `DRAW ${payim.toLocaleString('en-US')}` : 'DRAWN'}
                 </PixelButton>
               </span>
@@ -135,7 +137,8 @@ export function CryptSection({ progress, onChange, onError }: {
               <span style={{ fontSize: 13, fontWeight: 900, color: C.bone }}>{sonraki.name}</span>
               <Tag>WEIGHT ×{sonraki.weight}</Tag>
               <span style={{ marginLeft: 'auto' }}>
-                <PixelButton variant="01A" scale={2} disabled={!alabilir} onClick={satinAl}>
+                {/* ⚠️ BTN.buy — tapu GOLD ile alınıyor; altın doku her yerde aynı şeyi der. */}
+                <PixelButton variant={BTN.buy} scale={2} disabled={!alabilir} onClick={satinAl}>
                   {bedel.toLocaleString('en-US')} G
                 </PixelButton>
               </span>

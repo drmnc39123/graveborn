@@ -7,6 +7,7 @@
 // herkesin gold'u değersizleşirdi.
 
 import { useCallback, useMemo, useState } from 'react';
+import { BTN, PixelButton } from '@/components/ui/kit';
 import { STAGES } from '@/game/config';
 import { WAGER, wagerError, wagerPayout, wagerTarget } from '@/game/wager';
 import { paidDepth, type Progress } from '@/game/progress';
@@ -83,16 +84,12 @@ export function WagerSection({ progress, onChange, onError }: {
               {armed.stake.toLocaleString('en-US')} gold will be taken when the run opens —
               not now. Leaving the run early does not give it back.
             </div>
-            <button onClick={cancel} disabled={busy}
-              style={{
-                all: 'unset', boxSizing: 'border-box', display: 'block', width: '100%',
-                marginTop: 12, padding: '9px 12px', borderRadius: 7, textAlign: 'center',
-                cursor: busy ? 'default' : 'pointer',
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)',
-                fontSize: 11, fontWeight: 900, letterSpacing: 0.8, color: C.boneDim,
-              }}>
+            <PixelButton
+              variant={BTN.action} scale={2}
+              onClick={cancel} disabled={busy}
+              style={{ width: '100%', marginTop: 12, fontSize: 11, fontWeight: 900, letterSpacing: 0.8 }}>
               WITHDRAW THE BET
-            </button>
+            </PixelButton>
           </div>
         </Card>
       ) : (
@@ -164,20 +161,15 @@ export function WagerSection({ progress, onChange, onError }: {
               <Tag>IF YOU MAKE IT</Tag>
             </div>
 
-            <button onClick={place} disabled={!!err || busy}
-              style={{
-                all: 'unset', boxSizing: 'border-box', display: 'block', width: '100%',
-                marginTop: 13, padding: '11px 14px', borderRadius: 8, textAlign: 'center',
-                cursor: err || busy ? 'default' : 'pointer', opacity: err ? 0.45 : 1,
-                background: err
-                  ? 'rgba(255,255,255,0.05)'
-                  : 'linear-gradient(180deg, rgba(160,18,38,0.5), rgba(120,12,28,0.34))',
-                border: `1px solid ${err ? 'rgba(255,255,255,0.12)' : 'rgba(228,101,122,0.6)'}`,
-                fontSize: 12, fontWeight: 900, letterSpacing: 1,
-                color: err ? C.boneFaint : '#ffd9df',
-              }}>
+            {/* ⚠️ BTN.strong — bahis yatırmak GERİ DÖNÜŞSÜZ: gold koşu
+                açılırken yanıyor, kaybedince geri gelmiyor. Altın doku
+                "satın alıyorsun" der ve bu riski gizlerdi. */}
+            <PixelButton
+              variant={BTN.strong} scale={3}
+              onClick={place} disabled={!!err || busy}
+              style={{ width: '100%', marginTop: 13, fontSize: 12, fontWeight: 900, letterSpacing: 1 }}>
               {err ? err.toUpperCase() : busy ? 'PLACING…' : 'PLACE THE BET'}
-            </button>
+            </PixelButton>
           </div>
         </Card>
       )}

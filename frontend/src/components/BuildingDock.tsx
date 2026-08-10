@@ -10,7 +10,7 @@
 // portalıydı. Bu navbar o boşluğu da kapatıyor.
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { PixelButton, Icon } from '@/components/ui/kit';
+import { PixelButton, Icon, BTN } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
@@ -190,7 +190,7 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
         {GROUPS.map((g) => (
           <PixelButton
             key={g.id}
-            variant="01A"
+            variant={BTN.action}
             scale={2}
             active={acikGrup?.id === g.id}
             // Açık gruba tekrar basmak KAPATIR ('none'); başkasına basmak ona geçer
@@ -201,7 +201,7 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
           </PixelButton>
         ))}
         <PixelButton
-          variant="01A"
+          variant={BTN.action}
           scale={2}
           active={open === 'settings'}
           onClick={() => onOpen('settings')}
@@ -259,7 +259,7 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
             return (
               <PixelButton
                 key={id}
-                variant="01A"
+                variant={BTN.action}
                 scale={2}
                 active={open === id}
                 onClick={() => onOpen(id)}
