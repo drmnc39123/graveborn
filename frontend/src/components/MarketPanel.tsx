@@ -179,7 +179,7 @@ export function MarketPanel({
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap',
       }}>
         <span style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>
-          {Math.floor(progress.gold)} GOLD
+          {Math.floor(progress.gold).toLocaleString('en-US')} GOLD
         </span>
         <span style={{ fontSize: 10.5, color: C.boneFaint, textAlign: 'right' }}>
           {escrow > 0 ? `${escrow} gold held in escrow` : 'nothing listed'}<br />

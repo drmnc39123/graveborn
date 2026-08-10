@@ -10,7 +10,7 @@
 // portalıydı. Bu navbar o boşluğu da kapatıyor.
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { PixelButton } from '@/components/ui/kit';
+import { PixelButton, Icon } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
@@ -216,9 +216,14 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
           display: 'flex', gap: 10, alignItems: 'baseline', fontFamily: FONT.ui,
           paddingLeft: 12, marginLeft: 4, borderLeft: `1px solid ${C.border}`,
         }}>
-          <span style={{ fontSize: 14, fontWeight: 900, color: C.candle, whiteSpace: 'nowrap' }}>
+          {/* ⚠️ Oyunun EN ÇOK GÖRÜLEN sayısı bu — navbar her ekranda açık.
+              İkon burada bezeme değil çapa: oyuncu paneller arasında gezerken
+              "gold nerede" sorusunu her seferinde yeniden sormasın. */}
+          <span style={{ fontSize: 14, fontWeight: 900, color: C.candle, whiteSpace: 'nowrap',
+            display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="gold" />
             {Math.floor(gold).toLocaleString('en-US')}
-            <span style={{ fontSize: 9, marginLeft: 3, color: C.candleSoft }}>GOLD</span>
+            <span style={{ fontSize: 9, color: C.candleSoft }}>GOLD</span>
           </span>
           <span style={{ fontSize: 12, fontWeight: 900, color: C.boneFaint, whiteSpace: 'nowrap' }}>
             {grave.toLocaleString('en-US')}

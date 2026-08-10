@@ -22,7 +22,8 @@ import type { Progress } from '@/game/progress';
 import { fetchSkills, saveSkills, type SkillState } from '@/lib/gameSession';
 import { getMode } from '@/lib/session';
 import { CardSection, PanelHead, Tag } from '@/components/ui/cards';
-import { PixelButton } from '@/components/ui/kit';
+import { PixelButton, Icon } from '@/components/ui/kit';
+import { statIcon } from '@/lib/icons';
 import { C, FONT, glass } from '@/lib/theme';
 
 export function SkillPanel({ progress, onChange, onError }: {
@@ -181,11 +182,16 @@ export function SkillPanel({ progress, onChange, onError }: {
               const art = k === 'cooldown' ? (v < 0 ? '−' : '+') : (iyi ? '+' : '−');
               return (
                 <span key={k} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
                   padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 800,
                   color: iyi ? C.candleSoft : '#e4657a',
                   background: iyi ? 'rgba(239,167,46,0.12)' : 'rgba(160,18,38,0.14)',
                   border: `1px solid ${iyi ? `${C.candle}44` : `${C.bad}55`}`,
                 }}>
+                  {/* ⚠️ Aynı stat Forge'da, tılsımda ve burada AYNI ikonla
+                      çıkıyor — eşleme `lib/icons.ts`te tek yerde. Panel başına
+                      ayrı eşleme yazmak, ikonun amacını (tanıma) tersine çevirirdi. */}
+                  <Icon name={statIcon(k)} title={k} />
                   {art}{duz ? Math.round(m * 100) / 100 : `${Math.round(m * 100)}%`}{' '}
                   {STAT_NAME[k as 'might'] ?? k}
                 </span>

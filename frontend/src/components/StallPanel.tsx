@@ -11,6 +11,8 @@ import { useState } from 'react';
 import { CHARMS, CHARM_SLOTS, charmById, type CharmDef } from '@/game/charms';
 import type { Progress } from '@/game/progress';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
+import { Icon, IconText } from '@/components/ui/kit';
+import { statIcon } from '@/lib/icons';
 import { buyCharm } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
 import { C, FONT, glass } from '@/lib/theme';
@@ -48,9 +50,9 @@ export function StallPanel({ progress, onChange }: {
         ...glass(10), padding: '9px 12px', marginBottom: 10, fontFamily: FONT.ui,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>
+        <IconText name="gold" style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>
           {Math.floor(progress.gold).toLocaleString('en-US')} GOLD
-        </span>
+        </IconText>
         <span style={{ fontSize: 10.5, color: C.boneFaint, textAlign: 'right' }}>
           {progress.charms.length}/{CHARM_SLOTS} charms carried
         </span>
@@ -101,7 +103,14 @@ export function StallPanel({ progress, onChange }: {
             <Card key={c.id} dim={dolu}>
               <div style={{ padding: '11px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 900, fontSize: 14, color: C.bone }}>{c.name}</div>
+                  {/* ⚠️ İKON TÜRÜ SÖYLÜYOR, SAYIYI DEĞİL. Sayı zaten `desc`te
+                      ("+25% max health") — ayrıca sayısal çip koymak tekrar olurdu.
+                      İkonun işi tarama: altı tılsım arasında hangisi can, hangisi hasar,
+                      hangisi hız, tek bakışta ayırt edilsin. */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name={statIcon(Object.keys(c.stats)[0] ?? '')} title={Object.keys(c.stats)[0]} />
+                    <span style={{ fontWeight: 900, fontSize: 14, color: C.bone }}>{c.name}</span>
+                  </div>
                   <div style={{ fontSize: 11.5, color: C.boneDim, marginTop: 3 }}>{c.desc}</div>
                   {!dolu && !parasiVar && (
                     <div style={{ fontSize: 10.5, color: C.bad, marginTop: 5 }}>

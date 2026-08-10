@@ -14,7 +14,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ENEMY_ART, FALLEN_ART, PET_ART } from './sprites.js';
 import { PETS } from './pets.js';
-import { ICON, iconSrc, type IconName } from '../lib/icons.js';
+import { ICON, STAT_ICON, iconSrc, type IconName } from '../lib/icons.js';
+import { FORGE } from './forge.js';
+import { PASSIVES } from './config.js';
 import { pumpFx, resetFx, shakeOffset, takeFreeze } from './fx.js';
 
 const FAIL: string[] = [];
@@ -299,6 +301,22 @@ console.log('\n[8b] Mini ikonlar — dosyalar GERÇEKTEN var mı');
   const num = Object.values(ICON);
   check('ikon numaraları BENZERSİZ', new Set(num).size === num.length, `${new Set(num).size}/${num.length}`);
 }
+
+  // ⚠️ HER STAT'IN İKONU OLMALI. `statIcon` bilinmeyen stat'ı sessizce
+  // soru işaretine düşürüyor — bu çalışma zamanında doğru davranış ama
+  // GELİŞTİRME zamanında sessiz bir boşluk: yeni bir Forge satırı ya da pasif
+  // eklendiğinde kimse ikon eklemeyi hatırlamaz ve kart yarım görünür.
+  {
+    const statlar = new Set<string>([
+      ...FORGE.map((u) => u.stat as string),
+      ...PASSIVES.map((x) => x.stat as string),
+    ]);
+    const ikonsuz = [...statlar].filter((st) => !STAT_ICON[st]);
+    check('her Forge/pasif statinin ikonu VAR', ikonsuz.length === 0,
+      ikonsuz.join(', ') || `${statlar.size} stat`);
+    const gecersiz = Object.entries(STAT_ICON).filter(([, ad]) => !(ad in ICON)).map(([st]) => st);
+    check('stat ikonları geçerli isimlere bakıyor', gecersiz.length === 0, gecersiz.join(', ') || 'tamam');
+  }
 
 console.log('\n[9] Leş havuzu');
 {

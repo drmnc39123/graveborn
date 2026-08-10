@@ -31,3 +31,42 @@ export type IconName = keyof typeof ICON;
 export function iconSrc(name: IconName, dim = false): string {
   return `${ICON_DIR}/Icon_${ICON[name]}${dim ? '_Outline' : ''}.png`;
 }
+
+/**
+ * STAT → İKON.
+ *
+ * ⚠️ TEK YERDE DURMAK ZORUNDA. Aynı stat Forge'da, pasif kartında, tılsımda
+ * ve ekipmanda görünüyor; her panelin kendi eşlemesini yazması "aynı şey dört
+ * panelde dört farklı ikon" demekti ve bu, ikon eklemenin amacını (tanıma)
+ * tam tersine çevirirdi.
+ *
+ * ⚠️ İKİ STAT AYNI İKONU PAYLAŞABİLİR ve bu kasıtlı: `crit` ile `critMul`
+ * oyuncu için TEK kavram (kritik vuruş), ikisini ayrı resimle göstermek
+ * olmayan bir ayrımı varmış gibi gösterirdi.
+ */
+export const STAT_ICON: Record<string, IconName> = {
+  might: 'damage',
+  armor: 'armor',
+  maxHp: 'health',
+  recovery: 'flaskRed',
+  cooldown: 'rosette',
+  area: 'target',
+  // ⚠️ Tüy `projSpeed` için — 23 numaralı ikon bir OK TÜYÜ. Hızı değil
+  // MERMİYİ anlatıyor; `moveSpeed`e çizme (11) gidiyor, ikisi karışmasın.
+  projSpeed: 'feather',
+  duration: 'potion',
+  amount: 'gem',
+  moveSpeed: 'speed',
+  magnet: 'magnet',
+  greed: 'gold',
+  growth: 'tome',
+  curse: 'voidMark',
+  revival: 'sigil',
+  crit: 'star',
+  critMul: 'star',
+};
+
+/** Bir stat'ın ikonu — bilinmeyen stat sessizce soru işaretine düşer */
+export function statIcon(stat: string): IconName {
+  return STAT_ICON[stat] ?? 'unknown';
+}

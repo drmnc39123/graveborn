@@ -7,6 +7,8 @@
 import { useMemo } from 'react';
 import { FORGE, costOf, effectText, spentOn, spentOnOne, type ForgeUpgrade } from '@/game/forge';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
+import { Icon, IconText } from '@/components/ui/kit';
+import { statIcon } from '@/lib/icons';
 import type { Progress } from '@/game/progress';
 import { buyUpgrade } from '@/lib/gameSession';
 import { play } from '@/game/sfx';
@@ -49,10 +51,14 @@ export function ForgePanel({
 
       {/* Cüzdan + ilerleme. Artık "bütçe" yok — gold sonsuz akıyor, ağaç doymuyor. */}
       <div style={{ ...glass(10), padding: '9px 12px', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>{Math.floor(progress.gold)} GOLD</span>
+        <IconText name="gold" style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>
+          {/* ⚠️ BINLIK AYRAC: "615533 GOLD" okunmuyor. Panelin geri kalani
+              zaten toLocaleString kullaniyordu, burasi ve MarketPanel unutulmustu. */}
+          {Math.floor(progress.gold).toLocaleString('en-US')} GOLD
+        </IconText>
         <span style={{ fontSize: 10.5, color: C.boneFaint, textAlign: 'right' }}>
           {levels}/{maxLevels} levels forged<br />
-          {spent} gold spent here
+          {spent.toLocaleString('en-US')} gold spent here
         </span>
       </div>
 
@@ -74,6 +80,7 @@ export function ForgePanel({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                      <Icon name={statIcon(u.stat)} scale={1} title={u.stat} />
                       <span style={{ fontWeight: 900, fontSize: 14.5, color: C.bone }}>{u.name}</span>
                       {maxed ? <Tag tone="gold">MAX</Tag> : <Tag>LV {lv}/{u.maxLevel}</Tag>}
                     </div>
