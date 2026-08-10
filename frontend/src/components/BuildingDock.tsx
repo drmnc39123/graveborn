@@ -11,6 +11,7 @@
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { PixelButton, Icon, BTN } from '@/components/ui/kit';
+import { useCountUpInt } from '@/components/ui/motion';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
@@ -133,6 +134,8 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
    */
   footer?: ReactNode;
 }) {
+  // ⚠️ Kesirli gold görünmüyor (`Math.floor` zaten vardı) — sayaç da tamsayı.
+  const sayanGold = useCountUpInt(Math.floor(gold));
   const boxRef = useRef<HTMLDivElement>(null);
   /**
    * Elle yapılan seçim. `null` = seçim yok (açık panelin grubu gösterilir),
@@ -222,7 +225,12 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
           <span style={{ fontSize: 14, fontWeight: 900, color: C.candle, whiteSpace: 'nowrap',
             display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <Icon name="gold" />
-            {Math.floor(gold).toLocaleString('en-US')}
+            {/* ⚠️ SAYAN SAYI. Oyunun en görünür rakamı buydu ve harcama
+                anında ZIPLIYORDU: Forge'da 120.000 gold gidince oyuncunun
+                tek geri bildirimi, bir şeyin değişmiş olmasıydı — DEĞİŞTİĞİNİ
+                görmüyordu. Hareket kapalıyken (`prefers-reduced-motion` ya da
+                `lowGraphics`) anında son değeri gösterir, bilgi kaybolmaz. */}
+            {sayanGold.toLocaleString('en-US')}
             <span style={{ fontSize: 9, color: C.candleSoft }}>GOLD</span>
           </span>
           <span style={{ fontSize: 12, fontWeight: 900, color: C.boneFaint, whiteSpace: 'nowrap' }}>

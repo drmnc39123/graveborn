@@ -28,6 +28,7 @@ import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
+import { motionOff } from '@/components/ui/motion';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
@@ -138,6 +139,9 @@ const PANEL_CERCEVE: Record<string, PanelStyle> = {
  * ⚠️ Franuka çerçevesi 9-slice + `fill` — orta karo yatayda tekrarlıyor,
  * yani genişlik riski yok (bkz. kit.tsx `nineSlice`).
  */
+/** Kapanış animasyonunun süresi — `gb-panel-out` ile AYNI olmalı (kit.tsx) */
+const PANEL_KAPANIS_MS = 140;
+
 const PANEL_GENISLIK: Record<string, number> = {
   market: 1100,      // emir defteri — kıyaslama için sütun gerekiyor
   exchange: 1100,    // aynı kabuk (içi token'a kadar kilitli)
@@ -161,15 +165,57 @@ export default function PlayPage() {
    * tıklama sesi zaten var, ikisi üst üste binmemeli.
    */
   const panelRef = useRef<BuildingId | null>(null);
+  /**
+   * KAPANIŞ ANİMASYONU İÇİN GECİKMELİ SÖKME.
+   *
+   * ⚠️ Panel açılırken canlanıyor ama kapanırken BİR ANDA yok oluyordu —
+   * geçişin yarısı yapılmıştı. Animasyonun oynayabilmesi için elemanın kısa
+   * bir süre daha monteli kalması gerekiyor; `kapanan` o kalıntıyı tutuyor.
+   *
+   * ⚠️ Kalıntı TIKLAMA ALMAZ (`pointerEvents:'none'`). Almasaydı, kapanan
+   * panelin üstüne denk gelen ilk tıklama köye değil ölmekte olan panele
+   * giderdi — rıhtımın paneli örtmesiyle aynı sınıf hata.
+   */
+  const [kapanan, setKapanan] = useState<BuildingId | null>(null);
+  const kapanisSaati = useRef<number | null>(null);
   const setPanel = useCallback((p: BuildingId | null) => {
     // ⚠️ KARŞILAŞTIRMA REF ÜZERİNDEN, `setPanelRaw` GÜNCELLEYİCİSİNİN İÇİNDE
     // DEĞİL. İlk sürüm sesi güncelleyicinin içinde çalıyordu; React geliştirme
     // modunda (StrictMode) güncelleyici fonksiyonları İKİ KEZ çağırıyor — ses
     // çift çalardı. Güncelleyici SAF olmak zorunda, yan etki dışarıda kalır.
     if (p !== panelRef.current) play(p ? 'open' : 'close');
+
+    if (kapanisSaati.current !== null) {
+      window.clearTimeout(kapanisSaati.current);
+      kapanisSaati.current = null;
+    }
+    if (p === null && panelRef.current !== null && !motionOff()) {
+      const giden = panelRef.current;
+      setKapanan(giden);
+      kapanisSaati.current = window.setTimeout(() => {
+        setKapanan(null);
+        kapanisSaati.current = null;
+      }, PANEL_KAPANIS_MS);
+    } else {
+      // ⚠️ Yeni panel açılırken kalıntı ANINDA silinir; yoksa hızlı geçişte
+      // iki panel üst üste çizilir.
+      setKapanan(null);
+    }
+
     panelRef.current = p;
     setPanelRaw(p);
   }, []);
+  // Bileşen sökülürken bekleyen zamanlayıcı kalmasın
+  useEffect(() => () => {
+    if (kapanisSaati.current !== null) window.clearTimeout(kapanisSaati.current);
+  }, []);
+  /**
+   * ETKİN PANEL — açık olan ya da kapanmakta olan.
+   *
+   * ⚠️ Kapanış animasyonu sırasında `panel` NULL oluyor. İçerik dalları
+   * yalnız `panel`e baksaydı hepsi false olur ve panel gövdesi sönerken
+   * bir anlığına "Coming soon"a düşerdi — geçiş bir hataya benzerdi.
+   */
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
   const [note, setNoteRaw] = useState<string | null>(null);
@@ -407,6 +453,8 @@ export default function PlayPage() {
       </div>
     );
   }
+
+  const acik = panel ?? kapanan;
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
@@ -707,23 +755,38 @@ export default function PlayPage() {
         </div>
       )}
 
-      {panel && (
+      {acik && (
         // ⚠️ ÜST BOŞLUK ÖLÇÜLÜR, SABİT DEĞİL. Eskiden 78 px yazıyordu ve tek
         // satırlık navbar'a göre ölçülmüştü; 9. düğme satırı sardırınca rıhtım
         // (zIndex 6) panelin (zIndex 5) ilk 31 pikselini örttü ve oradaki
         // tıklamalar rıhtımın son düğmesine gitti — oyuncu karakter seçerken
         // kendini Settings'te buluyordu.
         <div onClick={() => setPanel(null)}
-          style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: `${dockH + 24}px 20px 20px`, overflowY: 'auto' }}>
+          style={{
+            position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)',
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+            padding: `${dockH + 24}px 20px 20px`, overflowY: 'auto',
+            // ⚠️ KAPANAN PANEL TIKLAMA ALMAZ. Almasaydı kapanış animasyonu
+            // sürerken ekrana yapılan ilk tıklama köye değil ölmekte olan
+            // panele giderdi.
+            pointerEvents: panel ? 'auto' : 'none',
+            opacity: panel ? 1 : 0,
+            transition: `opacity ${PANEL_KAPANIS_MS}ms ease-out`,
+          }}>
           {/* ⚠️ `alignItems: center` DEĞİL `flex-start`. Ortalamak, içeriği
               boşluktan uzun panellerde yukarı taşırıyordu: padding 99 px olsa
               bile panel 65 px'te başlıyor ve rıhtımın altına giriyordu.
               Hizalama üstten olunca panel boşluğun ALTINDA kalmayı garanti
               ediyor; maxHeight de ölçülen rıhtıma göre. */}
-          <Panel variant={(panel && PANEL_CERCEVE[panel]) || '07A'} scale={3} pad={6} onClick={(e) => e.stopPropagation()}
+          {/* ⚠️ ÇERÇEVE ve GENİŞLİK ETKİN id'den okunur (`panel ?? kapanan`).
+              Yalnız `panel` okunsaydı kapanış sırasında panel varsayılan
+              çerçeveye ve 560 px'e ATLAR, sonra sönerdi — geçiş bir hataya
+              benzerdi. */}
+          <Panel variant={PANEL_CERCEVE[acik] || '07A'} scale={3} pad={6} onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
-              maxWidth: (panel && PANEL_GENISLIK[panel]) || 560,
+              maxWidth: PANEL_GENISLIK[acik] || 560,
+              animation: panel ? undefined : `gb-panel-out ${PANEL_KAPANIS_MS}ms ease-out both`,
               // ⚠️ `dockH` ÖLÇÜLEN değer, sabit sayı DEĞİL — 78 px sabiti
               // 9. düğme satırı sardırınca panelin ilk 31 pikselini örtmüştü.
               maxHeight: `calc(100vh - ${dockH + 48}px)`,
@@ -732,82 +795,82 @@ export default function PlayPage() {
             {/* Panel içinde ikinci bir bina sırası YOK — navbar panelin üstünde
                 (zIndex 6) ve açıkken de tıklanabilir kalıyor. İki sıra hem
                 gereksizdi hem panelin içinde sarıp dağınık duruyordu. */}
-            {panel === 'quests' ? (
+            {acik === 'quests' ? (
               <StageSelect
                 progress={progress}
                 onHero={pickHero}
                 onPick={beginStage}
                 wilderness={!!wallet}
               />
-            ) : panel === 'upgrade' ? (
+            ) : acik === 'upgrade' ? (
               <ForgePanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
               />
-            ) : panel === 'settings' ? (
+            ) : acik === 'settings' ? (
               <SettingsPanel onError={setNote} />
-            ) : panel === 'boss' ? (
+            ) : acik === 'boss' ? (
               <WorldBossPanel onEnter={beginBoss} />
-            ) : panel === 'reliquary' ? (
+            ) : acik === 'reliquary' ? (
               <ReliquaryPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
               />
-            ) : panel === 'gear' ? (
+            ) : acik === 'gear' ? (
               <GearPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
               />
-            ) : panel === 'watch' ? (
+            ) : acik === 'watch' ? (
               <FollowPanel onChallenge={beginDuel} onError={setNote} />
-            ) : panel === 'daily' ? (
+            ) : acik === 'daily' ? (
               <QuestPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
               />
-            ) : panel === 'duel' ? (
+            ) : acik === 'duel' ? (
               <DuelPanel
                 hero={(progress ?? loadProgress()).hero}
                 onHero={pickHero}
                 onChallenge={beginDuel}
                 onError={setNote}
               />
-            ) : panel === 'paths' ? (
+            ) : acik === 'paths' ? (
               <SkillPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
               />
-            ) : panel === 'guild' ? (
+            ) : acik === 'guild' ? (
               <GuildPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
               />
-            ) : panel === 'tavern' ? (
+            ) : acik === 'tavern' ? (
               <RecordsPanel progress={progress ?? loadProgress()} onChange={setProgress} onError={setNote} />
-            ) : panel === 'market' ? (
+            ) : acik === 'market' ? (
               <MarketPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
               />
-            ) : panel === 'pets' ? (
+            ) : acik === 'pets' ? (
               <PetPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
                 onError={setNote}
               />
-            ) : panel === 'shop' ? (
+            ) : acik === 'shop' ? (
               <StallPanel
                 progress={progress ?? loadProgress()}
                 onChange={setProgress}
               />
             ) : (
-              <ComingSoon id={panel} />
+              <ComingSoon id={acik} />
             )}
 
             <div style={{ marginTop: 16, textAlign: 'center' }}>

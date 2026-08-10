@@ -97,9 +97,22 @@ export type PanelStyle = '01A' | '01B' | '01C' | '02A' | '02B' | '03A'
  * 20 kez giriyor, uzun bir animasyon 20 kez bekleme demek olurdu.
  * `both` şart — animasyon bitince son kareye kilitlenmezse panel titrer.
  */
+// ⚠️ KAPANIŞ da burada tanımlı. Panel açılırken canlanıp kapanırken bir anda
+// yok oluyordu — geçişin yarısı yapılmıştı. `Panel` kendi `animation`ını
+// yazıyor ama `...style` ondan SONRA yayıldığı için çağıran taraf bunu
+// style ile geçersiz kılabiliyor.
+//
+// ⚠️ AÇIKLAMA ŞABLON DİZESİNİN DIŞINDA. İçine yazmıştım ve yorumdaki ters
+// tırnaklar diziyi erkenden bitirdi — bu oturumda üçüncü kez aynı sınıf hata
+// (JSX yorumu ternary dalında, JSX yorumu içinde JSX yorumu, şimdi bu).
+// Sınırlayıcı içeren bir açıklama, sınırlayıcının dışında durmalı.
 const PANEL_ANIM = `@keyframes gb-panel-in {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes gb-panel-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(8px); }
 }`;
 
 /**
