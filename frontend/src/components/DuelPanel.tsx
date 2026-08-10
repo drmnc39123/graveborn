@@ -173,6 +173,36 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
         )}
       </CardSection>
 
+      {/* ── TÜM ZAMANLAR ──
+          ⚠️ NİYE VAR: sunucu bu tabloyu ZATEN hesaplayıp `/duel` yanıtında
+          gönderiyordu (`ladder`) ve panel onu HİÇ ÇİZMİYORDU — her açılışta
+          üç sorgu çalışıp çöpe gidiyordu. Testi de vardı: sıralama azalan,
+          rank 1'den başlar, hiç düello oynamamışlar elenir, tablo dışındaysan
+          sıran yine bildirilir. Çalışan ve doğrulanmış bir şeyi silmek yerine
+          göstermek doğru olan.
+          ⚠️ SEZON TABLOSUNUN ALTINDA. İkisi ayrı soruya cevap veriyor —
+          "bu hafta nasıl gidiyorum" ve "genel olarak neredeyim" — ama
+          oyuncuyu ilgilendiren ilki, o yüzden üstte kalıyor. */}
+      {board.ladder.rows.length > 0 && (
+        <CardSection label="All time" tone={C.ice}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {board.ladder.rows.map((r) => (
+              <Ladder key={r.wallet} row={r} me={r.wallet === wallet} odul={false} />
+            ))}
+            {board.ladder.me
+              && !board.ladder.rows.some((r) => r.wallet === wallet) && (
+              <>
+                <div style={{ textAlign: 'center', fontSize: 11, color: C.boneFaint }}>···</div>
+                <Ladder row={board.ladder.me} me odul={false} />
+              </>
+            )}
+          </div>
+          <div style={{ marginTop: 6, fontSize: 11, color: C.boneFaint, lineHeight: 1.5 }}>
+            Every duel you have ever answered. This one never resets.
+          </div>
+        </CardSection>
+      )}
+
       <CardSection label={`Records to answer — ${board.rows.length}`} tone={C.blood}>
         {board.rows.length === 0 ? (
           <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.55 }}>
@@ -271,7 +301,15 @@ function Row({ row, onChallenge, onError }: {
   );
 }
 
-function Ladder({ row, me }: { row: PvpSeasonRow; me: boolean }) {
+function Ladder({ row, me, odul = true }: {
+  // ⚠️ `DuelLadderRow` bu şeklin alt kümesi (matches yok) — tek satır
+  // bileşeni ikisine de yetiyor, ikinci bir kopya yazmaya gerek yok.
+  row: { rank: number; wallet: string; rating: number; wins: number; losses: number };
+  me: boolean;
+  /** ⚠️ Ödül noktası SADECE sezon tablosunda. Tüm-zamanlar tablosu ödül
+   *  ödemiyor; noktayı orada da çizmek olmayan bir ödül vaat ederdi. */
+  odul?: boolean;
+}) {
   const t = duelTier(row.rating);
   return (
     <div style={{
@@ -284,7 +322,7 @@ function Ladder({ row, me }: { row: PvpSeasonRow; me: boolean }) {
         {row.rank}
       </span>
       {/* Ödül alan sıralar işaretli — tırmanmanın nerede bittiği görünsün */}
-      {row.rank <= PVP_PAYOUT_DEPTH && pvpReward(row.rank) && (
+      {odul && row.rank <= PVP_PAYOUT_DEPTH && pvpReward(row.rank) && (
         <span style={{ width: 5, height: 5, borderRadius: 3, background: C.candle, flexShrink: 0 }} />
       )}
       <span style={{ minWidth: 0, flex: 1, fontSize: 11.5, fontWeight: me ? 900 : 700,

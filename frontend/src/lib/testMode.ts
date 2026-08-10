@@ -135,13 +135,18 @@ export const TEST_DUELS = {
     { challenger: ME, defender: W1, stageId: 18, depth: 39, target: 37, won: true, delta: 18, at: '2026-08-10T09:12:00Z' },
     { challenger: W2, defender: ME, stageId: 12, depth: 22, target: 24, won: false, delta: -11, at: '2026-08-09T21:40:00Z' },
   ],
+  // ⚠️ TÜM-ZAMANLAR SEZONDAN FARKLI OLMALI. İlk sürümde ikisi birebir aynı
+  // sayıları taşıyordu ve panelde yan yana iki özdeş tablo çıkıyordu — test
+  // modu "bu bölüm gereksiz" diye YANLIŞ bir izlenim veriyordu. Gerçekte
+  // sezon haftalık sıfırlanıyor, tüm-zamanlar birikiyor: yani tüm-zamanlar
+  // maç sayıları DAHA BÜYÜK ve sıralama farklı olabilir.
   ladder: {
     rows: [
-      { rank: 1, wallet: W3, rating: 1610, wins: 31, losses: 12, hero: 'bladekeeper' },
-      { rank: 2, wallet: W1, rating: 1420, wins: 22, losses: 15, hero: 'knight' },
-      { rank: 3, wallet: ME, rating: 1290, wins: 14, losses: 9, hero: 'ranger' },
+      { rank: 1, wallet: W1, rating: 1755, wins: 148, losses: 96, hero: 'knight' },
+      { rank: 2, wallet: W3, rating: 1702, wins: 121, losses: 74, hero: 'bladekeeper' },
+      { rank: 3, wallet: W2, rating: 1488, wins: 90, losses: 88, hero: 'priestess' },
     ],
-    me: { rank: 3, wallet: ME, rating: 1290, wins: 14, losses: 9, hero: 'ranger' },
+    me: { rank: 17, wallet: ME, rating: 1264, wins: 42, losses: 39, hero: 'ranger' },
   },
 };
 
