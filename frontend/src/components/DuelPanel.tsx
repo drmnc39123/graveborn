@@ -11,6 +11,7 @@
 // "birazdan tekrar" der.
 
 import { useCallback, useEffect, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
 import { DUEL, duelTier } from '@/game/duel';
 import { stageById } from '@/game/config';
 import { heroById } from '@/game/heroes';
@@ -47,13 +48,13 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
   const yukle = useCallback(() => {
     fetchDuels().then(setBoard).catch(() => setErr(true));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => { if (panelUnlocked(getMode())) yukle(); }, [yukle]);
   useEffect(() => {
-    if (getMode() !== 'wallet') return;
+    if (!panelUnlocked(getMode())) return;
     fetchPvpSeason().then(setSezon).catch(() => { /* sezon süs, panel çalışmaya devam eder */ });
   }, []);
 
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <PanelHead kicker="THE ANSWERING" title="You answer a real run" accent={C.blood}
         sub="A duel is not a match against a bot — you play the exact run someone else played, seed for seed. Connect a wallet to be answered." />

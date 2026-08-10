@@ -13,6 +13,7 @@
 // demek olurdu.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
 import {
   BRANCHES, SKILLS, SKILL_TREE, respecCost, sanitizeSkills, skillBlocker, skillBonus,
   skillById, spentPoints, type SkillNode,
@@ -40,7 +41,7 @@ export function SkillPanel({ progress, onChange, onError }: {
   const yukle = useCallback(() => {
     fetchSkills().then((s) => { setState(s); setTaslak(s.nodes); }).catch(() => setErr(true));
   }, []);
-  useEffect(() => { if (getMode() === 'wallet') yukle(); }, [yukle]);
+  useEffect(() => { if (panelUnlocked(getMode())) yukle(); }, [yukle]);
 
   const kayitli = useMemo(() => new Set(state?.nodes ?? []), [state]);
   const secili = useMemo(() => new Set(taslak), [taslak]);
@@ -55,7 +56,7 @@ export function SkillPanel({ progress, onChange, onError }: {
   const degisti = taslak.length !== (state?.nodes.length ?? 0)
     || taslak.some((id) => !kayitli.has(id));
 
-  if (getMode() !== 'wallet') {
+  if (!panelUnlocked(getMode())) {
     return (
       <PanelHead kicker="WHAT YOU BECAME" title="Points are earned, never bought" accent={C.ice}
         sub="Skill points come from the depths you have actually reached, and the server is the one that counts them. Connect a wallet to open the tree." />

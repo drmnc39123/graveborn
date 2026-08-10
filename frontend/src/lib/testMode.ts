@@ -109,3 +109,53 @@ export const TEST_FOLLOWS = {
       duelRating: 1180, bestStage: 12, bestDepth: 24, recordId: null, recordDepth: 0, blocker: 'offline' },
   ],
 };
+
+const W1 = 'Ashwa1ker00000000000000000000000000000000000';
+const W2 = 'Cryptkeep3r000000000000000000000000000000000';
+const W3 = 'B0nesinger00000000000000000000000000000000000';
+const ME = 'TESTwa11et000000000000000000000000000000000';
+
+/** ⚠️ `SkillState` — puan DERİNLİKTEN gelir, burada sadece çizim için sabit. */
+export const TEST_SKILLS = {
+  nodes: ['blade_1', 'blade_2', 'bulwark_1'],
+  points: 12,
+  spent: 5,
+  respec: 1_250,
+};
+
+/** ⚠️ `DuelBoard` — dört parçası da dolu olmalı, yoksa panel yarım çizer. */
+export const TEST_DUELS = {
+  me: { rating: 1290, wins: 14, losses: 9, rewardedToday: 2 },
+  rows: [
+    { id: 'd1', wallet: W1, stageId: 18, depth: 37, rating: 1420, duelRating: 1420, hero: 'knight', blocker: null },
+    { id: 'd2', wallet: W2, stageId: 12, depth: 24, rating: 1180, duelRating: 1180, hero: 'priestess', blocker: null },
+    { id: 'd3', wallet: W3, stageId: 21, depth: 44, rating: 1610, duelRating: 1610, hero: 'bladekeeper', blocker: 'already answered today' },
+  ],
+  recent: [
+    { challenger: ME, defender: W1, stageId: 18, depth: 39, target: 37, won: true, delta: 18, at: '2026-08-10T09:12:00Z' },
+    { challenger: W2, defender: ME, stageId: 12, depth: 22, target: 24, won: false, delta: -11, at: '2026-08-09T21:40:00Z' },
+  ],
+  ladder: {
+    rows: [
+      { rank: 1, wallet: W3, rating: 1610, wins: 31, losses: 12, hero: 'bladekeeper' },
+      { rank: 2, wallet: W1, rating: 1420, wins: 22, losses: 15, hero: 'knight' },
+      { rank: 3, wallet: ME, rating: 1290, wins: 14, losses: 9, hero: 'ranger' },
+    ],
+    me: { rank: 3, wallet: ME, rating: 1290, wins: 14, losses: 9, hero: 'ranger' },
+  },
+};
+
+export const TEST_PVP_SEASON = {
+  week: 32,
+  placement: 5,
+  rows: [
+    { rank: 1, wallet: W3, rating: 1610, wins: 31, losses: 12, matches: 43, hero: 'bladekeeper' },
+    { rank: 2, wallet: W1, rating: 1420, wins: 22, losses: 15, matches: 37, hero: 'knight' },
+    { rank: 3, wallet: ME, rating: 1290, wins: 14, losses: 9, matches: 23, hero: 'ranger' },
+  ],
+  me: { rank: 3, wallet: ME, rating: 1290, wins: 14, losses: 9, matches: 23, hero: 'ranger' },
+  awards: [
+    { week: 31, rank: 2, rating: 1355, cosmetic: 'title_feared', dust: 180 },
+    { week: 30, rank: 7, rating: 1240, cosmetic: null, dust: 60 },
+  ],
+};
