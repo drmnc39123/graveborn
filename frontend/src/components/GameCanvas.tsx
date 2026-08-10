@@ -20,7 +20,7 @@ import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import type { RunPet } from '@/game/pets';
 import { C, FONT, glass } from '@/lib/theme';
-import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing } from '@/components/ui/kit';
+import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon } from '@/components/ui/kit';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
@@ -35,6 +35,8 @@ interface Hud {
   weapons: { id: string; name: string; level: number; cd: number; cdMax: number }[];
   passives: { id: string; name: string; level: number }[];
   revives: number;
+  /** KALAN diriliş hakkı — `revives` harcanmışı sayar, bu kalanı */
+  revivalLeft: number;
   evolution: { name: string; at: number } | null;
   stageName: string;
   stageTotal: number;
@@ -375,6 +377,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           })),
           passives: game.passives.map((p) => ({ id: p.def.id, name: p.def.name, level: p.level })),
           revives: game.revives,
+          revivalLeft: Math.max(0, Math.floor(game.stats.revival)),
           evolution: game.lastEvolution,
           stageName: game.stage.def.name,
           stageTotal: game.stage.def.enemyCount,
@@ -517,6 +520,26 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                     }}>{w.level}</span>
                   </div>
                 ))}
+                {/* ⚠️ DİRİLİŞ HAKKI SONUNDA GÖRÜNÜR OLDU.
+                    `revival` DÖRT yerden satın alınabiliyor (Forge "Second
+                    Burial" 2.640 gold, aynı adlı pasif, "Grave Offering"
+                    tılsımı, sigil ekipmanı) ve oyuncu kaç hakkı olduğunu
+                    hiçbir yerde göremiyordu — ölene kadar. 2.640 gold
+                    harcayıp ne aldığını göremeyen oyuncu, bir daha almaz.
+                    ⚠️ KALAN gösteriliyor, HARCANMIŞ değil: oyuncunun
+                    kararını değiştiren sayı "kaç canım kaldı". */}
+                {hud.revivalLeft > 0 && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '3px 7px', borderRadius: 6,
+                    border: `1px solid ${C.ok}55`,
+                    background: 'rgba(0,0,0,0.35)',
+                    fontFamily: FONT.ui, fontSize: 11, fontWeight: 900, color: C.ok,
+                  }} title={`${hud.revivalLeft} revival left — you get back up at half health`}>
+                    <Icon name="sigil" scale={1} />
+                    ×{hud.revivalLeft}
+                  </div>
+                )}
                 {hud.passives.map((p) => (
                   <div key={p.id} style={{ position: 'relative' }}>
                     <Slot type="Ring" variant="02" scale={2} title={`${p.name} L${p.level}`}>
