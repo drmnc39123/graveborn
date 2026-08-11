@@ -169,6 +169,9 @@ const PANEL_GENISLIK: Record<string, number> = {
   reliquary: 900,    // dört sekme + iki sütunlu ızgara (49 relik)
   quests: 720,       // karakter vitrini + bölüm listesi
   duel: 720,         // iki sıralama tablosu
+  // ⚠️ 12 pet + iki sütun. Reliquary'de öğrenilen ders: dar sütunda kart
+  // içeriği sarıyor, o yüzden sütun eklemeden ÖNCE alan açılıyor.
+  pets: 900,
 };
 
 export default function PlayPage() {

@@ -218,6 +218,20 @@ export function PetPanel({ progress, onChange, onError }: {
         </div>
       )}
 
+      {/* ⚠️ İKİ SÜTUN — 12 pet tek sütunda uzun bir kaydırma yapıyordu ve
+          kartların sağ tarafı boş kalıyordu (durum satırı sola yaslı, düğme
+          satırı sağa yaslı; ikisinin arası ölü alan).
+          ⚠️ KART YAPISINA DOKUNULMADI. Satırları birleştirmek o ölü alanı
+          kapatırdı ama üç yatay satır düzeni "hepsi kayık ve sığmıyor"
+          şikâyetinin DÜZELTMESİ — sarma geri gelirse kartlar yine birbirinden
+          farklı görünür. Dar sütun zaten boşluğu görünmez hâle getiriyor.
+          ⚠️ `minmax(360px)` — kart içeriği (portre + ad + rol + düğmeler)
+          bunun altında sıkışır; dar ekranda kendiliğinden tek sütuna düşer. */}
+      <div style={{
+        display: 'grid', gap: 8,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+        alignItems: 'start',
+      }}>
       {PETS.map((def) => {
         const kopya = progress.pets?.[def.id] ?? 0;
         const bagli = kopya > 0;
@@ -436,6 +450,7 @@ export function PetPanel({ progress, onChange, onError }: {
           </Card>
         );
       })}
+      </div>
     </>
   );
 }
