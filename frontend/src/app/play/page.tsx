@@ -172,6 +172,7 @@ const PANEL_GENISLIK: Record<string, number> = {
   // ⚠️ 12 pet + iki sütun. Reliquary'de öğrenilen ders: dar sütunda kart
   // içeriği sarıyor, o yüzden sütun eklemeden ÖNCE alan açılıyor.
   pets: 900,
+  upgrade: 900,   // Forge — 16 yükseltme, iki sütun
 };
 
 export default function PlayPage() {

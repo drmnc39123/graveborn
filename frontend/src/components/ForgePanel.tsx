@@ -62,7 +62,17 @@ export function ForgePanel({
         </span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {/* ⚠️ İKİ SÜTUN — 16 yükseltme tek sütunda uzun bir kaydırma yapıyordu
+          ve kartların sağı boştu (ad/açıklama solda, satın alma düğmesi ta
+          sağda). Panel genişledi diye içerik esnetilmez; genişlik yeni bir
+          sütuna dönüşür. Reliquary ve Binding'de aynı düzeltme yapıldı.
+          ⚠️ `minmax(380px)` — kart içeriği (ad + LV + NOW→NEXT + seviye
+          boncukları + fiyat düğmesi) bunun altında sıkışır. */}
+      <div style={{
+        display: 'grid', gap: 7,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+        alignItems: 'start',
+      }}>
         {FORGE.map((u) => {
           const lv = progress.upgrades[u.id] ?? 0;
           const maxed = lv >= u.maxLevel;
