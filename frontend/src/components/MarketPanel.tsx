@@ -459,8 +459,17 @@ export function MarketPanel({
               and never enters the economy. Connect a wallet to trade.
             </div>
           ) : (
-            <>
-              <div style={{ ...glass(10), padding: '12px 14px', marginBottom: 12, border: `1px solid ${C.border}` }}>
+            /* ⚠️ İKİ SÜTUN — geniş ekranı ANLAMLI kullanmak için.
+               Tek sütunda form 1100 px'e yayılıyordu: 6 haneli bir sayı için
+               370 px'lik girdi kutuları ve sağda koca bir boşluk. Panel
+               genişledi diye içerik esnetilmez; genişlik yeni bir sütuna
+               dönüşür. `minmax` ile dar ekranda kendiliğinden alt alta
+               düşüyor. */
+            <div style={{
+              display: 'grid', gap: 12, alignItems: 'start',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+            }}>
+              <div style={{ ...glass(10), padding: '12px 14px', border: `1px solid ${C.border}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 9 }}>
                   <span style={{ fontWeight: 900, fontSize: 13, color: C.bone }}>List gold</span>
                   <span style={{ fontSize: 17, fontWeight: 900, color: C.candle }}>
@@ -507,6 +516,7 @@ export function MarketPanel({
                 </div>
               </div>
 
+              <div>
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 1.6, color: C.boneDim, marginBottom: 6 }}>
                 YOUR LISTINGS — {mine.length}/{maxIlan}
               </div>
@@ -515,10 +525,7 @@ export function MarketPanel({
                   You have nothing on the market.
                 </div>
               ) : (
-                <div style={{
-                  display: 'grid', gap: 8,
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-                }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {mine.map((l) => (
                     <ListingRow key={l.id} listing={l} mine
                       action={
@@ -531,7 +538,8 @@ export function MarketPanel({
                   ))}
                 </div>
               )}
-            </>
+              </div>
+            </div>
           )}
         </>
       )}

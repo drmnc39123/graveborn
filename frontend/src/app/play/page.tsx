@@ -962,9 +962,19 @@ export default function PlayPage() {
               <ComingSoon id={acik} />
             )}
 
+            {/* ── KAPAT ──
+                ⚠️ TAM GENİŞLİKTE KIRMIZI BİR ÇUBUKTU ve panelin EN BASKIN
+                öğesiydi — market ekranda görüldüğünde ilanlardan bile önce
+                göze çarpıyordu. Hiyerarşi ters: kapatmak panelin en önemli
+                eylemi değil, en sıradanı.
+                ⚠️ Sözlüğe göre de yanlıştı: `02A` = BTN.strong, yani
+                "geri dönüşsüz / ağır eylem". Panel kapatmak ikisi de değil.
+                Artık BTN.action ve içeriğe göre ölçülü genişlikte.
+                ⚠️ Kolay vurulur kalıyor (240 px, ortada) — küçültmek
+                erişilebilirlikten çalmak olurdu. */}
             <div style={{ marginTop: 16, textAlign: 'center' }}>
-              <PixelButton variant="02A" scale={2} onClick={() => setPanel(null)}
-                style={{ width: '100%', fontSize: 12, fontWeight: 900, letterSpacing: 1.5 }}>
+              <PixelButton variant={BTN.action} scale={2} onClick={() => setPanel(null)}
+                style={{ minWidth: 240, fontSize: 12, letterSpacing: 1.5 }}>
                 CLOSE
               </PixelButton>
             </div>
