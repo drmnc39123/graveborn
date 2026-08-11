@@ -1467,6 +1467,36 @@ export const ENEMIES: readonly EnemyType[] = [
 /** DENGE NOTU: ilk değerler (base 2.4 / perMinute 1.7 / cap 620 / hp +%34) ile
  *  5. dakikada tavan doluyordu — hem görsel lapa hem de kill hızı çöküşü.
  *  Tavan 420'ye çekildi (okunabilirlik + fps payı), eğri yumuşatıldı. */
+/**
+ * KOŞU GÖRÜŞ ALANI — SABİT, pencere boyutundan BAĞIMSIZ.
+ *
+ * 🔴 NİYE BİR DENGE SABİTİ: doğum halkasının yarıçapı görüş alanından
+ * geliyor (`SPAWN.ringMargin` ile birlikte). Yani pencere boyutu doğrudan
+ * doğum yoğunluğunu — dolayısıyla XP hızını, gold hızını ve bölüm süresini
+ * belirliyordu.
+ *
+ * ⚠️ ÖLÇÜLDÜ (aynı seed 4242, 60 sn):
+ *     1280×720  84 öldürme  (TÜM denge ölçümlerinin tabanı)
+ *     1600×900  78          −%7
+ *     1920×1080 77          −%8
+ *     2560×1440 66          −%21
+ *
+ * Yani "kampanya 3,6 saat" ve "ekonomi 102 saat" gibi bütün sayılar
+ * YALNIZCA 1280×720'de doğruydu; 1440p'de oynayan oyuncu bambaşka,
+ * ölçülmemiş bir oyun oynuyordu. Kilit, oyunu kendi ölçümleriyle
+ * uyumlu hâle getiriyor.
+ *
+ * ⚠️ DEĞER KEYFİ DEĞİL: `campaign.test.mts`, `curve.test.mts`,
+ * `forge.test.mts`, `ascension.test.mts` — hepsi bu boyutta ölçüyor.
+ * Arena da (`ARENA.viewW/viewH`) aynı sayıyı kullanıyor. Bunu değiştirmek
+ * TÜM denge ölçümlerini geçersiz kılar.
+ *
+ * ⚠️ BEDELİ KABUL EDİLDİ: geniş ekranda düşmanlar ekran kenarının bir
+ * miktar içinde beliriyor. Adalet ve ölçülebilirlik, kenardaki birkaç
+ * pikselden önce gelir.
+ */
+export const RUN_VIEW = { w: 1280, h: 720 } as const;
+
 export const SPAWN = {
   /** Ekran kenarının bu kadar dışında doğar (aniden içeride belirmesin) */
   ringMargin: 90,

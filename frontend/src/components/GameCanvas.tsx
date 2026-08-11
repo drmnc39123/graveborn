@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Game, type RunMode } from '@/game/engine';
 import type { RunResult } from '@/game/progress';
 import { render, resetEffects } from '@/game/render';
-import { MAX_CATCHUP, TICK, type StageDef, type StatKey } from '@/game/config';
+import { MAX_CATCHUP, TICK, type StageDef, type StatKey, RUN_VIEW } from '@/game/config';
 import { takeFreeze } from '@/game/fx';
 
 // Günlük seed — aynı gün aynı bölüm herkeste aynı akışı verir (adil kıyas)
@@ -25,7 +25,6 @@ import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
-import { ARENA } from '@/game/arena';
 import { isTestMode } from '@/lib/testMode';
 
 interface Hud {
@@ -182,28 +181,33 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth, ascension, allowedWeapons ?? null, pets ?? []);
 
     /**
-     * 🔴 DÜELLODA GÖRÜŞ ALANI MÜHÜRLENİYOR — vaadin doğru olması için ŞART.
+     * 🔴 GÖRÜŞ ALANI HER KOŞUDA MÜHÜRLENİYOR — pencere boyutu oyunu
+     * değiştiremesin.
      *
-     * `lockViewport`ın kendi başlığı zaten şunu söylüyor: "görüş alanı
+     * `lockViewport`ın kendi başlığı şunu söylüyordu: "görüş alanı
      * SİMÜLASYONU etkiliyor — doğum halkasının yarıçapı buradan geliyor,
      * yani PENCERE BOYUTU dünyayı değiştiriyor. Solo'da zararsız (herkes
      * kendi koşusunu oynuyor) ama 1v1'de ölümcül." Arena bu yüzden
-     * mühürlüyor.
+     * mühürlüyordu.
      *
-     * ⚠️ AMA DÜELLO O BOŞLUKTA KALMIŞTI. Düello paneli oyuncuya AÇIKÇA
-     * şunu vaat ediyor: "You play their run, not a copy of it — same seed,
-     * same enemies, in the same order." Bu vaat YANLIŞTI ve ölçüldü:
-     * aynı seed, 1280×720'de 84 öldürme, 1920×900'de 75. Yani dizüstünde
-     * oynayan rakibin koşusu masaüstünde BAŞKA bir koşu oluyordu.
+     * ⚠️ "SOLO'DA ZARARSIZ" DOĞRU DEĞİLMİŞ ve ölçüldü. Aynı seed, 60 sn:
+     *     1280×720  84 öldürme   ← TÜM denge ölçümlerinin tabanı
+     *     1920×1080 77           −%8
+     *     2560×1440 66           −%21
+     * Kampanya "3,6 saat", ekonomi "102 saat", Forge eğrisi — hepsi
+     * `setViewport(1280, 720)` ile ölçülmüş. Yani 1440p'de oynayan oyuncu
+     * ÖLÇÜLMEMİŞ bir oyun oynuyordu: daha seyrek saha, daha yavaş XP, daha
+     * yavaş gold, daha uzun kampanya. Solo'da "zararsız" değil, sadece
+     * GÖRÜNMEZ.
      *
-     * ⚠️ 1280×720 KEYFİ DEĞİL: arenanın kullandığı ve mühür testlerinin
-     * (`sim.test.mts`) ölçtüğü yapılandırmanın aynısı.
-     * ⚠️ BEDELİ KABUL EDİLDİ: daha geniş ekranlarda düşmanlar ekran
-     * kenarının bir miktar İÇİNDE beliriyor. Arena aynı bedeli zaten ödüyor.
-     * Adalet, kenardaki birkaç pikselden önce gelir — hele oyuna o vaat
-     * yazılıysa.
+     * ⚠️ İki şeyi aynı anda düzeltiyor: adaleti (düello/sıralama aynı koşuyu
+     * vaat ediyor) ve DOĞRULUĞU (oyun artık kendi ölçümleriyle uyumlu).
+     * ⚠️ BEDELİ: geniş ekranda düşmanlar kenarın bir miktar içinde beliriyor.
+     * Kullanıcı bu bedeli bilerek kabul etti.
+     * ⚠️ `RUN_VIEW` değeri `config.ts`te ve denge sabiti sayılıyor —
+     * değiştirmek tüm ölçümleri geçersiz kılar.
      */
-    if (duelTarget !== undefined) game.lockViewport(ARENA.viewW, ARENA.viewH);
+    game.lockViewport(RUN_VIEW.w, RUN_VIEW.h);
 
     gameRef.current = game;
     // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
