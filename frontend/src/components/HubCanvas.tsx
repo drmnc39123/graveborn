@@ -15,16 +15,39 @@ type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
 // Cüzdan ve bina rıhtımı artık play/page.tsx'te (BuildingDock) — bu bileşen
 // sadece sahneyi ve sahneye ait istemleri yönetir.
 export function HubCanvas({
-  onEnterBuilding, onEnterStage,
+  onEnterBuilding, onEnterStage, hero,
 }: {
   onEnterBuilding: (id: string) => void;
   onEnterStage: (stageId: number) => void;
+  /**
+   * Köyde yürüyecek karakter.
+   *
+   * ⚠️ Köyde HER ZAMAN Fire Knight yürüyordu — `hubRender` sabit
+   * `PLAYER_ART` çiziyordu. Karakter seçimi bir kimlik kararı; köy onu
+   * yansıtmıyorsa seçim yalnızca bir istatistik tablosu olur.
+   */
+  hero: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const keysRef = useRef(new Set<string>());
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
   const cbRef = useRef({ onEnterBuilding, onEnterStage });
   cbRef.current = { onEnterBuilding, onEnterStage };
+  /**
+   * ⚠️ `hero` EFEKT BAĞIMLILIĞINA KONMUYOR. Konsaydı karakter değişince
+   * bütün köy yeniden kurulur (`createHub`) ve oyuncunun konumu spawn'a
+   * SIFIRLANIRDI. Bunun yerine kurulmuş durumun alanı yerinde güncelleniyor;
+   * `hubRender` her karede `s.hero` okuduğu için değişim bir sonraki karede
+   * ekrana yansıyor — yeniden kurmaya gerek yok.
+   */
+  const hubRef = useRef<HubState | null>(null);
+  // ⚠️ Efekt bir KEZ çalışıyor; kapanış `hero`nun ilk değerini tutar.
+  // Ref, ilk kurulumda güncel değeri okumayı garanti ediyor.
+  const heroRef = useRef(hero);
+  heroRef.current = hero;
+  useEffect(() => {
+    if (hubRef.current) hubRef.current.hero = hero;
+  }, [hero]);
 
   const [hint, setHint] = useState<Hint | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -46,9 +69,14 @@ export function HubCanvas({
       if (disposed) return;
       if (!world) { setStatus('error'); return; }
       setStatus('ready');
-      preloadAll();
+      // ⚠️ SEÇİLİ KARAKTERLE. Argümansız çağrı `DEFAULT_HERO`u önden
+      // yüklüyordu — yani köy Fire Knight'ın karelerini indirip ekranda
+      // başka birini çiziyordu; gerçek karakterin kareleri tembel yüklenip
+      // ilk saniyede yedek şekil görünüyordu.
+      preloadAll(heroRef.current);
 
-      const hub: HubState = createHub(world);
+      const hub: HubState = createHub(world, heroRef.current);
+      hubRef.current = hub;
       let dpr = 1, cssW = 0, cssH = 0;
       const resize = () => {
         dpr = Math.min(window.devicePixelRatio || 1, 2);

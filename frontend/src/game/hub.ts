@@ -6,6 +6,7 @@
 // Simülasyondan (engine.ts) AYRI: burada düşman/hasar/RNG yok.
 
 import { MAP_TILE } from './mapData';
+import { DEFAULT_HERO } from './heroes';
 import type { MapWorld, WorldDoor, WorldTravel } from './mapWorld';
 
 export const HUB_PLAYER = { radius: 11, speed: 215 } as const;
@@ -45,13 +46,29 @@ export interface HubState {
   warpLock: number;
   /** son ışınlanmanın adı — HUD kısa bir bildirim gösterir */
   justWarped: string | null;
+  /**
+   * Köyde yürüyen karakterin id'si.
+   *
+   * ⚠️ NİYE EKLENDİ: köyde HER ZAMAN Fire Knight yürüyordu. `hubRender`
+   * sabit `PLAYER_ART`ı çiziyordu (`sprites.ts` → `playerArt(DEFAULT_HERO)`),
+   * yani oyuncu hangi karakteri seçerse seçsin ekrandaki figür değişmiyordu.
+   * Karakter seçimi bir kimlik kararı; köy onu yansıtmıyorsa seçim yalnızca
+   * bir istatistik tablosu olur.
+   */
+  hero: string;
 }
 
-export function createHub(world: MapWorld): HubState {
+/**
+ * ⚠️ `hero` OPSİYONEL ve varsayılanı `DEFAULT_HERO`. Zorunlu yapmak
+ * `hub.test.mts`teki mevcut çağrıları kırardı ve testin ilgilendiği şey
+ * çarpışma/kapı mantığı — karakter değil.
+ */
+export function createHub(world: MapWorld, hero: string = DEFAULT_HERO): HubState {
   return {
     x: world.spawn.x, y: world.spawn.y,
     facingRight: true, moving: false, animT: 0,
     world, atDoor: null, atTravel: null, atFight: false, warpLock: 0, justWarped: null,
+    hero,
   };
 }
 

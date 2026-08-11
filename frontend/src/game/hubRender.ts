@@ -7,7 +7,7 @@
 // PERFORMANS: sadece kameraya girenler çiziliyor.
 
 import { C } from '@/lib/theme';
-import { drawActor, drawFrame, PLAYER_ART } from './sprites';
+import { drawActor, drawFrame, playerArt } from './sprites';
 import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState } from './hub';
 import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldObject } from './mapWorld';
@@ -211,7 +211,9 @@ function drawLights(
 }
 
 function drawPlayer(ctx: CanvasRenderingContext2D, s: HubState) {
-  if (!drawActor(ctx, PLAYER_ART, s.moving ? 'run' : 'idle', s.animT, s.x, s.y, s.facingRight)) {
+  // ⚠️ Sabit `PLAYER_ART` DEĞİL, seçili karakter. `playerArt` kendi
+  // önbelleğini tutuyor (`heroArtCache`), her karede yeniden kurulmuyor.
+  if (!drawActor(ctx, playerArt(s.hero), s.moving ? 'run' : 'idle', s.animT, s.x, s.y, s.facingRight)) {
     ctx.fillStyle = C.bone;
     ctx.beginPath();
     ctx.arc(s.x, s.y, HUB_PLAYER.radius, 0, Math.PI * 2);

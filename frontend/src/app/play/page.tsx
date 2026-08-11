@@ -496,6 +496,7 @@ export default function PlayPage() {
     <div style={EKRAN_KOK}>
       <MotionStyles />
       <HubCanvas
+        hero={(progress ?? loadProgress()).hero}
         onEnterBuilding={onEnter}
         // Dövüş portalı doğrudan bölüm BAŞLATMAZ, seçim panelini açar.
         // (HubCanvas burada os(0) çağırıyordu; stageById(0) undefined olduğu

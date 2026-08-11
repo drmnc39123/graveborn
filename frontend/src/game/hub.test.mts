@@ -7,6 +7,8 @@
 import { readFileSync } from 'node:fs';
 import { buildMapWorld } from './mapWorld.js';
 import { createHub, stepHub, HUB_PLAYER } from './hub.js';
+import { HEROES } from './heroes.js';
+import { playerArt } from './sprites.js';
 import { MAP_TILE } from './mapData.js';
 import type { MapDoc } from './mapData.js';
 
@@ -102,6 +104,33 @@ const ground = world.objects.filter((o) => (o.z ?? 0) < -1000);
 check('zemin nesneleri işaretli', ground.length > 100, `${ground.length} nesne`);
 check('hepsi listenin başında', world.objects.slice(0, ground.length).every((o) => (o.z ?? 0) < -1000));
 check('zemin nesnelerinde çarpışma yok', ground.every((o) => !(o.solid ?? 0)));
+
+
+console.log('');
+console.log('[7] Köyde SEÇİLİ karakter yürüyor');
+{
+  // ⚠️ NİYE VAR: köyde HER ZAMAN Fire Knight yürüyordu. `hubRender` sabit
+  // `PLAYER_ART` çiziyordu (`playerArt(DEFAULT_HERO)`), yani karakter seçimi
+  // ekranda hiç karşılık bulmuyordu. Bu bölüm zincirin iki halkasını da
+  // ölçüyor: durum karakteri TAŞIYOR mu, ve karakter başına görsel GERÇEKTEN
+  // ayrışıyor mu.
+  //
+  // ⚠️ Bu testin ölçemediği tek şey `renderHub`ın o alanı OKUDUĞU — canvas
+  // gerektiriyor. Tarayıcıda doğrulanmalı.
+  for (const h of HEROES) {
+    const st = createHub(world, h.id);
+    check(`createHub karakteri taşıyor (${h.id})`, st.hero === h.id, st.hero);
+  }
+  check('varsayılan hâlâ çalışıyor (eski çağrılar kırılmadı)',
+    typeof createHub(world).hero === 'string', createHub(world).hero);
+
+  // Görseller gerçekten ayrışıyor mu — hepsi aynı klasöre bakıyorsa
+  // durum alanını taşımanın bir anlamı kalmaz.
+  const yollar = new Set(HEROES.map((h) => playerArt(h.id).anims.run.src));
+  check('her karakterin YÜRÜME görseli ayrı', yollar.size === HEROES.length,
+    `${yollar.size}/${HEROES.length} ayrı yol`);
+}
+
 
 console.log(`\n${FAIL.length === 0 ? '✅ TÜM ÇARPIŞMA TESTLERİ GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
