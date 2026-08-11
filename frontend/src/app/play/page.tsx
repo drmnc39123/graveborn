@@ -27,6 +27,7 @@ import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
 import { ChatPanel } from '@/components/ChatPanel';
+import { ProfileCard } from '@/components/ProfileCard';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
 import { MotionStyles, Reveal, motionOff, useCountUpInt } from '@/components/ui/motion';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
@@ -535,6 +536,26 @@ export default function PlayPage() {
           sohbet olduğunu da bilmez. Panel açıkken gizleniyor — üst üste
           binmesin ve panelin içindeki alanları kapatmasın. */}
       {!panel && <ChatPanel />}
+
+      {/* ⚠️ KİMLİK KARTI SOL ÜSTTE — ölçüldü, ekranın tek gerçekten boş
+          köşesi orası: rıhtım üstte ORTALI ve sarmalayıcısı `pointerEvents:
+          none`, sohbet sol altta, tuş ipucu sağ altta.
+          ⚠️ SAĞ ÜSTE KONULAMAZ: minimap canvas'ın İÇİNDE çiziliyor
+          (`hubRender.ts` drawMinimap) — oraya HTML koymak üstüne binerdi.
+          ⚠️ zIndex 6: 5 panel katmanı (açıkken kartın kaybolması gerekir
+          zaten `!panel` ile hallediliyor), 7/8 ödeme ve düello kaplamaları
+          kartın ÜSTÜNDE kalmalı.
+          ⚠️ Panel açıkken gizleniyor — ChatPanel ve EventBanner emsali:
+          oyuncu zaten bir şeye bakıyor demektir. */}
+      {!panel && progress && (
+        <div style={{ position: 'absolute', top: 10, left: 12, zIndex: 6 }}>
+          <ProfileCard
+            progress={progress}
+            wallet={wallet}
+            onOpen={() => setPanel('tavern')}
+          />
+        </div>
+      )}
 
       {/* Sunucu hatası oyuncudan GİZLENMEZ: cüzdan modunda ilerleme sunucuda,
           sessizce yerel kayda düşmek iki gerçeklik yaratırdı. */}
