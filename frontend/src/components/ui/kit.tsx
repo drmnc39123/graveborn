@@ -414,7 +414,7 @@ export function Orb({ pct, kind = 'HP', scale = 2 }: {
  * Palete eşleme: gold→Bar03 (mum altını #efa72e'ye en yakın),
  * blood→Bar02, ice→Bar05. Yeşiller kullanılmıyor.
  */
-const BAR_DOLGU = { gold: '03', blood: '02', ice: '05' } as const;
+export const BAR_DOLGU = { gold: '03', blood: '02', ice: '05' } as const;
 
 export function Bar({ pct, variant = '01', tone = 'gold', height = 16, scale = 2 }: {
   pct: number;
