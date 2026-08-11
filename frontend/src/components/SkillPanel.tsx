@@ -109,6 +109,20 @@ export function SkillPanel({ progress, onChange, onError }: {
         </div>
       </div>
 
+      {/* ⚠️ DALLAR YAN YANA, DÜĞÜMLER DEĞİL.
+          Diğer panellerde listeyi ızgaraya çevirdim ama burada o YANLIŞ
+          olurdu: bu bir AĞAÇ ve düğümlerin ön koşulu var ("Needs Long
+          Reach"). Düğümleri iki sütuna dağıtmak zinciri kırar — oyuncu
+          neyin neyi açtığını okuyamaz.
+          Doğru bölme noktası DAL: her dal kendi dikey sırasını koruyor,
+          dört dal iki sütuna yerleşiyor. Genişlik kullanılıyor, okuma
+          düzeni bozulmuyor.
+          ⚠️ `alignItems: start` — dallar farklı uzunlukta; olmasa kısa dal
+          uzun dalın boyuna esner ve düğümlerin arası açılırdı. */}
+      <div style={{
+        display: 'grid', gap: 10, alignItems: 'start',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))',
+      }}>
       {BRANCHES.map((b) => {
         const dugumler = SKILL_TREE.filter((n) => n.branch === b.id);
         return (
@@ -176,6 +190,7 @@ export function SkillPanel({ progress, onChange, onError }: {
           </CardSection>
         );
       })}
+      </div>
 
       {/* ── TOPLAM ── */}
       {Object.keys(toplam).length > 0 && (

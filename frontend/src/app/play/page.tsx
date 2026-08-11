@@ -173,6 +173,7 @@ const PANEL_GENISLIK: Record<string, number> = {
   // içeriği sarıyor, o yüzden sütun eklemeden ÖNCE alan açılıyor.
   pets: 900,
   upgrade: 900,   // Forge — 16 yükseltme, iki sütun
+  paths: 780,     // beceri ağacı — dört dal, iki sütun
 };
 
 export default function PlayPage() {
