@@ -335,7 +335,18 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
       </div>
       <p style={{ margin: '0 0 10px', fontSize: 11, color: C.boneFaint, lineHeight: 1.45 }}>{slotInfo.hint}</p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {/* ⚠️ İKİ SÜTUN — panel 720 px'e çıkarıldığında liste GENİŞLİĞİ
+          ESNETİYORDU: her satır tam genişlikte, adla düğme arasında ~165 px
+          ölü boşluk. Panel genişledi diye içerik esnetilmez; genişlik yeni
+          bir sütuna dönüşür.
+          ⚠️ Asıl kazanç kaydırmada: bu listede 49 kayıt var, iki sütun
+          kaydırmayı yarıya indiriyor.
+          ⚠️ `minmax(300px)` — dar ekranda kendiliğinden tek sütuna düşüyor;
+          satır içeriği (ikon + ad + nadirlik + düğme) 300'ün altında sıkışır. */}
+      <div style={{
+        display: 'grid', gap: 7,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+      }}>
         {list.map((def) => {
           const have = owned.has(def.id);
           const on = progress.equipped[def.slot] === def.id;

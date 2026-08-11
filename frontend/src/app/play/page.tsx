@@ -160,7 +160,13 @@ const PANEL_KAPANIS_MS = 140;
 const PANEL_GENISLIK: Record<string, number> = {
   market: 1100,      // emir defteri — kıyaslama için sütun gerekiyor
   exchange: 1100,    // aynı kabuk (içi token'a kadar kilitli)
-  reliquary: 720,    // dört sekme + ızgara
+  // ⚠️ 720 DENENDİ VE EKRANDA ÖLÇÜLDÜ: içerik alanı ~567 px kalıyor, iki
+  // sütun her karta 280 px veriyor ve o genişlikte relik ADLARI SARIYOR
+  // ("Draught of Stillness" iki satır), açıklama da sarıyor — kartlar
+  // sıkışık ve dağınık görünüyordu. İçerik sığmıyorsa sütun eklemek çözüm
+  // değil; alan açmak çözüm. 900'de her sütun ~370 px alıyor.
+  // ⚠️ Kazanç kaydırmada: bu listede 49 kayıt var.
+  reliquary: 900,    // dört sekme + iki sütunlu ızgara (49 relik)
   quests: 720,       // karakter vitrini + bölüm listesi
   duel: 720,         // iki sıralama tablosu
 };
