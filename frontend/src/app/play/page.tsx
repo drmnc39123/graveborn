@@ -1087,7 +1087,22 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick, wild
   // hpMul 1 → 14 aralığında; beş kademeye indiriyoruz
   const zorluk = Math.max(1, Math.min(5, Math.ceil(Math.log(s.hpMul) / Math.log(1.72) + 1)));
   const derinlikOdemesi = depthGold(s.id, bestDepth + 1);
-  const derinlikZorlugu = challengeRating(s.id, bestDepth + 1) / Math.max(1, challengeRating(s.id, 1));
+  /**
+   * BİR SONRAKİ DERİNLİK, GEÇTİĞİNDEN NE KADAR ZOR?
+   *
+   * ⚠️ Kıyas DERİNLİK 1'e göreydi ve ekranda "×5735.5 HARDER" yazıyordu.
+   * Matematiksel olarak doğru (zorluk üstel artıyor) ama oyuncuya HİÇBİR ŞEY
+   * anlatmıyor: o sayıyı yorumlayamaz, hata ya da saçmalık gibi okur.
+   * Oyuncunun sorduğu soru "1. derinliğe göre nerede duruyorum" değil,
+   * "SIRADAKİ adım ne kadar sert" — kıyas onun GEÇTİĞİ derinliğe göre.
+   * Depth 34→35 için bu ×1,2 civarı çıkıyor: küçük, okunur, cesaret verici.
+   *
+   * ⚠️ Hiç inilmemişse (bestDepth 0) kıyas edilecek bir şey YOK; etiket
+   * gösterilmiyor — zaten "NEVER ENTERED" yazıyor.
+   */
+  const derinlikZorlugu = bestDepth > 0
+    ? challengeRating(s.id, bestDepth + 1) / Math.max(1, challengeRating(s.id, bestDepth))
+    : 0;
   // Checkpoint = geçilmiş en derin boss basamağı; koşu onun BİR ALTINDAN başlar
   const kontrolNoktasi = checkpointFor(bestDepth);
   const devamDerinligi = kontrolNoktasi + 1;
@@ -1176,9 +1191,11 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick, wild
               <span style={{ fontSize: 12, fontWeight: 800, color: C.candle }}>
                 Depth {bestDepth + 1} pays {derinlikOdemesi.toLocaleString('en-US')} gold
               </span>
-              <Tag tone="blood" title="How much harder than depth 1">
-                ×{derinlikZorlugu.toFixed(1)} HARDER
-              </Tag>
+              {derinlikZorlugu > 0 && (
+                <Tag tone="blood" title="How much harder than the deepest you have cleared">
+                  ×{derinlikZorlugu.toFixed(2)} HARDER THAN YOUR BEST
+                </Tag>
+              )}
             </div>
           </div>
 
