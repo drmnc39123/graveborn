@@ -98,16 +98,23 @@ button { font: inherit; }
      Tick01   %7 dolu                 ← neredeyse görünmez, elendi
      Gauntlet %33 dolu                ← 16 px'de şekilsiz bir blob, elendi
 
+   ⚠️ 2 KAT BÜYÜTÜLDÜ. 16 px imleç ekranda sistem imlecinin yarısı kadar
+   kalıyordu ve kullanıcı "çok küçük" dedi. CSS imleci ÖLÇEKLEMEZ — görselin
+   kendi boyutunu kullanır; o yüzden 32x32 dosyalar ÜRETİLDİ
+   (public/art/cursors/, NEAREST ile; BICUBIC piksel sanatını bulanık bir
+   lekeye çevirirdi).
+
    ⚠️ SICAK NOKTA SPRITE'TAN ÖLÇÜLDÜ, tahmin edilmedi. Alfa haritası
    çıkarıldı: Cursor02'nin ok ucu (5,4)'te, Hand01_Up'ın parmak ucu (7,2)'de.
-   Yanlış sıcak nokta, tıklamanın imlecin ucundan kaymış hissettirmesi
-   demektir — fark edilmesi zor, düzeltilmesi can sıkıcı bir hata.
+   İki katına çıkınca sıcak nokta da İKİ KATINA çıkmak ZORUNDA: (10,8) ve
+   (14,4). Unutulsaydı tıklama imlecin ucundan 16 px kayardı — fark edilmesi
+   zor, yaşaması can sıkıcı bir hata.
 
    ⚠️ auto/pointer YEDEĞİ ŞART: dosya 404 verirse tarayıcı imleci tamamen
    kaybetmesin.
    ⚠️ Bu açıklamada TERS TIRNAK YOK — şablon dizesinin içindeyiz ve ters
    tırnak diziyi erkenden bitirir (bu oturumda dördüncü kez aynı tuzak). */
-body { cursor: url('/art/ui/kit/Cursors/Cursor02.png') 5 4, auto; }
+body { cursor: url('/art/cursors/Cursor02@2x.png') 10 8, auto; }
 a, button:not(:disabled), [role='button'], summary,
 input[type='checkbox'], input[type='radio'], select {
   /* ⚠️ !important ŞART ve ölçümle anlaşıldı: düğmeler imleci SATIR İÇİ
@@ -118,7 +125,7 @@ input[type='checkbox'], input[type='radio'], select {
      ⚠️ :not(:disabled) — devre dışı düğmede el işareti göstermek
      tıklanabilir olduğunu SÖYLEMEK olurdu; onların kendi default
      değeri kalsın. */
-  cursor: url('/art/ui/kit/Cursors/Hand01_Up.png') 7 2, pointer !important;
+  cursor: url('/art/cursors/Hand01_Up@2x.png') 14 4, pointer !important;
 }
 /* ⚠️ Yazı alanları KENDİ imlecini korur — metin imleci bir okla
    değiştirilirse nereye yazacağını gösteren tek işaret kaybolur. */

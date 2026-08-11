@@ -36,6 +36,20 @@ Dark Dungeon Builder Kit · Dark Forest Trees · Forest Ground Tiles
 
 ---
 
+### `cursors/` — Franuka'dan TÜRETİLMİŞ (bizim ürettiğimiz dosyalar)
+`Cursor02@2x.png`, `Hand01_Up@2x.png` — `ui/kit/Cursors/` altındaki 16×16
+Franuka imleçlerinin NEAREST ile 2 kat büyütülmüş hâli.
+
+- **Neden:** CSS imleci ölçeklemez, görselin kendi boyutunu kullanır. 16 px
+  imleç ekranda sistem imlecinin yarısı kadar kalıyordu.
+- **Lisans:** kaynakla aynı (Franuka RPG UI pack) — paket düzenlemeye izin
+  veriyor. **Credits'te franuka.itch.io bağlantısı ZORUNLU** (kaynak paketin
+  koşulu, türev için de geçerli).
+- **Yeniden üretim:** PIL, `im.resize((32,32), Image.NEAREST)`. BICUBIC
+  KULLANMAYIN — piksel sanatını bulanık bir lekeye çevirir.
+
+---
+
 ## ❌ KULLANILMAYACAK — sahte paket
 
 **"Pixel_RPG_Pack" / "Ultimate Fantasy RPG UI Mega Pack" (500+ assets)** — 2026-07-31'de incelendi.
