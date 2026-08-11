@@ -32,7 +32,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { STAGES } from '@/game/config';
 import { heroById } from '@/game/heroes';
-import { ossuaryTier, ossuaryTierProgress } from '@/game/ossuary';
+import { OSSUARY, ossuaryTier, ossuaryTierProgress } from '@/game/ossuary';
 import { paidDepth, type Progress } from '@/game/progress';
 import { nextPointAt, skillPoints } from '@/game/skills';
 import { Portrait } from '@/components/HeroPicker';
@@ -121,6 +121,14 @@ export function ProfileCard({ progress, wallet, onOpen }: {
 
   const rutbe = ossuaryTier(progress.ossuary);
   const ilerleme = ossuaryTierProgress(progress.ossuary);
+  /**
+   * ⚠️ ÇUBUK TEK BAŞINA HİÇBİR ŞEY SÖYLEMİYORDU. Ekranda 16 px'lik ince bir
+   * turuncu çizgi olarak duruyor ve %70 doluluğu okunmuyordu — yani kartın
+   * en anlamlı bilgisi görünmez bir süstü. Kalan seviye ve BİR SONRAKİ
+   * RÜTBENİN ADI yazılınca çubuk bir ilerleme anlatısına dönüşüyor.
+   */
+  const kalan = OSSUARY.tierEvery - (Math.max(0, Math.floor(progress.ossuary)) % OSSUARY.tierEvery);
+  const sonrakiRutbe = ossuaryTier(progress.ossuary + kalan);
   const derinlik = useCountUpInt(olcum.enDerin);
 
   const ad = wallet ? short(wallet) : 'You';
@@ -163,8 +171,14 @@ export function ProfileCard({ progress, wallet, onOpen }: {
         </div>
 
         {/* Açılır işareti — kartın açılabildiğini SÖYLEYEN tek şey bu */}
+        {/* ⚠️ Açılır işareti EKRANDA NEREDEYSE GÖRÜNMÜYORDU (9 px, sönük).
+            Kartın açılabildiğini söyleyen TEK şey bu; görünmezse özellik de
+            yok demektir. Büyütüldü ve kendi kutusuna alındı. */}
         <span style={{
-          flexShrink: 0, fontSize: 9, color: C.boneFaint,
+          flexShrink: 0, width: 16, height: 16, borderRadius: 4,
+          display: 'grid', placeItems: 'center',
+          fontSize: 8, color: C.candle, background: 'rgba(239,167,46,0.12)',
+          border: `1px solid ${C.candle}33`,
           transform: acik ? 'rotate(180deg)' : 'none',
           transition: 'transform 140ms ease-out',
         }}>
@@ -176,8 +190,19 @@ export function ProfileCard({ progress, wallet, onOpen }: {
       {acik && (
         <div style={{ padding: '0 8px 8px' }}>
           {/* ⚠️ `tone="gold"` — varsayılan dolgu YEŞİLDİ (Bar08 ölçüldü:
-              rgb(102,157,78)) ve oyunun paletinde yeşil yok. */}
-          <Bar pct={ilerleme} variant="01" tone="gold" scale={1} />
+              rgb(102,157,78)) ve oyunun paletinde yeşil yok.
+              ⚠️ `scale={2}`: scale 1'de çubuk 16 px ve Franuka'nın oluk
+              detayı kayboluyor; ekranda ince bir çizgi olarak okunuyordu. */}
+          <Bar pct={ilerleme} variant="01" tone="gold" scale={2} />
+          <div style={{
+            marginTop: 3, fontSize: 8.5, color: C.boneFaint,
+            display: 'flex', justifyContent: 'space-between', gap: 6,
+          }}>
+            <span>{kalan} to <b style={{ color: C.boneDim }}>{sonrakiRutbe.toUpperCase()}</b></span>
+            <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+              {OSSUARY.tierEvery - kalan}/{OSSUARY.tierEvery}
+            </span>
+          </div>
 
           <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
             <Kutu ikon="skull" etiket="DEPTH" deger={String(derinlik)} vurgu

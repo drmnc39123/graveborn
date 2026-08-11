@@ -7,6 +7,7 @@ import { createHub, stepHub, warp, type HubState } from '@/game/hub';
 import { renderHub, DEBUG } from '@/game/hubRender';
 import { loadMapWorld } from '@/game/mapWorld';
 import { preloadAll } from '@/game/sprites';
+import { isTestMode } from '@/lib/testMode';
 import { unlockAudio, play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
 
@@ -148,6 +149,28 @@ export function HubCanvas({
       });
 
       let last = performance.now(), t = 0, hintAcc = 0;
+      /**
+       * ⚠️ TEST MODUNDA ELLE KARE SÜRME — görsel iş iki kez bunun yokluğundan
+       * tıkandı.
+       *
+       * Tarayıcı sekmesi/paneli arka plandayken `requestAnimationFrame`
+       * DURUYOR (`document.visibilityState === 'hidden'`). Ekran görüntüsü
+       * aracı sekmeyi öne getirmediği için canvas, karolar yüklenmeden önceki
+       * İLK karede donuyor: ekranda köy yerine yedek dolgu rengi görünüyor.
+       * İki ayrı oturumda "harita bozulmuş" diye YANLIŞ teşhis çıkardım;
+       * ikisinde de kod sağlamdı, ölçüm aleti yalan söylüyordu.
+       *
+       * ⚠️ ÜRETİMDE YOK: `isTestMode()` production'da sabit `false` döner ve
+       * bundler ölü kodu atar (bkz. `lib/testMode.ts`). Oyun davranışı
+       * değişmiyor — bu yalnızca bir ölçüm kancası.
+       */
+      if (isTestMode()) {
+        (window as unknown as { __gbKare?: () => void }).__gbKare = () => {
+          stepHub(hub, 1 / 60, 0, 0);
+          renderHub(ctx, hub, cssW, cssH, dpr, t);
+        };
+      }
+
       const loop = (now: number) => {
         raf = requestAnimationFrame(loop);
         const dt = Math.min((now - last) / 1000, 0.05);
@@ -224,8 +247,21 @@ export function HubCanvas({
         </div>
       )}
 
+      {/* ── TUŞ İPUCU ──
+          ⚠️ "F1 collision" HER OYUNCUYA GÖRÜNÜYORDU. O bir GELİŞTİRİCİ aracı
+          (görünmez engel avı için çarpışma kutularını çizer); oyuncuya
+          gösterilen ipucuna karışması, oyunun kendi hata ayıklama aletini
+          bir oyun mekaniği gibi sunmak demekti. Tuş ÇALIŞMAYA DEVAM EDİYOR —
+          sadece geliştirmede yazılıyor, ya da zaten AÇIKKEN (aksi hâlde
+          oyuncu yanlışlıkla basıp kutuları görür ve nasıl kapatacağını
+          bilemez).
+          ⚠️ Ölçüm ipucu üretimde de gerekli: yeni oyuncu köye düşünce nasıl
+          yürüyeceğini bilmiyor. O kısım kalıyor. */}
       <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 11, color: debug ? C.blood : C.boneFaint }}>
-        WASD / arrows · E to interact · <b>F1</b> {debug ? 'collision ON' : 'collision'}
+        WASD / arrows · E to interact
+        {(process.env.NODE_ENV !== 'production' || debug) && (
+          <> · <b>F1</b> {debug ? 'collision ON' : 'collision'}</>
+        )}
       </div>
     </div>
   );
