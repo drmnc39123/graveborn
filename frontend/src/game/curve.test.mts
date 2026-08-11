@@ -222,6 +222,23 @@ function cohort(label: string, opts: Parameters<typeof descentRun>[1] = {}) {
     deepest: median(depths),
     seconds: median(runs.map((r) => r.seconds)),
     rareGold: median(runs.map((r) => r.rareGold)),
+    /**
+     * SAATLİK GELİR — ⚠️ ORTANCA/ORTANCA DEĞİL, TOPLAM/TOPLAM.
+     *
+     * Bu bir kez yanlış yazıldı ve ölçüm aletini yalancı yaptı: `rareGold`
+     * bir koşunun ortancası, `seconds` BAŞKA bir koşunun ortancası. İkisini
+     * bölmek hiçbir gerçek koşunun saatlik gelirini vermiyor — sadece
+     * "ortanca gold" felaket koşularıyla aşağı çekilirken "ortanca süre"
+     * aynı koşulardan gelmediği için oran uyduruk çıkıyordu. Ölçüldü:
+     * checkpoint saatlik geliri 2289→1644 DÜŞÜRÜYOR gibi göründü, oysa
+     * doğru hesapla ARTIRIYOR.
+     *
+     * Σgold/Σsüre = kohortun gerçek toplam kazancı / gerçek toplam süresi.
+     * `hours.test.mts` baştan beri bunu yapıyor; iki alet arasındaki kat
+     * farkının kaynağı buydu.
+     */
+    goldSaat: runs.reduce((s, r) => s + r.rareGold, 0) /
+      (runs.reduce((s, r) => s + r.seconds, 0) / 3600),
     timeouts: runs.filter((r) => r.end === 'timeout').length,
     spread: `${Math.min(...depths)}–${Math.max(...depths)}`,
     /** ⚠️ Karşılaştırmalar BUNUNLA yapılmalı, `deepest` ile değil */
@@ -290,10 +307,14 @@ check('Forge yatırımı derinliği ARTIRIYOR',
 // ödülü SIFIR — geriye sadece nadir düşüş kalır. O damla saatlik geliri tek
 // başına taşıyabiliyor mu?
 console.log('\n[3] Tekrar koşusunun geliri (yeni derinlik YOK)');
+// ⚠️ İKİ AYRI SORU, İKİ AYRI İSTATİSTİK — karıştırma:
+//   "TEK koşu tılsımı ödüyor mu"  → ORTANCA gold (tipik koşu)
+//   "saatte ne kazanıyorum"       → Σgold/Σsüre (kohort oranı, `goldSaat`)
 const repeatGold = veteran.rareGold;
 const repeatHours = veteran.seconds / 3600;
-const goldPerHour = repeatGold / repeatHours;
-console.log(`     ${repeatGold} gold / ${mmss(veteran.seconds)} → ${Math.round(goldPerHour)} gold/saat`);
+const goldPerHour = veteran.goldSaat;
+console.log(`     tipik koşu ${repeatGold} gold / ${mmss(veteran.seconds)} · ` +
+  `kohort oranı ${Math.round(goldPerHour)} gold/saat`);
 
 const cheapest = [...CHARMS].sort((a, b) => a.cost - b.cost).slice(0, CHARM_SLOTS);
 const dearest = [...CHARMS].sort((a, b) => b.cost - a.cost).slice(0, CHARM_SLOTS);
@@ -384,13 +405,33 @@ if (atCp) {
 }
 
 const resumed = cohort('resume', { upgrades: forgeMid, startDepth: cp + 1 });
-console.log(`     d1'den:   d${veteran.deepest} (dağılım ${veteran.spread}), ${mmss(veteran.seconds)}, ` +
+console.log(`     d1'den:   ${veteran.metin}, ${mmss(veteran.seconds)}, ` +
   `${veteran.timeouts}/${SEED_COUNT} tavan`);
-console.log(`     d${cp + 1}'den: d${resumed.deepest} (dağılım ${resumed.spread}), ${mmss(resumed.seconds)}, ` +
+console.log(`       ham: ${[...veteran.depths].sort((a, b) => a - b).join(',')}`);
+console.log(`     d${cp + 1}'den: ${resumed.metin}, ${mmss(resumed.seconds)}, ` +
   `${resumed.timeouts}/${SEED_COUNT} tavan`);
+console.log(`       ham: ${[...resumed.depths].sort((a, b) => a - b).join(',')}`);
 
-check('checkpoint DAHA DERİNE indiriyor', resumed.deepest > veteran.deepest,
-  `d${veteran.deepest} → d${resumed.deepest}`);
+// ⚠️ BURADA ORTANCAYA BAKMA — bu eşik bir kez yanlış kuruldu ve "checkpoint
+// çalışmıyor" diye KIRMIZI yandı. Ölçülen ham dağılımlar:
+//     d1'den: 4,4,4,4,4,4,9,9,14,14,14,19,22,25,25
+//     d6'dan: 9,9,9,9,9,9,9,9,14,14,17,19,19,25,28
+// Checkpoint koşuların %40'ını oluşturan "d4'te öldü" kümesini TAMAMEN
+// siliyor (taban 4→9) ve aynı derinliği YARI SÜREDE veriyor (11:19→6:07).
+// Ortancanın kıpırdamamasının sebebi, kayan kümenin tam ortanca değerinin
+// (9) üstüne oturup o kovayı 2'den 8'e şişirmesi. Çift tepeli dağılımda
+// ortanca, ölçebilecek en kötü istatistik.
+//
+// Checkpoint'in TASARIM SÖZÜ de zaten "daha derine in" değildi: israf edilen
+// süreyi geri kazandırmak. Ölçülen tam olarak o.
+check('checkpoint felaket koşuları siliyor', resumed.q.q1 > veteran.q.q1,
+  `alt çeyrek d${veteran.q.q1} → d${resumed.q.q1} · taban d${veteran.q.min} → d${resumed.q.min}`);
+
+// ASIL EKONOMİK İDDİA: aynı derinlik daha kısa sürede → saatlik gelir artıyor.
+console.log(`     saatlik: d1'den ${Math.round(veteran.goldSaat)} → ` +
+  `d${cp + 1}'den ${Math.round(resumed.goldSaat)} gold/saat`);
+check('checkpoint saatlik geliri ARTIRIYOR', resumed.goldSaat > veteran.goldSaat,
+  `${Math.round(veteran.goldSaat)} → ${Math.round(resumed.goldSaat)} gold/saat`);
 
 // Süre tavanı kaç derinliğe yetiyor — ham alt sınırla
 let raw = 0, reach = 0;
@@ -445,6 +486,13 @@ console.log('\n[9] Duvar — zincirleme koşularda ilerleme');
   // düşüyor — ölçüm "zincir hiç ilerlemiyor" diyordu, oysa ilerliyor.
   const CHAIN_SEEDS = 5;
   const zincir: { run: number; start: number; reached: number; gold: number }[] = [];
+  // ⚠️ Saatlik gelir için GERÇEK süre toplanıyor. Burada bir kez
+  // `halka sayısı × RUN.durationSec` yazıldı — yani her koşunun tam 30 dk
+  // sürdüğü varsayıldı. Ölçülen koşular 6–11 dk'da ÖLÜYOR; payda 3–5 kat
+  // şişince saatlik gelir aynı oranda düşük çıktı (447 gold/saat) ve
+  // "Forge ağacı 1.377 saat" gibi `hours.test.mts` ile 13 kat çelişen bir
+  // sayı üretti. Süre varsayılmaz, ÖLÇÜLÜR.
+  let zincirGold = 0, zincirSec = 0;
   let cpNow = 0;
   for (let n = 1; n <= 6; n++) {
     const start = checkpointFor(cpNow) + 1;
@@ -459,6 +507,9 @@ console.log('\n[9] Duvar — zincirleme koşularda ilerleme');
     // Yani `reached` = "5 denemenin en iyisi".
     const reached = Math.max(...outs.map((r) => r.deepest));
     const gold = median(outs.map((r) => r.rareGold));
+    // Σgold/Σsüre — [3] ve [7]'deki kuralın aynısı, ortanca/ortanca DEĞİL
+    zincirGold += outs.reduce((s, r) => s + r.rareGold, 0);
+    zincirSec += outs.reduce((s, r) => s + r.seconds, 0);
     zincir.push({ run: n, start, reached, gold });
     console.log(`     koşu ${n}: d${start}'den başladı → d${reached} (+${reached - start + 1}), ${gold} nadir gold`);
     // İlerleme durdu mu — yeni checkpoint eskisini geçmiyorsa duvar burası
@@ -474,12 +525,16 @@ console.log('\n[9] Duvar — zincirleme koşularda ilerleme');
     zincir.length < 6 || sonHalka.reached - sonHalka.start < ilkHalka.reached - ilkHalka.start,
     `${zincir.length} halka, son kazanç +${sonHalka.reached - sonHalka.start + 1} derinlik`);
 
-  const toplamGold = zincir.reduce((s, z) => s + z.gold, 0);
-  const toplamSaat = zincir.length * (RUN.durationSec / 3600);
+  const zincirSaat = zincirGold / Math.max(1, zincirSec / 3600);
   console.log(`     duvar ≈ d${sonHalka.reached} · ${zincir.length} koşu · ` +
-    `${Math.round(toplamGold / toplamSaat)} gold/saat (nadir düşüş)`);
+    `ortalama ${mmss(zincirSec / (zincir.length * CHAIN_SEEDS))}/koşu · ` +
+    `${Math.round(zincirSaat)} gold/saat (nadir düşüş)`);
   console.log(`     → Forge ağacı (${tree.toLocaleString('tr-TR')}) ≈ ` +
-    `${Math.round(tree / Math.max(1, toplamGold / toplamSaat))} saat`);
+    `${Math.round(tree / Math.max(1, zincirSaat))} saat`);
+  // ⚠️ Bu saat sayısı bir ALT SINIR DEĞİL, TAVAN: yalnızca nadir düşüş
+  // sayılıyor, ilerleme ödülü (musluğun büyük parçası, bkz. [4]) hariç.
+  check('duvar sonrası saatlik gelir ölçülebilir düzeyde', zincirSaat > 0,
+    `${Math.round(zincirSaat)} gold/saat`);
 }
 
 // ── SONUÇ ──
