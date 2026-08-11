@@ -320,7 +320,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       // kalıyor ve koşu hiç seviye atlamıyor — 1800 kare sürdüm, level-up
       // gelmedi. Bir savaşı incelemek için oyuncunun YÜRÜMESİ gerekiyor.
       (window as unknown as {
-        __gbKosuKare?: (n?: number, ix?: number, iy?: number) => void;
+        __gbKosuKare?: (n?: number, ix?: number, iy?: number) => unknown;
       }).__gbKosuKare = (n = 1, ix = 0, iy = 0) => {
         // ⚠️ ADIMLA ÇOK, ÇİZ BİR KEZ. Her adımda çizmek 900 karede tarayıcıyı
         // kilitliyordu (ekran görüntüsü 30 sn'de zaman aşımına uğradı).
@@ -331,6 +331,17 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           game.step();
         }
         render(ctx, game, cssW, cssH, dpr, TICK, auraRef.current, roomRef.current?.ghosts ?? []);
+        // ⚠️ CANVAS TEK BAŞINA YETMİYOR. Level-up kartı, ölüm ekranı ve HUD
+        // React tarafında; döngü durduğu için bunlar hiç güncellenmiyordu ve
+        // koşu içi arayüzün tamamı ölçüm dışı kalıyordu.
+        senkronHud();
+        return {
+          phase: game.phase, time: Math.round(game.time), level: game.level,
+          hp: Math.round(game.hp), maxHp: Math.round(game.stats.maxHp),
+          kills: game.kills, enemies: game.enemies.length,
+          depth: game.stage.depth, remaining: game.remaining,
+          offers: game.offers.map((o) => o.id),
+        };
       };
     }
 
@@ -406,48 +417,60 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       hudAcc += rawDt;
       if (hudAcc >= 1 / 12 || game.phase !== 'running') {
         hudAcc = 0;
-
-        // ── TUTORIAL ──
-        // ⚠️ HUD örneklemesine bağlı: ayrı bir zamanlayıcı kurmak 60Hz'de
-        // ikinci bir React akışı açardı. Motor OKUNUYOR, hiçbir alan yazılmıyor.
-        if (hintRef.current) {
-          // görünen ipucunun süresi doldu mu (OYUN zamanı — duraklamada donar)
-          if (game.time - hintRef.current.at >= hintRef.current.def.hold) {
-            hintRef.current = null;
-            setHint(null);
-          }
-        } else {
-          const h = nextHint(game, seenRef.current);
-          if (h) {
-            hintRef.current = { def: h, at: game.time };
-            seenRef.current = [...seenRef.current, h.id];
-            markHintSeen(h.id);
-            setHint(h.text);
-          }
-        }
-        setHud({
-          time: game.time, hp: game.hp, maxHp: game.stats.maxHp, level: game.level,
-          xp: game.xp, xpNext: game.xpNext, kills: game.kills, rareGold: game.rareGold,
-          enemies: game.enemies.length, phase: game.phase, fps,
-          mode: game.stage.mode, depth: game.stage.depth, deepestCleared: game.stage.deepestCleared,
-          offers: game.offers.map((o) => ({ id: o.id, name: o.name, desc: o.desc, kind: o.kind, level: o.level })),
-          // ⚠️ `id` ŞART: ikon ve "Lv 3 → 4" önizlemesi bununla bulunuyor.
-          // Eskiden sadece `name` taşınıyordu ve arayüz silahı tanıyamıyordu.
-          weapons: game.weapons.map((w) => ({
-            id: w.def.id, name: w.def.name, level: w.level,
-            cd: w.cd, cdMax: game.cooldownMaxOf(w),
-          })),
-          passives: game.passives.map((p) => ({ id: p.def.id, name: p.def.name, level: p.level })),
-          revives: game.revives,
-          revivalLeft: Math.max(0, Math.floor(game.stats.revival)),
-          evolution: game.lastEvolution,
-          stageName: game.stage.def.name,
-          stageTotal: game.stage.def.enemyCount,
-          remaining: game.remaining,
-        });
+        senkronHud();
       }
     };
     raf = requestAnimationFrame(loop);
+
+    /**
+     * MOTOR → REACT KÖPRÜSÜ.
+     *
+     * ⚠️ DÖNGÜDEN AYRILDI, ÇÜNKÜ DÖNGÜ DURABİLİYOR. Bu blok `loop`un içindeydi;
+     * panel/sekme arka plandayken `requestAnimationFrame` durduğu için
+     * `__gbKosuKare` oyunu ilerletiyor ama HUD, level-up kartı ve ölüm ekranı
+     * hiç güncellenmiyordu — yani koşu içi ARAYÜZÜN HİÇBİRİ ölçülemiyordu.
+     * Ölçüm aleti oyunun yarısını göremiyordu.
+     */
+    function senkronHud() {
+      // ── TUTORIAL ──
+      // ⚠️ HUD örneklemesine bağlı: ayrı bir zamanlayıcı kurmak 60Hz'de
+      // ikinci bir React akışı açardı. Motor OKUNUYOR, hiçbir alan yazılmıyor.
+      if (hintRef.current) {
+        // görünen ipucunun süresi doldu mu (OYUN zamanı — duraklamada donar)
+        if (game.time - hintRef.current.at >= hintRef.current.def.hold) {
+          hintRef.current = null;
+          setHint(null);
+        }
+      } else {
+        const h = nextHint(game, seenRef.current);
+        if (h) {
+          hintRef.current = { def: h, at: game.time };
+          seenRef.current = [...seenRef.current, h.id];
+          markHintSeen(h.id);
+          setHint(h.text);
+        }
+      }
+      setHud({
+        time: game.time, hp: game.hp, maxHp: game.stats.maxHp, level: game.level,
+        xp: game.xp, xpNext: game.xpNext, kills: game.kills, rareGold: game.rareGold,
+        enemies: game.enemies.length, phase: game.phase, fps,
+        mode: game.stage.mode, depth: game.stage.depth, deepestCleared: game.stage.deepestCleared,
+        offers: game.offers.map((o) => ({ id: o.id, name: o.name, desc: o.desc, kind: o.kind, level: o.level })),
+        // ⚠️ `id` ŞART: ikon ve "Lv 3 → 4" önizlemesi bununla bulunuyor.
+        // Eskiden sadece `name` taşınıyordu ve arayüz silahı tanıyamıyordu.
+        weapons: game.weapons.map((w) => ({
+          id: w.def.id, name: w.def.name, level: w.level,
+          cd: w.cd, cdMax: game.cooldownMaxOf(w),
+        })),
+        passives: game.passives.map((p) => ({ id: p.def.id, name: p.def.name, level: p.level })),
+        revives: game.revives,
+        revivalLeft: Math.max(0, Math.floor(game.stats.revival)),
+        evolution: game.lastEvolution,
+        stageName: game.stage.def.name,
+        stageTotal: game.stage.def.enemyCount,
+        remaining: game.remaining,
+      });
+    }
 
     return () => {
       cancelAnimationFrame(raf);
@@ -713,9 +736,25 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           <div style={{ fontSize: 34, fontWeight: 900, color: hud.phase === 'won' ? C.candle : C.blood, marginBottom: 6 }}>
             {hud.mode === 'descent' ? 'THE DESCENT ENDS' : hud.phase === 'won' ? 'STAGE CLEARED' : 'YOU DIED'}
           </div>
+          {/*
+            ⚠️ "ULAŞILAN" ve "TEMİZLENEN" AYNI SAYI DEĞİL — burada karıştırılıyordu.
+            Ekranda `deepestCleared` "Reached depth" diye yazılıyordu; derinlik 1'de
+            ölen oyuncu **"Reached depth 0"** görüyordu. Derinlik 0 diye bir şey yok
+            ve koşu içi HUD bir saniye önce "DEPTH 1" yazıyordu — oyuncu aynı ekranda
+            kendisiyle çelişen iki sayı görüyordu.
+            `depth` = üstünde savaştığı derinlik (oyuncunun sorduğu: ne kadar indim)
+            `deepestCleared` = tamamen bitirdiği en derin kat (ÖDEME bunu baz alır)
+            İkisi farklıysa ikisi de gösteriliyor; ödeme satırı hemen altta zaten
+            "New depths pay once" diyor ve o söz ancak bu sayı görünürse anlamlı.
+          */}
           {hud.mode === 'descent' && (
             <div style={{ fontSize: 15, fontWeight: 900, color: C.candle, marginBottom: 6 }}>
-              Reached depth {hud.deepestCleared}
+              Reached depth {hud.depth}
+              {hud.deepestCleared < hud.depth && (
+                <span style={{ color: C.boneDim, fontWeight: 700, fontSize: 13 }}>
+                  {' '}· cleared {hud.deepestCleared}
+                </span>
+              )}
             </div>
           )}
           <div style={{ fontSize: 13, color: C.boneDim, marginBottom: 20, textAlign: 'center' }}>

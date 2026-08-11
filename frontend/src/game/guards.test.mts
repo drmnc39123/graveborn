@@ -137,5 +137,40 @@ console.log('[4] Görüş alanı simülasyonu etkiliyor — düello vaadi');
 }
 
 
+console.log('\n[5] "Ulaşılan" ile "temizlenen" derinlik AYNI SAYI DEĞİL');
+{
+  /**
+   * ⚠️ NİYE BURADA: ölüm ekranı `deepestCleared`ı "Reached depth" diye
+   * yazıyordu. Derinlik 1'de ölen oyuncu **"Reached depth 0"** görüyordu —
+   * derinlik 0 diye bir şey yok ve koşu içi HUD bir saniye önce "DEPTH 1"
+   * yazıyordu. Oyuncu aynı ekranda kendisiyle çelişen iki sayı görüyordu.
+   *
+   * İki alanın AYRI kalması gerekiyor ve bu ölçülebilir:
+   *   `depth`          = üstünde savaştığı kat  → "ne kadar indim"
+   *   `deepestCleared` = tamamen bitirdiği kat  → ÖDEME bunu baz alır
+   * Biri diğerinin yerine kullanılırsa ya oyuncuya yalan söylenir ya da
+   * ödenmemiş bir derinlik ödenmiş sayılır. Bu bölüm ikisini de kilitliyor.
+   */
+  const g = new Game(9182, undefined, undefined, 'descent', undefined, 1);
+  g.lockViewport(1280, 720);
+  check('koşu derinlik 1de başlıyor', g.stage.depth === 1, `d${g.stage.depth}`);
+  check('hiçbir kat bitirilmeden temizlenen SIFIR',
+    g.stage.deepestCleared === 0, `${g.stage.deepestCleared}`);
+  check('yani ikisi FARKLI — biri diğerinin yerine yazılamaz',
+    g.stage.depth !== g.stage.deepestCleared,
+    `depth ${g.stage.depth} ≠ cleared ${g.stage.deepestCleared}`);
+
+  // Temizlenen, ulaşılanı ASLA geçemez — geçerse ödenmemiş kat ödenmiş sayılır
+  for (let i = 0; i < 40000 && g.phase === 'running'; i++) {
+    if (g.phase === 'levelup') g.choose(g.offers[0].id);
+    g.setInput(0.6, 0.4);
+    g.step();
+  }
+  check('temizlenen ≤ ulaşılan (koşu boyunca)',
+    g.stage.deepestCleared <= g.stage.depth,
+    `cleared ${g.stage.deepestCleared} ≤ depth ${g.stage.depth}`);
+}
+
+
 console.log(`\n${FAIL.length === 0 ? '✅ BEKÇİLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

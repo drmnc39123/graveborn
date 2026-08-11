@@ -33,6 +33,28 @@ export function Card({
   return (
     <div
       onClick={clickable ? onClick : undefined}
+      /**
+       * ⚠️ TIKLANABİLİR KART KLAVYEDEN ERİŞİLEBİLİR OLMAK ZORUNDA.
+       *
+       * Ölçüldü: kart `<div onClick>` idi — fareyle çalışıyor, klavyeyle
+       * ULAŞILAMIYOR, ekran okuyucuya düğme olduğunu SÖYLEMİYOR. Seviye
+       * atlama kartında "Press 1 · 2 · 3" bunu örtüyordu, ama GearPanel'de
+       * parça seçmenin klavye karşılığı hiç yoktu.
+       *
+       * ⚠️ `<button>`a ÇEVRİLMEDİ bilerek: `Card` 30+ yerde kullanılıyor ve
+       * bazı çağrı yerleri (kampanya kartı) İÇİNDE gerçek bir `<button>`
+       * barındırıyor — düğme içinde düğme geçersiz. Bunun yerine yalnızca
+       * TIKLANABİLİRKEN düğme rolü veriliyor; kart yine `div` kalıyor,
+       * hiçbir yerleşim değişmiyor.
+       *
+       * ⚠️ Space TARAYICIDA SAYFA KAYDIRIR — `preventDefault` şart, yoksa
+       * oyuncu kartı seçerken panel de aşağı kayar.
+       */
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick!(); }
+      } : undefined}
       style={{
         position: 'relative',
         borderRadius: 10,
