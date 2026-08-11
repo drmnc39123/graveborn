@@ -312,11 +312,21 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
      * ⚠️ Üretimde derlenmiyor (`isTestMode` production'da sabit false).
      */
     if (isTestMode()) {
-      (window as unknown as { __gbKosuKare?: (n?: number) => void }).__gbKosuKare = (n = 1) => {
+      // ⚠️ GİRDİ DE VERİLEBİLİYOR: oyuncu hareket etmezse XP küreleri yerde
+      // kalıyor ve koşu hiç seviye atlamıyor — 1800 kare sürdüm, level-up
+      // gelmedi. Bir savaşı incelemek için oyuncunun YÜRÜMESİ gerekiyor.
+      (window as unknown as {
+        __gbKosuKare?: (n?: number, ix?: number, iy?: number) => void;
+      }).__gbKosuKare = (n = 1, ix = 0, iy = 0) => {
+        // ⚠️ ADIMLA ÇOK, ÇİZ BİR KEZ. Her adımda çizmek 900 karede tarayıcıyı
+        // kilitliyordu (ekran görüntüsü 30 sn'de zaman aşımına uğradı).
+        // İncelemek için gereken şey son KARE; aradaki 899 çizim boşa gidiyor.
         for (let i = 0; i < n; i++) {
-          if (game.phase === 'running') game.step();
-          render(ctx, game, cssW, cssH, dpr, TICK, auraRef.current, roomRef.current?.ghosts ?? []);
+          if (game.phase !== 'running') break;
+          game.setInput(ix, iy);
+          game.step();
         }
+        render(ctx, game, cssW, cssH, dpr, TICK, auraRef.current, roomRef.current?.ghosts ?? []);
       };
     }
 
