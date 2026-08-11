@@ -1,4 +1,12 @@
-// PALET BEKÇİSİ — arayüzün çizdiği varlıklar temada mı?
+// BEKÇİLER — ölçümle bulunmuş hataların geri gelmesini engelleyen testler.
+//
+// ⚠️ DOSYA ADI ÖNCE `palette.test.mts` İDİ ve içine görüş alanı determinizmi
+// testi girince yalan söylemeye başladı. Bir testin adı ne ölçtüğünü
+// söylemiyorsa, bir dahaki okuyan onu yanlış yerde arar.
+//
+// [1-3] PALET · [4] GÖRÜŞ ALANI DETERMİNİZMİ
+//
+// ── PALET ──
 //
 // ⚠️ NİYE VAR: kullanıcı "XP barı o yeşil gibi gözüken şey kötü duruyor" dedi
 // ve haklıydı. `Bar` bileşeni varyanttan BAĞIMSIZ hep `Slider01_Bar08.png`i
@@ -18,6 +26,8 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { BAR_DOLGU, BTN } from '../components/ui/kit.js';
+import { Game } from './engine.js';
+import { ARENA } from './arena.js';
 
 const FAIL: string[] = [];
 function check(ad: string, kosul: boolean, detay = '') {
@@ -89,5 +99,43 @@ console.log('[3] Kaynakta ihlal eden dosya adı geçmiyor');
     gecen.map((a) => `${a} (${IHLAL[a]})`).join(' | ') || `${Object.keys(IHLAL).length} ihlal listede, hiçbiri kullanılmıyor`);
 }
 
-console.log(`\n${FAIL.length === 0 ? '✅ PALET TEMİZ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
+
+console.log('');
+console.log('[4] Görüş alanı simülasyonu etkiliyor — düello vaadi');
+{
+  /**
+   * ⚠️ NİYE BURADA: düello paneli oyuncuya AÇIKÇA "same seed, same enemies,
+   * in the same order" diyor. Ölçüldü ki bu vaat YANLIŞTI — pencere boyutu
+   * doğum halkasının yarıçapını belirliyor, yani aynı seed farklı ekranda
+   * FARKLI koşu üretiyordu (1280×720'de 84 öldürme, 1920×900'de 75).
+   * Düzeltme: düello koşusunda `lockViewport`. Bu bölüm iki şeyi ölçüyor —
+   * hatanın gerçek olduğunu ve kilidin onu kapattığını.
+   */
+  const kos = (w: number, h: number, kilit: boolean) => {
+    const g = new Game(4242);
+    if (kilit) g.lockViewport(ARENA.viewW, ARENA.viewH);
+    g.setViewport(w, h);
+    for (let i = 0; i < 1800 && g.phase === 'running'; i++) g.step();
+    return g.kills;
+  };
+
+  // ⚠️ ÇİFT TARAFLI: önce hatanın GERÇEK olduğunu göster. Bu satır olmasaydı
+  // kilit bir gün kaldırılsa test yine geçer ve koruma anlamını yitirirdi.
+  const kilitsizDar = kos(1280, 720, false);
+  const kilitsizGenis = kos(1920, 900, false);
+  check('kilitsizken pencere boyutu koşuyu DEĞİŞTİRİYOR (hata gerçek)',
+    kilitsizDar !== kilitsizGenis, `${kilitsizDar} vs ${kilitsizGenis} öldürme`);
+
+  const kilitliDar = kos(1280, 720, true);
+  const kilitliGenis = kos(1920, 900, true);
+  check('KİLİTLİYKEN pencere boyutu koşuyu değiştirMİYOR',
+    kilitliDar === kilitliGenis, `${kilitliDar} = ${kilitliGenis} öldürme`);
+
+  // Kilit, mühürlenen yapılandırmayla aynı sonucu vermeli
+  check('kilitli sonuç, 1280×720 referansıyla aynı',
+    kilitliGenis === kilitsizDar, `${kilitliGenis} = ${kilitsizDar}`);
+}
+
+
+console.log(`\n${FAIL.length === 0 ? '✅ BEKÇİLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

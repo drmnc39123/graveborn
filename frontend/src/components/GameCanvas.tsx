@@ -25,6 +25,8 @@ import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
+import { ARENA } from '@/game/arena';
+import { isTestMode } from '@/lib/testMode';
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
@@ -178,6 +180,31 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
     const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth, ascension, allowedWeapons ?? null, pets ?? []);
+
+    /**
+     * 🔴 DÜELLODA GÖRÜŞ ALANI MÜHÜRLENİYOR — vaadin doğru olması için ŞART.
+     *
+     * `lockViewport`ın kendi başlığı zaten şunu söylüyor: "görüş alanı
+     * SİMÜLASYONU etkiliyor — doğum halkasının yarıçapı buradan geliyor,
+     * yani PENCERE BOYUTU dünyayı değiştiriyor. Solo'da zararsız (herkes
+     * kendi koşusunu oynuyor) ama 1v1'de ölümcül." Arena bu yüzden
+     * mühürlüyor.
+     *
+     * ⚠️ AMA DÜELLO O BOŞLUKTA KALMIŞTI. Düello paneli oyuncuya AÇIKÇA
+     * şunu vaat ediyor: "You play their run, not a copy of it — same seed,
+     * same enemies, in the same order." Bu vaat YANLIŞTI ve ölçüldü:
+     * aynı seed, 1280×720'de 84 öldürme, 1920×900'de 75. Yani dizüstünde
+     * oynayan rakibin koşusu masaüstünde BAŞKA bir koşu oluyordu.
+     *
+     * ⚠️ 1280×720 KEYFİ DEĞİL: arenanın kullandığı ve mühür testlerinin
+     * (`sim.test.mts`) ölçtüğü yapılandırmanın aynısı.
+     * ⚠️ BEDELİ KABUL EDİLDİ: daha geniş ekranlarda düşmanlar ekran
+     * kenarının bir miktar İÇİNDE beliriyor. Arena aynı bedeli zaten ödüyor.
+     * Adalet, kenardaki birkaç pikselden önce gelir — hele oyuna o vaat
+     * yazılıysa.
+     */
+    if (duelTarget !== undefined) game.lockViewport(ARENA.viewW, ARENA.viewH);
+
     gameRef.current = game;
     // GELİŞTİRME KANCASI — üretimde YOK. Otomatik doğrulamada tarayıcı kare
     // üretimini kıstığı için oyunu gerçek zamanda oynayıp level-up/ölüm gibi
@@ -271,6 +298,27 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     let frames = 0;
     let fpsTimer = 0;
     let fps = 0;
+
+    /**
+     * ⚠️ TEST MODUNDA ELLE KARE SÜRME — köydekiyle aynı gerekçe.
+     *
+     * Sekme/panel arka plandayken `requestAnimationFrame` DURUYOR ve koşu
+     * ilk karesinde donuyor: ekran görüntüsünde savaş hiç görünmüyor.
+     * Görsel iş bu yüzden köyde iki kez tıkandı; savaşta da tıkanmasın.
+     *
+     * ⚠️ `game.step()` GERÇEK TICK ile çağrılıyor (TICK sabiti), rastgele bir
+     * dt ile değil — simülasyon deterministik ve mühürlü; farklı bir adımla
+     * sürmek ekranda GERÇEKTE OLMAYAN bir koşu gösterirdi.
+     * ⚠️ Üretimde derlenmiyor (`isTestMode` production'da sabit false).
+     */
+    if (isTestMode()) {
+      (window as unknown as { __gbKosuKare?: (n?: number) => void }).__gbKosuKare = (n = 1) => {
+        for (let i = 0; i < n; i++) {
+          if (game.phase === 'running') game.step();
+          render(ctx, game, cssW, cssH, dpr, TICK, auraRef.current, roomRef.current?.ghosts ?? []);
+        }
+      };
+    }
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
