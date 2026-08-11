@@ -164,10 +164,21 @@ export function HubCanvas({
        * bundler ölü kodu atar (bkz. `lib/testMode.ts`). Oyun davranışı
        * değişmiyor — bu yalnızca bir ölçüm kancası.
        */
+      // ⚠️ `n` kare sürer ve DURUMU DÖNDÜRÜR. Tek kare yetmiyordu: köylüler
+      // gibi zamanla hareket eden şeyler bir karede yerinden kıpırdamaz.
+      // Durumu döndürmesi de gerekli — ekranda bir şeyin çizildiğini
+      // doğrulamak için dünya koordinatını ekran koordinatına çevirmek,
+      // o da kameranın nerede olduğunu bilmek demek.
       if (isTestMode()) {
-        (window as unknown as { __gbKare?: () => void }).__gbKare = () => {
-          stepHub(hub, 1 / 60, 0, 0);
+        (window as unknown as { __gbKare?: (n?: number) => unknown }).__gbKare = (n = 1) => {
+          for (let i = 0; i < n; i++) { t += 1 / 60; stepHub(hub, 1 / 60, 0, 0); }
           renderHub(ctx, hub, cssW, cssH, dpr, t);
+          return {
+            x: hub.x, y: hub.y, cssW, cssH, dpr,
+            villagers: hub.villagers.map((v) => ({
+              kind: v.kind, x: v.x, y: v.y, moving: v.moving, facingRight: v.facingRight,
+            })),
+          };
         };
       }
 

@@ -20,6 +20,17 @@
 // duvara çarpıyor" ise sadece bir alt sınırdır. Denge kararları farklara
 // dayandırılmalı.
 //
+// ⚠️ `hours.test.mts` İLE İLİŞKİSİ — ikisi de gerekli, ikisi de uzlaşmış.
+// Bir dönem 13 KAT çelişiyorlardı (447 vs 6.031 gold/saat) ve denge kararları
+// bu sayılara dayanıyordu; sebep bu dosyadaki üç hesap hatasıydı (bkz.
+// `cohort.goldSaat` ve [9]). Düzeltildikten sonra ölçülen:
+//     curve [9] zincir : 4.085 gold/saat → Forge ağacı ≈ 151 saat
+//     hours [4] tekrar : 6.031 gold/saat → Forge ağacı ≈ 102 saat
+// Kalan fark GERÇEK ve senaryo farkı: curve'ün zinciri İLK keşif koşusunu da
+// sayıyor (sığ derinlikte nadir düşüş az — 70 gold), hours ise doğrudan
+// checkpoint'ten başlayan saf tekrar koşusunu ölçüyor. Yani curve alt sınır,
+// hours üst sınır. İkisi ayrışırsa önce ORAN HESABINA bak, dengeye değil.
+//
 // ⚠️ TEK SEED YALAN SÖYLER. Descent'te ölüm anı birkaç saniyelik şansa bağlı;
 // tek koşu ±4 derinlik oynayabiliyor. Bu yüzden her ölçüm SEED_COUNT koşunun
 // ORTANCASI — ortalama değil, çünkü tek bir felaket koşu ortalamayı çeker.

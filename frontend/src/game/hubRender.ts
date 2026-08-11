@@ -1,14 +1,15 @@
 // Dünya çizimi — editörde çizilen haritadan (mapWorld.ts).
 //
 // DERİNLİK: nesneler mapWorld'de bir kez ayak Y'sine göre sıralanıyor.
-// Oyuncu her frame kendi Y'sine göre araya sokuluyor (binary search) —
-// 2086 nesneyi her karede yeniden sıralamak boşuna maliyetti.
+// Aktörler (oyuncu + köylüler) her frame kendi aralarında sıralanıp bu
+// sıralı listeyle BİRLEŞTİRİLİYOR — 2086 nesneyi her karede yeniden
+// sıralamak boşuna maliyetti, aktör sayısı ise tek haneli.
 //
 // PERFORMANS: sadece kameraya girenler çiziliyor.
 
 import { C } from '@/lib/theme';
-import { drawActor, drawFrame, playerArt } from './sprites';
-import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState } from './hub';
+import { drawActor, drawFrame, playerArt, villagerArt } from './sprites';
+import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState, type Villager } from './hub';
 import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldObject } from './mapWorld';
 
@@ -132,22 +133,40 @@ export function renderHub(
   // ── nesneler + oyuncu, derinlik sıralı ──
   // Nesneler zaten sıralı; oyuncunun sırasını bulup ikiye bölerek çiziyoruz.
   const objs = world.objects;
-  const playerFoot = s.y;
-  let lo = 0, hi = objs.length;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (objs[mid].footY < playerFoot) lo = mid + 1; else hi = mid;
-  }
-  const split = lo;
 
-  for (let i = 0; i < split; i++) drawObject(ctx, objs[i], viewL, viewR, viewT, viewB, time);
-  drawPlayer(ctx, s);
-  // Oyuncunun ÜSTÜNE gelen nesneler: eğer oyuncuyu örtüyorlarsa saydamlaşır.
+  // ⚠️ ARTIK TEK OYUNCU DEĞİL: köylüler de derinlik sırasına giriyor. Eskiden
+  // ikili arama ile TEK bir kesme noktası bulunuyordu; köylüler eklendiğinde
+  // o yaklaşım hepsini oyuncuyla aynı katmana koyar, üstteki köylü alttaki
+  // binanın önüne çizilirdi. Aktörler y'ye göre sıralanıp nesnelerle
+  // BİRLEŞTİRİLİYOR (iki liste de sıralı, klasik merge).
+  const aktorler: { y: number; ciz: () => void }[] = [
+    { y: s.y, ciz: () => drawPlayer(ctx, s) },
+  ];
+  for (const v of s.villagers) {
+    if (v.x < viewL || v.x > viewR || v.y < viewT || v.y > viewB) continue;
+    aktorler.push({ y: v.y, ciz: () => drawVillager(ctx, v) });
+  }
+  aktorler.sort((a, b) => a.y - b.y);
+
+  // ⚠️ ÖRTME SOLMASI OYUNCUNUN Y'SİNE BAĞLI, DÖNGÜNÜN SIRASINA DEĞİL.
+  // İlk yazımda "kalan nesneler" solma kontrolünden geçiyordu; oyuncudan
+  // AŞAĞIDA duran bir köylü varsa, oyuncuyla o köylü arasındaki nesneler
+  // birleştirme döngüsünün içinde kalıyor ve kontrolü kaçırıyordu — yani
+  // köylülerin varlığı, oyuncunun bina içinde kaybolmasını geri getirebilirdi.
+  // Ölçüt tek: nesne oyuncunun ÜSTÜNE çiziliyorsa ve onu örtüyorsa solar.
+  let oi = 0;
+  const cizNesne = (o: WorldObject) => {
+    const ustte = o.footY >= s.y;
+    drawObject(ctx, o, viewL, viewR, viewT, viewB, time, ustte && occludes(o, s.x, s.y));
+  };
+
+  for (const a of aktorler) {
+    while (oi < objs.length && objs[oi].footY < a.y) cizNesne(objs[oi++]);
+    a.ciz();
+  }
   // Duvarın/binanın arkasına geçmek doğru, ama içinde kaybolmak değil —
   // kale kapısından geçerken karakter tamamen gömülüyordu.
-  for (let i = split; i < objs.length; i++) {
-    drawObject(ctx, objs[i], viewL, viewR, viewT, viewB, time, occludes(objs[i], s.x, s.y));
-  }
+  for (; oi < objs.length; oi++) cizNesne(objs[oi]);
 
   // ── GECE ──
   // ⚠️ KÖYE GECE KATMANI EKLEME. Bir kez denendi (nesnelerden sonra,
@@ -219,6 +238,18 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: HubState) {
     ctx.arc(s.x, s.y, HUB_PLAYER.radius, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+/**
+ * Köylü — SALT DEKOR.
+ *
+ * ⚠️ Görsel yüklenmediyse HİÇBİR ŞEY çizilmiyor. Oyuncuda daire yedeği var
+ * (o olmazsa oyun oynanamaz), köylüde yok: yüklenmemiş bir dekor için köyün
+ * ortasına kemik rengi daireler serpmek, eksikliği gizlemek değil büyütmek olur.
+ */
+function drawVillager(ctx: CanvasRenderingContext2D, v: Villager) {
+  drawActor(ctx, villagerArt(v.kind, v.facingRight), v.moving ? 'run' : 'idle',
+    v.animT, v.x, v.y, v.facingRight);
 }
 
 /** Kapı ve portal işaretleri — yaklaşınca parlar, uzaktan soluk durur */

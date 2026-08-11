@@ -332,6 +332,73 @@ export function playerArt(heroId?: string): ActorArt {
 /** Varsayılan karakter görseli — geriye dönük uyumluluk için */
 export const PLAYER_ART: ActorArt = playerArt(DEFAULT_HERO);
 
+// ── KÖYLÜLER ──────────────────────────────────────────────────────────
+//
+// MutterPixel `npc/villagers` — ATTRIBUTION.md'de ticari serbest DOĞRULANMIŞ
+// kutuda. Depoda duruyordu ve hiç kullanılmamıştı.
+//
+// ⚠️ ÖLÇÜLDÜ, VARSAYILMADI: şeritler 324×36 = 9 kare × 36×36. Bu dosyada
+// 80×80 (topdown canavarlar) ve 48×16 (yataydan dilinen) varlıklar da var;
+// "hepsi aynı ızgara" varsaymak daha önce yanlış çizime yol açtı.
+const VILLAGER_FRAME = 36;
+const VILLAGER_FRAMES = 9;
+
+/**
+ * ⚠️ İSİMLENDİRME TUTARSIZ, ELLE EŞLEŞTİRİLDİ. Üç köylünün yürüyüşü
+ * `..._walk_left/right_...` ama `woman` `..._left/right_...` (walk YOK).
+ * Kalıptan üretmek `spr_village_woman_walk_left_strip9.png` isteyip 404
+ * verirdi ve köylü sessizce görünmez olurdu — tam da bu projede tekrar eden
+ * "kod doğru, ekrana hiç ulaşmıyor" hatası.
+ */
+const VILLAGER_WALK: Record<string, string> = {
+  man: 'spr_village_man_walk',
+  woman: 'spr_village_woman',
+  oldman: 'spr_village_oldman_walk',
+  old_woman: 'spr_village_old_woman_walk',
+};
+const VILLAGER_IDLE: Record<string, string> = {
+  man: 'spr_village_man_idle',
+  woman: 'spr_village_woman_idle',
+  oldman: 'spr_village_oldman_idle',
+  old_woman: 'spr_village_old_woman_idle',
+};
+
+const villagerCache = new Map<string, ActorArt>();
+
+/**
+ * Köylü görseli — yön AYRI DOSYADA, `facingRight` ile seçilir.
+ *
+ * ⚠️ `flipByVelocity: false`. Paket sol ve sağ yürüyüşü ayrı çizmiş; bir de
+ * üstüne çevirme uygulanırsa sola yürüyen köylü sağa bakar.
+ */
+export function villagerArt(kind: string, facingRight: boolean): ActorArt {
+  const key = `${kind}:${facingRight ? 'r' : 'l'}`;
+  let art = villagerCache.get(key);
+  if (!art) {
+    const dir = facingRight ? 'right' : 'left';
+    const strip = (base: string): AnimDef => ({
+      kind: 'grid',
+      src: `/art/npc/villagers/${base}_strip${VILLAGER_FRAMES}.png`,
+      frames: VILLAGER_FRAMES, fps: 8, loop: true,
+      frameW: VILLAGER_FRAME, frameH: VILLAGER_FRAME, row: 0,
+    });
+    art = {
+      // 36 px kaynak. Oyuncudan belirgin şekilde küçük kalsın ki dekor
+      // olduğu bakışta anlaşılsın.
+      drawHeight: 52,
+      contentRatio: 1,
+      anchorY: 0.92,
+      flipByVelocity: false,
+      anims: {
+        idle: strip(VILLAGER_IDLE[kind] ?? VILLAGER_IDLE.man),
+        run: strip(`${VILLAGER_WALK[kind] ?? VILLAGER_WALK.man}_${dir}`),
+      },
+    };
+    villagerCache.set(key, art);
+  }
+  return art;
+}
+
 // ── mermi ve efektler ──
 // Mermi: BDragon "All Fire Bullet" atlası, 16×16 hücre. Satır 4 = yöne dönebilen
 // dart formu (5 frame). Turuncu/altın zaten paletimizde (C.candle).

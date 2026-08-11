@@ -4,11 +4,11 @@
 //
 // Çalıştır:  npx tsx src/game/hub.test.mts
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { buildMapWorld } from './mapWorld.js';
 import { createHub, stepHub, HUB_PLAYER } from './hub.js';
 import { HEROES } from './heroes.js';
-import { playerArt } from './sprites.js';
+import { playerArt, villagerArt } from './sprites.js';
 import { MAP_TILE } from './mapData.js';
 import type { MapDoc } from './mapData.js';
 
@@ -131,6 +131,65 @@ console.log('[7] Köyde SEÇİLİ karakter yürüyor');
     `${yollar.size}/${HEROES.length} ayrı yol`);
 }
 
+
+console.log('[8] Köylüler — dekor canlı ama mantığa girmiyor');
+{
+  const st = createHub(world);
+
+  check('köylüler doğdu', st.villagers.length > 0, `${st.villagers.length} köylü`);
+  const kinds = new Set(st.villagers.map((v) => v.kind));
+  check('birden fazla çeşit var', kinds.size >= 2, [...kinds].join(', '));
+
+  // ⚠️ ÇİZDİĞİ DOSYALAR GERÇEKTEN VAR MI. Bu projede tekrar eden hata sınıfı
+  // "kod doğru, dosya yok, hiçbir şey görünmüyor": paket `woman`ı `_walk_`
+  // OLMADAN adlandırmış, kalıptan üretmek sessizce 404 verirdi.
+  const yollar = new Set<string>();
+  for (const k of kinds) {
+    for (const yon of [true, false]) {
+      const a = villagerArt(k, yon);
+      if (a.anims.idle.src) yollar.add(a.anims.idle.src);
+      if (a.anims.run.src) yollar.add(a.anims.run.src);
+    }
+  }
+  const eksik = [...yollar].filter((p) => !existsSync(`public${p}`));
+  check('her köylü görseli diskte VAR', eksik.length === 0,
+    eksik.length ? eksik.join(', ') : `${yollar.size} yol doğrulandı`);
+
+  // Sol ve sağ AYRI dosya — aynıysa `facingRight` görsel olarak ölü demektir
+  const sol = villagerArt('man', false).anims.run.src;
+  const sag = villagerArt('man', true).anims.run.src;
+  check('sol/sağ yürüyüş ayrı görsel', sol !== sag);
+
+  // ── DAVRANIŞ ── 60 sn ilerlet, oyuncu HİÇ girdi vermiyor
+  const bas = st.villagers.map((v) => ({ x: v.x, y: v.y }));
+  const oyuncu = { x: st.x, y: st.y };
+  for (let i = 0; i < 3600; i++) stepHub(st, 1 / 60, 0, 0);
+
+  check('oyuncu girdisiz KIPIRDAMADI (köylüler onu itmiyor)',
+    st.x === oyuncu.x && st.y === oyuncu.y);
+
+  const disarda = st.villagers.filter((v) =>
+    v.x < 0 || v.y < 0 || v.x > world.w || v.y > world.h);
+  check('hiçbiri haritadan çıkmadı', disarda.length === 0, `${disarda.length} kaçak`);
+
+  const enUzak = Math.round(Math.max(...st.villagers.map((v) =>
+    Math.hypot(v.x - v.homeX, v.y - v.homeY))));
+  check('tasma tutuyor (evden 400px+ uzaklaşan yok)', enUzak <= 400, `en uzak ${enUzak}px`);
+
+  // En az ikisi yer değiştirdi — hepsi tıkanmışsa "yürüyen köylü" değil
+  // "duvara bakan heykel" eklemişiz demektir.
+  const kimildayan = st.villagers.filter((v, i) =>
+    Math.hypot(v.x - bas[i].x, v.y - bas[i].y) > 8);
+  check('köylüler gerçekten dolaşıyor', kimildayan.length >= 2,
+    `${kimildayan.length}/${st.villagers.length} yer değiştirdi`);
+
+  // ⚠️ DETERMİNİZM: `game/` altında `Math.random()` yasak. Aynı dünyadan iki
+  // köy kurulunca köylüler AYNI yerde doğmalı, yoksa sayfa her yenilendiğinde
+  // köyün düzeni zıplar.
+  const imza = (h: ReturnType<typeof createHub>) =>
+    h.villagers.map((v) => `${v.kind}@${Math.round(v.x)},${Math.round(v.y)}`).join('|');
+  check('doğuş deterministik (Math.random yok)', imza(createHub(world)) === imza(createHub(world)));
+}
 
 console.log(`\n${FAIL.length === 0 ? '✅ TÜM ÇARPIŞMA TESTLERİ GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

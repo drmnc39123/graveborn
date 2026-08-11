@@ -5,6 +5,19 @@
 // commit'te d17 ve d9 verdi, ama İKİSİNDE DE dağılım 4–23'tü — yani ortanca
 // değişti, dağılım değişmedi. Beş örnekle 4–23 aralığından çekilen bir
 // ortancaya bakıp "ekonomi bozuldu" demek, gürültüyü bulgu sanmaktı.
+// (curve o gün 15 seed'e çıkarıldı, ama bu dosyanın varlık sebebi duruyor.)
+//
+// ⚠️ İKİSİ UZLAŞTIRILDI, ÇELİŞKİ KALMADI. Bir dönem 13 KAT ayrışıyorlardı
+// (447 vs 6.031 gold/saat) ve denge kararları bu sayılara dayanıyordu; sebep
+// curve'ün saatlik gelir hesabıydı — ORTANCA gold'u ORTANCA süreye bölüyor,
+// zincirde ise süreyi ölçmek yerine "her koşu 30 dk sürdü" varsayıyordu.
+// Düzeltildi. Bugünkü tablo:
+//     hours [4] tekrar koşusu : 6.031 gold/saat → ağaç ≈ 102 saat  (ÜST sınır)
+//     curve [9] zincir        : 4.085 gold/saat → ağaç ≈ 151 saat  (ALT sınır)
+// Fark gerçek ve senaryo farkı: curve İLK keşif koşusunu da sayıyor (sığ
+// derinlikte nadir düşüş az), bu dosya doğrudan checkpoint'ten başlıyor.
+// Bir gün yine kat kat ayrışırlarsa önce ORAN HESAPLARINA bak — ekonominin
+// değil, aletin bozulmuş olma ihtimali daha yüksek.
 //
 // Bu dosya aynı soruyu DAĞILIMLA cevaplıyor: N seed, ortanca + çeyrekler +
 // aralık. "Şu kadar saat" cümlesi ancak hata payıyla birlikte anlamlı.
