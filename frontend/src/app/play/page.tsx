@@ -437,6 +437,24 @@ export default function PlayPage() {
     return () => { delete w.__gb; };
   }, [finishRun]);
 
+  /**
+   * KOŞU ÖDEMESİ — oyunun en büyük ödül anı.
+   *
+   * ⚠️ Bakiye sayacından DAHA YAVAŞ (700 ms). Bakiye bir arka plan bilgisi;
+   * bu ise oyuncunun koşusunun karşılığı ve üstünde durulmayı hak ediyor.
+   * ⚠️ `payout` yokken 0 — ekran açılınca 0'dan toplama sayıyor, yani ilk
+   * değer BURADA sayılmalı (bakiyenin tersine).
+   *
+   * 🔴 BU SATIR ERKEN DÖNÜŞLERDEN SONRAYDI VE OYUNU ÇÖKERTİYORDU.
+   * `PlayPage` arena/boss/stage ekranları için erken `return` yapıyor;
+   * kanca onlardan SONRA çağrılınca koşuya girişte React daha az kanca
+   * görüyor ve "Rendered fewer hooks than expected" atıp tüm sayfayı
+   * beyaza düşürüyordu. Yani KOŞU BAŞLATMAK OYUNU KIRIYORDU — panellerde
+   * hiç görünmedi, çünkü panel ekranı erken dönüşe uğramıyor.
+   * ⚠️ KANCALAR HER ERKEN DÖNÜŞTEN ÖNCE, KOŞULSUZ ÇAĞRILMALI.
+   */
+  const odemeToplam = useCountUpInt(payout ? payout.progressGold + payout.dropGold : 0, 700);
+
   if (screen.kind === 'arena') {
     return <ArenaScreen onExit={() => setScreen({ kind: 'hub' })} />;
   }
@@ -503,15 +521,6 @@ export default function PlayPage() {
   }
 
   const acik = panel ?? kapanan;
-  /**
-   * KOŞU ÖDEMESİ — oyunun en büyük ödül anı.
-   *
-   * ⚠️ Bakiye sayacından DAHA YAVAŞ (700 ms). Bakiye bir arka plan bilgisi;
-   * bu ise oyuncunun koşusunun karşılığı ve üstünde durulmayı hak ediyor.
-   * ⚠️ `payout` yokken 0 — ekran açılınca 0'dan toplama sayıyor, yani ilk
-   * değer BURADA sayılmalı (bakiyenin tersine).
-   */
-  const odemeToplam = useCountUpInt(payout ? payout.progressGold + payout.dropGold : 0, 700);
 
   return (
     <div style={EKRAN_KOK}>
