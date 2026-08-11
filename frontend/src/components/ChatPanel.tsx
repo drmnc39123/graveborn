@@ -51,9 +51,21 @@ export function ChatPanel() {
     if (enAltta) el.scrollTop = el.scrollHeight;
   }, [msgs.length]);
 
-  if (getMode() !== 'wallet') return null;
+  /**
+   * ⚠️ DEMO'DA `null` DÖNÜYORDU ve sohbet ekrandan TAMAMEN kayboluyordu.
+   * Gerekçesi doğruydu — sahte mesaj göstermek olmayan bir topluluğu varmış
+   * gibi göstermek olurdu — ama gereğinden ileri gidiyordu: VERİYİ değil
+   * ÖZELLİĞİ saklıyordu. Demo oyuncusu oyunun sohbeti olduğunu hiç
+   * öğrenmiyordu; kullanıcı da "chat paneli nereye gitti" diye sordu.
+   *
+   * Artık kutu duruyor, içi dürüstçe kilitli — market panelinin
+   * "Demo gold cannot be sold" kutusuyla aynı desen. Sahte mesaj YOK,
+   * bağlantı YOK (efekt hâlâ erken çıkıyor), sadece kapı görünür.
+   */
+  const kilitli = getMode() !== 'wallet';
 
   const gonder = () => {
+    if (kilitli) return;
     const t = metin.trim();
     if (!t) return;
     handleRef.current?.say(t);
@@ -80,7 +92,7 @@ export function ChatPanel() {
         }}>
         <span style={{
           width: 7, height: 7, borderRadius: 4,
-          background: bagli ? C.ok : C.boneFaint,
+          background: kilitli ? C.boneFaint : bagli ? C.ok : C.boneFaint,
         }} />
         <span style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 1.6, color: C.ice }}>
           THE SQUARE
@@ -90,7 +102,16 @@ export function ChatPanel() {
         </span>
       </button>
 
-      {acik && (
+      {acik && kilitli && (
+        <div style={{
+          padding: '0 10px 10px', fontSize: 11, color: C.boneDim, lineHeight: 1.5,
+        }}>
+          Everyone who plays talks here. <b style={{ color: C.bone }}>Connect a
+          wallet</b> to join them — the demo listens to no one and no one hears it.
+        </div>
+      )}
+
+      {acik && !kilitli && (
         <>
           <div ref={listRef} style={{
             maxHeight: 168, overflowY: 'auto', padding: '0 10px 6px',
