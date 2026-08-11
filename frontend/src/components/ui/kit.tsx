@@ -398,9 +398,29 @@ export function Orb({ pct, kind = 'HP', scale = 2 }: {
 // Franuka 8 kademe hazır dolgu veriyor; biz kutuyu taban alıp en dolu
 // kademeyi kırparak PÜRÜZSÜZ dolum yapıyoruz (kademeli görünüm istemiyoruz).
 
-export function Bar({ pct, variant = '01', height = 16, scale = 2 }: {
+/**
+ * ÇUBUK DOLGUSUNUN RENGİ — sprite ADIYLA değil ÖLÇÜLEN RENGİYLE seçildi.
+ *
+ * ⚠️ `Bar` varyanttan bağımsız hep `_Bar08`i çiziyordu ve o sprite ÖLÇÜLDÜ:
+ * rgb(102,157,78) — düpedüz YEŞİL. Oyunun paleti kemik/kan/mum altını/buz;
+ * yeşil hiçbir yerde yok. Koşu içi XP çubuğu da kartın rütbe çubuğu da
+ * bu yüzden sırıtıyordu.
+ *
+ * Sekiz dolgunun hepsi ölçüldü (ortalama görünür piksel):
+ *   Bar01 110,196,187 turkuaz · Bar02 200,57,63 kırmızı · Bar03 229,126,46 kehribar
+ *   Bar04 146,190,77 yeşil    · Bar05 93,150,160 buz    · Bar06 207,74,61 kırmızı
+ *   Bar07 200,103,47 pas      · Bar08 102,157,78 yeşil
+ *
+ * Palete eşleme: gold→Bar03 (mum altını #efa72e'ye en yakın),
+ * blood→Bar02, ice→Bar05. Yeşiller kullanılmıyor.
+ */
+const BAR_DOLGU = { gold: '03', blood: '02', ice: '05' } as const;
+
+export function Bar({ pct, variant = '01', tone = 'gold', height = 16, scale = 2 }: {
   pct: number;
   variant?: '01' | '02' | '03';
+  /** dolgu rengi — ⚠️ varsayılan `gold`, yeşil ARTIK SEÇENEK DEĞİL */
+  tone?: keyof typeof BAR_DOLGU;
   height?: number;
   scale?: number;
 }) {
@@ -426,7 +446,7 @@ export function Bar({ pct, variant = '01', height = 16, scale = 2 }: {
         }}>
           <div style={{
             height: '100%', width: `${100 / Math.max(p, 0.0001)}%`,
-            backgroundImage: `url("${KIT}/Sliders---Bars/Slider${variant}_Bar08.png")`,
+            backgroundImage: `url("${KIT}/Sliders---Bars/Slider${variant}_Bar${BAR_DOLGU[tone]}.png")`,
             backgroundSize: '100% 100%',
             ...pixel,
           }} />

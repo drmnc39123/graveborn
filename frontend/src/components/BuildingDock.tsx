@@ -116,7 +116,7 @@ export const BUILDINGS: readonly DockEntry[] = [
  * Sabit sayı yerine GERÇEK yükseklik ölçülüyor; düğme sayısı ya da ekran
  * genişliği değişince kendiliğinden doğru kalıyor.
  */
-export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onHeight, footer }: {
+export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onHeight, onLeft, footer }: {
   /** açık olan panel — buton "Selected" görünür */
   open: string | null;
   onOpen: (id: string) => void;
@@ -127,6 +127,15 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
   style?: CSSProperties;
   /** rıhtımın kapladığı toplam yükseklik (px) — panel boşluğu buna göre ayarlanır */
   onHeight?: (h: number) => void;
+  /**
+   * Rıhtım İÇERİĞİNİN sol kenarı (px).
+   *
+   * ⚠️ NİYE GEREKLİ: rıhtım ORTALI, yani sol kenarı görüntü genişliğine
+   * bağlı. Sol üstteki kimlik kartı navbar hizasında durmak istiyor ve
+   * "kaç piksel yerim var" sorusunun cevabı sabit bir sayı DEĞİL. Kartı
+   * sabit genişlikte yapmak, dar ekranda navbar'ın altına sokuyordu.
+   */
+  onLeft?: (x: number) => void;
   /**
    * Rıhtımın ALTINA, aynı sütunun içine asılan içerik (hafta sonu şeridi).
    * ⚠️ Sayfaya ayrı yerleştirilip `onHeight` ile hizalanmıyor — sebebi
@@ -151,13 +160,22 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
   // haber veriyor — pencere yeniden boyutlandırılınca da doğru kalıyor.
   useEffect(() => {
     const el = boxRef.current;
-    if (!el || !onHeight) return;
-    const bildir = () => onHeight(el.getBoundingClientRect().height);
+    if (!el) return;
+    const bildir = () => {
+      const r = el.getBoundingClientRect();
+      onHeight?.(r.height);
+      onLeft?.(r.left);
+    };
     bildir();
     const ro = new ResizeObserver(bildir);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, [onHeight]);
+    // ⚠️ `ResizeObserver` BOYUTU izler, KONUMU değil. Rıhtım ortalı ve
+    // içeriği `maxWidth`in altındaysa pencere genişleyince ENİ DEĞİŞMEZ,
+    // yalnız SOL KENARI kayar — RO o durumda hiç tetiklenmez ve kartın
+    // hesapladığı boş alan yanlış kalırdı. Pencere olayı o boşluğu kapatıyor.
+    window.addEventListener('resize', bildir);
+    return () => { ro.disconnect(); window.removeEventListener('resize', bildir); };
+  }, [onHeight, onLeft]);
 
   // ⚠️ SIRA ÖNEMLİ: önce elle seçim, sonra açık panelin grubu.
   const acikGrup = grup === 'none'

@@ -234,6 +234,15 @@ export default function PlayPage() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
   const [note, setNoteRaw] = useState<string | null>(null);
+  /**
+   * Rıhtım içeriğinin sol kenarı — kimlik kartının kullanabileceği genişlik.
+   *
+   * ⚠️ SABİT SAYI OLAMAZ: rıhtım ORTALI, sol kenarı görüntü genişliğine
+   * bağlı. Kart 214 px sabitken ölçüldü: 1134 px'de rıhtım x=189'da
+   * başlıyor, kart x=226'da bitiyordu — navbar'ın ÜSTÜNE biniyordu.
+   * `dockH` ile aynı desen: ölç, varsayma.
+   */
+  const [dockLeft, setDockLeft] = useState(0);
 
   /**
    * ⚠️ ERKEN DÖNÜŞLERDEN ÖNCE tanımlı olmak zorunda: arena ve boss ekranları
@@ -512,6 +521,7 @@ export default function PlayPage() {
         setPanel(id);
       }} gold={progress?.gold ?? 0} wallet={wallet}
         onHeight={setDockH}
+        onLeft={setDockLeft}
         // ⚠️ ŞERİT RIHTIMIN İÇİNDE, sayfada ayrı bir katmanda DEĞİL — gerekçe
         // BuildingDock'un render sonundaki notta. Panel açıkken gizleniyor:
         // oyuncu zaten bir şeye bakıyor demektir.
@@ -548,7 +558,25 @@ export default function PlayPage() {
           ⚠️ Panel açıkken gizleniyor — ChatPanel ve EventBanner emsali:
           oyuncu zaten bir şeye bakıyor demektir. */}
       {!panel && progress && (
-        <div style={{ position: 'absolute', top: 10, left: 12, zIndex: 6 }}>
+        // ⚠️ NAVBAR HİZASINDA (`top: 10`) ama GENİŞLİĞİ ÖLÇÜLEN BOŞLUĞA GÖRE.
+        //
+        // Üç deneme oldu ve ikisi ölçümle çürüdü:
+        //   1) `top:10` + sabit 214 px → 1134 px'de rıhtım x=189'da başlıyor,
+        //      kart x=226'da bitiyordu: navbar'ın ÜSTÜNE biniyordu.
+        //   2) Rıhtımın ALTINA almak (`top: dockH+16`) çakışmayı çözüyordu
+        //      ama kart ekranın ortasına doğru sarkıyordu — istenen, navbar
+        //      gibi üste bitişik durması.
+        //   3) Şimdi: üstte kalıyor, genişliği `dockLeft`ten türüyor.
+        //      Rıhtım ORTALI olduğu için o sayı görüntü genişliğiyle
+        //      değişiyor; sabit bir genişlik dar ekranda yine çakışırdı.
+        //
+        // ⚠️ `dockLeft` 0 gelirse (ilk kare, henüz ölçülmedi) kart çizilmez —
+        // yanlış genişlikle bir kare çizip zıplamasındansa bir kare beklesin.
+        <div style={{
+          position: 'absolute', top: 10, left: 12, zIndex: 6,
+          width: Math.max(0, Math.min(214, dockLeft - 24)),
+          visibility: dockLeft > 60 ? 'visible' : 'hidden',
+        }}>
           <ProfileCard
             progress={progress}
             wallet={wallet}
