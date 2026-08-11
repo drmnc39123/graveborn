@@ -86,6 +86,45 @@ const FONT_FACE = `
 /* Piksel sanat her yerde net kalsın */
 img { image-rendering: pixelated; }
 button { font: inherit; }
+
+/* ── İMLEÇ ──
+   Franuka kitinde 39 imleç vardı ve HİÇBİRİ kullanılmıyordu; oyun sistemin
+   varsayılan okuyla oynanıyordu. Sıfır dosya indirmeden gelen kimlik.
+
+   ⚠️ SEÇİM ÖLÇÜLDÜ, GÖZ ONAYLADI. Sekiz aday görünür piksel ortalamasıyla
+   tarandı:
+     Cursor02 rgb(180,63,66) KIRMIZI  ← blood(160,18,38)'e en yakın, SEÇİLDİ
+     Cursor03 rgb(94,137,79) YEŞİL    ← palet kuralı, elendi
+     Tick01   %7 dolu                 ← neredeyse görünmez, elendi
+     Gauntlet %33 dolu                ← 16 px'de şekilsiz bir blob, elendi
+
+   ⚠️ SICAK NOKTA SPRITE'TAN ÖLÇÜLDÜ, tahmin edilmedi. Alfa haritası
+   çıkarıldı: Cursor02'nin ok ucu (5,4)'te, Hand01_Up'ın parmak ucu (7,2)'de.
+   Yanlış sıcak nokta, tıklamanın imlecin ucundan kaymış hissettirmesi
+   demektir — fark edilmesi zor, düzeltilmesi can sıkıcı bir hata.
+
+   ⚠️ auto/pointer YEDEĞİ ŞART: dosya 404 verirse tarayıcı imleci tamamen
+   kaybetmesin.
+   ⚠️ Bu açıklamada TERS TIRNAK YOK — şablon dizesinin içindeyiz ve ters
+   tırnak diziyi erkenden bitirir (bu oturumda dördüncü kez aynı tuzak). */
+body { cursor: url('/art/ui/kit/Cursors/Cursor02.png') 5 4, auto; }
+a, button:not(:disabled), [role='button'], summary,
+input[type='checkbox'], input[type='radio'], select {
+  /* ⚠️ !important ŞART ve ölçümle anlaşıldı: düğmeler imleci SATIR İÇİ
+     stille veriyor (PixelButton: cursor: 'pointer') ve satır içi stil
+     stylesheet kuralını yener. Kural olmadan yazıldığında ekranda
+     getComputedStyle(button).cursor hâlâ "pointer" çıkıyordu — yani
+     özel imleç düğmelere HİÇ ulaşmıyordu.
+     ⚠️ :not(:disabled) — devre dışı düğmede el işareti göstermek
+     tıklanabilir olduğunu SÖYLEMEK olurdu; onların kendi default
+     değeri kalsın. */
+  cursor: url('/art/ui/kit/Cursors/Hand01_Up.png') 7 2, pointer !important;
+}
+/* ⚠️ Yazı alanları KENDİ imlecini korur — metin imleci bir okla
+   değiştirilirse nereye yazacağını gösteren tek işaret kaybolur. */
+input[type='text'], input[type='number'], input:not([type]), textarea {
+  cursor: text;
+}
 `;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
