@@ -71,6 +71,44 @@ export const viewport: Viewport = {
  *
  * `font-display: swap` — font gelmezse arayüz görünmez kalmaz, yedeğe düşer.
  */
+/**
+ * ── İMLEÇ BİLGİSİ ──
+ *
+ * ⚠️ BU AÇIKLAMA BİLEREK BURADA, `FONT_FACE`İN İÇİNDE DEĞİL. Aşağıdaki şablon
+ * dizesi olduğu gibi `<style>` etiketine basılıyor; içine yazılan her yorum
+ * HER ZİYARETÇİYE indiriliyor ve sayfa kaynağında okunuyor. Bu blok orada
+ * duruyordu: hem boşuna byte, hem de sağlayıcı adını sayfaya gömüyordu.
+ * TS yorumu derlemede düşer, ekrana hiç çıkmaz.
+ *
+ * ⚠️ SEÇİM ÖLÇÜLDÜ, GÖZ ONAYLADI. Sekiz aday görünür piksel ortalamasıyla
+ * tarandı:
+ *   Cursor02 rgb(180,63,66) KIRMIZI  ← blood(160,18,38)'e en yakın, SEÇİLDİ
+ *   Cursor03 rgb(94,137,79) YEŞİL    ← palet kuralı, elendi
+ *   Tick01   %7 dolu                 ← neredeyse görünmez, elendi
+ *   Gauntlet %33 dolu                ← 16 px'de şekilsiz bir blob, elendi
+ *
+ * ⚠️ 2 KAT BÜYÜTÜLDÜ. 16 px imleç ekranda sistem imlecinin yarısı kadar
+ * kalıyordu ve kullanıcı "çok küçük" dedi. CSS imleci ÖLÇEKLEMEZ — görselin
+ * kendi boyutunu kullanır; o yüzden 32×32 dosyalar ÜRETİLDİ
+ * (`public/art/cursors/`, NEAREST ile; BICUBIC piksel sanatını bulanık bir
+ * lekeye çevirirdi).
+ *
+ * ⚠️ SICAK NOKTA SPRITE'TAN ÖLÇÜLDÜ, tahmin edilmedi. Alfa haritası çıkarıldı:
+ * ok ucu (5,4)'te, parmak ucu (7,2)'de. İki katına çıkınca sıcak nokta da İKİ
+ * KATINA çıkmak ZORUNDA: (10,8) ve (14,4). Unutulsaydı tıklama imlecin
+ * ucundan 16 px kayardı — fark edilmesi zor, yaşaması can sıkıcı bir hata.
+ *
+ * ⚠️ `!important` ŞART ve ölçümle anlaşıldı: düğmeler imleci SATIR İÇİ stille
+ * veriyor (`PixelButton: cursor:'pointer'`) ve satır içi stil stylesheet
+ * kuralını yener. Onsuz `getComputedStyle(button).cursor` hâlâ "pointer"
+ * çıkıyordu — yani özel imleç düğmelere HİÇ ulaşmıyordu.
+ * ⚠️ `:not(:disabled)` — devre dışı düğmede el işareti göstermek tıklanabilir
+ * olduğunu SÖYLEMEK olurdu.
+ * ⚠️ `auto`/`pointer` YEDEĞİ ŞART: dosya 404 verirse tarayıcı imleci tamamen
+ * kaybetmesin.
+ * ⚠️ Yazı alanları KENDİ imlecini korur — metin imleci okla değiştirilirse
+ * nereye yazılacağını gösteren tek işaret kaybolur.
+ */
 const FONT_FACE = `
 /* Tek aile, tek dosya, tek ağırlık. */
 @font-face {
@@ -87,48 +125,11 @@ const FONT_FACE = `
 img { image-rendering: pixelated; }
 button { font: inherit; }
 
-/* ── İMLEÇ ──
-   Franuka kitinde 39 imleç vardı ve HİÇBİRİ kullanılmıyordu; oyun sistemin
-   varsayılan okuyla oynanıyordu. Sıfır dosya indirmeden gelen kimlik.
-
-   ⚠️ SEÇİM ÖLÇÜLDÜ, GÖZ ONAYLADI. Sekiz aday görünür piksel ortalamasıyla
-   tarandı:
-     Cursor02 rgb(180,63,66) KIRMIZI  ← blood(160,18,38)'e en yakın, SEÇİLDİ
-     Cursor03 rgb(94,137,79) YEŞİL    ← palet kuralı, elendi
-     Tick01   %7 dolu                 ← neredeyse görünmez, elendi
-     Gauntlet %33 dolu                ← 16 px'de şekilsiz bir blob, elendi
-
-   ⚠️ 2 KAT BÜYÜTÜLDÜ. 16 px imleç ekranda sistem imlecinin yarısı kadar
-   kalıyordu ve kullanıcı "çok küçük" dedi. CSS imleci ÖLÇEKLEMEZ — görselin
-   kendi boyutunu kullanır; o yüzden 32x32 dosyalar ÜRETİLDİ
-   (public/art/cursors/, NEAREST ile; BICUBIC piksel sanatını bulanık bir
-   lekeye çevirirdi).
-
-   ⚠️ SICAK NOKTA SPRITE'TAN ÖLÇÜLDÜ, tahmin edilmedi. Alfa haritası
-   çıkarıldı: Cursor02'nin ok ucu (5,4)'te, Hand01_Up'ın parmak ucu (7,2)'de.
-   İki katına çıkınca sıcak nokta da İKİ KATINA çıkmak ZORUNDA: (10,8) ve
-   (14,4). Unutulsaydı tıklama imlecin ucundan 16 px kayardı — fark edilmesi
-   zor, yaşaması can sıkıcı bir hata.
-
-   ⚠️ auto/pointer YEDEĞİ ŞART: dosya 404 verirse tarayıcı imleci tamamen
-   kaybetmesin.
-   ⚠️ Bu açıklamada TERS TIRNAK YOK — şablon dizesinin içindeyiz ve ters
-   tırnak diziyi erkenden bitirir (bu oturumda dördüncü kez aynı tuzak). */
 body { cursor: url('/art/cursors/Cursor02@2x.png') 10 8, auto; }
 a, button:not(:disabled), [role='button'], summary,
 input[type='checkbox'], input[type='radio'], select {
-  /* ⚠️ !important ŞART ve ölçümle anlaşıldı: düğmeler imleci SATIR İÇİ
-     stille veriyor (PixelButton: cursor: 'pointer') ve satır içi stil
-     stylesheet kuralını yener. Kural olmadan yazıldığında ekranda
-     getComputedStyle(button).cursor hâlâ "pointer" çıkıyordu — yani
-     özel imleç düğmelere HİÇ ulaşmıyordu.
-     ⚠️ :not(:disabled) — devre dışı düğmede el işareti göstermek
-     tıklanabilir olduğunu SÖYLEMEK olurdu; onların kendi default
-     değeri kalsın. */
   cursor: url('/art/cursors/Hand01_Up@2x.png') 14 4, pointer !important;
 }
-/* ⚠️ Yazı alanları KENDİ imlecini korur — metin imleci bir okla
-   değiştirilirse nereye yazacağını gösteren tek işaret kaybolur. */
 input[type='text'], input[type='number'], input:not([type]), textarea {
   cursor: text;
 }

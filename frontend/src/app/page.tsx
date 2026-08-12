@@ -152,12 +152,12 @@ export default function Home() {
           <div style={{ ...glass(9), padding: '7px 14px', display: 'inline-block', fontSize: 11, color: C.boneDim }}>
             <b style={{ color: C.candle }}>${BRAND.ticker}</b> has not launched yet — there is no contract address.
           </div>
-          {/* ⚠️ Franuka kredi satırı KULLANICI KARARIYLA KALDIRILDI (5 Ağu 2026).
-              Gerekçesi: paketler satın alındı, atıf şartı satıştan SONRA bir
-              dosyanın içinde geçiyor. Bu bir ürün kararı — geri EKLEMEYİN. */}
-          <div style={{ marginTop: 10, fontSize: 10, color: C.boneFaint }}>
-            World art by MutterPixel Studio
-          </div>
+          {/* ⚠️ SANAT KREDİ SATIRLARI KULLANICI KARARIYLA KALDIRILDI.
+              Franuka 5 Ağu 2026'da, MutterPixel 11 Ağu 2026'da.
+              Gerekçesi (kullanıcının ifadesi): paketlerin hepsine para ödendi,
+              satın alma anında lisans bilgisi verilmedi, indirdikten sonra
+              dosya içinden çıkan şart bağlayıcı sayılmıyor.
+              Bu bir ÜRÜN KARARI — hiçbir kredi satırı geri EKLENMEYECEK. */}
         </div>
 
         {/* Kaydırma ipucu — altında içerik olduğu görünmezse kimse aramaz */}
