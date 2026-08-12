@@ -19,13 +19,11 @@ const KEY = 'graveborn:settings:v1';
 export interface Settings {
   /** ana ses seviyesi 0..1 (0 = sessiz) */
   volume: number;
-  /**
-   * Ekran sarsıntısı. ⚠️ ERİŞİLEBİLİRLİK — kapatılabilir olması şart:
-   * vestibüler rahatsızlığı olan oyuncu için sarsıntı oyunu oynanamaz yapar.
-   * Kapalıyken hasar geri bildirimi vinyet ve hasar sayısıyla devam eder,
-   * yani bilgi KAYBOLMAZ, sadece hareket kalkar.
-   */
-  screenShake: boolean;
+  // ⚠️ `screenShake` KALDIRILDI (kullanıcı kararı): efektin kendisi oyundan
+  // çıkarıldı, ayarı bırakmak olmayan bir şeyi kapatan anahtar olurdu.
+  // Erişilebilirlik gerekçesi kaybolmadı, TERSİNE tam karşılandı — vestibüler
+  // rahatsızlığı olan oyuncu için artık kapatılacak hareket YOK. Eski
+  // kayıtlardaki alan `normalizeSettings` tarafından sessizce yok sayılır.
   /**
    * Hasar sayıları. Sürüde ekran dolabiliyor; kapatmak isteyene seçenek.
    */
@@ -38,7 +36,7 @@ export interface Settings {
 }
 
 export function defaultSettings(): Settings {
-  return { volume: 0.7, screenShake: true, damageNumbers: true, lowGraphics: false };
+  return { volume: 0.7, damageNumbers: true, lowGraphics: false };
 }
 
 function clamp01(v: unknown, fallback: number): number {
@@ -53,7 +51,6 @@ export function normalizeSettings(raw: Partial<Settings> | null | undefined): Se
   if (!raw || typeof raw !== 'object') return d;
   return {
     volume: clamp01(raw.volume, d.volume),
-    screenShake: typeof raw.screenShake === 'boolean' ? raw.screenShake : d.screenShake,
     damageNumbers: typeof raw.damageNumbers === 'boolean' ? raw.damageNumbers : d.damageNumbers,
     lowGraphics: typeof raw.lowGraphics === 'boolean' ? raw.lowGraphics : d.lowGraphics,
   };

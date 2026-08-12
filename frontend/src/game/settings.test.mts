@@ -9,7 +9,7 @@
 
 import { Game } from './engine.js';
 import { TICK } from './config.js';
-import { applyFxSettings, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx.js';
+import { applyFxSettings, drawFxWorld, pumpFx, resetFx } from './fx.js';
 import { defaultSettings, normalizeSettings, type Settings } from './settings.js';
 import { HINTS, nextHint } from './tutorial.js';
 
@@ -25,7 +25,6 @@ console.log('\n[1] Varsayılanlar ve normalize');
 {
   const d = defaultSettings();
   check('ses varsayılanı sessiz DEĞİL', d.volume > 0, `${d.volume}`);
-  check('sarsıntı varsayılan AÇIK', d.screenShake);
   check('hasar sayıları varsayılan AÇIK', d.damageNumbers);
 
   // Ayar dosyası da elle düzenlenebilir — savunmacı olmalı
@@ -34,34 +33,22 @@ console.log('\n[1] Varsayılanlar ve normalize');
   check('aralık dışı ses kırpılıyor',
     normalizeSettings({ volume: 9 }).volume === 1 && normalizeSettings({ volume: -3 }).volume === 0);
   check('boolean olmayan bayrak varsayılana düşüyor',
-    normalizeSettings({ screenShake: 'evet' as unknown as boolean }).screenShake === d.screenShake);
+    normalizeSettings({ damageNumbers: 'evet' as unknown as boolean }).damageNumbers === d.damageNumbers);
   check('null kayıt çökmüyor', normalizeSettings(null).volume === d.volume);
   check('bilinmeyen alan yok sayılıyor',
     Object.keys(normalizeSettings({ hile: true } as Partial<Settings>)).length === Object.keys(d).length);
 }
 
-console.log('\n[2] Sarsıntı kapatma');
-{
-  const g = new Game(4242);
-  g.setViewport(1280, 720);
-  resetFx();
-  applyFxSettings({ screenShake: true, damageNumbers: true });
-  // Sarsıntı biriktir
-  for (let i = 0; i < 400; i++) { g.step(); pumpFx(g, TICK); }
-  const acik = shakeOffset();
-  const acikVar = Math.abs(acik.x) + Math.abs(acik.y) > 0;
-
-  applyFxSettings({ screenShake: false, damageNumbers: true });
-  const kapali = shakeOffset();
-  check('açıkken kamera sarsılıyor', acikVar, `${acik.x.toFixed(2)},${acik.y.toFixed(2)}`);
-  check('KAPALIYKEN kamera hiç sarsılmıyor', kapali.x === 0 && kapali.y === 0);
-}
+// ⚠️ [2] "Sarsıntı kapatma" bölümü SİLİNDİ — ekran sarsıntısı oyundan
+// TAMAMEN kaldırıldı (bkz. fx.ts FEEL notu). Kapatılacak bir şey kalmadığı
+// için kapatmayı sınayan mühür de yok. Aşağıdaki [3] DURUYOR ve asıl önemli
+// olan o: ayar bayrakları simülasyonu etkilemiyor.
 
 console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
 {
   // Aynı seed, aynı girdi, TAMAMEN farklı ayarlar → BİREBİR aynı koşu.
   // Bu, "ayar denge değiştirmiyor" iddiasının tek gerçek kanıtı.
-  const kosu = (s: { screenShake: boolean; damageNumbers: boolean }) => {
+  const kosu = (s: { damageNumbers: boolean }) => {
     const g = new Game(13579);
     g.setViewport(1280, 720);
     resetFx();
@@ -94,9 +81,9 @@ console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
     };
   };
 
-  const hepsiAcik = kosu({ screenShake: true, damageNumbers: true });
-  const hepsiKapali = kosu({ screenShake: false, damageNumbers: false });
-  const karisik = kosu({ screenShake: false, damageNumbers: true });
+  const hepsiAcik = kosu({ damageNumbers: true });
+  const hepsiKapali = kosu({ damageNumbers: false });
+  const karisik = kosu({ damageNumbers: true });
 
   const ayni = (a: typeof hepsiAcik, b: typeof hepsiAcik) =>
     a.kills === b.kills && a.level === b.level
@@ -144,7 +131,7 @@ console.log('\n[4] Kapalı sayılar çizimi bozmuyor');
     const g = new Game(777);
     g.setViewport(1280, 720);
     resetFx();
-    applyFxSettings({ screenShake: true, damageNumbers });
+    applyFxSettings({ damageNumbers });
     for (let i = 0; i < 400; i++) {
       if (g.phase !== 'running') break;
       g.hp = g.stats.maxHp;         // ölürse step() no-op olur, vuruş üretilmez

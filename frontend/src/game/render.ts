@@ -7,7 +7,7 @@ import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
 import type { Game, Hero } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey, FX, PET_ART, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
-import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx, shakeOffset } from './fx';
+import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx } from './fx';
 import { weaponArt } from './combatArt';
 import { cosmeticById } from './cosmetics';
 
@@ -159,14 +159,15 @@ export function render(
   ctx.fillStyle = C.void;
   ctx.fillRect(0, 0, w, h);
 
-  // ⚠️ pumpFx kamera dönüşümünden ÖNCE: sarsıntı büyüklüğü bu karede
-  // hesaplanmalı ki translate onu kullanabilsin.
+  // ⚠️ pumpFx kamera dönüşümünden ÖNCE kalıyor. Eski gerekçesi sarsıntıydı
+  // ("büyüklük bu karede hesaplanmalı"); sarsıntı KALDIRILDI ama sıra
+  // kalmalı: kozmetik kuyrukların boşaltılma ANI budur ve `settings.test`
+  // aynı seed → aynı koşu mührüyle onu koruyor.
   pumpFx(g, dt);
-  const sh = shakeOffset();
 
-  // kamera oyuncuyu ortalar (+ ekran sarsıntısı)
+  // kamera oyuncuyu ortalar
   ctx.save();
-  ctx.translate(cx - focus.px + sh.x, cy - focus.py + sh.y);
+  ctx.translate(cx - focus.px, cy - focus.py);
 
   pumpEffects(g, dt);
   pumpPetFx(g, dt);

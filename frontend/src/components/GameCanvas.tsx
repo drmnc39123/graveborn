@@ -21,6 +21,7 @@ import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio 
 import type { RunPet } from '@/game/pets';
 import { C, FONT, glass } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon } from '@/components/ui/kit';
+import { Reveal } from '@/components/ui/motion';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
@@ -646,21 +647,76 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
         </>
       )}
 
-      {/* ── LEVEL UP ── */}
+      {/* ── LEVEL UP ──
+          ⚠️ SEÇİM ANI BİR PENCERE, KARARTILMIŞ BİR EKRAN DEĞİL.
+          Eskiden düz `rgba(10,8,6,0.86)` bir örtüydü: savaş yok oluyordu ama
+          yerine bir SAHNE gelmiyordu. Artık merkezden dışa açılan radyal bir
+          karartma var — ortada kartlar, kenarlarda koşu hâlâ seziliyor.
+          Oyuncu oyundan çıkmıyor, oyunun içinde duruyor.
+          ⚠️ Bu yorum `&& (` SONRASINA konulamaz: JSX yorumu orada ifade
+          sayılır ve derleme kırılır (bu oturumda ikinci kez). */}
       {hud?.phase === 'levelup' && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.86)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <Banner variant="01C" scale={2} style={{ marginBottom: 18, minWidth: 210 }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'radial-gradient(ellipse at center, rgba(10,8,6,0.80) 0%, rgba(6,5,4,0.94) 62%, rgba(4,3,3,0.97) 100%)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          padding: 20,
+        }}>
+          <Banner variant="01C" scale={2} style={{ minWidth: 210 }}>
             <span style={{ fontSize: 13, color: C.candle }}>LEVEL {hud.level}</span>
           </Banner>
-          {/* ⚠️ Dikey yığın KORUNUYOR — telefonda 3'lü yatay kart sıkışır. */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%', maxWidth: 420 }}>
+          {/* ⚠️ ALT BAŞLIK: "ne yapıyorum" sorusunun cevabı. Banner yalnız
+              seviyeyi söylüyordu; kararın KENDİSİ isimsizdi. */}
+          <div style={{
+            marginTop: 7, marginBottom: 16, fontFamily: FONT.ui,
+            fontSize: 10.5, letterSpacing: 2.4, color: C.boneFaint,
+          }}>CHOOSE WHAT YOU BECOME</div>
+          {/**
+            * ⚠️ YAN YANA — ama telefonu KIRMADAN.
+            *
+            * Eskiden dikey yığındı ve yorumu "telefonda 3'lü yatay kart
+            * sıkışır" diyordu; kaygı doğruydu, çözümü yanlıştı. `auto-fit` +
+            * `minmax` ikisini birden veriyor: geniş ekranda üç sütun,
+            * sütun 236 px'in altına düşecekse ızgara KENDİLİĞİNDEN alt alta
+            * iniyor. Medya sorgusu yok, satır içi stil kuralı korunuyor.
+            *
+            * ⚠️ `alignItems:'stretch'` ŞART — kartların `height:'100%'`i
+            * ancak böyle bir şeye dayanıyor; onsuz üçü farklı boyda biter.
+            */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(236px, 1fr))',
+            gap: 12, width: '100%', maxWidth: 980, alignItems: 'stretch',
+          }}>
+            {/* ⚠️ KADEMELİ BELİRİŞ — üç kart aynı anda patlamıyor, 70 ms arayla
+                soldan sağa geliyor. Göz sırayı böyle yakalıyor ve "üç seçenek
+                var" bilgisi bedavaya geliyor. `Reveal` hareket kapalıyken
+                (prefers-reduced-motion / lowGraphics) kendini devre dışı
+                bırakıyor — bilgi kaybolmuyor, yalnız hareket kalkıyor. */}
             {hud.offers.map((o, i) => (
-              <LevelUpCard key={o.id} offer={o} index={i} onPick={choose}
-                weapons={hud.weapons} passives={hud.passives} />
+              <Reveal key={o.id} delay={i * 70} style={{ height: '100%' }}>
+                <LevelUpCard offer={o} index={i} onPick={choose}
+                  weapons={hud.weapons} passives={hud.passives} />
+              </Reveal>
             ))}
           </div>
-          <div style={{ marginTop: 14, fontSize: 11, color: C.boneFaint, fontFamily: FONT.ui }}>
-            Press 1 · 2 · 3 to choose
+          {/* ⚠️ Tuşlar METİN DEĞİL, TUŞ gibi çiziliyor — kartlardaki rozetle
+              aynı dil. "Press 1 · 2 · 3" bir cümleydi ve göz onu atlıyordu. */}
+          <div style={{
+            marginTop: 16, display: 'flex', alignItems: 'center', gap: 7,
+            fontFamily: FONT.ui, fontSize: 10.5, color: C.boneFaint,
+          }}>
+            {[1, 2, 3].map((n) => (
+              <span key={n} style={{
+                minWidth: 18, height: 18, padding: '0 4px', borderRadius: 4,
+                display: 'grid', placeItems: 'center',
+                fontSize: 10, fontWeight: 900, color: C.boneDim,
+                background: 'rgba(255,255,255,0.07)',
+                border: '1px solid rgba(255,255,255,0.13)',
+                boxShadow: 'inset 0 -2px 0 rgba(0,0,0,0.3)',
+              }}>{n}</span>
+            ))}
+            <span style={{ letterSpacing: 1.4 }}>or click a card</span>
           </div>
         </div>
       )}

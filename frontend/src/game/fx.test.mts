@@ -17,7 +17,7 @@ import { PETS } from './pets.js';
 import { ICON, STAT_ICON, iconSrc, type IconName } from '../lib/icons.js';
 import { FORGE } from './forge.js';
 import { PASSIVES, WEAPONS, EVOLVED } from './config.js';
-import { pumpFx, resetFx, shakeOffset, takeFreeze } from './fx.js';
+import { pumpFx, resetFx, takeFreeze } from './fx.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -117,24 +117,20 @@ console.log('\n[6] Hit-stop ve sarsıntı');
   g.setViewport(1280, 720);
   resetFx();
 
-  check('başlangıçta sarsıntı yok', shakeOffset().x === 0 && shakeOffset().y === 0);
   check('başlangıçta donma yok', takeFreeze() === 0);
 
-  // Oyuncuya hasar verdir → hem sarsıntı hem donma gelmeli
+  // Oyuncuya hasar verdir → donma gelmeli (sarsıntı KALDIRILDI)
   g.hurts.push({ amount: 10 });
   pumpFx(g, TICK);
-  const sh = shakeOffset();
-  check('hasar sarsıntı üretiyor', Math.abs(sh.x) + Math.abs(sh.y) > 0,
-    `(${sh.x.toFixed(2)}, ${sh.y.toFixed(2)})`);
   const f = takeFreeze();
   check('hasar donma üretiyor', f > 0, `${(f * 1000).toFixed(0)} ms`);
   check('donma bir kez okunur (tekrar 0)', takeFreeze() === 0);
   check('donma tavanı makul (≤90 ms)', f <= 0.09, `${(f * 1000).toFixed(0)} ms`);
 
-  // Sarsıntı sönmeli — kalıcı olsaydı ekran sürekli titrerdi
+  // ⚠️ Ekran sarsıntısı OYUNDAN KALDIRILDI. Buradaki üç iddia (başlangıçta
+  // yok / hasar üretiyor / sönüyor) onunla birlikte silindi. Hit-stop ve
+  // hasar sayısı duruyor; vuruş hissini artık onlar taşıyor.
   for (let i = 0; i < 240; i++) pumpFx(g, TICK);
-  const sh2 = shakeOffset();
-  check('sarsıntı sönüyor', sh2.x === 0 && sh2.y === 0);
 }
 
 console.log('\n[7] Determinizm — efektler rng akışını KİRLETMİYOR');

@@ -25,15 +25,11 @@ import { weaponArt } from './combatArt';
 // ── SUNUM SABİTLERİ ───────────────────────────────────────────────────
 // ⚠️ Bunlar DENGE DEĞİL, his. O yüzden `config.ts`'te değil burada.
 const FEEL = {
-  /** ekran sarsıntısı büyüklükleri (px) */
-  hitShake: 0.5,
-  critShake: 2.4,
-  hurtShake: 5.0,
-  deathShake: 0.3,
-  bossDeathShake: 7,
-  maxShake: 9,
-  /** sarsıntı sönümü — frame bağımsız üstel */
-  shakeDecay: 0.0008,
+  // ⚠️ EKRAN SARSINTISI KALDIRILDI (kullanıcı kararı). Vuruş hissi kalan
+  // sinyallerden geliyor: hasar sayısı, hit-stop, çarpma efekti, kan
+  // vinyeti. Sarsıntı bunların üstüne bilgi EKLEMİYOR, sadece okumayı
+  // zorlaştırıyordu. Geri eklenecekse hem `shakeOffset` hem ayar hem de
+  // `settings.test`teki kuyruk-sırası mührü birlikte geri gelmeli.
   /** hasar sayısı ömrü (sn) */
   numLife: 0.62,
   /** aynı düşmanın bu yarıçapındaki sayılar BİRLEŞİR (yoksa aura 400 sayı üretir) */
@@ -86,7 +82,6 @@ const nums: Num[] = Array.from({ length: CAP.num },
 const corpses: Corpse[] = Array.from({ length: CAP.corpse },
   () => ({ x: 0, y: 0, t: 0, art: '', facing: true, on: false }));
 
-let shakeMag = 0;
 let hurtFlash = 0;
 let frameSeq = 0;
 /** biriken donma isteği — `takeFreeze()` okuyup sıfırlar */
@@ -100,16 +95,14 @@ let freezeReq = 0;
  * değişince `applyFxSettings` bir kez çağrılır.
  *
  * ⚠️ SİMÜLASYONA GİRMEZ. Buradaki hiçbir bayrak motorun durumuna dokunmuyor;
- * sarsıntı kapalıyken de `pumpFx` aynı kuyrukları aynı sırayla boşaltıyor,
- * sadece çizim değişiyor. Testte aynı seed → aynı koşu ile kanıtlanıyor.
+ * bayrak kapalıyken de `pumpFx` aynı kuyrukları AYNI SIRAYLA boşaltıyor,
+ * sadece çizim değişiyor. `settings.test.mts` bunu aynı seed → aynı koşu
+ * ile mühürlüyor; bayrak eklenip çıkarılsa bile o mühür KALMALI.
  */
-let shakeOn = true;
 let numbersOn = true;
 
-export function applyFxSettings(v: { screenShake: boolean; damageNumbers: boolean }) {
-  shakeOn = v.screenShake;
+export function applyFxSettings(v: { damageNumbers: boolean }) {
   numbersOn = v.damageNumbers;
-  if (!shakeOn) shakeMag = 0;
 }
 
 /** Yeni koşu — önceki koşudan efekt taşmasın */
@@ -117,7 +110,6 @@ export function resetFx() {
   for (const s of sparks) s.on = false;
   for (const n of nums) n.on = false;
   for (const c of corpses) c.on = false;
-  shakeMag = 0;
   hurtFlash = 0;
   frameSeq = 0;
   freezeReq = 0;
@@ -182,7 +174,6 @@ export function pumpFx(g: Game, dt: number) {
       n.on = true;
     }
 
-    shakeMag = Math.min(FEEL.maxShake, shakeMag + (h.crit ? FEEL.critShake : FEEL.hitShake));
     if (h.crit) freezeReq = Math.min(FEEL.freezeMax, freezeReq + FEEL.freezeCrit);
   }
   g.hits.length = 0;
@@ -190,7 +181,6 @@ export function pumpFx(g: Game, dt: number) {
   // ── ölümler → leş + sarsıntı ──
   for (let i = 0; i < g.deaths.length; i++) {
     const d = g.deaths[i];
-    shakeMag = Math.min(FEEL.maxShake, shakeMag + (d.boss ? FEEL.bossDeathShake : FEEL.deathShake));
     if (d.boss) freezeReq = Math.min(FEEL.freezeMax, freezeReq + FEEL.freezeBossDeath);
     if (d.art) {
       const c = slot(corpses);
@@ -200,9 +190,8 @@ export function pumpFx(g: Game, dt: number) {
   // ⚠️ `deaths` BURADA boşaltılmaz — render.ts'teki ölüm patlaması onu
   // kullanıyor. Tek boşaltma noktası olmalı, yoksa efektlerden biri aç kalır.
 
-  // ── oyuncu hasarı → ekran flaşı + güçlü sarsıntı ──
+  // ── oyuncu hasarı → ekran flaşı + hit-stop ──
   for (let i = 0; i < g.hurts.length; i++) {
-    shakeMag = Math.min(FEEL.maxShake, shakeMag + FEEL.hurtShake);
     hurtFlash = FEEL.hurtLife;
     freezeReq = Math.min(FEEL.freezeMax, freezeReq + FEEL.freezeHurt);
   }
@@ -228,9 +217,6 @@ export function pumpFx(g: Game, dt: number) {
     if (c.t >= FEEL.corpseLife) c.on = false;
   }
   if (hurtFlash > 0) hurtFlash = Math.max(0, hurtFlash - dt);
-  // frame bağımsız üstel sönüm
-  shakeMag *= Math.pow(FEEL.shakeDecay, dt);
-  if (shakeMag < 0.05) shakeMag = 0;
 }
 
 /**
@@ -242,23 +228,6 @@ export function takeFreeze(): number {
   const f = freezeReq;
   freezeReq = 0;
   return f;
-}
-
-/**
- * Kamera sarsıntı ofseti.
- * ⚠️ SADECE dünya dönüşümüne uygulanır. Atmosfer katmanı (`drawAtmosphere`)
- * ekran uzayında çiziliyor ve oyuncunun taşıdığı ışık halesini temsil ediyor —
- * onu sarsmak kamerayı değil "gözlüğü" sallamak gibi görünür.
- */
-export function shakeOffset(): { x: number; y: number } {
-  // ⚠️ Kapatma BURADA, biriktirmede değil: `shakeMag` yine hesaplanıyor ama
-  // kameraya uygulanmıyor. Böylece ayarı koşu ortasında açmak/kapatmak
-  // anında ve tutarlı çalışıyor, hiçbir durum tutarsız kalmıyor.
-  if (!shakeOn || shakeMag <= 0) return { x: 0, y: 0 };
-  return {
-    x: (tileHash(frameSeq, 0, 1) - 0.5) * 2 * shakeMag,
-    y: (tileHash(0, frameSeq, 2) - 0.5) * 2 * shakeMag,
-  };
 }
 
 /**

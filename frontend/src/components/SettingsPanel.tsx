@@ -115,14 +115,6 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
       <div style={{ marginTop: 9, display: 'flex', flexDirection: 'column', gap: 6 }}>
         <Card>
           <Toggle
-            label="Screen shake"
-            hint="Turn this off if motion bothers you. Damage feedback stays — the red edge and the numbers do not depend on it."
-            on={s.screenShake}
-            onChange={(v) => patch({ screenShake: v })}
-          />
-        </Card>
-        <Card>
-          <Toggle
             label="Damage numbers"
             hint="The number that pops off every hit. Crowded screens get quieter without it."
             on={s.damageNumbers}
