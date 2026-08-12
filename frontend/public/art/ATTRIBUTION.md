@@ -89,20 +89,96 @@ metin etiketi. Buttons/Icons/Panels/Items/HUDs klasörlerinden örneklendi, heps
 
 ---
 
-## ⚠️ KAYNAĞI TESPİT EDİLECEK — yayına çıkmadan önce netleştir
+## ⚠️ KAYNAĞI TESPİT EDİLECEK — **2026-08-11 ARAŞTIRMASI**
 
-Bu klasörler zip içinde lisans dosyası olmadan geldi ve kaynağı henüz doğrulanmadı.
-Muhtemelen CraftPix / Pixel UI pack 3 (ikisi de ticari serbest), ama **doğrulanmadan
-launch edilmemeli.**
+Bu bölüm "muhtemelen CraftPix, doğrulanmadan launch edilmemeli" diyordu.
+Araştırıldı; tek bir "belirsiz lisans" sorunu DEĞİLMİŞ, **üç ayrı durum** var.
 
-| Klasör | Tahmini kaynak | Dosya |
+### 🔴 1 — KULLANILMIYOR + GERÇEKTEN SORUNLU → SİLİNMELİ (265 dosya)
+
+| Klasör | Dosya | Kodda referans |
 |---|---|---|
-| `ui/`, `ui/borders` | Pixel UI pack 3 / CraftPix | 149 |
-| `icons/` | belirsiz | 51 |
-| `pickups/`, `misc/` | belirsiz | 116 |
+| `ui/` kökü | 52 | **0** |
+| `ui/borders` | 97 | **0** (tek eşleşme bir YORUM satırı) |
+| `pickups/` | 24 | **0** |
+| `misc/` | 92 | **0** |
 
-Riski sıfırlamanın en hızlı yolu: bu kategoriler için CraftPix'ten bilinen ücretsiz
-UI/ikon/pickup paketleri indirip belirsiz olanları değiştirmek.
+Ölçüm: kodda geçen HER `/art/ui/...` yolu `ui/kit/` altına gidiyor (Franuka,
+doğrulanmış). Diğer dördü hiçbir yerden çağrılmıyor.
+
+⚠️ **Bu bir evrak sorunu değil.** `ui/` kökü karışık bir çöplük:
+- `Teemo Basic emote animations sprite sheet.png` → **Teemo bir League of Legends
+  karakteri, Riot Games IP'si.** Depo PUBLIC, yani şu an açıkta duruyor.
+- `waterdroplet-clipart-...-free-png.png` ve
+  `fire-flame-in-simple-illustration-for-design-element-png.png` → SEO slug'lı
+  isimlendirme, ücretsiz-PNG **scraping sitesi** imzası.
+- `SPR_MouseCursor_*` · `Catpaw ... icon` · `Triangle Mouse icon` · `dialog box` ·
+  `XpBarrr` → en az 4 farklı isimlendirme düzeni = birbirine karışmış paketler.
+
+Şablonu yapan kişi web'den toplanmış malzemeyi pakete koymuş.
+**Kullanılmadıkları için silmenin maliyeti SIFIR, faydası riskin tamamı.**
+
+```
+cd frontend/public/art
+find ui -maxdepth 1 -type f -delete && rm -rf ui/borders pickups misc
+cd ../.. && node scripts/build-manifest.mjs
+```
+⚠️ `ui/kit/` (633 dosya, Franuka) **KALIYOR** — `-maxdepth 1` yalnız kökteki
+dosyaları siler, alt klasöre dokunmaz.
+⚠️ `manifest.json` bunları listeliyor → **yeniden üretilmeli.** Manifest'i sadece
+`src/app/editor/page.tsx` (harita editörü paleti) okuyor, oyuncuya giden bir şey değil.
+
+### 🟡 2 — TABLODA HİÇ YOKTU, EN ÇOK KULLANILAN → BELGELENMELİ (452 dosya)
+
+`world/` (362) ve `town/` (90) bu dosyanın **hiçbir yerinde geçmiyordu** — oysa
+`world/` kodda en çok referans verilen klasör (21 yol). Risk tablosu bunları atlamış.
+
+MutterPixel olduklarına dair kanıt (tahmin değil, ölçüm):
+- İsimlendirme: `world/` %93, `town/` %80 `spr_`/`Spr_` öneki. Doğrulanmış
+  MutterPixel klasörleri %82–100 (`loot` %100, `chests` %100, `stage` %100,
+  `npc` %87). İstisnalar da büyük harfli `Spr_` — aynı yazar.
+- Alt klasörler satın alınan paketlerle örtüşüyor: `ruins`+`props` → *Ruined
+  Village Builder Kit* · `darktrees` → *Dark Forest Trees* · `forest`,`forest2` →
+  *Forest Ground Tiles* · `town/` binaları → *Ruined Medieval Buildings*.
+
+✅ **KESİNLEŞTİRMESİ 5 DAKİKA:** MutterPixel "ALL ASSETS" derlemesi SATIN ALINDI.
+itch.io hesabından indirilip dosya adları karşılaştırılsın; eşleşince yukarıdaki
+✅ MutterPixel satırına `world/` ve `town/` eklenir ve iş biter.
+(Orijinal indirmeler bu makinede bulunamadı.)
+
+### 🟠 3 — KULLANILIYOR + KAYNAK GERÇEKTEN BULUNAMADI → DEĞİŞTİRİLMELİ (31 dosya)
+
+`icons/` — 51 dosyanın **31'i kullanılıyor** (`game/combatArt.ts`, `const ICO`):
+16 silahın ve pasiflerin ikonları. **Tek gerçek açık kalan bu.**
+
+Yapı: 48 ikon @16×16 + `spritesheet.png` @128×96 (tam 8×6 = 48) → tek tutarlı
+paket. Ayrıca `Golden Coin.png` + `Skull.png` @32×32, farklı isimlendirme =
+**başka bir kaynaktan**.
+
+Araştırma çıkmazları:
+- PNG metadata **temizlenmiş** — hiçbir dosyada yazar/yazılım kaydı yok.
+- Dosya adları (`ghost_form_(physical_damage_immunity)`,
+  `frenzy_spell_(critical_booster)`) internette birebir eşleşmiyor.
+- CraftPix'te iki aday: *100 Pixel Art Status Effect Icons Pack* ve *RPG Pixel
+  Magic Buff & Debuff 16×16 Icons*. İkisi de 16×16 ✅ ama ikisi de **100 ikon**
+  (bizde 48), ikon adı listesi yayınlamıyorlar ve premium üyelik arkasındalar.
+  **Eşleştirme YAPILAMADI.**
+
+❌ **Franuka Mini-icons ile takas ÇÖZÜM DEĞİL** — onlar genel amaçlı arayüz
+ikonları (yıldız/can/altın/kafatası); P3'te bilerek yapılan "16 silah görsel
+olarak ayrışsın" işini geri alır.
+
+✅ **Doğru çözüm:** lisansına sahip olduğumuz bir büyü/yetenek ikon paketi alınıp
+`combatArt.ts`teki 31 yol yeniden eşlenecek — tek dosya, tek oturumluk iş.
+Adaylar: CraftPix premium (zaten `fx/` oradan, üyelik ticari kullanıma açık) ·
+LuizMelo (CC0) · itch.io CC0 ikon paketleri.
+
+### Özet
+| Durum | Dosya | Aksiyon | Maliyet |
+|---|---|---|---|
+| Kullanılmıyor + Riot IP / scrape | 265 | **SİL** | sıfır |
+| MutterPixel olduğu ölçüldü | 452 | satın alınan paketle eşleştir, buraya yaz | 5 dk |
+| Kaynak yok ama kullanılıyor | 31 | lisanslı paketle değiştir | 1 oturum |
 
 ---
 
