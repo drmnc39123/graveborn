@@ -119,8 +119,14 @@ type Payout = {
 const PANEL_CERCEVE: Record<string, PanelStyle> = {
   shop: '05A',       // PEDLAR'S STALL — ahşap kalas, tezgâh
   paths: '01B',      // YOUR PATHS — soğuk mavi-gri, zihinsel
-  market: '02B',     // MARKETPLACE — turkuaz, para
-  exchange: '02B',
+  // ⚠️ EskiDEN 02B ("turkuaz, para"). ÖLÇÜLDÜ: 02B'nin kenar tonu 201°
+  // CAMGÖBEĞİ ve %31 doygunlukla kullanımdaki EN doygun çerçeveydi — gotik
+  // palette tek gerçek kırılma oydu (bkz. kit.tsx ton tablosu). Üstelik bu
+  // oyunda parayı camgöbeği değil ALTIN anlatıyor; rakamlar zaten renkli,
+  // çerçevenin nötr kalması gerekiyor. 08A tam bunun için var ve bugüne
+  // kadar hiç kullanılmamıştı (20° kırmızı, %9 — en nötr çerçeve).
+  market: '08A',     // MARKETPLACE — nötr; rengi altın rakamlar taşır
+  exchange: '08A',
   // ⚠️ Forge 06A, Reliquary 03A, Gear 08A DENENDİ ve GERİ ALINDI: üçü de
   // kenarlık parlaklığında sınırın üstünde ve ekranda panel soluk, çerçeve
   // cılız duruyordu (06A yalnızca köşe braketi çiziyor, gövde boş kalıyor).
@@ -539,7 +545,8 @@ export default function PlayPage() {
         // ⚠️ Pit bir panel değil, ekran: rıhtımdan doğrudan maça giriliyor.
         if (id === 'pit') { setPanel(null); setScreen({ kind: 'arena' }); return; }
         setPanel(id);
-      }} gold={progress?.gold ?? 0} wallet={wallet}
+      }} onClose={() => setPanel(null)}
+        gold={progress?.gold ?? 0} wallet={wallet}
         onHeight={setDockH}
         onLeft={setDockLeft}
         // ⚠️ ŞERİT RIHTIMIN İÇİNDE, sayfada ayrı bir katmanda DEĞİL — gerekçe
@@ -1049,6 +1056,31 @@ function StageSelect({ progress, onPick, onHero, wilderness }: {
   wilderness: boolean;
 }) {
   const p = progress ?? loadProgress();
+
+  /**
+   * OYUNCUNUN EN ÇOK ÖDEYEN HATTI — bölümler arası kıyas için.
+   *
+   * ⚠️ NİYE VAR: her bölümün KENDİ iniş merdiveni var ve yeni bir bölüme
+   * girmek derinlik 1'den başlamak demek. Ölçüldü: bölüm 1 derinlik 35'te
+   * 3.037 gold öderken bölüm 3 derinlik 1'de 32 ödüyor. Oyuncu bunu görüp
+   * haklı olarak "bu bölüm bozuk" sanıyordu.
+   *
+   * Oysa rakamlar bilinçli: bölüm bonusu AYNI derinlikte bölüm 10'a 2,35 kat
+   * ödetiyor. Yani bu bir PRESTİJ HATTI — daha zor yola geç, sıfırdan başla,
+   * uzun vadede daha çok kazan. Arayüz bunu hiç söylemiyordu; eksik olan
+   * ekonomi değil BİLGİYDİ. Aşağıdaki kıyas o boşluğu kapatıyor ve tek bir
+   * ekonomi sabitine dokunmuyor.
+   */
+  const enIyiHat = STAGES.reduce(
+    (iyi, st) => {
+      const d = paidDepth(p, st.id);
+      if (d <= 0) return iyi;
+      const g = depthGold(st.id, d + 1);
+      return g > iyi.gold ? { stageId: st.id, depth: d, gold: g } : iyi;
+    },
+    { stageId: 0, depth: 0, gold: 0 },
+  );
+
   return (
     <>
       <PanelHead
@@ -1069,7 +1101,7 @@ function StageSelect({ progress, onPick, onHero, wilderness }: {
           return (
             <StageCard
               key={s.id} stage={s} locked={locked} cleared={cleared} claimed={claimed}
-              bestDepth={best} onPick={onPick} wilderness={wilderness}
+              bestDepth={best} enIyiHat={enIyiHat} onPick={onPick} wilderness={wilderness}
             />
           );
         })}
@@ -1086,12 +1118,14 @@ function StageSelect({ progress, onPick, onHero, wilderness }: {
  * yapıyordu — hangi yaratıklar var, boss var mı, ne kadar sürer, bir sonraki
  * derinlik ne öder, hiçbiri yazmıyordu. Veri zaten `StageDef`'te duruyordu.
  */
-function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick, wilderness }: {
+function StageCard({ stage: s, locked, cleared, claimed, bestDepth, enIyiHat, onPick, wilderness }: {
   stage: (typeof STAGES)[number];
   locked: boolean;
   cleared: boolean;
   claimed: boolean;
   bestDepth: number;
+  /** Oyuncunun EN ÇOK ÖDEYEN hattı — bu bölümle kıyaslamak için */
+  enIyiHat: { stageId: number; depth: number; gold: number };
   onPick: (id: number, mode: RunKind, startDepth?: number, ascension?: number) => void;
   wilderness: boolean;
 }) {
@@ -1126,6 +1160,26 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick, wild
   // yerde YAZILMADI, iki yerde ÇAĞRILDI.
   const enYuksekKademe = maxAscensionFor(bestDepth);
   const [kademe, setKademe] = useState(0);
+
+  /**
+   * BAŞKA BİR HATTAN GELİYORSAN NE KAYBEDİP NE KAZANIYORSUN.
+   *
+   * ⚠️ SADECE SUNUM — hiçbir ekonomi sabiti değişmiyor, `depthGold` olduğu
+   * gibi çağrılıyor. Gösterilen tek şey oyuncunun zaten yaşadığı gerçek.
+   *
+   * ⚠️ Yalnız GERÇEKTEN GERİ DÜŞÜYORSA gösteriliyor. Bu bölüm zaten en iyi
+   * hattınsa ya da daha çok ödüyorsa kıyas gürültü olurdu.
+   */
+  const kiyas = (() => {
+    if (enIyiHat.stageId === 0 || enIyiHat.stageId === s.id) return null;
+    if (derinlikOdemesi >= enIyiHat.gold) return null;
+    // Çarpan derinlikten BAĞIMSIZ (stageMul oranı) — aynı derinlikte ölç
+    const carpan = depthGold(s.id, 20) / Math.max(1, depthGold(enIyiHat.stageId, 20));
+    // Bu hattın en iyi hattı yakaladığı derinlik
+    let esitlenme = bestDepth + 1;
+    while (esitlenme < 400 && depthGold(s.id, esitlenme) < enIyiHat.gold) esitlenme++;
+    return { carpan, esitlenme, kalan: esitlenme - bestDepth };
+  })();
 
   return (
     <Card accent={cleared} dim={locked}>
@@ -1211,6 +1265,25 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, onPick, wild
                 </Tag>
               )}
             </div>
+
+            {/* ⚠️ "BU BÖLÜM BOZUK" SANILAN ŞEYİN AÇIKLAMASI.
+                Oyuncu 3.037 ödeyen bir hattan geliyor ve burada 32 görüyor;
+                anlatılmadığında bu bir hata gibi okunuyor. Oysa aynı derinlikte
+                bu hat DAHA ÇOK ödüyor — sadece sıfırdan başlıyor. İki satır,
+                sıfır ekonomi değişikliği. */}
+            {kiyas && (
+              <div style={{ marginTop: 7, padding: '6px 9px', borderRadius: 7,
+                background: 'rgba(255,255,255,0.04)',
+                border: '1px solid rgba(255,255,255,0.07)' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: C.candle }}>
+                  Pays ×{kiyas.carpan.toFixed(2)} at equal depth
+                </div>
+                <div style={{ fontSize: 10.5, color: C.boneDim, marginTop: 2 }}>
+                  Restarts shallow — about {kiyas.kalan} more depths to out-earn
+                  your best (stage {enIyiHat.stageId} · depth {enIyiHat.depth}).
+                </div>
+              </div>
+            )}
           </div>
 
           {/* ── ASCENSION ──

@@ -103,10 +103,14 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
       {/* 🔴 LOBİ OYUNUN GERİ KALANINA HİÇ BENZEMİYORDU: düz yuvarlak bir kutu,
           Franuka çerçevesi yok, ham düğmeler. Oyunun her yeri piksel çerçeveliyken
           burası başka bir uygulamadan alınmış gibi duruyordu.
-          ⚠️ 02B (turkuaz): THE PIT bir ARENA, köyün mezarlık sarmaşığı (07A)
-          buraya ait değil — ve 02B, kenarlık parlaklığı 110 ile gotik palete
-          uyumlu dört çerçeveden biri. */}
-      <Panel variant="02B" scale={3} pad={10}
+          ⚠️ 02B DEĞİL 08A. Eski gerekçe "02B, kenarlık PARLAKLIĞI 110 ile
+          gotik palete uyumlu" diyordu — ama parlaklık TON demek değil ve
+          ölçüm bunu yalanladı: 02B'nin tonu 201° CAMGÖBEĞİ, doygunluk %31,
+          yani kullanımdaki en doygun ve palete en zıt çerçeveydi.
+          Niyet ("arena köy değil") doğru; 08A onu palet kırmadan veriyor —
+          20° kırmızı, %9 doygunluk, 07A'dan belirgin daha AÇIK (137 vs 90).
+          Ton tablosu: kit.tsx. */}
+      <Panel variant="08A" scale={3} pad={10}
         style={{ width: '100%', maxWidth: 420, textAlign: 'center',
           position: 'relative', zIndex: 1 }}>
         <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2.6, color: C.blood }}>

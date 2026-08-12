@@ -116,10 +116,19 @@ export const BUILDINGS: readonly DockEntry[] = [
  * Sabit sayı yerine GERÇEK yükseklik ölçülüyor; düğme sayısı ya da ekran
  * genişliği değişince kendiliğinden doğru kalıyor.
  */
-export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onHeight, onLeft, footer }: {
+export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, style, onHeight, onLeft, footer }: {
   /** açık olan panel — buton "Selected" görünür */
   open: string | null;
   onOpen: (id: string) => void;
+  /**
+   * Açık paneli kapat.
+   *
+   * ⚠️ NİYE GEREKLİ: başka bir gruba geçince alt satır o grubun binalarını
+   * gösteriyor ama panel eski grubunkinde kalıyordu — vurgulanan şey ile
+   * ekranda duran şey birbirini tutmuyordu. Grup değişimi bir "nereye
+   * bakıyorum" kararı; panelin onu takip etmesi gerekiyor.
+   */
+  onClose?: () => void;
   gold: number;
   grave?: number;
   /** bağlı cüzdan; yoksa DEMO modundayız */
@@ -177,12 +186,20 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
     return () => { ro.disconnect(); window.removeEventListener('resize', bildir); };
   }, [onHeight, onLeft]);
 
-  // ⚠️ SIRA ÖNEMLİ: önce elle seçim, sonra açık panelin grubu.
-  const acikGrup = grup === 'none'
-    ? null
-    : (GROUPS.find((g) => g.id === grup)
-      ?? GROUPS.find((g) => open !== null && g.members.includes(open))
-      ?? null);
+  /**
+   * ⚠️ SIRA ÖNEMLİ: önce elle seçim, sonra AÇIK PANELİN GRUBU.
+   *
+   * 🔴 İKİNCİ ARAMA ULAŞILAMAZ KODDU. Eski hâli `grup === 'none' ? null : (…)`
+   * ile başlıyordu; yani `grup` bir grup id'siyse ilk arama ZATEN her zaman
+   * buluyor, `'none'` ise fonksiyon daha ikinci aramaya varmadan `null`
+   * dönüyordu. Niyet ("açık panelin grubunu işaretle") yazılmış ve ekrana
+   * HİÇ ulaşmamıştı — bu depoda tekrar eden hata sınıfı.
+   *
+   * Ekranda görülen sonucu: panel açıkken hiçbir grup vurgulu değildi.
+   */
+  const acikGrup =
+    (grup !== 'none' ? GROUPS.find((g) => g.id === grup) ?? null : null)
+    ?? (open !== null ? GROUPS.find((g) => g.members.includes(open)) ?? null : null);
 
   return (
     <div style={{
@@ -214,8 +231,15 @@ export function BuildingDock({ open, onOpen, gold, grave = 0, wallet, style, onH
             variant={BTN.action}
             scale={2}
             active={acikGrup?.id === g.id}
-            // Açık gruba tekrar basmak KAPATIR ('none'); başkasına basmak ona geçer
-            onClick={() => setGrup(acikGrup?.id === g.id ? 'none' : g.id)}
+            // Açık gruba tekrar basmak KAPATIR ('none'); başkasına basmak ona geçer.
+            // ⚠️ BAŞKA gruba geçerken açık panel de kapanır: alt satır artık
+            // o grubun binalarını gösteriyor, panelin eski grupta kalması
+            // "vurgulanan şey ile görünen şey" çelişkisi yaratıyordu.
+            onClick={() => {
+              const yeni = acikGrup?.id === g.id ? 'none' : g.id;
+              if (yeni !== acikGrup?.id && open !== null) onClose?.();
+              setGrup(yeni);
+            }}
             style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
           >
             {g.label}

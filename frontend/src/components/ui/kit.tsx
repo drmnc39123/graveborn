@@ -88,6 +88,18 @@ export function sliceH(src: string, slice = 16, scale = 3): CSSProperties {
 //   01B → soğuk mavi-gri (ikincil, "buz" tonu)
 //   08A → düz gri (nötr, dikkat dağıtmaması gereken yerler)
 // 01C/02A/04A/04B parlak turuncu-pembe bez — temaya ZIT, kullanma.
+//
+// ⚠️ TON ÖLÇ, PARLAKLIK DEĞİL. Bu kural bir kez PARLAKLIKLA çiğnendi:
+// `ArenaScreen` "02B kenarlık parlaklığı 110, palete uyumlu" diye camgöbeği
+// bir çerçeve seçmişti. Parlaklık ton demek değil. Kenar piksellerinin
+// ÖLÇÜLEN tonu (derece / doygunluk / parlaklık):
+//   07A    7° kırmızı  %13   90   ← en koyu, varsayılan
+//   08A   20° kırmızı   %9  137   ← en NÖTR, "dikkat çekmesin" için doğru seçim
+//   05A    4° kırmızı  %24  136   ← aynı kırmızı ailesi, sadece daha açık
+//   01B  236° mavi     %14  116   ← bilerek onaylı "buz" tonu
+//   02B  201° CAMGÖBEĞİ %31 111   ← kullanımdaki en doygun, TEK gerçek kırılma
+// Yeni bir çerçeve seçmeden önce bu ölçümü tekrarla; göz kararı bir kez
+// "05A pembe" dedirtti, oysa 4° kırmızıymış.
 
 export type PanelStyle = '01A' | '01B' | '01C' | '02A' | '02B' | '03A'
   | '04A' | '04B' | '04C' | '05A' | '06A' | '07A' | '08A';
@@ -288,10 +300,25 @@ export function PixelButton({
         padding: 0,
         background: 'transparent',
         cursor: disabled ? 'default' : 'pointer',
-        opacity: disabled ? 0.45 : 1,
-        filter: disabled ? 'grayscale(0.7)' : 'none',
+        /**
+         * ⚠️ DEVRE DIŞI = SOLUK, GÖRÜNMEZ DEĞİL. Burada ÜÇ etki üst üste
+         * biniyordu — `opacity: 0.45` + `grayscale(0.7)` + zaten paletin en
+         * soluk metin rengi olan `boneFaint`. ÖLÇÜLDÜ: ekrandaki metin
+         * rgb(69,63,53), zemin rgb(24,18,14), kontrast **1,78:1** (WCAG AA
+         * 4,5 ister). "ENTER THE ROOM" ve tılsım fiyatları okunmuyordu.
+         *
+         * Devre dışı bir düğmenin işi oyuncuya NEYİ kaçırdığını söylemektir;
+         * okunmuyorsa o işi yapmıyor demektir.
+         *
+         * ⚠️ Opaklık SIFIRLANMADI, GEVŞETİLDİ. Tamamen kaldırınca ölçülen
+         * kontrast 8,4:1 çıkıyor — açık düğmenin (~13:1) neredeyse yanına
+         * geliyor ve "kapalı" sinyali kayboluyor. 0,8 + boneDim ölçülen
+         * 5,8:1 veriyor: AA'yı geçiyor, ama gözle hâlâ ikincil.
+         */
+        opacity: disabled ? 0.8 : 1,
+        filter: disabled ? 'grayscale(0.85)' : 'none',
         fontFamily: FONT.ui,
-        color: disabled ? C.boneFaint : C.bone,
+        color: disabled ? C.boneDim : C.bone,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         // Pressed dokusu zaten bir piksel aşağı çizilmiş; metni de birlikte indir
         transform: down && !disabled ? 'translateY(1px)' : 'none',
