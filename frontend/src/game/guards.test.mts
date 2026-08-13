@@ -194,7 +194,11 @@ console.log('\n[6] Her sanat yolu DİSKTE var mı — sessiz 404 bekçisi');
     for (const ad of readdirSync(d)) {
       const p = join(d, ad);
       if (statSync(p).isDirectory()) gez(p);
-      else if (/\.(ts|tsx|mts)$/.test(ad)) kaynaklar.push(p);
+      // ⚠️ TEST DOSYALARI HARİÇ. Bekçi GÖNDERİLEN kodu denetler; testler
+      // hiçbir şey çizmiyor. Ve bu kural bekçinin KENDİ ÜSTÜNDE öğrendiği
+      // bir ders: bu dosyanın yorumundaki örnek yol (ters tırnak içinde bir
+      // `/art/...` dizesi) gerçek bir varlık sanılıp kırmızı yaktı.
+      else if (/\.(ts|tsx|mts)$/.test(ad) && !/\.test\.mts$/.test(ad)) kaynaklar.push(p);
     }
   };
   gez(src);
@@ -221,6 +225,46 @@ console.log('\n[6] Her sanat yolu DİSKTE var mı — sessiz 404 bekçisi');
     eksik.length === 0,
     eksik.length ? eksik.map(([p, f]) => `${p} ← ${f}`).join(' · ')
       : `${dosyaYollari.length} yol · ${onekler} önek · ${sablonlu} şablonlu (kapsam dışı)`);
+
+  // ── KÖK SABİTLİ ŞABLONLAR — artık BUNLAR DA taranıyor ──
+  //
+  // ⚠️ NİYE EKLENDİ: bekçi yalnız düz yolları görüyordu ve bu, kapsamda
+  // GERÇEK bir delikti. `stageArt.ts` — arena zemininin, dekorunun ve
+  // atmosferinin TAMAMI — yollarını `${D}/spr_coffin_1.png` diye kuruyor;
+  // 33 yolun hiçbiri denetlenmiyordu. Aynısı `kit.tsx`teki `${KIT}/...`
+  // için de geçerliydi ve tam da bu hafta panel çerçeveleri sorun çıkardı.
+  //
+  // Yöntem GENEL: her dosyanın KENDİ `const X = '/art/...'` bildirimleri
+  // toplanıyor, sonra o dosyadaki `${X}/kalan.png` şablonları çözülüyor.
+  // Böylece yeni bir kök sabiti eklendiğinde bekçi kendiliğinden kapsıyor.
+  //
+  // ⚠️ İÇİNDE BAŞKA `${}` OLANLAR ELENİYOR (`spr_dark_tree_${i}.png` gibi):
+  // onlar bir dosya değil AİLE. Sayıları ayrıca yazdırılıyor ki kapsamın
+  // nerede bittiği görünsün — sessizce atlamak, bekçiyi yalancı yapardı.
+  const kokEksik: string[] = [];
+  let kokCozulen = 0, kokAile = 0;
+  for (const f of kaynaklar) {
+    const s = readFileSync(f, 'utf8');
+    const kok = new Map<string, string>();
+    for (const m of s.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*['"](\/art\/[^'"]*)['"]/g)) {
+      kok.set(m[1], m[2]);
+    }
+    if (!kok.size) continue;
+    for (const m of s.matchAll(/\$\{([A-Za-z_$][\w$]*)\}(\/[^`"'\n]*)/g)) {
+      const taban = kok.get(m[1]);
+      if (!taban) continue;
+      const kalan = m[2];
+      if (kalan.includes('${')) { kokAile++; continue; }   // aile, tek dosya değil
+      if (!/\.[a-z0-9]{2,4}$/i.test(kalan)) continue;      // önek, dosya değil
+      kokCozulen++;
+      const tam = taban + kalan;
+      if (!existsSync(join('public', tam))) kokEksik.push(`${tam} ← ${f}`);
+    }
+  }
+  check('kök sabitli şablon yollarının HEPSİ diskte var',
+    kokEksik.length === 0,
+    kokEksik.length ? kokEksik.join(' · ')
+      : `${kokCozulen} yol çözüldü · ${kokAile} aile (kapsam dışı)`);
 
   // ── ŞABLONLU AİLELERİN EN KRİTİĞİ: silah/pasif ikonları ──
   // ⚠️ Bunlar `combatArt.ts`te `${ICO}/ad.png` diye kuruluyor; kart ikonu
