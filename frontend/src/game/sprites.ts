@@ -552,9 +552,24 @@ export function preloadAll(heroId?: string) {
     // ilk kareyi geciktirmek pahasına indirmek olurdu.
     for (const art of Object.values(FALLEN_ART)) preload(art);
   };
+  // ⚠️ İKİ ZAMANLAYICI BİRDEN, "ya o ya bu" DEĞİL.
+  //
+  // Eskiden `requestIdleCallback` VARSA o kuruluyor, YOKSA `setTimeout`
+  // deniyordu. Ölçüldü (aynı hata `ui/kit.tsx` `preloadKit`te de vardı ve
+  // orada ikinci dalganın hiç yüklenmediği görüldü): `requestIdleCallback`
+  // ARKA PLANDAKİ SEKMEDE ateşlenmiyor — `requestAnimationFrame` ile aynı
+  // sınıf bir tuzak. Chrome'da fonksiyon VAR olduğu için idle dalı seçiliyor,
+  // yedek de "yoksa" koşuluna bağlı olduğu için hiç devreye girmiyordu.
+  //
+  // Burada bedeli somut: bu ikinci aşama kahramanın saldırı/hasar/ölüm
+  // karelerini ve düşmüş şampiyonları yüklüyor. Çalışmazsa oyuncu ilk
+  // saldırıda `drawActor`ın yedek şekline düşüyor (kırılmıyor ama çirkin).
+  //
+  // ⚠️ İkisinin de çalışması ZARARSIZ: `get()` `cache` Map'iyle tekilleştirir,
+  // ikinci geçiş yeni `Image` üretmez.
   const w = globalThis as unknown as { requestIdleCallback?: (cb: () => void) => void };
-  if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(gerisi);
-  else setTimeout(gerisi, 600);
+  w.requestIdleCallback?.(gerisi);
+  setTimeout(gerisi, 600);
 }
 
 /**
