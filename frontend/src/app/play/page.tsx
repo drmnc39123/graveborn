@@ -118,8 +118,21 @@ type Payout = {
  */
 const PANEL_CERCEVE: Record<string, PanelStyle> = {
   shop: '05A',       // PEDLAR'S STALL — ahşap kalas, tezgâh
-  paths: '01B',      // YOUR PATHS — soğuk mavi-gri, zihinsel
-  // ⚠️ EskiDEN 02B ("turkuaz, para"). ÖLÇÜLDÜ: 02B'nin kenar tonu 201°
+  // ⚠️ PATHS 01B'DEN ÇIKARILDI — sebebi bu sözlüğün KENDİ son satırı:
+  // "Kimlik uğruna tema bozulmaz". Forge/Reliquary/Gear tam o gerekçeyle
+  // 07A'ya döndürülmüştü; `paths` o turda atlanmış.
+  //
+  // ÖLÇÜLDÜ (kenarlık halkası, HLS):
+  //   01B  ton 236  doygunluk 0,24   ← PATHS'in kullandığı
+  //   02B  ton 232  doygunluk 0,20   ← "palette tek gerçek kırılma" diye
+  //                                     KALDIRILAN çerçeve
+  // Yani 01B, kaldırılan çerçeveden HEM DAHA MAVİ HEM DAHA DOYGUN. Onu
+  // bırakıp 02B'yi almak kendi içinde tutarsızdı.
+  // "Soğuk, zihinsel" niyeti anlaşılır ama oyunda başka soğuk panel kalmadı;
+  // tek başına duran mavi bir panel kimlik değil KOPUKLUK oluyor. Beceri
+  // ağacının kimliği zaten içeriğinde: dört renkli dal başlığı taşıyor.
+  //
+  // ⚠️ EskiDEN market 02B'ydi ("turkuaz, para"). ÖLÇÜLDÜ: 02B'nin kenar tonu 201°
   // CAMGÖBEĞİ ve %31 doygunlukla kullanımdaki EN doygun çerçeveydi — gotik
   // palette tek gerçek kırılma oydu (bkz. kit.tsx ton tablosu). Üstelik bu
   // oyunda parayı camgöbeği değil ALTIN anlatıyor; rakamlar zaten renkli,
