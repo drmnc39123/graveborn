@@ -20,7 +20,7 @@ import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import type { RunPet } from '@/game/pets';
 import { C, FONT, glass } from '@/lib/theme';
-import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon } from '@/components/ui/kit';
+import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon, preloadKit } from '@/components/ui/kit';
 import { Reveal } from '@/components/ui/motion';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
@@ -179,6 +179,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
 
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
+    preloadKit();     // HUD'un çerçeveleri de aynı anda istensin
     const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth, ascension, allowedWeapons ?? null, pets ?? []);
 
     /**

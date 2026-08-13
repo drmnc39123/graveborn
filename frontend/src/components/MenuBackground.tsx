@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { loadMapWorld, type MapWorld } from '@/game/mapWorld';
 import { renderMenuBackground } from '@/game/hubRender';
 import { preloadAll } from '@/game/sprites';
+import { preloadKit } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 
 /** Kamera yolu — kapanmayan bir Lissajous, köyün üstünde tembelce dolaşır */
@@ -49,6 +50,7 @@ export function MenuBackground() {
     window.addEventListener('resize', resize);
 
     preloadAll();
+    preloadKit();   // ana sayfadan /play'e geçince paneller çerçeveli açılsın
     loadMapWorld().then((w) => {
       if (stopped) return;
       world = w;

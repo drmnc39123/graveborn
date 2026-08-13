@@ -7,6 +7,7 @@ import { createHub, stepHub, warp, type HubState } from '@/game/hub';
 import { renderHub, DEBUG } from '@/game/hubRender';
 import { loadMapWorld } from '@/game/mapWorld';
 import { preloadAll } from '@/game/sprites';
+import { preloadKit } from '@/components/ui/kit';
 import { isTestMode } from '@/lib/testMode';
 import { unlockAudio, play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
@@ -75,6 +76,7 @@ export function HubCanvas({
       // başka birini çiziyordu; gerçek karakterin kareleri tembel yüklenip
       // ilk saniyede yedek şekil görünüyordu.
       preloadAll(heroRef.current);
+      preloadKit();   // paneller açılmadan ÖNCE çerçeveler önbellekte olsun
 
       const hub: HubState = createHub(world, heroRef.current);
       hubRef.current = hub;

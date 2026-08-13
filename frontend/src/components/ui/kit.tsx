@@ -19,6 +19,87 @@ import { iconSrc, type IconName } from '@/lib/icons';
 
 const KIT = '/art/ui/kit';
 
+/**
+ * ARAYÜZ ÇERÇEVELERİNİ ÖNDEN İSTE.
+ *
+ * 🔴 NİYE VAR — KULLANICI EKRAN GÖRÜNTÜSÜYLE YAKALADI: Forge açıldığında
+ * panelin sarmaşıklı çerçevesi ve düğme çerçeveleri YOKTU, geriye düz koyu
+ * bir kutu kalmıştı. Kod doğruydu; sorun ZAMANLAMA.
+ *
+ * `sprites.ts` `preloadAll()` yalnız OYUN sprite'larını (kahraman, düşman,
+ * mermi, efekt) önden yüklüyor. Franuka arayüz varlıkları ise hiç
+ * yüklenmiyordu: CSS onları panel İLK AÇILDIĞINDA istiyor. Soğuk önbellekte
+ * bu, panelin bir süre çerçevesiz görünmesi demek.
+ *
+ * ⚠️ Ve çerçevesizlik SESSİZ: `nineSlice` kenar rengini bilerek `transparent`
+ * yapıyor (404'te tarayıcının sahte slab çizmemesi için). Doğru karar, ama
+ * yan etkisi şu — görsel gelene kadar kenarlık YOK gibi görünüyor, hata
+ * mesajı da yok. Bu yüzden "kenarlıklar niye gitmiş" sorusu çıktı.
+ *
+ * ⚠️ LİSTE BURADA, ÇÜNKÜ YOLLARI KURAN KOD BURADA. Ayrı bir dosyaya
+ * kopyalansaydı iki liste zamanla ayrışırdı — bu depoda `MIN_GOLD`/
+ * `MAX_LISTINGS` tam olarak öyle ayrışmıştı.
+ */
+const KIT_KRITIK = [
+  // Panel çerçeveleri — kullanımdaki üç varyant (bkz. PANEL_CERCEVE)
+  `${KIT}/Background-boxes/BGbox_05A.png`,
+  `${KIT}/Background-boxes/BGbox_07A.png`,
+  `${KIT}/Background-boxes/BGbox_08A.png`,
+  // Düğmeler — üç varyant × üç durum (BTN sözlüğü)
+  ...['01A', '02A', '03A'].flatMap((v) =>
+    ['Normal', 'Pressed', 'Selected'].map((s) => `${KIT}/Buttons/Button_${v}_${s}.png`)),
+];
+
+/** İlk kareyi geciktirmeyecek ikinci dalga — yuva, çubuk, küre, flama */
+const KIT_GERISI = [
+  ...['Empty', 'Weapon', 'Armor', 'Headgear', 'Footwear', 'Necklace', 'Ring']
+    .map((t) => `${KIT}/-tem-slots/Slot_02_${t}.png`),
+  `${KIT}/Sliders---Bars/Slider01_Box.png`,
+  `${KIT}/Sliders---Bars/Slider01_Bar02.png`,
+  `${KIT}/Sliders---Bars/Slider01_Bar03.png`,
+  `${KIT}/Sliders---Bars/Slider01_Bar05.png`,
+  `${KIT}/Title-banners/BannerMedium_01C.png`,
+  `${KIT}/Resource-orbs/Orb_HP.png`,
+  `${KIT}/Resource-orbs/Orb_Frame_HP.png`,
+];
+
+const istendi = new Set<string>();
+
+function iste(yollar: string[]) {
+  for (const y of yollar) {
+    if (istendi.has(y)) continue;
+    istendi.add(y);
+    // ⚠️ `new Image()` YETERLİ ve DOĞRU araç: tarayıcı önbelleğine koyuyor,
+    // CSS `url()` sonra oradan okuyor. `<link rel=preload>` eklemek aynı işi
+    // yapardı ama her panel için ayrı DOM düğümü demekti.
+    const im = new Image();
+    im.src = y;
+  }
+}
+
+/**
+ * Uygulama açılışında bir kez çağrılır. Tekrar çağrılması zararsız —
+ * `istendi` kümesi aynı dosyayı iki kez istemeyi engelliyor.
+ */
+export function preloadKit() {
+  if (typeof window === 'undefined') return;   // SSR'de Image yok
+  iste(KIT_KRITIK);
+
+  // ⚠️ İKİSİ BİRDEN, "ya o ya bu" DEĞİL — ÖLÇÜLDÜ.
+  // İlk yazımda `requestIdleCallback` varsa o, yoksa `setTimeout` deniyordu.
+  // Ölçüm: ikinci dalganın 4 dosyasının HİÇBİRİ istenmemişti. Sebep,
+  // `requestIdleCallback`in ARKA PLANDAKİ SEKMEDE çalışmaması — `rAF` ile
+  // aynı sınıf bir tuzak (bu depoda altıncı kez aynı şeye takıldık).
+  // Chrome'da `requestIdleCallback` VAR olduğu için o dal seçiliyor ve sekme
+  // gizliyken hiç ateşlenmiyordu; yedek de "yoksa" koşuluna bağlı olduğu için
+  // devreye girmiyordu. Artık ikisi de kuruluyor; `istendi` kümesi zaten
+  // aynı dosyanın iki kez istenmesini engelliyor.
+  const gerisi = () => iste(KIT_GERISI);
+  const w = globalThis as unknown as { requestIdleCallback?: (cb: () => void) => void };
+  w.requestIdleCallback?.(gerisi);
+  setTimeout(gerisi, 600);
+}
+
 /** Piksel sanat için ortak kural — her 9-slice ve <img> bunu kullanır */
 export const pixel: CSSProperties = { imageRendering: 'pixelated' };
 
