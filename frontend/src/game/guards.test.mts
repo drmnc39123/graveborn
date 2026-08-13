@@ -23,7 +23,7 @@
 // ⚠️ LİSTE YENİDEN ÖLÇÜLMEDEN GENİŞLETİLMEZ. Buraya göz kararıyla dosya adı
 // eklemek, bu dosyayı tam da yerine geçtiği şeye — tahmine — çevirir.
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { BAR_DOLGU, BTN } from '../components/ui/kit.js';
 import { Game } from './engine.js';
@@ -169,6 +169,82 @@ console.log('\n[5] "Ulaşılan" ile "temizlenen" derinlik AYNI SAYI DEĞİL');
   check('temizlenen ≤ ulaşılan (koşu boyunca)',
     g.stage.deepestCleared <= g.stage.depth,
     `cleared ${g.stage.deepestCleared} ≤ depth ${g.stage.depth}`);
+}
+
+
+console.log('\n[6] Her sanat yolu DİSKTE var mı — sessiz 404 bekçisi');
+{
+  /**
+   * ⚠️ BU PROJENİN EN VERİMLİ HATA SINIFI: kod doğru, dosya yok, hiçbir şey
+   * çizilmiyor ve HİÇBİR YERDE HATA ÇIKMIYOR. Beş kez yaşandı (evrim ipucu,
+   * pet vuruşu, soğuma halkası, diriliş hakkı, tüm-zamanlar sıralaması) ve
+   * köylülerde bir kez daha yakalandı: paket `woman`ı `_walk_` OLMADAN
+   * adlandırmış, kalıptan üretilen yol 404 verecekti.
+   *
+   * `<img>` 404'ü konsola düşer ama CSS `background-image`/`border-image`
+   * 404'ü SESSİZDİR — tarayıcı hiçbir şey söylemez, sadece çizmez.
+   *
+   * ⚠️ YALNIZ DÜZ YOLLAR taranıyor. Şablonlu olanlar (`${ICO}/...`) burada
+   * çözülemez; onların kendi mühürleri var (hub.test [8] köylüler, aşağıdaki
+   * ikon bloğu). Kapsam dürüstçe sınırlı olsun diye sayı da yazdırılıyor.
+   */
+  const src = join(process.cwd(), 'src');
+  const kaynaklar: string[] = [];
+  const gez = (d: string) => {
+    for (const ad of readdirSync(d)) {
+      const p = join(d, ad);
+      if (statSync(p).isDirectory()) gez(p);
+      else if (/\.(ts|tsx|mts)$/.test(ad)) kaynaklar.push(p);
+    }
+  };
+  gez(src);
+
+  const duz = new Map<string, string>();   // yol → onu yazan dosya
+  let sablonlu = 0;
+  for (const f of kaynaklar) {
+    const s = readFileSync(f, 'utf8');
+    for (const m of s.matchAll(/['"`](\/art\/[^'"`\n]*)['"`]/g)) {
+      const p = m[1];
+      if (p.includes('${')) { sablonlu++; continue; }
+      if (!duz.has(p)) duz.set(p, f);
+    }
+  }
+
+  // ⚠️ ÖNEK YOLLARI ELENİYOR. `petStrip('/art/.../spr_Bone_Archer', …)` sonuna
+  // `_walk_strip7.png` ekliyor; uzantısı olmayan yol bir DOSYA değil ÖNEKtir.
+  // Bu ayrım yapılmasaydı test ilk çalıştığında YANLIŞ alarm verirdi (verdi de).
+  const dosyaYollari = [...duz].filter(([p]) => /\.[a-z0-9]{2,4}$/i.test(p));
+  const onekler = duz.size - dosyaYollari.length;
+
+  const eksik = dosyaYollari.filter(([p]) => !existsSync(join('public', p)));
+  check('düz sanat yollarının HEPSİ diskte var',
+    eksik.length === 0,
+    eksik.length ? eksik.map(([p, f]) => `${p} ← ${f}`).join(' · ')
+      : `${dosyaYollari.length} yol · ${onekler} önek · ${sablonlu} şablonlu (kapsam dışı)`);
+
+  // ── ŞABLONLU AİLELERİN EN KRİTİĞİ: silah/pasif ikonları ──
+  // ⚠️ Bunlar `combatArt.ts`te `${ICO}/ad.png` diye kuruluyor; kart ikonu
+  // 404 verirse level-up ekranı sessizce boş kutu gösterir.
+  const ca = readFileSync(join(src, 'game', 'combatArt.ts'), 'utf8');
+  const ikonlar = [...new Set([...ca.matchAll(/\$\{ICO\}\/([^`"']+\.png)/g)].map((m) => m[1]))];
+  const ikonEksik = ikonlar.filter((p) => !existsSync(join('public', 'art', 'icons', p)));
+  check('silah/pasif ikonlarının HEPSİ diskte var',
+    ikonEksik.length === 0,
+    ikonEksik.length ? ikonEksik.join(', ') : `${ikonlar.length} ikon doğrulandı`);
+
+  // ── Mini-icon sözlüğü (lib/icons.ts) ──
+  const li = readFileSync(join(src, 'lib', 'icons.ts'), 'utf8');
+  const nums = [...new Set([...li.matchAll(/'(\d{2})'/g)].map((m) => m[1]))];
+  const miniEksik: string[] = [];
+  for (const n of nums) {
+    for (const suf of ['', '_Outline']) {
+      const p = join('public', 'art', 'ui', 'kit', 'Mini-icons', `Icon_${n}${suf}.png`);
+      if (!existsSync(p)) miniEksik.push(`Icon_${n}${suf}.png`);
+    }
+  }
+  check('mini ikon sözlüğünün HEPSİ diskte var',
+    miniEksik.length === 0,
+    miniEksik.length ? miniEksik.join(', ') : `${nums.length} ikon × 2 varyant doğrulandı`);
 }
 
 
