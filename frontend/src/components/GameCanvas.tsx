@@ -506,8 +506,13 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
         <>
           {/* üst şerit: XP + süre */}
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, pointerEvents: 'none' }}>
+            {/* ⚠️ ÖLÇEK 3 (eskiden 2) ve YÜZDE AÇIK — kullanıcı isteği.
+                Ölçek TAM SAYI olmak zorunda (kit kuralı); 3 = 48 px yükseklik.
+                `tone` VERİLMİYOR: çubuk çeyrekliğine göre kendi rengini
+                seçiyor (buz → köz → altın → kızıl), yani oyuncu doluluğu
+                renkten de okuyor. */}
             <div style={{ padding: '4px 8px 0' }}>
-              <Bar pct={xpPct / 100} variant="01" scale={2} />
+              <Bar pct={xpPct / 100} variant="01" scale={3} label />
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
               <span style={{ color: C.candle }}>LV {hud.level}</span>

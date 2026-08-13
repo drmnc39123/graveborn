@@ -522,19 +522,44 @@ export function Orb({ pct, kind = 'HP', scale = 2 }: {
  * Palete eşleme: gold→Bar03 (mum altını #efa72e'ye en yakın),
  * blood→Bar02, ice→Bar05. Yeşiller kullanılmıyor.
  */
-export const BAR_DOLGU = { gold: '03', blood: '02', ice: '05' } as const;
+export const BAR_DOLGU = { gold: '03', blood: '02', ice: '05', ember: '07', hot: '06' } as const;
 
-export function Bar({ pct, variant = '01', tone = 'gold', height = 16, scale = 2 }: {
+/**
+ * ÇEYREKLİK RENK — dolan çubuk "ısınıyor".
+ *
+ * ⚠️ RENKLER GÖZ KARARI DEĞİL, ÖLÇÜLDÜ (8 dolgunun HLS tonu):
+ *   Bar05 189° mavi %26 · Bar07 22° turuncu %62
+ *   Bar03  26° altın %78 · Bar06  5° kırmızı %60
+ *   Bar04 83° ve Bar08 102° YEŞİL → palet kuralı gereği KULLANILMAZ.
+ *   Mor hiç yok.
+ * Sıra soğuktan kora: yeni başlamış çubuk sönük, dolmak üzere olan kızıl.
+ * Bu bir TEHLİKE ölçeği değil bir DOLULUK ölçeği — XP çubuğunda kırmızı
+ * "az kaldı" demek, "az can" değil.
+ */
+export function ceyrekTon(p: number): keyof typeof BAR_DOLGU {
+  if (p < 0.25) return 'ice';
+  if (p < 0.50) return 'ember';
+  if (p < 0.75) return 'gold';
+  return 'hot';
+}
+
+export function Bar({ pct, variant = '01', tone, height = 16, scale = 2, label = false }: {
   pct: number;
   variant?: '01' | '02' | '03';
-  /** dolgu rengi — ⚠️ varsayılan `gold`, yeşil ARTIK SEÇENEK DEĞİL */
+  /**
+   * Dolgu rengi. ⚠️ Verilmezse ÇEYREKLİĞE göre seçilir (`ceyrekTon`).
+   * Yeşil ARTIK SEÇENEK DEĞİL — palet kuralı.
+   */
   tone?: keyof typeof BAR_DOLGU;
   height?: number;
   scale?: number;
+  /** ortada yüzde yazsın mı */
+  label?: boolean;
 }) {
   const p = Math.max(0, Math.min(1, pct));
   const s = Math.max(1, Math.round(scale));
   const h = height * s;
+  const t = tone ?? ceyrekTon(p);
   return (
     <div style={{ position: 'relative', width: '100%', height: h }}>
       {/* boş oluk — altta */}
@@ -552,14 +577,37 @@ export function Bar({ pct, variant = '01', tone = 'gold', height = 16, scale = 2
           height: '100%', width: `${p * 100}%`, overflow: 'hidden',
           transition: 'width 120ms linear',
         }}>
+          {/**
+            * ⚠️ DOLGU 9-SLICE, GERİLMİŞ ARKA PLAN DEĞİL — ve bu ÖLÇÜLMÜŞ bir
+            * hata düzeltmesi. Eskiden `backgroundSize:'100% 100%'` ile 48 px'lik
+            * doku `100/p` genişliğe geriliyordu. Doku 48×16 ve HER İKİ YANINDA
+            * 4 px ŞEFFAF pay var (%8) — o pay da gerildiği için çubuğun SOLUNDA
+            * kocaman bir boşluk açılıyordu: 1892 px'lik olukta %70 doluluğta
+            * 216 px. Kullanıcı bunu ekran görüntüsüyle yakaladı.
+            * `sliceH` uçları `4·s` pikselde SABİT tutuyor, yalnız orta tekrar
+            * ediyor — yani boşluk 216 px'ten 8 px'e iniyor ve yuvarlak uç
+            * amaçlandığı gibi görünüyor.
+            * ⚠️ Dilim 16 DEĞİL 4: şeffaf payın ölçülen genişliği o. 16 verilseydi
+            * uç 32 px olurdu, yani sorunun küçük bir kopyası kalırdı.
+            */}
           <div style={{
             height: '100%', width: `${100 / Math.max(p, 0.0001)}%`,
-            backgroundImage: `url("${KIT}/Sliders---Bars/Slider${variant}_Bar${BAR_DOLGU[tone]}.png")`,
-            backgroundSize: '100% 100%',
-            ...pixel,
+            ...sliceH(`${KIT}/Sliders---Bars/Slider${variant}_Bar${BAR_DOLGU[t]}.png`, 4, s),
           }} />
         </div>
       </div>
+      {/* ⚠️ YÜZDE OLUĞUN ÜSTÜNDE, DOLGUNUN İÇİNDE DEĞİL — dolgu kısayken
+          yazı dışarı taşardı. Kontrast için ince bir gölge; çubuk hem koyu
+          hem açık dolgunun üstünden geçiyor. */}
+      {label && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
+          fontFamily: FONT.ui, fontSize: Math.max(9, Math.round(h * 0.44)),
+          fontWeight: 900, letterSpacing: 0.6, color: C.bone,
+          textShadow: '0 1px 0 rgba(0,0,0,0.85), 0 0 6px rgba(0,0,0,0.7)',
+          pointerEvents: 'none',
+        }}>{Math.round(p * 100)}%</div>
+      )}
     </div>
   );
 }
