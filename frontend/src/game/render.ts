@@ -172,8 +172,13 @@ export function render(
   pumpEffects(g, dt);
   pumpPetFx(g, dt);
 
-  drawStageGround(ctx, g.stage.def.id, focus.px, focus.py, w, h);
-  drawStageDecor(ctx, g.stage.def.id, focus.px, focus.py, w, h);
+  // ⚠️ DERİNLİK GEÇİLİYOR. `descentStage` yeni tanımı üretirken `id: base.id`
+  // yazdığı için sanat SADECE bölüme bağlıydı ve Descent'te derinlik 1 ile 60
+  // birebir aynı görünüyordu. Sanat seçimi artık derinliği de biliyor
+  // (`stageGround.sanat` → `descentArt`); kampanyada `depth` 1 kalıyor ve
+  // hiçbir şey değişmiyor.
+  drawStageGround(ctx, g.stage.def.id, focus.px, focus.py, w, h, g.stage.depth);
+  drawStageDecor(ctx, g.stage.def.id, focus.px, focus.py, w, h, g.stage.depth);
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
   drawChests(ctx, g);
@@ -208,7 +213,7 @@ export function render(
 
   // ⚠️ ATMOSFER EN SONDA, ekran uzayında. Kameradan önce çizilseydi dünyayla
   // birlikte kayardı; oyuncunun taşıdığı ışık halesi ekranda SABİT durmalı.
-  drawAtmosphere(ctx, g.stage.def.id, w, h, artTime);
+  drawAtmosphere(ctx, g.stage.def.id, w, h, artTime, g.stage.depth);
   // Hasar vinyeti atmosferin ÜSTÜNDE — yoksa bölümün kendi karartması
   // kırmızıyı yutar ve "vuruldum" sinyali kaybolur.
   drawFxScreen(ctx, w, h);

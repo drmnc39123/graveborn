@@ -13,7 +13,7 @@
 // kadar bozuk kalırdı — o yüzden eksikse chunk ÖNBELLEĞE ALINMAZ, sonraki
 // karede yeniden denenir.
 
-import { artOf, tileHash, variantOf, type StageArt } from './stageArt';
+import { artOf, descentArt, descentBant, DESCENT_BANT, tileHash, variantOf, type StageArt } from './stageArt';
 
 const TILE = 32;
 const CHUNK_TILES = 8;
@@ -23,12 +23,31 @@ const MAX_CHUNKS = 120;
 
 const images = new Map<string, HTMLImageElement>();
 const chunks = new Map<string, HTMLCanvasElement>();
-let builtFor = -1;
+/**
+ * Önbelleğin kime ait olduğu. ⚠️ ARTIK SADECE bölüm id'si DEĞİL: Descent'te
+ * sanat DERİNLİK BANDINA göre değişiyor (`descentArt`), yani anahtar
+ * `"stageId:bant"` olmak zorunda. Yalnız id tutulsaydı bant değişince
+ * önbellek eski zeminle dolu kalır ve inişin görsel karşılığı hiç
+ * görünmezdi — tam da düzeltilmeye çalışılan şey.
+ */
+let builtFor = '';
+
+/**
+ * Bu kare hangi sanatla çizilecek.
+ * ⚠️ `depth = 1` VARSAYILANI ŞART: köy, arena ve kampanya bölümleri derinlik
+ * kavramı taşımıyor ve `descentBant(1) === 0` → `descentArt` tabanı aynen
+ * döndürüyor. Yani bu değişiklik Descent DIŞINDA hiçbir şeyi değiştirmiyor.
+ */
+const sanat = (stageId: number, depth: number): StageArt =>
+  depth > DESCENT_ESIK ? descentArt(stageId, depth) : artOf(stageId);
+
+/** Bu derinliğin altında taban sanatı kullanılır (bant 0) */
+const DESCENT_ESIK = DESCENT_BANT;
 
 /** Yeni koşu / yeni derinlik: bölüm değiştiyse önbellek geçersiz */
 export function resetStageGround() {
   chunks.clear();
-  builtFor = -1;
+  builtFor = '';
 }
 
 function img(src: string): HTMLImageElement | null {
@@ -140,9 +159,13 @@ function chunkCanvas(art: StageArt, stageId: number, cx: number, cy: number): HT
 export function drawStageGround(
   ctx: CanvasRenderingContext2D, stageId: number,
   px: number, py: number, w: number, h: number,
+  depth = 1,
 ) {
-  const art = artOf(stageId);
-  if (builtFor !== stageId) { chunks.clear(); builtFor = stageId; }
+  const art = sanat(stageId, depth);
+  // ⚠️ Anahtara BANT giriyor, derinlik DEĞİL. Derinlik girseydi 60 derinlikli
+  // bir koşuda önbellek 60 kez komple yeniden çizilirdi; bantla 6 kez.
+  const key = `${stageId}:${descentBant(depth)}`;
+  if (builtFor !== key) { chunks.clear(); builtFor = key; }
 
   // Karo yüklenene kadar altta duracak taban rengi — bir kare bile beyaz/boş
   // görünmesin (yükleme sırasında ekran atlıyordu).
@@ -171,8 +194,11 @@ export function drawStageGround(
 export function drawStageDecor(
   ctx: CanvasRenderingContext2D, stageId: number,
   px: number, py: number, w: number, h: number,
+  depth = 1,
 ) {
-  const art = artOf(stageId);
+  // ⚠️ Dekor chunk'a GİRMİYOR, her karede çiziliyor — bant değişimini
+  // bedelsiz takip ediyor, ek önbellek yönetimi gerekmiyor.
+  const art = sanat(stageId, depth);
   if (!art.decor.length) return;
 
   // Kenardan bir tur fazla tara: yarısı ekran dışında kalan enkaz aniden
@@ -232,9 +258,9 @@ export function drawStageDecor(
  */
 export function drawAtmosphere(
   ctx: CanvasRenderingContext2D, stageId: number,
-  w: number, h: number, time: number,
+  w: number, h: number, time: number, depth = 1,
 ) {
-  const art = artOf(stageId);
+  const art = sanat(stageId, depth);
   const [r, g, b, a] = art.tint;
   const cx = w / 2;
   const cy = h / 2;

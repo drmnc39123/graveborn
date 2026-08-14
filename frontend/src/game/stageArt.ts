@@ -25,6 +25,10 @@
 //   serbestçe karışabilirler — "dama tahtası" sorunu renk farkından değil
 //   ŞEFFAFLIKTAN geliyordu.
 
+// ⚠️ TEK BAĞIMLILIK: `DESCENT.bossEvery` kopyalanmıyor, kaynağından okunuyor.
+// Döngü yok — `config.ts` bu dosyayı import etmiyor (ölçüldü).
+import { DESCENT } from './config';
+
 const G = '/art/stage/ground';
 const D = '/art/stage/dungeon';
 const T = '/art/stage/trees';
@@ -418,4 +422,131 @@ export const STAGE_ART: Record<number, StageArt> = {
 /** Bilinmeyen bölüm için 1. yol — eksik veri sahneyi boş bırakmasın */
 export function artOf(stageId: number): StageArt {
   return STAGE_ART[stageId] ?? STAGE_ART[1];
+}
+
+// ── THE DESCENT: İNMEK GÖRÜNSÜN ──────────────────────────────────────
+//
+// 🔴 ÖLÇÜLEN BOŞLUK: derinlik 1 ile derinlik 60 BİREBİR AYNI görünüyordu.
+// `config.ts` `descentStage` yeni tanımı üretirken `id: base.id` yazıyor,
+// `render.ts` de `g.stage.def.id` ile sanat seçiyor — yani zemin, renk, sis
+// ve dekor derinlikten TAMAMEN bağımsızdı. Oyuncu vaktinin tamamını bu modda
+// geçiriyor ve indiğini gösteren tek şey HUD'daki yazıydı.
+//
+// ⚠️ BANT, SÜREKLİ DEĞİL — ve bu bir performans kararı, estetik değil.
+// `drawStageGround` 256 px'lik chunk önbelleği tutuyor. Sanat her derinlikte
+// değişseydi önbellek 60 derinliklik bir koşuda 60 kez komple yeniden
+// çizilirdi; bantla 6 kez yenileniyor.
+//
+// ⚠️ BANT 0 TABAN SANATI — DOKUNULMUYOR. Her bölümün kendi kimliği var
+// (25 kayıtlık STAGE_ART) ve ilk 10 derinlik o kimliği taşımalı; oyuncu
+// "hangi yoldayım" bilgisini kaybetmemeli. Değişim ondan SONRA başlıyor.
+export const DESCENT_BANT = 10;
+
+/** Derinlik → bant (0 tabanlı). d1-10 → 0, d11-20 → 1, … */
+export function descentBant(depth: number): number {
+  return Math.max(0, Math.floor((Math.max(1, Math.floor(depth)) - 1) / DESCENT_BANT));
+}
+
+/**
+ * Bandın atmosfer rengi.
+ *
+ * ⚠️ ARA DEĞER HESAPLANMIYOR, LİSTEDEN SEÇİLİYOR. İki rengi karıştırmak
+ * (ör. kahverengiden kırmızıya lineer geçiş) ara tonlarda MOR üretebilir ve
+ * bu paletin tek mutlak yasağı o. Her bant elle seçildi: toprak → taş →
+ * kemik → kan. Hepsi sıcak/nötr, hiçbiri 265-345° aralığında değil.
+ */
+const BANT_TINT: readonly (readonly [number, number, number, number])[] = [
+  [22, 20, 15, 0.56],   // 1 — daha derin toprak
+  [24, 22, 20, 0.62],   // 2 — taş, rengi çekilmiş
+  [28, 20, 19, 0.68],   // 3 — kemik tozu, kızıla dönen
+  [34, 16, 17, 0.74],   // 4+ — kan karanlığı
+] as const;
+
+/** Katakomp zemini — bant 2'den itibaren tabanın karolarının yerini alır */
+const KATAKOMP_ZEMIN = [1, 2, 3, 4, 5, 6].map((n) => `${D}/spr_catacomb_floor_${n}.png`);
+
+/**
+ * Mum/meşale kökü — Szadi "RF_Catacombs" seti, ATTRIBUTION'da PUBLIC DOMAIN.
+ * ⚠️ 19 dosyalık bu klasör bugüne kadar %0 kullanımdaydı ve tam da katakomp
+ * temasına ait. Boss katının işareti buradan geliyor.
+ */
+const TL = '/art/tiles';
+
+/**
+ * BOSS KATININ IŞIKLARI.
+ *
+ * ⚠️ Boss katları checkpoint veriyor (`DESCENT.bossEvery`) — yani oyuncunun
+ * "buraya kadar geldim" dediği yer. Görsel bir işareti YOKTU; oyuncu ancak
+ * boss doğunca anlıyordu. Mum ve meşale o katı ışıkla ayırıyor.
+ *
+ * ⚠️ ÖLÇÜLDÜ: kaynak dosyalar 7×14 ile 16×16 arası — 32 px'lik hücre
+ * dünyasında ham boyutta neredeyse görünmezler, 2× çiziliyorlar.
+ * ⚠️ Bunlar TEK KARE dosyalar (candleA_01..04 ayrı ayrı), şerit değil.
+ * Animasyon için yeni bir çizim yolu yazmak gerekirdi; `variantOf` gibi bir
+ * aile seçici de yok. Statik duruyorlar — "yanıp sönen mum" ayrı bir iş.
+ */
+const mum = (chance: number): DecorDef =>
+  ({ src: `${TL}/candleB_01.png`, w: 26, h: 32, chance, alpha: 0.95, shadow: 0.22 });
+const mesale = (chance: number): DecorDef =>
+  ({ src: `${TL}/torch_1.png`, w: 32, h: 32, chance, alpha: 1, shadow: 0.26 });
+
+// Derin bantların enkazı — hepsi diskte duruyordu ve HİÇ kullanılmıyordu
+const tabut = (chance: number): DecorDef =>
+  ({ src: `${D}/spr_coffin_1.png`, w: 32, h: 32, chance, alpha: 0.9, shadow: 0.28 });
+const katakombDuvar = (chance: number): DecorDef =>
+  ({ src: `${D}/spr_catacomb_wall_1.png`, w: 32, h: 64, chance, alpha: 0.92, shadow: 0.3 });
+const kemikSutun = (chance: number): DecorDef =>
+  ({ src: `${D}/spr_bone_pillow.png`, w: 16, h: 64, chance, alpha: 0.85, shadow: 0.24 });
+const enkaz = (chance: number): DecorDef =>
+  ({ src: `${D}/spr_smashed_objs.png`, w: 32, h: 32, chance, alpha: 0.8 });
+
+/**
+ * Derinliğe göre türetilmiş sanat. SAF: aynı (stageId, depth) her zaman aynı
+ * sonucu verir, hiçbir yere yazmaz, motora dokunmaz.
+ */
+export function descentArt(stageId: number, depth: number): StageArt {
+  const taban = artOf(stageId);
+  const bant = descentBant(depth);
+  if (bant === 0) return taban;
+
+  const i = Math.min(bant, BANT_TINT.length) - 1;
+  const tint = BANT_TINT[i];
+
+  // ⚠️ TABANLAR VAR — ve ikisi de gerçek bir hatanın karşılığı.
+  // `bright` sınırsız düşseydi derin bantta oyuncu düşmanı GÖREMEZDİ;
+  // bu dosyanın kendi başlığı ters yönde aynı dersi yazıyor ("sahne gotik
+  // korku değil çocuk RPG'si gibi görünüyordu"). Karartma sahneyi
+  // çerçevelemeli, yutmamalı.
+  const bright = Math.max(0.34, taban.grade.bright - 0.07 * bant);
+  const sat = Math.max(0.14, taban.grade.sat - 0.06 * bant);
+
+  // ⚠️ BOSS KATI = CHECKPOINT KATI. Oyuncunun "buraya kadar geldim" dediği
+  // yerin görsel işareti yoktu; boss doğana kadar sıradan bir kattan farkı
+  // yoktu. Mum/meşale o katı ışıkla ayırıyor.
+  const bossKati = Math.floor(depth) % DESCENT.bossEvery === 0;
+
+  return {
+    // Bant 2'den itibaren zemin katakomba döner — "toprağın altına indim"
+    ground: bant >= 2 ? KATAKOMP_ZEMIN : taban.ground,
+    weights: bant >= 2 ? [5, 5, 4, 4, 3, 3] : taban.weights,
+    // Şeffaf üst katman tabandan kalıyor: çatlak/çakıl her zeminde çalışıyor
+    overlay: taban.overlay,
+    grade: { sat, bright, tintA: Math.min(0.62, taban.grade.tintA + 0.04 * bant) },
+    tint: [tint[0], tint[1], tint[2], tint[3]],
+    // ⚠️ Sis TAVANLI: 0.55 üstünde iki kütle üst üste binip ekranı
+    // sütliman yapıyor ve düşman siluetleri kayboluyor.
+    fog: Math.min(0.55, taban.fog + 0.06 * bant),
+    decor: [
+      // Işıklar EN BAŞTA: `drawStageDecor` ilk eşleşende duruyor, yani
+      // listenin başındakiler önceliklidir. Boss katının işareti diğer
+      // enkazın altında kaybolmamalı.
+      ...(bossKati ? [mesale(0.008), mum(0.010)] : []),
+      ...(bant >= 3 ? [katakombDuvar(0.006), kemikSutun(0.004)] : []),
+      ...(bant >= 2 ? [tabut(0.007), enkaz(0.005)] : []),
+      bones(0.010 + 0.004 * bant),
+      // Taban dekorunun ilki (ağaç/kaya) derinleştikçe seyreliyor: yeryüzüne
+      // ait şeyler aşağıda azalsın, ama bir anda YOK olmasın.
+      ...taban.decor.slice(0, 1).map((d) => ({ ...d, chance: d.chance * Math.max(0, 1 - 0.3 * bant) })),
+    ],
+  };
 }
