@@ -82,16 +82,17 @@ export function CryptSection({ progress, onChange, onError }: {
     <>
       {/* ⚠️ BU PARAGRAF KALDIRILAMAZ — bkz. dosya başlığı */}
       <p style={{ margin: '0 0 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
-        {/* ⚠️ "EVERY purchase" YAZIYORDU ve YANLIŞTI. Kasayı besleyen türler
-            `crypt.ts` SINK_KINDS'ta sayılı: Forge, tılsım, Reliquary, anıt,
-            bahis, lonca, beceri. DIŞARIDA kalanlar var ve ikisinin gerekçesi
-            YOKTU — `pet` (bağlama 800–8.000 G, ikinci yuva 40.000 G) ve
-            `reforge`. Panel bunları da içeriyormuş gibi anlatıyordu.
-            Metin artık kapsamı söylüyor; hangi türün kasaya gireceği
-            ekonomi kararı ve `crypt.ts`te açık not olarak duruyor. */}
-        A deed does <strong style={{ color: C.bone }}>not print gold</strong>. Gold spent at
-        the Forge, the Stall, the Reliquary, your monument, the wager, your guild and your
-        paths drops {Math.round(CRYPT_CUT * 100)}% into the crypt vault,
+        {/* ⚠️ CÜMLE TEK KURALA İNDİ ve artık DOĞRU.
+            Önce "EVERY purchase" yazıyordu ve yanlıştı: `pet` ve `reforge`
+            kasayı beslemiyordu. Sonra kapsamı tek tek saydım — doğruydu ama
+            okunmuyordu. Kullanıcı kararıyla o ikisi de sink oldu
+            (`crypt.ts` SINK_KINDS), böylece kural tek cümlede söylenebiliyor.
+            ⚠️ İSTİSNALARI DA YAZ: iptal edilen ilan geri döndüğü için
+            beslemez, deed'in kendisi ise beslerse oyuncu kendi alımından
+            pay alırdı. İkisi de `crypt.ts`te gerekçesiyle duruyor. */}
+        A deed does <strong style={{ color: C.bone }}>not print gold</strong>. Gold you
+        spend and never get back drops {Math.round(CRYPT_CUT * 100)}% into the crypt vault
+        — everything except a listing you cancel and the deed itself —
         and deed holders share what is in it. Nothing comes out that did not go in.
       </p>
 

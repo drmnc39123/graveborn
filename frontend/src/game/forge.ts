@@ -94,37 +94,36 @@ export const FORGE: readonly ForgeUpgrade[] = [
   { id: 'cooldown', name: 'Quick Hands', desc: '-2% cooldown', stat: 'cooldown', perLevel: 0.02, maxLevel: 12, baseCost: 310, growth: 1.41, inverse: true },
   { id: 'growth', name: 'Soul Harvest', desc: '+5% experience', stat: 'growth', perLevel: 0.05, maxLevel: 10, baseCost: 360, growth: 1.51 },
 
-  // ── risk/ödül: düşman güçlenir ama sürü de kalabalıklaşır ──
   /**
-   * ⚠️ LANET HİÇBİR ÖDÜLÜ ÇARPMIYOR — ÖLÇÜLDÜ, tahmin değil.
+   * 🔴 `Cursed Blood` KALDIRILDI (kullanıcı kararı, 2026-08-14). GERİ EKLEME.
    *
-   * Motor `stats.curse`u yalnız üç yerde kullanıyor: düşman canı, hızı ve
-   * doğuş sıklığı (`engine.ts` 1028-1034, 1094). Hiçbir gold/deneyim
-   * formülünde geçmiyor. Buna rağmen ÜÇ ayrı yerde oyuncuya "richer"
-   * (zenginleşirsin) deniyordu — burada, `config.ts` Cursed Skull tılsımında
-   * ve `skills.ts` "Invite Them In" düğümünde. Dördü de düzeltildi.
+   * NİYE: Forge'un vaadi bu panelin kendi başlığında yazıyor —
+   * "Bought once, kept forever. Every run after this starts stronger."
+   * Lanet yükseltmesi bunun TERSİNİ yapıyordu: kalıcı, geri alınamaz ve
+   * ölçümle gösterildiği üzere oyuncuyu ZAYIFLATIYOR. Diğer 14 yükseltmenin
+   * hepsi koşulsuz iyi; bu tek istisna bir tuzaktı.
    *
-   * Kontrollü deney (12 seed × 5 kademe, aynı seed, TEK fark lanet):
+   * ÖLÇÜM (12 seed × 5 kademe, kontrollü deney — aynı seed, tek fark lanet):
    *     lv0  derinlik 11,8 · gold/koşu 537 · gold/dk 32,5
-   *     lv2  derinlik 11,1 · gold/koşu 490 · gold/dk 33,2
    *     lv4  derinlik  9,3 · gold/koşu 366 · gold/dk 36,0
-   *     lv6  derinlik  7,8 · gold/koşu 312 · gold/dk 35,2
    *     lv8  derinlik  6,6 · gold/koşu 249 · gold/dk 37,8
+   * Lanet derinliği %44, koşu başına gold'u %54 düşürüyor; dakika başına
+   * gold yalnız %16 artıyor. Derinlik ilerlemeyi kapıyor (checkpoint,
+   * yetenek puanı), yani takas çoğu oyuncu için kötü.
+   * ⚠️ Ölçüm `fleeInput` yapay zekâsıyla; insandan kötü oynuyor ve lanet
+   * kötü oyunu daha çok cezalandırıyor. YÖN güvenilir, BÜYÜKLÜK üst sınır.
    *
-   * Yani lanet DERİNLİĞİ %44, koşu başına gold'u %54 düşürüyor; karşılığında
-   * dakika başına gold yalnız %16 artıyor. Derinlik ilerlemeyi kapıyor
-   * (checkpoint, yetenek puanı) — bu takas çoğu oyuncu için KÖTÜ.
+   * ⚠️ LANET OYUNDAN ÇIKMADI — yalnız GERİ DÖNÜŞÜ OLMAYAN yerden çıktı:
+   *   · `skills.ts` "Invite Them In" — laneti +%10 deneyimle BİRLİKTE satıyor
+   *     ve yetenek ağacı respec edilebiliyor
+   *   · `gear.ts` sigil yuvası — takıp çıkarılabilir
+   *   · `config.ts` Cursed Skull tılsımı — tek koşuluk, kalıcı değil
+   * Risk kolu geri alınabilir yerlerde durur. Forge geri alınamaz.
    *
-   * ⚠️ Ölçüm `fleeInput` yapay zekâsıyla yapıldı; insandan kötü oynuyor ve
-   * lanet kötü oyunu daha çok cezalandırıyor. YÖN güvenilir, BÜYÜKLÜK üst
-   * sınır. Yeniden ölçmeden "abartılmış" diye indirme.
-   *
-   * ⚠️ AÇIK KARAR (kullanıcıya bırakıldı): bu yükseltme ya gerçek bir ödül
-   * çarpanı kazanmalı (motor değişikliği → SIM_SEAL kırılır, ekonomi
-   * etkilenir) ya da Forge'dan kalkmalı. Metin şimdilik DÜRÜST: ne verdiğini
-   * değil, ne aldığını yazıyor.
+   * ⚠️ Motorun `stats.curse` kanalı DURUYOR ve dokunulmadı — yukarıdaki üç
+   * kaynak onu besliyor. Bu bir arayüz/ekonomi kararı, motor değişikliği
+   * DEĞİL: SIM_SEAL bozulmadı.
    */
-  { id: 'curse', name: 'Cursed Blood', desc: '+8% curse — enemies hit harder, move faster, arrive sooner', stat: 'curse', perLevel: 0.08, maxLevel: 8, baseCost: 215, growth: 1.71 },
 
   // ── nadir, oyunu değiştiren alımlar ──
   // ⚠️ Bu ikisinde growth DEĞİL baseCost yükseltildi: sadece 3 seviyeleri var,

@@ -25,6 +25,15 @@ import type { LedgerKind } from './ledger.js';
  */
 export const SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
   'forge', 'charm', 'reliquary', 'ossuary', 'wager', 'guild', 'skill',
+  // ⭐ EKLENDİ (kullanıcı kararı, 2026-08-14). İkisi de YOK EDİLEN gold ve
+  // dışarıda kalmalarının yazılı bir gerekçesi YOKTU:
+  //   · `reforge` — dosyanın kendi tanımıyla "SONSUZ SINK ve hiçbir şey
+  //     ÜRETMİYOR": kasayı beslemek için en ideal aday.
+  //   · `pet` — güç satıyor, ama `forge` da güç satıyor ve KASAYI BESLİYOR.
+  //     Dışarıda bırakmak tutarsızdı.
+  // Kural artık tek cümle: yok edilen her gold'un %10'u kasaya gider —
+  // geri alınabilenler (iptal edilen ilan) ve deed'in kendisi hariç.
+  'reforge', 'pet',
 ]);
 
 /**
@@ -46,12 +55,6 @@ export const NON_SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
   'market_list',
   // ⚠️ Deed alımı: kasaya katkı yapsaydı oyuncu kendi alımından pay alırdı.
   'crypt_deed',
-  // 🔴 AÇIK KARAR (panel denetimi 2026-08-14): aşağıdaki ikisi kasayı
-  // beslemiyor ve bunun yazılı bir gerekçesi YOKTU. Deed paneli "köyde
-  // yapılan HER alışverişin %10'u kasaya düşer" diyordu — bu ikisi yüzünden
-  // yanlıştı; panel metni düzeltildi. Kasaya EKLENMELİ Mİ, kullanıcının
-  // ekonomi kararı: eklemek kasa girişini artırır ve deed payını değiştirir.
-  'pet', 'reforge',
 ]);
 
 export function isCryptSink(kind: string, gold: number): boolean {

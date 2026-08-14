@@ -51,6 +51,12 @@ console.log('\n[1] Hangi harcama kasaya katkı yapar');
   check('hiçbir tür iki listede birden değil', cakisan.length === 0,
     cakisan.join(', ') || 'temiz');
 
+  // ⭐ KULLANICI KARARI 2026-08-14 — bu ikisi kasayı BESLER. Karar
+  // geri alınacaksa bilinçli olsun diye mühürlendi: sessizce düşerlerse
+  // deed paneli yine yanlış söyler.
+  check('reforge kasayı besler (sonsuz sink)', isCryptSink('reforge', -100));
+  check('pet kasayı besler (forge gibi güç satıyor)', isCryptSink('pet', -100));
+
   check('forge harcaması sink', isCryptSink('forge', -100));
   check('ossuary harcaması sink', isCryptSink('ossuary', -100));
   // ⚠️ ESCROW SİNK DEĞİL: ilan açıp iptal ederek kasayı kendi gold'unla
