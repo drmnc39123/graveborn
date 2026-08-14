@@ -16,17 +16,35 @@ function dailySeed() {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 import { seedFromString } from '@/game/rng';
+import { descentBant } from '@/game/stageArt';
+
 import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import type { RunPet } from '@/game/pets';
 import { C, FONT, glass } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon, preloadKit } from '@/components/ui/kit';
-import { Reveal } from '@/components/ui/motion';
+import { Reveal, motionOff } from '@/components/ui/motion';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
 import { isTestMode } from '@/lib/testMode';
+
+/**
+ * Bant eşiğinde gösterilen tek satır.
+ *
+ * ⚠️ SÜS DEĞİL: her satır o bantta EKRANDA GERÇEKTEN OLAN değişimi tarif
+ * ediyor (bkz. `stageArt.descentArt` — ışık düşer, zemin katakomba döner,
+ * enkaz kemiğe/tabuta kayar). Uydurma bir "kehanet" yazmak, oyuncuya
+ * olmayan bir mekanik vaat etmek olurdu.
+ */
+const BANT_METNI = [
+  '',                              // bant 0 — taban, eşik yok
+  'The light thins',
+  'Soil gives way to stone',
+  'The dead are stacked here',
+  'Nothing living has been this deep',
+] as const;
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
@@ -162,11 +180,23 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
 
   // Derinlik değişince banner'ı tetikle (oyun zamanı damgası — duraklamada kaymaz)
   const [depthFlash, setDepthFlash] = useState(0);
+  /**
+   * Bu geçişte BANT da değişti mi.
+   *
+   * ⚠️ Bantlar sanatın değiştiği yer (`stageArt.descentArt`): zemin, renk, sis
+   * ve enkaz orada başkalaşıyor. Her derinlikte aynı kartı göstermek o anı
+   * sıradanlaştırıyordu — 10 derinlikte bir gelen gerçek eşik ayrı okunmalı.
+   */
+  const [bantDegisti, setBantDegisti] = useState(false);
   const lastDepth = useRef(0);
+  const lastBant = useRef(0);
   useEffect(() => {
     if (!hud || hud.mode !== 'descent') return;
     if (hud.depth !== lastDepth.current) {
       lastDepth.current = hud.depth;
+      const b = descentBant(hud.depth);
+      setBantDegisti(b !== lastBant.current);
+      lastBant.current = b;
       if (hud.depth > 1) setDepthFlash(hud.time);
     }
   }, [hud]);
@@ -727,14 +757,54 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
         </div>
       )}
 
-      {/* Derinlik geçişi — merdivende inildiğini oyuncu görmeli */}
+      {/* ── DERİNLİK GEÇİŞİ ──
+          Eskiden 2,2 sn boyunca ortada duran bir YAZIDAN ibaretti; canvas'ta
+          hiçbir karşılığı yoktu. Merdivenden inmek bir AN olmalı.
+          ⚠️ Süpürme CSS'te, canvas'ta DEĞİL: her karede tam ekran bir dolgu
+          çizmek 400 düşmanlık bir sahnede boşuna maliyet, üstelik geçiş
+          simülasyonu hiç ilgilendirmiyor.
+          ⚠️ Hareket kapalıyken (prefers-reduced-motion / lowGraphics) süpürme
+          düşer ama YAZI KALIR — bilgi kaybolmaz, yalnız hareket kalkar. */}
       {hud?.mode === 'descent' && depthFlash > 0 && hud.time - depthFlash < 2.2 && (
-        <div style={{ position: 'absolute', top: '26%', left: 0, right: 0, textAlign: 'center', pointerEvents: 'none' }}>
-          <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 3, color: C.boneFaint, marginBottom: 2 }}>DESCENDING</div>
-          <div style={{ fontSize: 40, fontWeight: 900, color: C.bone, textShadow: `0 0 26px ${C.blood}, 0 2px 0 ${C.void}` }}>
-            DEPTH {hud.depth}
+        <>
+          {!motionOff() && (
+            <>
+              <style>{`
+@keyframes gb-inis { 0% { opacity: 0; } 18% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes gb-inis-yazi { 0% { opacity: 0; transform: translateY(-10px); } 22% { opacity: 1; transform: translateY(0); } 100% { opacity: 1; } }
+`}</style>
+              <div style={{
+                position: 'absolute', inset: 0, pointerEvents: 'none',
+                // Yukarıdan aşağı inen koyu bir perde — "aşağı geçtim" hissi
+                background: `linear-gradient(180deg, ${C.void} 0%, rgba(10,8,6,0.55) 42%, transparent 78%)`,
+                animation: `gb-inis ${bantDegisti ? 900 : 520}ms ease-out both`,
+              }} />
+            </>
+          )}
+          <div style={{
+            position: 'absolute', top: '26%', left: 0, right: 0, textAlign: 'center',
+            pointerEvents: 'none',
+            animation: motionOff() ? undefined : 'gb-inis-yazi 520ms ease-out both',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 3, color: C.boneFaint, marginBottom: 2 }}>
+              DESCENDING
+            </div>
+            <div style={{ fontSize: 40, fontWeight: 900, color: C.bone, textShadow: `0 0 26px ${C.blood}, 0 2px 0 ${C.void}` }}>
+              DEPTH {hud.depth}
+            </div>
+            {/* ⚠️ Bant eşiği: 10 derinlikte bir, sanatın gerçekten değiştiği
+                yer. Metinler SÜS DEĞİL — oyuncunun birazdan göreceği şeyi
+                tarif ediyorlar (ışık çekilir, zemin taşa döner, kemik başlar). */}
+            {bantDegisti && (
+              <div style={{
+                marginTop: 6, fontSize: 12.5, fontWeight: 900, letterSpacing: 1.6,
+                color: C.candle, fontFamily: FONT.ui,
+              }}>
+                {BANT_METNI[Math.min(descentBant(hud.depth), BANT_METNI.length - 1)]}
+              </div>
+            )}
           </div>
-        </div>
+        </>
       )}
 
       {/* ── TUTORIAL İPUCU ──

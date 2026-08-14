@@ -228,10 +228,16 @@ export function HubCanvas({
 
       {status !== 'ready' && (
         <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: C.boneDim, fontSize: 14 }}>
+          {/* ⚠️ OYUNCU METNİ İNGİLİZCE ve DOSYA YOLU YOK. Eskiden burada Türkçe
+              bir hata ve "public/map/village.json bulunamadı" yazıyordu: oyuncuya
+              hem yabancı bir dil hem de bir kaynak yolu gösteriyordu. Yol bilgisi
+              geliştiricinin işi — `loadMapWorld` zaten konsola kendi hatasını basıyor.
+              ⚠️ Bu yorum ternary'nin `(` sonrasına KONULAMAZ: orada ifade sayılır
+              ve derleme kırılır (bu oturumda üçüncü kez aynı tuzak). */}
           {status === 'loading' ? 'Loading the village…' : (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ color: C.blood, fontWeight: 800, marginBottom: 6 }}>Harita yüklenemedi</div>
-              <div style={{ fontSize: 12 }}>public/map/village.json bulunamadı</div>
+              <div style={{ color: C.blood, fontWeight: 800, marginBottom: 6 }}>The village will not load</div>
+              <div style={{ fontSize: 12 }}>Reload the page — if it keeps happening, the map data is missing.</div>
             </div>
           )}
         </div>

@@ -57,7 +57,7 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
         if (r.state === 'matched' && r.setup) setDurum({ k: 'match', setup: r.setup });
         else setDurum({ k: 'queue', waited: r.waited ?? 0 });
       } catch (e) {
-        setHata(e instanceof Error ? e.message : 'Kuyruk açılamadı.');
+        setHata(e instanceof Error ? e.message : 'Could not join the queue.');
         setDurum({ k: 'idle' });
       }
     };

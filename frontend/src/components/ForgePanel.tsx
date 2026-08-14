@@ -38,7 +38,7 @@ export function ForgePanel({
     // yerel kayda yazılır. Ayrımı gameSession yapar, panel bilmez.
     buyUpgrade(u.id, progress, cost)
       .then(onChange)
-      .catch(() => onError?.('Yükseltme alınamadı.'));
+      .catch(() => onError?.('The upgrade could not be bought.'));
   };
 
   return (

@@ -339,7 +339,7 @@ export default function PlayPage() {
       .catch(() => {
         // Cüzdan modunda sunucuya ulaşılamıyorsa YEREL kayda DÜŞMEYİZ:
         // iki kayıt birbirine karışır ve hangisinin doğru olduğu belirsizleşir.
-        setNote('Sunucuya ulaşılamadı — ilerlemen yüklenemedi.');
+        setNote('Could not reach the server — your progress did not load.');
       });
   }, [router]);
 
@@ -361,7 +361,7 @@ export default function PlayPage() {
     setProgress((prev) => {
       if (!prev) return prev;
       const p = saveHero(hero, prev).then(setProgress)
-        .catch(() => setNote('Karakter kaydedilemedi.'));
+        .catch(() => setNote('Your hero could not be saved.'));
       heroSaveRef.current = p;
       return { ...prev, hero };            // arayüz beklemesin, iyimser güncelle
     });
@@ -390,7 +390,7 @@ export default function PlayPage() {
           unlocked: newlyUnlocked(base, r.progress),
         });
       })
-      .catch(() => setNote('Koşu kaydedilemedi — ödül işlenmedi.'));
+      .catch(() => setNote('Run not saved — no reward was granted.'));
   }, [screen, progress]);
 
   /** Bölüm başlat: cüzdan modunda seed'i, koşu kimliğini ve checkpoint'i SUNUCU verir */
@@ -398,7 +398,7 @@ export default function PlayPage() {
     setPanel(null);
     startRun(mode, stageId, wantStartDepth, wantAscension)
       .then((ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }))
-      .catch(() => setNote('Koşu başlatılamadı.'));
+      .catch(() => setNote('The run could not be started.'));
   }, []);
 
   /**
@@ -414,7 +414,7 @@ export default function PlayPage() {
     heroSaveRef.current
       .then(() => startDuel(recordId))
       .then((t) => setScreen({ kind: 'stage', stageId: t.duel.stageId, mode: 'duel', ticket: t }))
-      .catch((e) => setNote(e instanceof Error ? e.message : 'Meydan okuma açılamadı.'));
+      .catch((e) => setNote(e instanceof Error ? e.message : 'The challenge could not be opened.'));
   }, []);
 
   /**
@@ -426,7 +426,7 @@ export default function PlayPage() {
     setPanel(null);
     startBossRun()
       .then((t) => setScreen({ kind: 'boss', runId: t.runId, seed: t.seed }))
-      .catch(() => setNote('Barrow açılamadı — cüzdan gerekiyor.'));
+      .catch(() => setNote('The Barrow needs a connected wallet.'));
   }, []);
 
   /** Boss koşusu bitti: hasarı sunucuya bildir, tavana kırpılmışsa söyle */
@@ -440,7 +440,7 @@ export default function PlayPage() {
           ? `Barrow: ${r.accepted.toLocaleString('en-US')} damage counted (claim trimmed).`
           : `Barrow: ${r.accepted.toLocaleString('en-US')} damage dealt.`);
       })
-      .catch(() => setNote('Hasar kaydedilemedi.'));
+      .catch(() => setNote('Your damage was not recorded.'));
   }, [screen]);
 
   // GELİŞTİRME KANCASI — üretimde YOK.

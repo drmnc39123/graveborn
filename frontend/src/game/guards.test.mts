@@ -292,5 +292,70 @@ console.log('\n[6] Her sanat yolu DİSKTE var mı — sessiz 404 bekçisi');
 }
 
 
+console.log('\n[7] Oyuncu metni İNGİLİZCE — Türkçe sızıntısı yok');
+{
+  /**
+   * 🐛 ÖLÇÜLDÜ: oyun İngilizce ama HATA MESAJLARININ HEPSİ TÜRKÇEYDİ.
+   * Mutlu yol İngilizce yazılmış, `catch` blokları Türkçe kalmıştı — yani
+   * ağ hatası alan her oyuncu yabancı bir dil görüyordu. Köy haritası
+   * yüklenemediğinde ekranda ayrıca "public/map/village.json bulunamadı"
+   * yazıyordu: hem Türkçe hem de oyuncuya bir KAYNAK YOLU.
+   *
+   * ⚠️ KOD YORUMLARI TÜRKÇE KALIR — projenin kuralı bu. Aranan şey yalnız
+   * OYUNCUYA GİDEN metin.
+   * ⚠️ `admin/` ve `editor/` HARİÇ: onlar operatör araçları, oyun değil.
+   */
+  const TR = /[ışğüöçİŞĞÜÖÇ]/;
+  const dosyalar: string[] = [];
+  const tara = (d: string) => {
+    for (const ad of readdirSync(d)) {
+      const p = join(d, ad);
+      if (statSync(p).isDirectory()) { tara(p); continue; }
+      if (!/\.(ts|tsx)$/.test(ad) || ad.includes('.test.')) continue;
+      const n = p.replace(/\\/g, '/');
+      if (n.includes('/admin/') || n.includes('/editor/')) continue;
+      dosyalar.push(p);
+    }
+  };
+  tara(join(process.cwd(), 'src'));
+
+  /** Bir satırdaki dize literallerinde Türkçe harf var mı */
+  const trDize = (satir: string): string[] => {
+    const bulunan: string[] = [];
+    for (const m of satir.matchAll(/'([^'\n]*)'|"([^"\n]*)"/g)) {
+      const t = m[1] ?? m[2] ?? '';
+      if (TR.test(t)) bulunan.push(t);
+    }
+    return bulunan;
+  };
+
+  const sizinti: string[] = [];
+  for (const f of dosyalar) {
+    readFileSync(f, 'utf8').split('\n').forEach((satir, i) => {
+      const t = satir.trim();
+      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
+      // (a) oyuncuya mesaj üreten çağrılar
+      if (/(setNote|setHata|setErr|setError|onError)\s*[?.(]/.test(satir)) {
+        for (const m of trDize(satir)) sizinti.push(`${f.split(/[\\/]/).pop()}:${i + 1} → ${m.slice(0, 40)}`);
+      }
+      // (b) JSX metni: >…< arasında Türkçe
+      const jsx = satir.match(/>([^<>{}]{3,})</);
+      if (jsx && TR.test(jsx[1]) && !jsx[1].trim().startsWith('⚠')) {
+        sizinti.push(`${f.split(/[\\/]/).pop()}:${i + 1} → ${jsx[1].trim().slice(0, 40)}`);
+      }
+    });
+  }
+  check('oyuncuya giden metinlerde Türkçe YOK', sizinti.length === 0,
+    sizinti.length ? sizinti.join(' · ') : `${dosyalar.length} dosya tarandı`);
+
+  // ⚠️ ÇİFT TARAFLI: bekçinin gerçekten yakalayabildiğini KANITLA. Bu satır
+  // olmasaydı regex bir gün bozulsa bile test sessizce yeşil kalırdı — bu
+  // depoda "hiçbir şey ölçmeyen test" tuzağına bir kez düşüldü.
+  check('bekçi sahte bir sızıntıyı YAKALIYOR',
+    trDize(`.catch(() => setNote('Koşu başlatılamadı.'));`).length === 1);
+  check('bekçi İNGİLİZCE mesajı yakalaMIYOR (yanlış alarm yok)',
+    trDize(`.catch(() => setNote('The run could not be started.'));`).length === 0);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ BEKÇİLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
