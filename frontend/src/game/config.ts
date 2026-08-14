@@ -1533,7 +1533,14 @@ export const GEM = {
 export type StatKey =
   | 'might' | 'armor' | 'maxHp' | 'recovery' | 'cooldown' | 'area'
   | 'projSpeed' | 'duration' | 'amount' | 'moveSpeed' | 'magnet'
-  | 'luck' | 'growth' | 'greed' | 'curse' | 'revival'
+  // ⚠️ `luck` SİLİNDİ (panel denetimi, 2026-08-14). Motor onu HİÇBİR yerde
+  // okumuyordu (`stats.luck` araması: 0 sonuç) — yani tipte duran ama
+  // hiçbir şey yapmayan bir istatistikti. İki kez zarar verdi: "Dead Man's
+  // Luck" Forge yükseltmesi ve `Coin Mask` pasifi bu anahtara yazıyordu ve
+  // ikisi de satın alındığında HİÇBİR ETKİ yaratmıyordu. Yorum ve test
+  // ("ölü `luck` istatistiği satılmıyor") uyarıyordu ama anahtar tipte
+  // durdukça biri yine ona yazabilirdi. TİP artık kendisi söylüyor.
+  | 'growth' | 'greed' | 'curse' | 'revival'
   // ⚠️ KRİTİK VURUŞ — VS'te yok, bizim eklememiz. Zar HER vuruşta atılır
   // (bkz. engine.damageEnemy); bu SIM_VERSION 2'yi getirdi.
   | 'crit' | 'critMul';
@@ -1542,7 +1549,7 @@ export type StatKey =
 export const STAT_BASE: Record<StatKey, number> = {
   might: 1, armor: 0, maxHp: PLAYER.maxHp, recovery: 0, cooldown: 1, area: 1,
   projSpeed: 1, duration: 1, amount: 0, moveSpeed: 1, magnet: 1,
-  luck: 1, growth: 1, greed: 1, curse: 1, revival: 0,
+  growth: 1, greed: 1, curse: 1, revival: 0,
   /** %5 taban kritik şansı — her build'de arada bir sarı sayı görünsün */
   crit: 0.05,
   /** kritik hasar çarpanı */
@@ -1600,7 +1607,11 @@ export const PASSIVES: readonly PassiveDef[] = [
   // Gerçek bir şans sistemi (sandık/nadirlik) gelirse geri eklenir.
   { id: 'crown', name: 'Grave Crown', vs: 'Crown', stat: 'growth', perLevel: 0.08, maxLevel: 5, desc: '+8% experience' },
   { id: 'coinmask', name: 'Coin Mask', vs: 'Stone Mask', stat: 'greed', perLevel: 0.10, maxLevel: 5, desc: '+10% gold' },
-  { id: 'skull', name: 'Cursed Skull', vs: "Skull O'Maniac", stat: 'curse', perLevel: 0.10, maxLevel: 5, desc: '+10% curse — deadlier, richer' },
+  // ⚠️ "richer" KALDIRILDI — YANLIŞTI. Motor `stats.curse`u yalnız düşman
+  // canı/hızı/doğuş sıklığında kullanıyor; HİÇBİR ödül formülünde geçmiyor.
+  // Üç ayrı yerde (burada, `gear.ts`, `skills.ts`) oyuncuya zenginleşeceği
+  // söyleniyordu ve hiçbiri doğru değildi. Ölçüm için bkz. `forge.ts` curse.
+  { id: 'skull', name: 'Cursed Skull', vs: "Skull O'Maniac", stat: 'curse', perLevel: 0.10, maxLevel: 5, desc: '+10% curse — deadlier enemies, faster waves' },
   { id: 'burial', name: 'Second Burial', vs: 'Tirajisú', stat: 'revival', perLevel: 1, maxLevel: 2, desc: '+1 revival' },
   // ── kritik arketipi ──
   { id: 'edge', name: 'Whetted Bone', vs: '—', stat: 'crit', perLevel: 0.05, maxLevel: 5, desc: '+5% critical chance' },

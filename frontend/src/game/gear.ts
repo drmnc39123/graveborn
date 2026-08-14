@@ -180,9 +180,12 @@ const BOON_POOL: Record<GearSlot, readonly StatKey[]> = {
   shroud: ['maxHp', 'armor', 'recovery'],
   grasp: ['might', 'amount', 'projSpeed'],
   tread: ['moveSpeed', 'cooldown', 'duration'],
-  // ⚠️ Sigil kumar yuvası: `curse` düşmanları hem sertleştirir hem
-  // zenginleştirir, `revival` bir hayat satın alır. İkisi de "ne kadar
-  // riske girersin" sorusunu soruyor — yuvanın adı bu yüzden Sigil.
+  // ⚠️ Sigil kumar yuvası: `revival` bir hayat satın alır, `curse` ise
+  // koşuyu sertleştirir.
+  // ⚠️ ESKİ YORUM "curse hem sertleştirir HEM ZENGİNLEŞTİRİR" diyordu ve
+  // YANLIŞTI: motor laneti hiçbir ödül formülünde kullanmıyor. Yani bu
+  // yuvadaki `curse` şu an saf bir dezavantaj — kumar değil, sadece kayıp.
+  // Ölçüm ve karar notu için bkz. `forge.ts` curse yükseltmesi.
   sigil: ['curse', 'area', 'revival', 'might'],
 };
 

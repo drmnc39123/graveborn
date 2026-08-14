@@ -171,9 +171,12 @@ export const SKILL_TREE: readonly SkillNode[] = [
     stats: { crit: 0.08, critMul: 0.4 }, desc: '+8% crit chance, +40% crit damage' },
   { id: 'cov_curse', branch: 'covenant', name: 'Invite Them In', tier: 2, cost: 3,
     requires: 'cov_learn', excludes: 'cov_frenzy',
-    // ⚠️ `curse` düşmanları hem sertleştirir hem zenginleştirir — bu dalın
-    // tamamı "ne kadar riske girersin" sorusu üzerine kurulu.
-    stats: { curse: 0.25, growth: 0.10 }, desc: '+25% curse — deadlier, richer. +10% experience' },
+    // ⚠️ ÖDÜL `growth`TEN GELİYOR, laneten DEĞİL. Eski yorum "curse hem
+    // sertleştirir hem zenginleştirir" diyordu; motor laneti hiçbir ödül
+    // formülünde kullanmıyor (ölçüm: `forge.ts` curse). Bu düğümdeki gerçek
+    // karşılık +%10 deneyim; lanet onun BEDELİ. İkisini ayrı yazmak şart,
+    // yoksa oyuncu bedeli fayda sanır.
+    stats: { curse: 0.25, growth: 0.10 }, desc: '+10% experience — at the cost of +25% curse (deadlier, faster enemies)' },
   { id: 'cov_pact', branch: 'covenant', name: 'The Pact', tier: 4, cost: 6, capstone: true,
     requires: 'cov_edge',
     stats: { crit: 0.20, critMul: 0.6, armor: -3 },
