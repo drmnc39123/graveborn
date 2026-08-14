@@ -12,6 +12,7 @@
 // bağlandığında sunucu kaydı BAŞTAN başlar — demo bir vitrindir, kısa yol değil.
 
 import type { Progress } from '@/game/progress';
+import { isTestMode, TEST_WALLET } from '@/lib/testMode';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100';
 const K_TOKEN = 'graveborn:token';
@@ -31,6 +32,19 @@ export function getMode(): SessionMode | null {
 export function setMode(m: SessionMode) { ls()?.setItem(K_MODE, m); }
 export function getToken(): string | null { return ls()?.getItem(K_TOKEN) ?? null; }
 export function getWallet(): string | null { return ls()?.getItem(K_WALLET) ?? null; }
+
+/**
+ * GÖSTERİM için cüzdan — "bu satır benim mi" karşılaştırmalarında kullanılır.
+ *
+ * ⚠️ `getWallet()`ten AYRI. O, isteklerde ve imzada kullanılan GERÇEK değer
+ * ve test modunda bile gerçek kalmalı. Bu ise yalnızca ekranda kimin
+ * vurgulanacağını belirliyor; test modunda sahte tabloların ME cüzdanını
+ * döndürür, yoksa o tablolarda oyuncu kendini hiç tanımaz (bkz.
+ * `testMode.ts` TEST_WALLET notu).
+ */
+export function displayWallet(): string | null {
+  return isTestMode() ? TEST_WALLET : getWallet();
+}
 
 export function signOut() {
   const s = ls();

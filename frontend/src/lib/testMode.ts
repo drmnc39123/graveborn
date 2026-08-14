@@ -30,6 +30,23 @@ export function isTestMode(): boolean {
   }
 }
 
+/**
+ * TEST MODUNDA "BEN" SAYILAN CÜZDAN.
+ *
+ * ⚠️ NİYE VAR — ölçüm aleti yalan söylüyordu. Sahte tablolar sabit bir ME
+ * cüzdanı kullanıyor, `getWallet()` ise gerçek oturumunkini döndürüyor.
+ * İkisi hiç eşleşmediği için "bu satır benim" kontrolleri test modunda
+ * ASLA tutmuyordu; düello sezon tablosunda oyuncu bir kez sırada, bir kez
+ * de "You" satırında görünüyordu. Kod doğruydu (yinelenme koruması var),
+ * yanlış olan sahte veriydi — ve ben bunu neredeyse gerçek bir hata diye
+ * raporlayacaktım.
+ *
+ * ⚠️ `getWallet()`in KENDİSİ değiştirilmedi: o değer gerçek isteklerde ve
+ * imzada kullanılıyor, orada yalan söylemek test modunu bir exploit
+ * yüzeyine çevirirdi. Bu yalnızca GÖSTERİM karşılaştırmaları için.
+ */
+export const TEST_WALLET = 'TESTwa11et000000000000000000000000000000000';
+
 /** Panel kilidi: cüzdan modu VEYA test modu */
 export function panelUnlocked(mode: string | null): boolean {
   return mode === 'wallet' || isTestMode();

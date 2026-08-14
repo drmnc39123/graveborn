@@ -19,7 +19,7 @@ import { heroById } from '@/game/heroes';
 import { fetchDuels, fetchPvpSeason, findDuel, type DuelBoard, type DuelRow, type PvpSeasonRow, type PvpSeasonState } from '@/lib/gameSession';
 import { PVP_PAYOUT_DEPTH, pvpReward } from '@/game/pvpSeason';
 import { DuelBriefing } from '@/components/DuelBriefing';
-import { getMode, getWallet } from '@/lib/session';
+import { displayWallet, getMode } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { C, FONT, glass } from '@/lib/theme';
 
@@ -44,7 +44,8 @@ export function DuelPanel({ hero, onHero, onChallenge, onError }: {
   const [wallet, setWallet] = useState('');
   const [araniyor, setAraniyor] = useState(false);
   const [sezon, setSezon] = useState<PvpSeasonState | null>(null);
-  useEffect(() => { setWallet(getWallet() ?? ''); }, []);
+  // ⚠️ `displayWallet` — gerçek cüzdan DEĞİL, "bu satır benim mi" için
+  useEffect(() => { setWallet(displayWallet() ?? ''); }, []);
 
   const yukle = useCallback(() => {
     fetchDuels().then(setBoard).catch(() => setErr(true));

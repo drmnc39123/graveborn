@@ -151,6 +151,24 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
           </div>
         )}
 
+        {/* ⚠️ NE ÖDEDİĞİ YAZILI OLMALI — ve NE ÖDEMEDİĞİ de.
+            Panel denetiminde ölçüldü: arena `settleArena` içinde `dust: 0`
+            yazıyor, yani Pit maçı SADECE derece veriyor. Yan kapıdaki DUELS
+            paneli ödülünü açıkça anlatıyor ("ilk 3 galibiyet 15 toz");
+            burada tek kelime yoktu. Kazanıp eli boş kalan oyuncu bunu hata
+            sanar — bu depodaki kural: görünmeyen ödül, olmayan ödüldür.
+
+            ⚠️ AYNI DERECE. Pit ve Duels tek bir `duelRating` paylaşıyor
+            (`arena.ts` ve `duel.ts` aynı sütuna yazıyor). Oyuncu iki ayrı
+            puan sanıp "neden Duels'te de değişti" diye sormasın. */}
+        <div style={{
+          marginBottom: 14, fontSize: 11, color: C.boneFaint, lineHeight: 1.55,
+        }}>
+          The Pit pays <b style={{ color: C.bone }}>standing only</b> — no dust,
+          no gold. It is the <b style={{ color: C.bone }}>same standing</b> the
+          Answering uses: win here and your duel rating moves too.
+        </div>
+
         {hata && (
           <div style={{ marginBottom: 12, fontSize: 11.5, color: C.bad }}>{hata}</div>
         )}
