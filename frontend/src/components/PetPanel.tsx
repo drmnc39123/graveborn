@@ -366,6 +366,21 @@ export function PetPanel({ progress, onChange, onError }: {
                       </span>
                     </>
                   )}
+                  {/* ⚠️ BAĞLANMAMIŞ PETTE DE ETKİ YAZIYOR.
+                      Bu satır yalnız BAĞLI petlerde vardı; bağlanmamış kart
+                      sadece "STRIKER · Strikes the nearest enemy" diyordu.
+                      Yani oyuncu 800–8.000 gold'u, iki rolü karşılaştıramadan
+                      harcıyordu: Bound Rogue (striker) ile Bound Carrion
+                      (forager) aynı fiyatta ve kartlarında tek bir sayı yok.
+                      `petEffect` saf bir fonksiyon, sayı zaten hesaplanıyordu
+                      — sadece ekrana çıkmıyordu.
+                      ⚠️ Seviye 0 GÖSTERİLİYOR: `bindPet` yeni peti
+                      `petLevels[id] = 0` ile kaydediyor, yani bağlandığı anda
+                      göreceği değer bu. 1 yazmak alamayacağı bir sayı vaat
+                      etmek olurdu. */}
+                  <span style={{ display: 'block', marginTop: 2, color: C.boneDim }}>
+                    once bound: {etkiMetni(def, 0, false)}
+                  </span>
                 </IconText>
               ) : (
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
