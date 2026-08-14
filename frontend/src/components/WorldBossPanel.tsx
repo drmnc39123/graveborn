@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { BTN, PixelButton } from '@/components/ui/kit';
 import { BOSS_RUN_SEC, bossProgress } from '@/game/worldBoss';
+import { ENEMY_ART } from '@/game/sprites';
 import { fetchWorldBoss, worldBossAvailable, type BossState } from '@/lib/gameSession';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
@@ -20,12 +21,63 @@ import { C } from '@/lib/theme';
 const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
 const big = (n: number) => n.toLocaleString('en-US');
 
-function remaining(endsAt: number): string {
+/**
+ * Kalan süre — TAM CÜMLE döndürür.
+ *
+ * ⚠️ Önce yalnız süreyi döndürüyordu ve çağrı yeri `... left this week`
+ * ekliyordu; süre bitince fonksiyon `'ending'` dönüyor, ekranda
+ * **"ending left this week"** yazıyordu. Bozuk bir cümle ve gerçek kod
+ * yolu: hafta her döndüğünde, sunucu yeni boss'u kurana kadar herkes onu
+ * görüyordu. Cümlenin tamamı tek yerde kurulunca o ayrışma olamaz.
+ */
+function kalanIfade(endsAt: number): string {
   const ms = endsAt - Date.now();
-  if (ms <= 0) return 'ending';
+  if (ms <= 0) return 'sealing now';
   const h = Math.floor(ms / 3600_000);
-  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h`;
-  return `${h}h ${Math.floor((ms % 3600_000) / 60_000)}m`;
+  if (h >= 24) return `${Math.floor(h / 24)}d ${h % 24}h left this week`;
+  return `${h}h ${Math.floor((ms % 3600_000) / 60_000)}m left this week`;
+}
+
+/**
+ * BOSS PORTRESİ.
+ *
+ * ⚠️ `BossState.art` SUNUCUDAN GELİYORDU ve HİÇBİR ARAYÜZ ÇİZMİYORDU.
+ * Alan tipte tanımlı (`gameSession.ts`), sunucu dolduruyor
+ * (`backend/worldBoss.ts`), sahte veride yorumu bile var — ama panel onu
+ * hiç okumuyordu. Haftanın ortak boss'u oyunun en toplu anı; oyuncuya
+ * neye vurduğunu göstermemek, elindeki veriyi çöpe atmaktı.
+ *
+ * ⚠️ Bilinmeyen anahtar → HİÇBİR ŞEY çizilmez. Boş bir kutu çizmek,
+ * "burada bir görsel olmalıydı" demenin en kötü yolu.
+ */
+function BossPortrait({ artKey, size = 92 }: { artKey: string; size?: number }) {
+  const art = ENEMY_ART[artKey];
+  const idle = art?.anims?.idle;
+  // ⚠️ `frameW/frameH` tipte İSTEĞE BAĞLI (sheet/sequence türlerinde yok).
+  // Varsayılan uydurmak yerine çizmemeyi seçiyoruz — yanlış ölçekli bir
+  // portre, portre olmamasından beter.
+  if (!idle || idle.kind !== 'grid' || !idle.frameW || !idle.frameH) return null;
+  const kareW = idle.frameW, kareH = idle.frameH;
+  // 640×1440 sheet, 80×80 kare — ilk karenin (idle satırı, 0. kare) konumu
+  const k = size / kareH;
+  return (
+    <div style={{
+      width: size, height: size, flexShrink: 0, overflow: 'hidden',
+      position: 'relative', borderRadius: 10,
+      border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.35)',
+    }}>
+      <div style={{
+        position: 'absolute', left: 0, top: 0,
+        width: kareW, height: kareH,
+        backgroundImage: `url(${idle.src})`,
+        backgroundPosition: `0px -${(idle.row ?? 0) * kareH}px`,
+        // ⚠️ `pixelated` ŞART: bu bir piksel sanatı, tarayıcının yumuşatması
+        // onu bulanık bir lekeye çevirir.
+        imageRendering: 'pixelated',
+        transform: `scale(${k})`, transformOrigin: 'top left',
+      }} />
+    </div>
+  );
 }
 
 export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
@@ -61,9 +113,12 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
   return (
     <>
       <PanelHead kicker="THE SHARED BARROW" accent={C.blood} title={state.name} />
-      <p style={{ margin: '0 0 14px', fontSize: 12, color: C.boneDim, lineHeight: 1.55, fontStyle: 'italic' }}>
-        {state.epithet}
-      </p>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', margin: '0 0 14px' }}>
+        <BossPortrait artKey={state.art} />
+        <p style={{ margin: 0, fontSize: 12, color: C.boneDim, lineHeight: 1.55, fontStyle: 'italic' }}>
+          {state.epithet}
+        </p>
+      </div>
 
       <Card accent={!state.defeated}>
         <div style={{ padding: '14px 13px' }}>
@@ -73,7 +128,7 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
               SHARED HEALTH
             </span>
             <span style={{ marginLeft: 'auto', fontSize: 11, color: C.boneDim }}>
-              {remaining(state.endsAt)} left this week
+              {kalanIfade(state.endsAt)}
             </span>
           </div>
           <div style={{

@@ -174,7 +174,12 @@ export const TEST_BOSS = {
   bossId: 'wb_32',
   name: 'The Unburied',
   epithet: 'it remembers every grave',
-  art: 'fallen_warden_boss_nightmare',
+  // ⚠️ GEÇERLİ bir `ENEMY_ART` anahtarı olmak ZORUNDA. Burada
+  // 'fallen_warden_boss_nightmare' yazıyordu — sprites.ts'te BÖYLE BİR
+  // ANAHTAR YOK. Yorumu "yanlışsa panel boş kutu çizer" diyordu ama panel
+  // zaten hiç çizmiyordu, o yüzden kimse fark etmedi. Portre eklenince
+  // sahte veri sessizce boş kalırdı — test modunun yalan söylediği yer.
+  art: 'boss_nightmare',
   hp: 4_180_000,
   maxHp: 9_000_000,
   endsAt: Date.parse('2026-08-14T00:00:00Z'),
