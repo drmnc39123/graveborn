@@ -9,7 +9,7 @@
 
 import { Game } from './engine.js';
 import { TICK } from './config.js';
-import { applyFxSettings, drawFxWorld, pumpFx, resetFx } from './fx.js';
+import { applyFxSettings, drawFxWorld, fxSayim, isLowGfx, pumpFx, resetFx } from './fx.js';
 import { defaultSettings, normalizeSettings, type Settings } from './settings.js';
 import { HINTS, nextHint } from './tutorial.js';
 
@@ -48,7 +48,7 @@ console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
 {
   // Aynı seed, aynı girdi, TAMAMEN farklı ayarlar → BİREBİR aynı koşu.
   // Bu, "ayar denge değiştirmiyor" iddiasının tek gerçek kanıtı.
-  const kosu = (s: { damageNumbers: boolean }) => {
+  const kosu = (s: { damageNumbers: boolean; lowGraphics?: boolean }) => {
     const g = new Game(13579);
     g.setViewport(1280, 720);
     resetFx();
@@ -81,9 +81,9 @@ console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
     };
   };
 
-  const hepsiAcik = kosu({ damageNumbers: true });
-  const hepsiKapali = kosu({ damageNumbers: false });
-  const karisik = kosu({ damageNumbers: true });
+  const hepsiAcik = kosu({ damageNumbers: true, lowGraphics: false });
+  const hepsiKapali = kosu({ damageNumbers: false, lowGraphics: true });
+  const karisik = kosu({ damageNumbers: true, lowGraphics: true });
 
   const ayni = (a: typeof hepsiAcik, b: typeof hepsiAcik) =>
     a.kills === b.kills && a.level === b.level
@@ -93,13 +93,72 @@ console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
 
   console.log(`     açık:   ${hepsiAcik.kills} kill · LV${hepsiAcik.level} · ${hepsiAcik.enemies} düşman`);
   console.log(`     kapalı: ${hepsiKapali.kills} kill · LV${hepsiKapali.level} · ${hepsiKapali.enemies} düşman`);
-  check('sarsıntı+sayı KAPALI koşu, AÇIK koşuyla birebir aynı', ayni(hepsiAcik, hepsiKapali),
+  check('TÜM ayarlar kapalı koşu, açık koşuyla birebir aynı', ayni(hepsiAcik, hepsiKapali),
     `${hepsiAcik.kills} = ${hepsiKapali.kills} kill`);
   check('karışık ayar da aynı sonucu veriyor', ayni(hepsiAcik, karisik));
   // ⚠️ Ölçüm testinde oyuncu bir şey YAPMIŞ olmalı, yoksa test hiçbir şey
   // ölçmeden "geçer" (projede bir kez düşülen tuzak)
   check('koşu gerçekten oynandı', hepsiAcik.kills > 0 && hepsiAcik.level > 1,
     `${hepsiAcik.kills} kill, LV${hepsiAcik.level}`);
+}
+
+
+console.log('\n[3b] ⭐ DÜŞÜK GRAFİK GERÇEKTEN BİR ŞEY YAPIYOR MU');
+{
+  // 🐛 Düzeltilen hata tam olarak buydu: ayarın paneldeki açıklaması
+  // "fewer corpses, sparks and atmosphere" diyordu ama bayrağı YALNIZ
+  // `ui/motion.tsx` okuyordu — söz verilen üç şeyin ÜÇÜ DE olmuyordu.
+  //
+  // ⚠️ [3] "ayar simülasyonu bozmuyor" der; TEK BAŞINA YETMEZ, çünkü hiçbir
+  // şey yapmayan bir ayar da o testi geçer. Bu bölüm tersini ölçüyor.
+  // ⚠️ DERİN DESCENT KOŞUSU — ve bu bir ölçüm düzeltmesi. İlk senaryo bölüm 1
+  // taze koşusuydu: orada vuruşların neredeyse HEPSİ öldürüyor, yani
+  // kapatılan "bonus kıvılcım" dalı zaten hiç çalışmıyordu ve kıvılcım
+  // 2 → 2 çıkıyordu. Kıvılcım kısıtı ancak düşman DAYANIKLIYKEN, yani
+  // öldürmeyen vuruş çoğaldığında ve havuz baskı altındayken anlam kazanıyor —
+  // tam da zayıf cihazın zorlandığı an.
+  const kosu = (lowGraphics: boolean) => {
+    const g = new Game(24680, undefined, undefined, 'descent', undefined, 20);
+    g.setViewport(1280, 720);
+    resetFx();
+    applyFxSettings({ damageNumbers: true, lowGraphics });
+    let enCokLes = 0, enCokSpark = 0;
+    for (let i = 0; i < 1800; i++) {
+      if (g.phase === 'levelup') g.choose(g.offers[0].id);
+      if (g.phase !== 'running') break;
+      g.hp = g.stats.maxHp;
+      g.setInput(0.4, 0.3);
+      g.step();
+      pumpFx(g, TICK);
+      const c = fxSayim();
+      enCokLes = Math.max(enCokLes, c.corpse);
+      enCokSpark = Math.max(enCokSpark, c.spark);
+    }
+    return { kills: g.kills, enCokLes, enCokSpark };
+  };
+
+  const acik = kosu(false);
+  const dusuk = kosu(true);
+
+  console.log(`     normal: ${acik.kills} kill · en çok ${acik.enCokLes} leş · ${acik.enCokSpark} kıvılcım`);
+  console.log(`     düşük : ${dusuk.kills} kill · en çok ${dusuk.enCokLes} leş · ${dusuk.enCokSpark} kıvılcım`);
+
+  // ⚠️ ÇİFT TARAFLI: önce normalde GERÇEKTEN leş/kıvılcım olduğunu göster.
+  // Bu satırlar olmasaydı ikisi de sıfırken test yine "geçer" ve hiçbir şey
+  // ölçmezdi — bu projede tam olarak o tuzağa bir kez düşüldü.
+  check('normalde leş ÜRETİLİYOR (ölçüm anlamlı)', acik.enCokLes > 0, `${acik.enCokLes} leş`);
+  check('normalde kıvılcım ÜRETİLİYOR', acik.enCokSpark > 0, `${acik.enCokSpark} kıvılcım`);
+
+  check('DÜŞÜK GRAFİKTE leş hiç üretilmiyor', dusuk.enCokLes === 0, `${dusuk.enCokLes} leş`);
+  check('DÜŞÜK GRAFİKTE kıvılcım AZALIYOR', dusuk.enCokSpark < acik.enCokSpark,
+    `${acik.enCokSpark} → ${dusuk.enCokSpark}`);
+  // ⚠️ ama SIFIRLANMIYOR: öldüren ve kritik vuruş geri bildirimdir, süs değil
+  check('kıvılcım SIFIRLANMIYOR (öldüren vuruş hâlâ görünür)', dusuk.enCokSpark > 0,
+    `${dusuk.enCokSpark} kıvılcım`);
+
+  check('bayrak modüller arası TEK KAYNAK', isLowGfx() === true);
+  applyFxSettings({ damageNumbers: true, lowGraphics: false });
+  check('bayrak geri kapanıyor', isLowGfx() === false);
 }
 
 console.log('\n[4] Kapalı sayılar çizimi bozmuyor');

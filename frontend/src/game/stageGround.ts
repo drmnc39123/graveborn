@@ -14,6 +14,9 @@
 // karede yeniden denenir.
 
 import { artOf, descentArt, descentBant, DESCENT_BANT, tileHash, variantOf, type StageArt } from './stageArt';
+// ⚠️ Bayrak `fx.ts`te tutuluyor — iki modülün ayrı kopyası olsaydı ayarı
+// açmak birini etkileyip diğerini etkilemezdi. Tek kaynak, tek setter.
+import { isLowGfx } from './fx';
 
 const TILE = 32;
 const CHUNK_TILES = 8;
@@ -200,6 +203,7 @@ export function drawStageDecor(
   // bedelsiz takip ediyor, ek önbellek yönetimi gerekmiyor.
   const art = sanat(stageId, depth);
   if (!art.decor.length) return;
+  const dusuk = isLowGfx();
 
   // Kenardan bir tur fazla tara: yarısı ekran dışında kalan enkaz aniden
   // belirmesin.
@@ -218,7 +222,10 @@ export function drawStageDecor(
       const r = tileHash(tx, ty, stageId + 7919);
       let acc = 0;
       for (const d of art.decor) {
-        acc += d.chance;
+        // ⚠️ Yoğunluk yarıya iniyor, dekor KAPANMIYOR. Tamamen kapatmak
+        // sahneyi boş bir karo tarlasına çevirirdi; "daha az" ile "hiç"
+        // arasındaki fark, ayarın oyunu çirkinleştirmemesi demek.
+        acc += dusuk ? d.chance * 0.5 : d.chance;
         if (r >= acc) continue;
 
         const im = img(variantOf(d.src, tileHash(tx, ty, stageId + 104729)));
@@ -284,7 +291,11 @@ export function drawAtmosphere(
 
   // Sis — iki yavaş sürüklenen kütle. Tek katman "duran duman" gibi
   // görünüyordu; iki farklı hızda üst üste binince akıyor.
-  if (art.fog > 0) {
+  // ⚠️ SİS DÜŞÜK GRAFİKTE KAPANIR — ayarın söz verdiği "atmosphere" bu.
+  // Her karede iki tam ekran radial gradient demek; zayıf cihazda en pahalı
+  // kalemlerden biri. Vinyet/ışık halesi DURUYOR, yani sahne okunaklılığını
+  // taşıyan katman kaybolmuyor.
+  if (art.fog > 0 && !isLowGfx()) {
     drawFogBank(ctx, w, h, time * 0.021, art.fog, 0.62);
     drawFogBank(ctx, w, h, -time * 0.013 + 0.5, art.fog, 0.42);
   }

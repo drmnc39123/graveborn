@@ -101,8 +101,51 @@ let freezeReq = 0;
  */
 let numbersOn = true;
 
-export function applyFxSettings(v: { damageNumbers: boolean }) {
+/**
+ * DÜŞÜK GRAFİK.
+ *
+ * 🐛 BU AYAR OYUNCUYA YALAN SÖYLÜYORDU. Panelde açıklaması aynen şu:
+ * *"Fewer corpses, sparks and atmosphere. For weaker devices"* — ama bayrağı
+ * YALNIZCA `ui/motion.tsx` okuyordu (React beliriş animasyonu).
+ * `fx.ts` · `render.ts` · `stageGround.ts` hiç bakmıyordu; yani söz verilen
+ * üç şeyin ÜÇÜ DE olmuyordu. Zayıf cihazdaki oyuncu ayarı açıyor, hiçbir şey
+ * değişmiyordu.
+ *
+ * ⚠️ BİLGİ KAYBOLMAZ, YALNIZ SÜS KALKAR — `damageNumbers` için yazılmış
+ * kuralın aynısı. Kapatılanlar: leş, fazladan kıvılcım, sis, dekor yoğunluğu.
+ * ASLA kapatılmayanlar: hasar sayısı (kendi ayarı var), boss telegrafı,
+ * HP küresi, soğuma halkaları. Oyuncu görmesi gereken hiçbir şeyi kaybetmez.
+ */
+let lowGfx = false;
+
+/** `stageGround` de okuyor — bayrak tek yerde tutulsun diye buradan veriliyor */
+export function isLowGfx(): boolean {
+  return lowGfx;
+}
+
+/**
+ * Aktif efekt sayıları — ÖLÇÜM İÇİN.
+ *
+ * ⚠️ NİYE GEREKLİ: düzeltilen hata "ayar hiçbir şey yapmıyordu" idi. Bir
+ * ayarın simülasyonu BOZMADIĞINI kanıtlamak kolay; ETKİ ETTİĞİNİ kanıtlamak
+ * için sayılabilir bir çıktı şart. Havuzlar modül içinde kapalı olduğu için
+ * test onları başka türlü göremez ve düzeltme sessizce geri alınabilirdi.
+ * ⚠️ Yalnız OKUR, hiçbir şey değiştirmez.
+ */
+export function fxSayim(): { spark: number; num: number; corpse: number } {
+  return {
+    spark: sparks.reduce((n, s) => n + (s.on ? 1 : 0), 0),
+    num: nums.reduce((n, x) => n + (x.on ? 1 : 0), 0),
+    corpse: corpses.reduce((n, c) => n + (c.on ? 1 : 0), 0),
+  };
+}
+
+export function applyFxSettings(v: { damageNumbers: boolean; lowGraphics?: boolean }) {
   numbersOn = v.damageNumbers;
+  lowGfx = v.lowGraphics ?? false;
+  // Ayar koşu ORTASINDA açılabilir: ekrandaki leşleri hemen temizle, yoksa
+  // "açtım ama hâlâ duruyorlar" görünür.
+  if (lowGfx) for (const c of corpses) c.on = false;
 }
 
 /** Yeni koşu — önceki koşudan efekt taşmasın */
@@ -140,8 +183,11 @@ export function pumpFx(g: Game, dt: number) {
     // Kıvılcım: her vuruşa değil — 96 vuruşluk bir aura tick'inde ekran
     // bembeyaz olurdu. Öldüren ve kritik vuruşlar kesin, kalanı havuz izin
     // verdiği kadar.
+    // ⚠️ DÜŞÜK GRAFİKTE SADECE ÖNEMLİ VURUŞ kıvılcım üretir. Havuzun boş
+    // yuvasını dolduran "bonus" kıvılcımlar kapanıyor — öldüren ve kritik
+    // vuruş HER ZAMAN çiziliyor, çünkü onlar süs değil GERİ BİLDİRİM.
     const onemli = h.killed || h.crit;
-    if (onemli || sparks.some((s) => !s.on)) {
+    if (onemli || (!lowGfx && sparks.some((s) => !s.on))) {
       const s = slot(sparks);
       const art = weaponArt(h.wid).impact;
       s.x = h.x; s.y = h.y; s.t = 0;
@@ -182,7 +228,10 @@ export function pumpFx(g: Game, dt: number) {
   for (let i = 0; i < g.deaths.length; i++) {
     const d = g.deaths[i];
     if (d.boss) freezeReq = Math.min(FEEL.freezeMax, freezeReq + FEEL.freezeBossDeath);
-    if (d.art) {
+    // ⚠️ Leş TAMAMEN kapanıyor: 128 yuvalık havuz, düşük grafikte en pahalı
+    // kalem. Ölümün geri bildirimi kaybolmuyor — ölüm patlaması (`render.ts`
+    // `drawEffects`) ve hasar sayısı duruyor.
+    if (d.art && !lowGfx) {
       const c = slot(corpses);
       c.x = d.x; c.y = d.y; c.t = 0; c.art = d.art; c.facing = d.facingRight; c.on = true;
     }
