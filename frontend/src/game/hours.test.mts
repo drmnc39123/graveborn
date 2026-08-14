@@ -29,6 +29,7 @@
 // Çalıştır:  npx tsx src/game/hours.test.mts
 
 import { Game } from './engine.js';
+import { smartPick } from './simPlayer.mjs';
 import { RUN, STAGES, TICK } from './config.js';
 import { FORGE, permanentBonus, spentOnOne, treeTotalCost } from './forge.js';
 import { seedFromString } from './rng.js';
@@ -66,24 +67,6 @@ function flee(g: any): [number, number] {
   return [vx, vy];
 }
 
-/**
- * Kart seçimi — `offers[0]` DEĞİL.
- *
- * ⚠️ `offers[0]` rastgele oynamak demek ve ölçümü tamamen değiştiriyor:
- * insan oyuncu hasar/canını yükseltir, teklif listesinin ilk elemanını değil.
- * Basit ama tutarlı bir öncelik: silah seviyesi > hasar > can > diğer.
- */
-function smartPick(g: any): string {
-  const puan = (o: any) => {
-    if (o.kind === 'weapon') return o.level ? 100 : 90;      // mevcut silahı yükselt
-    const s = o.stat as string;
-    if (s === 'might') return 80;
-    if (s === 'maxHp' || s === 'armor') return 70;
-    if (s === 'cooldown') return 65;
-    return 40;
-  };
-  return [...g.offers].sort((a: any, b: any) => puan(b) - puan(a))[0].id;
-}
 
 interface Sonuc { depth: number; sec: number; gold: number; capped: boolean }
 

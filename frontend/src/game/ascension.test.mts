@@ -15,6 +15,7 @@
 // Çalıştır:  npx tsx src/game/ascension.test.mts
 
 import { Game } from './engine.js';
+import { smartPick } from './simPlayer.mjs';
 import {
   ASCENSION, RUN, STAGES, TICK, ascensionDropMul, ascensionHpMul,
   ascensionUnlockDepth, challengeRating, descentStage, maxAscensionFor,
@@ -58,18 +59,6 @@ function flee(g: any): [number, number] {
   const dist = Math.hypot(g.px, g.py);
   if (dist > 2100) { vx += -g.px / dist * 0.6; vy += -g.py / dist * 0.6; }
   return [vx, vy];
-}
-
-function smartPick(g: any): string {
-  const puan = (o: any) => {
-    if (o.kind === 'weapon') return o.level ? 100 : 90;
-    const s = o.stat as string;
-    if (s === 'might') return 80;
-    if (s === 'maxHp' || s === 'armor') return 70;
-    if (s === 'cooldown') return 65;
-    return 40;
-  };
-  return [...g.offers].sort((a: any, b: any) => puan(b) - puan(a))[0].id;
 }
 
 // Forge yarı dolu oyuncu — ölçümdeki "duvara çarpan" profil

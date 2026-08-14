@@ -36,6 +36,7 @@
 // ORTANCASI — ortalama değil, çünkü tek bir felaket koşu ortalamayı çeker.
 
 import { Game } from './engine.js';
+import { fleeInput, smartPick } from './simPlayer.mjs';
 import { DESCENT, RUN, STAGES, TICK, checkpointFor, depthGold, descentStage } from './config.js';
 import { CHARMS, CHARM_SLOTS, charmBonus, mergeBonus } from './charms.js';
 import { FORGE, permanentBonus, treeTotalCost } from './forge.js';
@@ -90,71 +91,7 @@ const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec %
 
 // ── OYUNCU VEKİLİ ─────────────────────────────────────────────────────
 
-/**
- * Hayatta kalma sürücüsü — `sim.test.mts`'tekiyle aynı mantık.
- *
- * ⚠️ Kopya olması kasıtlı: o dosyadaki sürücü DENGE ölçümü için ayarlı
- * (durup sürüyü üstüne alan `engagedInput` ile eşleşiyor), buradaki ise
- * HAYATTA KALMA ölçüyor. İkisini tek fonksiyona bağlamak, birini
- * ayarlarken diğerinin sessizce bozulması demek olurdu.
- */
-function fleeInput(g: Game): [number, number] {
-  let ax = 0, ay = 0, threat = 0;
-  for (const e of g.enemies) {
-    const dx = e.x - g.px, dy = e.y - g.py;
-    const d2 = dx * dx + dy * dy;
-    if (d2 > 260 * 260) continue;
-    const d = Math.sqrt(d2) || 1;
-    ax += dx / d / d; ay += dy / d / d;
-    if (d < 120) threat += 1;
-  }
-  let vx = -ax, vy = -ay;
 
-  if (threat < 3 && g.gems.length) {
-    let best = -1, bestD = Infinity;
-    for (let i = 0; i < g.gems.length; i++) {
-      const dx = g.gems[i].x - g.px, dy = g.gems[i].y - g.py;
-      const d2 = dx * dx + dy * dy;
-      if (d2 < bestD) { bestD = d2; best = i; }
-    }
-    if (best >= 0) {
-      const dx = g.gems[best].x - g.px, dy = g.gems[best].y - g.py;
-      const d = Math.hypot(dx, dy) || 1;
-      const w = threat === 0 ? 1.4 : 0.6;
-      vx += (dx / d) * w; vy += (dy / d) * w;
-    }
-  }
-  const dist = Math.hypot(g.px, g.py);
-  if (dist > 2100) { vx += -g.px / dist * 0.6; vy += -g.py / dist * 0.6; }
-  return [vx, vy];
-}
-
-/**
- * KART SEÇİMİ — "makul oyuncu" vekili.
- *
- * ⚠️ `sim.test.mts` hep `offers[0]`'ı seçiyor; orada doğru, çünkü amaç
- * determinizmi ölçmek. Burada yanlış olurdu: teklifler rng ile karılıyor,
- * yani "ilkine bas" = RASTGELE oyna. Ekonomi ölçümünde rastgele oynayan bir
- * oyuncu duvara olduğundan çok daha erken çarpar ve bütün gold/saat hesabını
- * aşağı çeker.
- *
- * Kural basit ve VS'in gerçek oynanışına yakın: önce elini kur (yeni silah),
- * sonra elindekileri büyüt (düşük seviyeliyi öne al), pasifi ihmal etme.
- * Puanlar mutlak değil sıralama içindir.
- */
-function smartPick(g: Game): string {
-  let bestId = g.offers[0]?.id ?? '';
-  let bestScore = -Infinity;
-  for (const o of g.offers) {
-    let s: number;
-    if (o.kind === 'weapon-new') s = g.weapons.length < 4 ? 100 : 12;
-    else if (o.kind === 'weapon-up') s = 80 - (o.level ?? 1) * 3;
-    else if (o.kind === 'passive-new') s = g.passives.length < 4 ? 62 : 22;
-    else s = 50 - (o.level ?? 1) * 2;
-    if (s > bestScore) { bestScore = s; bestId = o.id; }
-  }
-  return bestId;
-}
 
 // ── KOŞU ──────────────────────────────────────────────────────────────
 
