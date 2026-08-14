@@ -18,7 +18,7 @@ import { useEffect, useState } from 'react';
 import { fetchEvent, type EventState } from '@/lib/gameSession';
 import { Icon } from '@/components/ui/kit';
 import type { IconName } from '@/lib/icons';
-import { C, FONT } from '@/lib/theme';
+import { C, FONT, thinGlass } from '@/lib/theme';
 
 // ⚠️ İKON `effect`TEN TÜRETİLİYOR, `EventDef`e alan EKLENMEDİ. Sebebi:
 // etkinliğin ne yaptığını zaten `effect` söylüyor; ayrı bir `icon` alanı
@@ -87,11 +87,32 @@ export function EventBanner({ onOpen }: { onOpen?: () => void }) {
         maxWidth: 520,
         padding: '7px 12px',
         fontFamily: FONT.ui,
-        borderRadius: 9,
-        border: `1px solid ${canli ? `${ton}77` : 'rgba(255,255,255,0.10)'}`,
+        /**
+         * ⚠️ `thinGlass` — köyün üstünde duran TEK yüzey buydu, onu
+         * KULLANMIYORDU. Sade bir yarı saydam degrade yazılmıştı,
+         * `backdrop-filter` YOK: parlak çimenin ve taş yolun üstünde şerit
+         * eriyip kayboluyordu (kullanıcı "aşırı şeffaf, hiç gözükmüyor"
+         * dedi ve haklıydı). Navbar, sohbet kutusu ve profil kartı zaten
+         * bu yüzeyi kullanıyor; şerit sistemin dışında kalmıştı.
+         */
+        /**
+         * ⚠️ ALFA ÖLÇÜLEREK SEÇİLDİ, göz kararı değil. En kötü zemin açık
+         * taş yol (168,166,158); ikincil satırın (`boneDim`) kontrastı:
+         *   eski zemin (rgba(0,0,0,0.28), blur YOK) → 1,02  ← okunamaz
+         *   0,58 → 3,19 · 0,66 → 3,77 · **0,80 → 5,04** · 0,90 → 6,13
+         * 0,80 seçildi: küçük metin için 4,5 eşiğini rahat geçiyor ve
+         * arkadaki dünya hâlâ seçiliyor. Düşürülecekse önce bu satır ölçülsün.
+         */
+        ...thinGlass(9, 0.80),
+        border: `1px solid ${canli ? `${ton}88` : C.border}`,
+        // ⚠️ Etkinlik rengi cam zeminin ÜSTÜNE ikinci katman olarak biniyor;
+        // zemini onunla değiştirmek okunaklılığı geri götürürdü.
         background: canli
-          ? `linear-gradient(90deg, ${ton}26, rgba(0,0,0,0.30) 62%)`
-          : 'linear-gradient(180deg, rgba(255,255,255,0.035), rgba(0,0,0,0.28))',
+          ? `linear-gradient(90deg, ${ton}2e, rgba(0,0,0,0) 70%),`
+            + ' linear-gradient(180deg, rgba(43,31,22,0.80), rgba(10,8,6,0.88))'
+          : 'linear-gradient(180deg, rgba(43,31,22,0.80), rgba(10,8,6,0.88))',
+        // Karanlık bir plaka olarak otursun — köyle sınırı belli olsun
+        boxShadow: '0 3px 10px rgba(0,0,0,0.45)',
       }}
     >
       {/* ⚠️ Canlı/yaklaşan ayrımı RENKTEN ÖNCE METİNLE veriliyor: rengi tek
@@ -118,7 +139,10 @@ export function EventBanner({ onOpen }: { onOpen?: () => void }) {
           <span style={{ color: ton, marginLeft: 7, fontSize: 11 }}>×{st.event.mul}</span>
         </span>
         <span style={{
-          display: 'block', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.4,
+          // ⚠️ `boneFaint` DEĞİL: 10,5 px'lik ikincil satır, cam zeminde bile
+          // en soluk tonda okunmuyordu. Etkinliğin NE YAPTIĞINI söyleyen
+          // satır bu — silik olması, bilgiyi hiç yazmamakla aynı şey.
+          display: 'block', fontSize: 10.5, color: C.boneDim, lineHeight: 1.4,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>
           {st.event.blurb}
