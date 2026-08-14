@@ -8,6 +8,7 @@ import { HEROES, heroById, type HeroDef } from '@/game/heroes';
 import { weaponById } from '@/game/config';
 import { Card, CardSection, DeltaBar, PATTERN_TEXT, Tag } from '@/components/ui/cards';
 import { STAT_ICON } from '@/lib/icons';
+import { Icon } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 
 /**
@@ -91,15 +92,40 @@ export function HeroPicker({ selected, onSelect }: {
 function HeroCard({ hero }: { hero: HeroDef }) {
   const w = weaponById(hero.weapon);
   const pat = w ? PATTERN_TEXT[w.pattern] : undefined;
-  // İstatistikleri çubuğa dökmek için — motorun okuduğu alanlarla aynı isimler
+  /**
+   * ORANSAL istatistikler — çubuk olarak çizilir, `%` ile yazılır.
+   *
+   * ⚠️ `recovery` BU LİSTEDEN ÇIKARILDI ve `duzler`e taşındı. Burada
+   * duruyordu ve `DeltaBar` her değeri yüzdeye çeviriyor: Water Priestess'in
+   * `recovery: 0.5`i ekranda **"RECOVERY +50%"** olarak yazıyordu. Oysa
+   * motor onu ORAN DEĞİL, saniyede iyileşen CAN olarak okuyor
+   * (`engine.ts`: `h.hp + h.stats.recovery * dt`) — yani gerçek değer
+   * "+0,5 HP/sn". Panel olmayan bir bonusu duyuruyordu.
+   */
   const bars: { label: string; key: keyof HeroDef['stats'] }[] = [
     { label: 'Damage', key: 'might' },
     { label: 'Attack speed', key: 'cooldown' },
     { label: 'Move speed', key: 'moveSpeed' },
     { label: 'Max health', key: 'maxHp' },
     { label: 'Area', key: 'area' },
-    { label: 'Recovery', key: 'recovery' },
     { label: 'Proj. speed', key: 'projSpeed' },
+  ];
+
+  /**
+   * DÜZ istatistikler — yüzde DEĞİL, mutlak sayı. Çubuk çizilmez.
+   *
+   * ⚠️ `armor` HİÇBİR YERDE GÖSTERİLMİYORDU. `bars` listesinde yoktu ve
+   * başka bir yerde de çizilmiyordu; yani Fire Knight'ın kartında tek satır
+   * ("MAX HEALTH +8%") görünüyordu — oysa ikinci bir avantajı daha var
+   * (+1 armor), Metal Bladekeeper'ın ise +2. İkon (`STAT_ICON.armor`)
+   * baştan beri hazırdı, kimse kullanmamıştı.
+   *
+   * ⚠️ Çubuğa EKLENEMEZ: `DeltaBar` yüzde bekliyor, `armor: 1` oraya
+   * konsaydı "+100%" yazardı — bir yalanı başkasıyla değiştirmek olurdu.
+   */
+  const duzler: { label: string; key: keyof HeroDef['stats']; birim: string; not: string }[] = [
+    { label: 'Armor', key: 'armor', birim: '', not: 'flat damage cut per hit' },
+    { label: 'Recovery', key: 'recovery', birim: ' HP/s', not: 'heals while you fight' },
   ];
 
   return (
@@ -144,6 +170,36 @@ function HeroCard({ hero }: { hero: HeroDef }) {
               return <DeltaBar key={b.key} label={b.label} pct={gosterilen} icon={STAT_ICON[b.key]} />;
             })}
           </div>
+
+          {/* Düz sayılar — çubuk yok, çünkü ölçekleri yüzde değil */}
+          {duzler.some((d) => (hero.stats[d.key] ?? 0) !== 0) && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 4,
+              marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`,
+            }}>
+              {duzler.map((d) => {
+                const v = hero.stats[d.key];
+                if (v === undefined || v === 0) return null;
+                return (
+                  <div key={d.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name={STAT_ICON[d.key]} scale={1} />
+                    <span style={{
+                      fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7,
+                      color: C.boneFaint, flex: '0 0 74px',
+                    }}>
+                      {d.label.toUpperCase()}
+                    </span>
+                    <span style={{ fontSize: 11.5, fontWeight: 900, color: v > 0 ? C.ok : C.bad }}>
+                      {v > 0 ? '+' : '−'}{Math.abs(v)}{d.birim}
+                    </span>
+                    {/* ⚠️ NE OLDUĞU YAZIYOR. "+1 ARMOR" tek başına oyuncuya
+                        bir şey söylemez; düz mü, yüzde mi, neye karşı? */}
+                    <span style={{ fontSize: 10, color: C.boneDim, marginLeft: 2 }}>{d.not}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </CardSection>
       </div>
     </Card>

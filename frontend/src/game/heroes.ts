@@ -22,9 +22,16 @@ export interface HeroDef {
   blurb: string;
   /** STAT_BASE'e eklenir (cooldown NEGATİF = daha hızlı) */
   stats: Partial<Record<StatKey, number>>;
-  /** oyuncuya gösterilecek artı/eksi listesi */
-  pros: string[];
-  cons: string[];
+  /**
+   * ⚠️ `pros` / `cons` KALDIRILDI (panel denetimi, 2026-08-14).
+   *
+   * Elle yazılmış artı/eksi listeleriydi ve HİÇBİR YERDE OKUNMUYORDU —
+   * ne panelde, ne motorda, ne testte. Üstelik içerikleri `stats`ın
+   * kelimeye dökülmüş hâliydi ('+8% max health' ↔ `maxHp: 0.08`), yani
+   * ikinci bir gerçek kaynağıydı: biri değişip diğeri unutulduğunda panel
+   * yanlış bilgi verirdi. Kartın "Against the baseline" bölümü aynı bilgiyi
+   * ZATEN `stats`tan türetiyor — türetilmiş olan yalan söyleyemez.
+   */
 
   // ── görsel ──
   /** public/art/heroes/<dir>/ */
@@ -59,8 +66,6 @@ export const HEROES: readonly HeroDef[] = [
     weapon: 'shard',
     blurb: 'Balanced. Fires on its own — the safest way to learn the horde.',
     stats: { armor: 1, maxHp: 0.08 },
-    pros: ['+1 armor', '+8% max health', 'Auto-aiming starter weapon'],
-    cons: [],
     dir: 'fire-knight', idle: 'idle_{i}.png', run: 'run_{i}.png',
     idleFrames: 8, runFrames: 8,
     atk: '1_atk_{i}.png', atkFrames: 11,
@@ -81,8 +86,6 @@ export const HEROES: readonly HeroDef[] = [
     //   temiz gövde 15,8 · mv+12 varyantı 14,0 · bu varyant 19,2
     // Karakterin istatistiği silahını DESTEKLEMELİ, onunla dövüşmemeli.
     stats: { moveSpeed: 0.05, cooldown: -0.15, projSpeed: 0.15, maxHp: -0.12 },
-    pros: ['−15% attack cooldown', '+15% projectile speed', '+5% move speed'],
-    cons: ['−12% max health'],
     dir: 'leaf-ranger', idle: 'idle_{i}.png', run: 'run_{i}.png',
     idleFrames: 12, runFrames: 10,
     atk: '1_atk_{i}.png', atkFrames: 10,
@@ -104,8 +107,6 @@ export const HEROES: readonly HeroDef[] = [
     weapon: 'lightning',
     blurb: 'Slow to kill, hard to kill. Lightning finds the dead for you while your wounds close.',
     stats: { recovery: 0.5, area: 0.15, might: -0.1 },
-    pros: ['+0.5 HP/sec regeneration', '+15% attack area'],
-    cons: ['−10% damage'],
     dir: 'water-priestess', idle: 'idle_{i}.png', run: 'walk_{i}.png',
     idleFrames: 8, runFrames: 10,
     atk: '1_atk_{i}.png', atkFrames: 7,
@@ -121,8 +122,6 @@ export const HEROES: readonly HeroDef[] = [
     weapon: 'lash',
     blurb: 'Heavy and mean. Cuts wide, but the swarm will catch you if you wander.',
     stats: { might: 0.15, maxHp: 0.15, armor: 2, moveSpeed: -0.1 },
-    pros: ['+15% damage', '+15% max health', '+2 armor'],
-    cons: ['−10% move speed'],
     dir: 'metal-bladekeeper', idle: '01_idle_{i}.png', run: '02_run_{i}.png',
     idleFrames: 8, runFrames: 8,
     atk: '07_1_atk_{i}.png', atkFrames: 6,
