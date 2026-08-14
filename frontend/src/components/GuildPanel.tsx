@@ -209,6 +209,15 @@ export function GuildPanel({ progress, onChange, onError }: {
                   {g.name}
                 </span>
                 <Tag>LV {g.level}</Tag>
+                {/* ⚠️ SEVİYENİN NE İŞE YARADIĞI YAZILI. Liste yalnız "LV 3" /
+                    "LV 5" diyordu; oyuncu iki lonca arasında seçim yaparken
+                    aradaki farkın NE olduğunu göremiyordu — panelin kendi
+                    başlığı "üyeler kalıcı bir deneyim kazancı paylaşır"
+                    diyor ama kazancın büyüklüğü hiçbir satırda yoktu.
+                    `guildGrowth` saf bir fonksiyon ve bu dosyada ZATEN içe
+                    aktarılmıştı (aşağıda "sonraki seviye" önizlemesinde
+                    kullanılıyor); sadece listeye ulaşmamıştı. */}
+                <Tag tone="gold">+{Math.round(guildGrowth(g.level) * 100)}% XP</Tag>
                 {/* ⚠️ Dolu loncalar da listeleniyor: gizlemek "neden yok" sorusunu
                     doğurur, göstermek "neden giremiyorum"u cevaplar. */}
                 <Tag tone={dolu ? 'bad' : 'dim'}>{g.members}/{g.cap}</Tag>

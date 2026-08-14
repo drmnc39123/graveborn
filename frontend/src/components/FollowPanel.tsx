@@ -171,7 +171,15 @@ function Row({ row, busy, onChallenge, onError, onDrop }: {
               : 'linear-gradient(180deg, rgba(160,18,38,0.45), rgba(120,12,28,0.32))',
             border: `1px solid ${row.blocker ? 'rgba(255,255,255,0.12)' : 'rgba(228,101,122,0.55)'}`,
           }}>
-          {row.recordDepth > 0 ? `d${row.recordDepth}` : 'ANSWER'}
+          {/* ⚠️ ETİKET TERS OKUNUYORDU. Kural `recordDepth > 0 ? 'd37' :
+              'ANSWER'` idi; yani CEVAPLANABİLİR satır bir SAYI gösteriyordu
+              ("d37" — düğmeye değil etikete benziyor), cevaplanamayan satır
+              ise "ANSWER" diyordu (eyleme çağrı gibi okunuyor, ama basınca
+              yalnız engeli söylüyor). İki durum da yanlış tarafa işaret
+              ediyordu.
+              Artık düğme NE OLACAĞINI yazıyor; koşu yoksa bunu söylüyor ve
+              engel varsa sebebi zaten hemen altında duruyor. */}
+          {row.recordDepth > 0 ? `ANSWER d${row.recordDepth}` : 'NO RUN YET'}
         </button>
         <button onClick={onDrop} disabled={busy} title="Stop watching"
           style={{
