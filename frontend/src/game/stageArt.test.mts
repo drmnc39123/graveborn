@@ -186,5 +186,22 @@ console.log('\n[5] tileHash — kozmetik rastgelelik deterministik');
     `${min.toFixed(3)} … ${max.toFixed(3)}`);
 }
 
+console.log('\n[6] Haftalık boss odasının KENDİ sanatı var');
+{
+  // 🐛 `worldBoss.ts` `bossRoomStage` `id: 0` veriyor. `STAGE_ART[0]` yokken
+  // `artOf` sessizce `STAGE_ART[1]`e düşüyordu — yani oyunun en görünür
+  // haftalık etkinliği bölüm 1'in ORMANINDA geçiyordu. Yedek hata vermediği
+  // için kimse fark etmemişti: "kod doğru, yanlış şey çiziliyor".
+  const oda = artOf(0);
+  const hollowWood = artOf(1);
+  check('boss odası artık bölüm 1e DÜŞMÜYOR', oda !== hollowWood);
+  check('zemini taş (çim DEĞİL)',
+    oda.ground.every((p) => !p.includes('grass')) && oda.ground.some((p) => p.includes('catacomb')));
+  check('odada IŞIK var — kimliği bu',
+    oda.decor.some((d) => d.src.includes('torch') || d.src.includes('candle')));
+  // ⚠️ 0'ı tanımlamak YEDEĞİ bozmamalı: bilinmeyen bölüm hâlâ 1'e düşsün
+  check('bilinmeyen bölüm hâlâ yedeğe düşüyor', artOf(999) === hollowWood);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ SANAT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

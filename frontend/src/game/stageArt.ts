@@ -99,6 +99,31 @@ const skull = (chance: number): DecorDef => ({ src: `${D}/spr_skull_1.png`, w: 3
 const bones = (chance: number): DecorDef => ({ src: `${D}/spr_skulls.png`, w: 32, h: 32, chance, alpha: 0.7 });
 const rubble = (chance: number): DecorDef => ({ src: `${G}/spr_rock.png`, w: 32, h: 32, chance, alpha: 0.85 });
 
+/**
+ * Mum/meşale kökü — Szadi "RF_Catacombs" seti, ATTRIBUTION'da PUBLIC DOMAIN.
+ * ⚠️ 19 dosyalık bu klasör bugüne kadar %0 kullanımdaydı ve tam da katakomp
+ * temasına ait. Boss katının işareti buradan geliyor.
+ */
+const TL = '/art/tiles';
+
+/**
+ * BOSS KATININ IŞIKLARI.
+ *
+ * ⚠️ Boss katları checkpoint veriyor (`DESCENT.bossEvery`) — yani oyuncunun
+ * "buraya kadar geldim" dediği yer. Görsel bir işareti YOKTU; oyuncu ancak
+ * boss doğunca anlıyordu. Mum ve meşale o katı ışıkla ayırıyor.
+ *
+ * ⚠️ ÖLÇÜLDÜ: kaynak dosyalar 7×14 ile 16×16 arası — 32 px'lik hücre
+ * dünyasında ham boyutta neredeyse görünmezler, 2× çiziliyorlar.
+ * ⚠️ Bunlar TEK KARE dosyalar (candleA_01..04 ayrı ayrı), şerit değil.
+ * Animasyon için yeni bir çizim yolu yazmak gerekirdi; `variantOf` gibi bir
+ * aile seçici de yok. Statik duruyorlar — "yanıp sönen mum" ayrı bir iş.
+ */
+const mum = (chance: number): DecorDef =>
+  ({ src: `${TL}/candleB_01.png`, w: 26, h: 32, chance, alpha: 0.95, shadow: 0.22 });
+const mesale = (chance: number): DecorDef =>
+  ({ src: `${TL}/torch_1.png`, w: 32, h: 32, chance, alpha: 1, shadow: 0.26 });
+
 // Şeffaf üst katmanlar — ölçülen alpha ≈ 0.20-0.30
 const grassTuft = (chance: number): OverlayDef => ({ src: `${G}/spr_grass_3.png`, chance });
 const cracks = (chance: number): OverlayDef => ({ src: `${D}/spr_gold_floor_1.png`, chance });
@@ -123,6 +148,33 @@ export function variantOf(src: string, r: number): string {
  * gider. Oyuncu ilerlerken zeminin altından çıkanlar değişsin.
  */
 export const STAGE_ART: Record<number, StageArt> = {
+  /**
+   * 0 — HAFTALIK ORTAK BOSS ODASI.
+   *
+   * 🐛 NİYE EKLENDİ: `worldBoss.ts` `bossRoomStage` `id: 0` veriyor, `artOf(0)`
+   * tabloda yoktu ve `?? STAGE_ART[1]` yedeğine düşüyordu. Yani oyunun en
+   * görünür haftalık etkinliği "The Hollow Wood"un ORMANINDA geçiyordu —
+   * çimenlikte dev bir boss. Kimse fark etmemişti çünkü yedek sessizce
+   * çalışıyor, hata vermiyordu.
+   *
+   * Kimliği: mumla aydınlatılmış taş oda. Işık burada DEKOR DEĞİL ANLAM —
+   * herkesin aynı anda vurduğu tek yer, bir tapınak gibi görünmeli.
+   * ⚠️ Sis yüksek ama tavanın altında; ışıkların okunması gerekiyor.
+   */
+  0: {
+    ground: [`${D}/spr_catacomb_floor_1.png`, `${D}/spr_catacomb_floor_4.png`, `${D}/spr_catacomb_floor_6.png`],
+    weights: [5, 4, 3],
+    overlay: [cracks(0.10), cracks2(0.06)],
+    grade: { sat: 0.46, bright: 0.56, tintA: 0.38 },
+    tint: [30, 14, 16, 0.62],
+    fog: 0.30,
+    decor: [
+      // Işıklar EN BAŞTA — `drawStageDecor` ilk eşleşende duruyor
+      mesale(0.010), mum(0.012),
+      { src: `${D}/spr_coffin_2.png`, w: 32, h: 32, chance: 0.006, alpha: 0.9, shadow: 0.24 },
+      bones(0.008), skull(0.006),
+    ],
+  },
   // 1 — The Hollow Wood: hâlâ orman, ama ışık çekilmiş
   1: {
     ground: [`${G}/spr_grass_1.png`, `${G}/spr_grass_2.png`],
@@ -465,30 +517,6 @@ const BANT_TINT: readonly (readonly [number, number, number, number])[] = [
 /** Katakomp zemini — bant 2'den itibaren tabanın karolarının yerini alır */
 const KATAKOMP_ZEMIN = [1, 2, 3, 4, 5, 6].map((n) => `${D}/spr_catacomb_floor_${n}.png`);
 
-/**
- * Mum/meşale kökü — Szadi "RF_Catacombs" seti, ATTRIBUTION'da PUBLIC DOMAIN.
- * ⚠️ 19 dosyalık bu klasör bugüne kadar %0 kullanımdaydı ve tam da katakomp
- * temasına ait. Boss katının işareti buradan geliyor.
- */
-const TL = '/art/tiles';
-
-/**
- * BOSS KATININ IŞIKLARI.
- *
- * ⚠️ Boss katları checkpoint veriyor (`DESCENT.bossEvery`) — yani oyuncunun
- * "buraya kadar geldim" dediği yer. Görsel bir işareti YOKTU; oyuncu ancak
- * boss doğunca anlıyordu. Mum ve meşale o katı ışıkla ayırıyor.
- *
- * ⚠️ ÖLÇÜLDÜ: kaynak dosyalar 7×14 ile 16×16 arası — 32 px'lik hücre
- * dünyasında ham boyutta neredeyse görünmezler, 2× çiziliyorlar.
- * ⚠️ Bunlar TEK KARE dosyalar (candleA_01..04 ayrı ayrı), şerit değil.
- * Animasyon için yeni bir çizim yolu yazmak gerekirdi; `variantOf` gibi bir
- * aile seçici de yok. Statik duruyorlar — "yanıp sönen mum" ayrı bir iş.
- */
-const mum = (chance: number): DecorDef =>
-  ({ src: `${TL}/candleB_01.png`, w: 26, h: 32, chance, alpha: 0.95, shadow: 0.22 });
-const mesale = (chance: number): DecorDef =>
-  ({ src: `${TL}/torch_1.png`, w: 32, h: 32, chance, alpha: 1, shadow: 0.26 });
 
 // Derin bantların enkazı — hepsi diskte duruyordu ve HİÇ kullanılmıyordu
 const tabut = (chance: number): DecorDef =>
