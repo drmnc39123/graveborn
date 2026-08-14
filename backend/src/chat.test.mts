@@ -103,12 +103,44 @@ console.log('\n[3] ⭐ Uçtan uca: mesaj diğer oyuncuya ulaşıyor mu');
     `${peersMsg.length} peers mesajı, hayalet ${hayaletVar ? 'VAR' : 'yok'}`);
 
   // Konum gönderince hayalet OLMALI
+  //
+  // ⚠️ B DE KONUM GÖNDERİYOR. Önce yalnız A gönderiyordu ve test kırmızı
+  // yandı — kod doğruydu: köy ızgarasında hayalet listesi ALICININ
+  // HÜCRESİNDEN türüyor, konum göndermemiş bağlantının hücresi yok. Bu
+  // istenen davranış: sohbet paneli açık ama köy tuvali olmayan bir
+  // istemciye (koşuda, başka sayfada) hayalet göndermek boşuna trafik.
   a.send(JSON.stringify({ x: 100, y: 100, f: 1 }));
+  b.send(JSON.stringify({ x: 260, y: 140, f: 0 }));   // aynı 512'lik hücre
   await bekle(400);
   const sonPeers = (bGelen.filter((m) => (m as { t: string }).t === 'peers') as
-    { peers: unknown[] }[]).slice(-1)[0];
+    { peers: { n: string; x: number; b?: string; bt?: number }[] }[]).slice(-1)[0];
   check('konum gönderen hayalet OLUYOR', !!sonPeers && sonPeers.peers.length === 1,
     `${sonPeers?.peers.length ?? 0} hayalet`);
+
+  // ⭐ BALON: A'nın son mesajı hayalet çerçevesinde taşınıyor mu.
+  // ⚠️ Bu, "kod çalışıyor ama ekrana ulaşmıyor" hata sınıfının tam yeri:
+  // sohbet paneli mesajı gösterse bile balon alanı düşerse kimse fark etmez.
+  check('balon son mesajı taşıyor', sonPeers?.peers[0]?.b === 'selam kasaba',
+    sonPeers?.peers[0]?.b ?? 'yok');
+  check('balon yaşı taşınıyor (bt)', typeof sonPeers?.peers[0]?.bt === 'number',
+    String(sonPeers?.peers[0]?.bt));
+
+  // ⭐ ÇİFT TARAFLI: balon 4 sn sonra çerçeveden DÜŞMELİ. Düşmezse mesaj
+  // oyuncunun başında sonsuza kadar asılı kalır.
+  await bekle(4100);
+  const geçPeers = (bGelen.filter((m) => (m as { t: string }).t === 'peers') as
+    { peers: { b?: string }[] }[]).slice(-1)[0];
+  check('balon 4 sn sonra DÜŞÜYOR', geçPeers?.peers[0]?.b === undefined,
+    geçPeers?.peers[0]?.b ?? 'düştü');
+
+  // ⭐ UZAK HÜCRE: aynı odada ama uzakta duran oyuncu listeden çıkmalı —
+  // "hangi 30 kişi" cevabının çalıştığının kanıtı.
+  b.send(JSON.stringify({ x: 2400, y: 1800, f: 0 }));
+  await bekle(400);
+  const uzak = (bGelen.filter((m) => (m as { t: string }).t === 'peers') as
+    { peers: unknown[] }[]).slice(-1)[0];
+  check('UZAK hücredeki oyuncu hayalet görmüyor', uzak?.peers.length === 0,
+    `${uzak?.peers.length ?? 0} hayalet`);
 
   a.close(); b.close();
   stopPresence();

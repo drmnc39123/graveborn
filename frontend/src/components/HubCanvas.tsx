@@ -9,6 +9,7 @@ import { loadMapWorld } from '@/game/mapWorld';
 import { preloadAll } from '@/game/sprites';
 import { preloadKit } from '@/components/ui/kit';
 import { isTestMode } from '@/lib/testMode';
+import { koyTutamagi } from '@/lib/chat';
 import { unlockAudio, play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
 
@@ -172,11 +173,28 @@ export function HubCanvas({
       // doğrulamak için dünya koordinatını ekran koordinatına çevirmek,
       // o da kameranın nerede olduğunu bilmek demek.
       if (isTestMode()) {
-        (window as unknown as { __gbKare?: (n?: number) => unknown }).__gbKare = (n = 1) => {
-          for (let i = 0; i < n; i++) { t += 1 / 60; stepHub(hub, 1 / 60, 0, 0); }
-          renderHub(ctx, hub, cssW, cssH, dpr, t);
+        // ⚠️ GİRDİ DE ALIYOR (`ix`, `iy`). Önce yalnız (0,0) ile sürüyordu ve
+        // ölçümde iki oyuncu HEP AYNI noktada duruyordu — hayaletin gerçekten
+        // takip edip etmediği görülemiyordu. Tuş olayı göndermek işe yaramaz:
+        // döngü tuşları `keysRef`ten okuyor ve bu kanca o döngü DEĞİL.
+        (window as unknown as {
+          __gbKare?: (n?: number, ix?: number, iy?: number) => unknown;
+        }).__gbKare = (n = 1, ix = 0, iy = 0) => {
+          for (let i = 0; i < n; i++) { t += 1 / 60; stepHub(hub, 1 / 60, ix, iy); }
+          // ⚠️ KONUM DA GÖNDERİLİYOR — ana döngüdeki gibi. Önce yalnız
+          // çiziyordu ve ölçüm YALAN SÖYLÜYORDU: gizli sekmedeki oyuncu
+          // hiç konum bildirmediği için diğer sekmede hayalet olarak
+          // görünmüyordu, ben de "köy yayını çalışmıyor" diye yanlış teşhis
+          // koyacaktım. Kanca ana döngünün AYNI işini yapmazsa ölçtüğü şey
+          // oyunun kendisi olmaz.
+          const s = koyTutamagi();
+          if (s) s.push(hub.x, hub.y, hub.facingRight);
+          renderHub(ctx, hub, cssW, cssH, dpr, t, s?.ghosts ?? []);
           return {
             x: hub.x, y: hub.y, cssW, cssH, dpr,
+            // Ölçüm için: kaç hayalet geldi, nerede, balonu var mı
+            ghosts: (s?.ghosts ?? []).map((g) => ({ n: g.n, x: g.x, y: g.y, b: g.b })),
+            bagli: s?.bagli ?? false,
             villagers: hub.villagers.map((v) => ({
               kind: v.kind, x: v.x, y: v.y, moving: v.moving, facingRight: v.facingRight,
             })),
@@ -199,7 +217,14 @@ export function HubCanvas({
         if (stickRef.current.active) { ix = stickRef.current.dx; iy = stickRef.current.dy; }
         stepHub(hub, dt, ix, iy);
 
-        renderHub(ctx, hub, cssW, cssH, dpr, t);
+        // ⚠️ KÖY MEYDANI. Bağlantı `ChatPanel`de açılıyor; burada yalnız
+        // OKUNUYOR (bkz. `lib/chat.ts` kayıt defteri notu). Yoksa `null`
+        // döner ve köy tek kişilik çalışır — sosyal katman bir SÜS, köyü
+        // kilitlemesi yanlış olurdu.
+        const sohbet = koyTutamagi();
+        if (sohbet) sohbet.push(hub.x, hub.y, hub.facingRight);
+
+        renderHub(ctx, hub, cssW, cssH, dpr, t, sohbet?.ghosts ?? []);
 
         // React state ~10Hz — her frame güncellemek re-render fırtınası olur
         hintAcc += dt;

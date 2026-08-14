@@ -10,7 +10,7 @@
 // oyuncu hiç açmaz ve sosyal katman ölü doğar.
 
 import { useEffect, useRef, useState } from 'react';
-import { joinChat, type ChatHandle, type ChatMessage } from '@/lib/chat';
+import { joinChat, type ChatHandle, type ChatMessage, type Kanal } from '@/lib/chat';
 import { getMode } from '@/lib/session';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
@@ -24,6 +24,9 @@ export function ChatPanel() {
   const [bagli, setBagli] = useState(false);
   const [acik, setAcik] = useState(true);
   const [metin, setMetin] = useState('');
+  const [kanal, setKanal] = useState<Kanal>('world');
+  /** Lonca etiketi — `null` = loncasız, sekme kilitli */
+  const [lonca, setLonca] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,7 +34,7 @@ export function ChatPanel() {
     // oyuncusunun jetonu yok. Sahte bir sohbet göstermek, olmayan bir
     // topluluğu varmış gibi göstermek olurdu.
     if (getMode() !== 'wallet') return;
-    const h = joinChat(setMsgs, setBagli);
+    const h = joinChat(setMsgs, setBagli, setLonca);
     handleRef.current = h;
     return () => {
       // ⚠️ setBagli(false) BURADA YOK. Cleanup, StrictMode'da yeni bağlantı
@@ -49,7 +52,7 @@ export function ChatPanel() {
     if (!el) return;
     const enAltta = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     if (enAltta) el.scrollTop = el.scrollHeight;
-  }, [msgs.length]);
+  }, [msgs.length, kanal]);
 
   /**
    * ⚠️ DEMO'DA `null` DÖNÜYORDU ve sohbet ekrandan TAMAMEN kayboluyordu.
@@ -64,11 +67,20 @@ export function ChatPanel() {
    */
   const kilitli = getMode() !== 'wallet';
 
+  /**
+   * Seçili kanalın mesajları.
+   * ⚠️ `c` alanı OLMAYAN mesaj dünya sayılıyor: eski sunucu sürümü bu alanı
+   * göndermiyordu ve zorunlu tutmak, sürüm atlarken sohbeti boşaltırdı.
+   */
+  const gorunen = msgs.filter((m) => (m.c ?? 'world') === kanal);
+
   const gonder = () => {
     if (kilitli) return;
     const t = metin.trim();
     if (!t) return;
-    handleRef.current?.say(t);
+    // ⚠️ Loncasızken lonca kanalına yazılamaz — sekme zaten kilitli ama
+    // durum ayrık kalmasın: sunucu da bu mesajı düşürür.
+    handleRef.current?.say(t, lonca ? kanal : 'world');
     setMetin('');
   };
 
@@ -102,6 +114,37 @@ export function ChatPanel() {
         </span>
       </button>
 
+      {/* ⚠️ SEKMELER, AYRI PENCERE DEĞİL. İki ayrı sohbet kutusu köyün
+          köşesini kaplardı; sekme, aynı yerde iki kanal demek. */}
+      {acik && !kilitli && (
+        <div style={{ display: 'flex', gap: 4, padding: '0 10px 7px' }}>
+          {(['world', 'guild'] as const).map((k) => {
+            const kilit = k === 'guild' && !lonca;
+            const secili = kanal === k;
+            return (
+              <button
+                key={k}
+                onClick={() => { if (!kilit) setKanal(k); }}
+                title={kilit ? 'Join a guild to unlock this channel' : undefined}
+                style={{
+                  all: 'unset', cursor: kilit ? 'not-allowed' : 'pointer',
+                  padding: '3px 9px', borderRadius: 5, fontSize: 9.5,
+                  fontWeight: 900, letterSpacing: 1.1,
+                  color: kilit ? C.boneFaint : secili ? C.void : C.boneDim,
+                  background: secili && !kilit ? C.ice : 'rgba(0,0,0,0.28)',
+                  border: `1px solid ${secili && !kilit ? C.ice : C.border}`,
+                  opacity: kilit ? 0.55 : 1,
+                }}>
+                {/* ⚠️ Kilit DÜRÜSTÇE gösteriliyor (Exchange deseni): boş bir
+                    lonca kanalı açmak, olmayan bir topluluğu varmış gibi
+                    göstermek olurdu. */}
+                {k === 'world' ? 'WORLD' : lonca ? `[${lonca}]` : 'GUILD 🔒'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {acik && kilitli && (
         <div style={{
           padding: '0 10px 10px', fontSize: 11, color: C.boneDim, lineHeight: 1.5,
@@ -117,13 +160,15 @@ export function ChatPanel() {
             maxHeight: 168, overflowY: 'auto', padding: '0 10px 6px',
             display: 'flex', flexDirection: 'column', gap: 3,
           }}>
-            {msgs.length === 0 ? (
+            {gorunen.length === 0 ? (
               <div style={{ fontSize: 11, color: C.boneFaint, lineHeight: 1.5, padding: '4px 0' }}>
-                {bagli
-                  ? 'Nobody has spoken yet. The village is quiet.'
-                  : 'Reaching the square…'}
+                {!bagli
+                  ? 'Reaching the square…'
+                  : kanal === 'guild'
+                    ? 'Your guild has been silent.'
+                    : 'Nobody has spoken yet. The village is quiet.'}
               </div>
-            ) : msgs.map((m, i) => (
+            ) : gorunen.map((m, i) => (
               <div key={`${m.at}-${i}`} style={{ fontSize: 11.5, lineHeight: 1.45 }}>
                 {/* ⚠️ Lonca etiketi sohbette görünmezse lonca da görünmez.
                     İnsanlar bir topluluğa ancak onun VARLIĞINI gördükleri
@@ -146,7 +191,11 @@ export function ChatPanel() {
                 e.stopPropagation();
                 if (e.key === 'Enter') gonder();
               }}
-              placeholder={bagli ? 'Say something…' : 'not connected'}
+              placeholder={
+                !bagli ? 'not connected'
+                  : kanal === 'guild' ? 'Say something to your guild…'
+                    : 'Say something…'
+              }
               disabled={!bagli}
               maxLength={180}
               style={{

@@ -264,10 +264,18 @@ export async function growthOf(wallet: string): Promise<number> {
   return p?.guild ? guildLevel(p.guild.level).growth : 0;
 }
 
-/** Sohbette/tabloda gösterilecek etiket — yoksa null */
-export async function tagOf(wallet: string): Promise<string | null> {
+/**
+ * Sohbette/tabloda gösterilecek etiket VE lonca kimliği.
+ *
+ * ⚠️ İKİSİ TEK SORGUDA. Ayrı `tagOf` + `myGuild` çağrısı iki gidiş-dönüş
+ * demekti; `presence.ts` bunu bağlantı başına çağırıyor ve lonca kanalı
+ * için `id`ye de ihtiyacı var. `myGuild` burada KULLANILAMAZ: o tam
+ * `GuildView` kuruyor (üye listesi, seviye, maliyet) — bir etiket için
+ * ödenecek bedel değil.
+ */
+export async function tagOf(wallet: string): Promise<{ id: string; tag: string } | null> {
   const p = await prisma.player.findUnique({
-    where: { wallet }, select: { guild: { select: { tag: true } } },
+    where: { wallet }, select: { guild: { select: { id: true, tag: true } } },
   });
-  return p?.guild?.tag ?? null;
+  return p?.guild ? { id: p.guild.id, tag: p.guild.tag } : null;
 }

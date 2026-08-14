@@ -21,6 +21,10 @@ export interface Ghost {
   f: number;
   /** takılı hale id'si (cosmetics.ts) — hayaletin rengi */
   a?: string;
+  /** son sohbet mesajı — balon. Sunucu yalnız TAZEYSE gönderiyor. */
+  b?: string;
+  /** balonun yaşı (ms) — istemci solmayı buna göre yapar */
+  bt?: number;
 }
 
 /** İstemcinin konum gönderme hızı — sunucu zaten 8 Hz yayınlıyor */
@@ -51,6 +55,9 @@ export function joinBossRoom(): PresenceHandle {
     u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
     u.pathname = '/presence';
     u.searchParams.set('t', token);
+    // ⚠️ ODAYI BAĞLANIRKEN BİLDİR. Sunucunun varsayılanı KÖY; bunu
+    // göndermezsek boss odasındaki koşu köye hayalet olarak sızar.
+    u.searchParams.set('room', 'boss');
     url = u.toString();
   } catch {
     return bos;

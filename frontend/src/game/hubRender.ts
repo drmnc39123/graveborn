@@ -8,10 +8,24 @@
 // PERFORMANS: sadece kameraya girenler çiziliyor.
 
 import { C } from '@/lib/theme';
+import { cosmeticById } from './cosmetics';
 import { drawActor, drawFrame, playerArt, villagerArt } from './sprites';
 import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState, type Villager } from './hub';
 import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldObject } from './mapWorld';
+
+/** Sunucudan gelen köy oyuncusu — `lib/chat.ts` `Ghost` ile aynı şekil */
+export interface KoyOyuncu {
+  n: string; x: number; y: number; f: number;
+  a?: string;
+  /** son mesaj — balon */
+  b?: string;
+  /** balonun yaşı (ms) */
+  bt?: number;
+}
+
+/** Balon bu süreden sonra hiç çizilmez (ms) — son 500 ms solarak gider */
+const BALON_MS = 3500;
 
 /**
  * HATA AYIKLAMA — F1 ile açılır. Çarpışma kutularını, oyuncu yarıçapını ve
@@ -112,6 +126,12 @@ function drawMenuLights(
 export function renderHub(
   ctx: CanvasRenderingContext2D, s: HubState,
   w: number, h: number, dpr: number, time: number,
+  /**
+   * Köydeki diğer oyuncular. ⚠️ TAMAMEN KOZMETİK — `HubState`e girmiyor,
+   * çarpışmıyor, kapı/portal tetiklemiyor. Boss odasındaki hayalet kuralının
+   * aynısı (bkz. `render.ts` `drawGhosts`).
+   */
+  oyuncular: readonly KoyOyuncu[] = [],
 ) {
   const world = s.world;
 
@@ -145,6 +165,13 @@ export function renderHub(
   for (const v of s.villagers) {
     if (v.x < viewL || v.x > viewR || v.y < viewT || v.y > viewB) continue;
     aktorler.push({ y: v.y, ciz: () => drawVillager(ctx, v) });
+  }
+  // ⚠️ Gerçek oyuncular da DERİNLİK SIRASINA giriyor — köylülerle aynı
+  // listeye. Ayrı bir geçişte çizilselerdi binaların önünde/arkasında
+  // yanlış katmanda görünürlerdi.
+  for (const o of oyuncular) {
+    if (o.x < viewL || o.x > viewR || o.y < viewT || o.y > viewB) continue;
+    aktorler.push({ y: o.y, ciz: () => drawKoyOyuncu(ctx, o) });
   }
   aktorler.sort((a, b) => a.y - b.y);
 
@@ -250,6 +277,77 @@ function drawPlayer(ctx: CanvasRenderingContext2D, s: HubState) {
 function drawVillager(ctx: CanvasRenderingContext2D, v: Villager) {
   drawActor(ctx, villagerArt(v.kind, v.facingRight), v.moving ? 'run' : 'idle',
     v.animT, v.x, v.y, v.facingRight);
+}
+
+/**
+ * KÖYDEKİ BAŞKA OYUNCU.
+ *
+ * ⚠️ SPRITE DEĞİL SİLÜET — boss odasındaki `drawGhosts` kuralının aynısı:
+ * oyuncu kalabalıkta KENDİ karakterini kaybetmemeli. Kendi karakteri tam
+ * sprite, başkaları içi boş bir silüet.
+ */
+function drawKoyOyuncu(ctx: CanvasRenderingContext2D, o: KoyOyuncu) {
+  const renk = o.a ? cosmeticById(o.a)?.aura?.color ?? C.ice : C.ice;
+  ctx.save();
+
+  ctx.globalAlpha = 0.34;
+  ctx.fillStyle = renk;
+  ctx.beginPath();
+  ctx.ellipse(o.x, o.y + 3, HUB_PLAYER.radius * 0.9, HUB_PLAYER.radius * 1.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = 0.6;
+  ctx.strokeStyle = renk;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // bakış yönü — kimin nereye gittiği okunsun
+  ctx.beginPath();
+  ctx.moveTo(o.x + (o.f ? 6 : -6), o.y - 2);
+  ctx.lineTo(o.x + (o.f ? 13 : -13), o.y + 1);
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.55;
+  ctx.fillStyle = C.bone;
+  ctx.font = '600 10px ui-monospace, monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText(o.n, o.x, o.y - HUB_PLAYER.radius - 8);
+
+  // ── KONUŞMA BALONU ──
+  // ⚠️ Sunucu 4 sn'den tazeyi gönderiyor; burada 3,5 sn'de kesiliyor ve son
+  // 500 ms solarak gidiyor. İki eşik farklı olmak ZORUNDA: aynı olsaydı
+  // balon tam görünürken bir anda kaybolurdu.
+  if (o.b && typeof o.bt === 'number' && o.bt < BALON_MS) {
+    const kalan = BALON_MS - o.bt;
+    ctx.globalAlpha = Math.min(1, kalan / 500);
+    // ⚠️ Metin KISALTILIYOR: sunucu 180 karaktere izin veriyor ve o uzunlukta
+    // bir balon köyün yarısını kapatır.
+    const metin = o.b.length > 40 ? `${o.b.slice(0, 39)}…` : o.b;
+    ctx.font = '600 11px ui-monospace, monospace';
+    const gen = ctx.measureText(metin).width + 14;
+    const bx = o.x - gen / 2;
+    const by = o.y - HUB_PLAYER.radius - 40;
+    ctx.fillStyle = 'rgba(10,8,6,0.88)';
+    ctx.strokeStyle = `${renk}66`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, gen, 20, 5);
+    ctx.fill();
+    ctx.stroke();
+    // kuyruk — balon kime ait belli olsun
+    ctx.beginPath();
+    ctx.moveTo(o.x - 4, by + 20);
+    ctx.lineTo(o.x, by + 25);
+    ctx.lineTo(o.x + 4, by + 20);
+    ctx.fillStyle = 'rgba(10,8,6,0.88)';
+    ctx.fill();
+
+    ctx.fillStyle = C.bone;
+    ctx.textAlign = 'center';
+    ctx.fillText(metin, o.x, by + 14);
+  }
+
+  ctx.restore();
 }
 
 /** Kapı ve portal işaretleri — yaklaşınca parlar, uzaktan soluk durur */

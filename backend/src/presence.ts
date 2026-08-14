@@ -23,7 +23,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { routeUpgrade } from './wsRoute.js';
 import { readToken } from './auth.js';
 import { bossWeek } from '@game/worldBoss';
-import { kaydet, konusabilir, son as sonMesajlar, temizle } from './chat.js';
+import { kaydet, konusabilir, son as sonMesajlar, temizle, type Kanal } from './chat.js';
 import { tagOf } from './guild.js';
 
 /** Sunucunun yayın hızı — istemci daha sık gönderse bile bu hızda dağıtılır */
@@ -32,6 +32,38 @@ const TICK_MS = 125;              // 8 Hz
 const IDLE_MS = 20_000;
 /** Bir odada en fazla kaç hayalet yayınlanır (perf + bant genişliği tavanı) */
 const MAX_GHOSTS = 24;
+
+// ── KÖY MEYDANI ───────────────────────────────────────────────────────
+//
+// ⚠️ ÖLÇEK DÜĞMELERİ BURADA, TEK YERDE. "1000 oyuncumuz olursa hangi 30
+// birbirini görecek" sorusunun cevabı bu üç sabit + `koyListeleri()`.
+// Sorun gerçek olduğunda ölçülüp bunlar ayarlanacak; şimdiden karmaşıklık
+// satın alınmayacak.
+//
+// ⚠️ PLANDAKİ HESAP YANLIŞTI, ÖLÇÜM DÜZELTTİ. Plana "30 hayalet × ~24 B ×
+// 5 Hz ≈ 3,6 KB/sn" yazılmıştı. `presence.test.mts` [6] 200 gerçek soketle
+// ölçtü: çerçeve 29 hayalette 1183 B — hayalet başına ~41 B, çünkü JSON
+// anahtarları ve kısaltılmış cüzdan (`4x8f…9k2p`) tahminin iki katı yer
+// kaplıyor. GERÇEK: kişi başına ~6-7 KB/sn.
+//   100 eşzamanlı köy oyuncusu → ~0,7 MB/sn çıkış: sorun değil
+//   1000 → ~7 MB/sn: gerçek para. İlk düğmeler tavan 30→20, tick 5→3 Hz
+//   (ikisi birlikte ~%56 azaltır). Ölçüm testte, tahmine geri dönme.
+
+/** Köy hücresi (px). Köy 3072×2048 → 6×4 = 24 hücre. */
+const KOY_HUCRE = 512;
+/** Bir köy hücresinde en fazla kaç hayalet yayınlanır — kullanıcı kararı */
+const KOY_TAVAN = 30;
+/**
+ * Köy yayın hızı — boss odasından AYRI.
+ * Boss odası 8 Hz'de kalıyor: orada dövüş var, takılan hayalet göze çarpar.
+ * Köyde herkes yürüyor; 5 Hz yeterli ve bant genişliğini ~%38 azaltıyor.
+ */
+const KOY_TICK_MS = 200;          // 5 Hz
+/** Balon bu yaştan sonra çerçeveye eklenmez (sn) */
+const BALON_OMRU_MS = 4000;
+
+/** Oda anahtarı: köy tek oda, boss odaları haftaya göre ayrı */
+const KOY = 'village';
 
 interface Peer {
   ws: WebSocket;
@@ -49,6 +81,12 @@ interface Peer {
    * güncellenir — kabul edilebilir gecikme.
    */
   tag: string | null;
+  /**
+   * Lonca kimliği — lonca kanalının hedefi.
+   * ⚠️ `tag` ile AYNI sorgudan geliyor (bkz. `guild.ts tagOf`) ve aynı
+   * gerekçeyle bağlanırken bir kez okunuyor.
+   */
+  guildId: string | null;
   lastSeen: number;
   /**
    * ⚠️ HAYALET OLARAK YAYINLANIR MI. Sohbet aynı soketi kullanıyor ve köyde
@@ -59,6 +97,21 @@ interface Peer {
    * odasında koşan biri.
    */
   gorunur: boolean;
+  /**
+   * Hangi odada.
+   *
+   * ⚠️ NİYE EKLENDİ: köy ile boss odası aynı havuzda duruyordu ve ikisini
+   * `gorunur` bayrağı ayırıyordu — yani köydeki oyuncu ZORUNLU olarak
+   * görünmezdi, çünkü görünür olsa boss odasında belirirdi. Oda kavramı
+   * gelince o kısıt kalktı: köydekiler birbirini görebilir, boss odasına
+   * sızmadan.
+   * ⚠️ Bağlanırken URL'den okunur (`?room=`) ve DEĞİŞMEZ: köy ve boss odası
+   * zaten AYRI bağlantılar açıyor (`lib/chat.ts` vs `lib/presence.ts`).
+   */
+  oda: string;
+  /** Son sohbet mesajı — balon için. `null` = balon yok */
+  sonMesaj: string | null;
+  sonMesajAt: number;
 }
 
 const peers = new Map<WebSocket, Peer>();
@@ -78,35 +131,133 @@ function broadcast() {
   }
   if (!peers.size) return;
 
-  // Haftaya göre grupla — herkes kendi haftasının odasında
-  const byWeek = new Map<number, Peer[]>();
+  // Odaya göre grupla. Boss odaları haftaya göre ayrı, köy tek oda.
+  const odalar = new Map<string, Peer[]>();
   for (const p of peers.values()) {
-    const list = byWeek.get(p.week);
-    if (list) list.push(p); else byWeek.set(p.week, [p]);
+    const anahtar = p.oda === KOY ? KOY : `boss:${p.week}`;
+    const list = odalar.get(anahtar);
+    if (list) list.push(p); else odalar.set(anahtar, [p]);
   }
 
-  for (const [, list] of byWeek) {
-    // ⚠️ Herkese HERKESİ göndermiyoruz: kendini listeden çıkar, yoksa oyuncu
-    // kendi hayaletini üstünde görür ve "gecikmeli ikizim var" sanır.
-    for (const me of list) {
-      if (me.ws.readyState !== WebSocket.OPEN) continue;
-      const others = [];
-      for (const o of list) {
-        if (o === me) continue;
-        if (!o.gorunur) continue;   // köyde duran bağlantı hayalet değildir
-        if (others.length >= MAX_GHOSTS) break;
-        others.push({
-          n: short(o.wallet),
-          x: Math.round(o.x), y: Math.round(o.y),
-          f: o.facingRight ? 1 : 0,
-          a: o.aura ?? undefined,
-        });
-      }
-      try {
-        me.ws.send(JSON.stringify({ t: 'peers', peers: others }));
-      } catch { /* yazılamıyorsa bir sonraki turda düşecek */ }
-    }
+  // ⚠️ KÖY KENDİ HIZINDA. Tek zamanlayıcı 8 Hz'de dönüyor; köy yayınını her
+  // turda yapmak boşuna bant genişliği olurdu (köyde herkes yürüyor). Ayrı
+  // bir `setInterval` kurmak yerine biriktirici kullanılıyor — iki
+  // zamanlayıcı, iki ayrı temizleme yolu demekti.
+  const koyZamani = now - sonKoyYayini >= KOY_TICK_MS;
+  if (koyZamani) sonKoyYayini = now;
+
+  for (const [anahtar, list] of odalar) {
+    if (anahtar === KOY) { if (koyZamani) koyYayini(list, now); }
+    else bossYayini(list);
   }
+}
+
+/** Köyün son yayın zamanı — köy 5 Hz, boss odası 8 Hz */
+let sonKoyYayini = 0;
+
+/**
+ * BOSS ODASI — eski davranış, birebir korunuyor.
+ * ⚠️ O(n²) burada KALIYOR ve bu bilinçli: boss odası hafta başına ayrı ve
+ * `MAX_GHOSTS` 24; oradaki kalabalık köyünki gibi büyümüyor. Izgarayı
+ * oraya da taşımak, ölçülmemiş bir sorun için karmaşıklık satın almak olurdu.
+ */
+function bossYayini(list: Peer[]) {
+  // ⚠️ Herkese HERKESİ göndermiyoruz: kendini listeden çıkar, yoksa oyuncu
+  // kendi hayaletini üstünde görür ve "gecikmeli ikizim var" sanır.
+  for (const me of list) {
+    if (me.ws.readyState !== WebSocket.OPEN) continue;
+    const others = [];
+    for (const o of list) {
+      if (o === me) continue;
+      if (!o.gorunur) continue;
+      if (others.length >= MAX_GHOSTS) break;
+      others.push({
+        n: short(o.wallet),
+        x: Math.round(o.x), y: Math.round(o.y),
+        f: o.facingRight ? 1 : 0,
+        a: o.aura ?? undefined,
+      });
+    }
+    try {
+      me.ws.send(JSON.stringify({ t: 'peers', peers: others }));
+    } catch { /* yazılamıyorsa bir sonraki turda düşecek */ }
+  }
+}
+
+/** Hücre anahtarı — konumdan türer */
+const hucreOf = (x: number, y: number) =>
+  `${Math.floor(x / KOY_HUCRE)},${Math.floor(y / KOY_HUCRE)}`;
+
+/**
+ * KÖY MEYDANI — IZGARA YAYINI.  ⬅️ "1000 oyuncuda hangi 30?" sorusunun cevabı
+ *
+ * ⚠️ OYUNCU BAŞINA "EN YAKIN 30" DEĞİL. O yaklaşım O(n²): 1000 oyuncuda tick
+ * başına 1 milyon karşılaştırma × 5 Hz. Bunun yerine liste HÜCRE BAŞINA bir
+ * kez kuruluyor ve o hücredeki herkese aynısı gidiyor — O(n).
+ *
+ * ⚠️ SABİT SHARD (hash % N) DA DEĞİL: birlikte duran iki arkadaş birbirini
+ * görmek ZORUNDA. Köyde doğal oda anahtarı konumdur — "yanımdaki kişi".
+ *
+ * ⚠️ KABUL EDİLEN TAKAS, açıkça: aynı hücredeki iki oyuncu AYNI 30'u görür.
+ * Meydana 200 kişi yığılırsa 170'i görünmez kalır — ama TUTARLI şekilde,
+ * titremeden. Her adımda değişen bir "en yakın 30" listesi, kalabalıkta
+ * hayaletlerin sürekli belirip kaybolması demekti.
+ *
+ * ⚠️ SIRALAMA CÜZDANA GÖRE SABİT. `Map` ekleme sırası kullanılsaydı biri
+ * bağlanıp koptukça listedeki 30 kişi değişir, ekran titrerdi.
+ */
+function koyYayini(list: Peer[], now: number) {
+  // 1) Hücrelere kovala — O(n)
+  const kovalar = new Map<string, Peer[]>();
+  for (const p of list) {
+    if (!p.gorunur) continue;      // konum göndermemiş bağlantı hayalet değil
+    const k = hucreOf(p.x, p.y);
+    const b = kovalar.get(k);
+    if (b) b.push(p); else kovalar.set(k, [p]);
+  }
+
+  // 2) Hücre başına TEK liste (kendi hücresi + 8 komşu), tavanla — O(hücre)
+  const listeler = new Map<string, ReturnType<typeof ozet>[]>();
+  for (const k of kovalar.keys()) {
+    const [cx, cy] = k.split(',').map(Number);
+    const aday: Peer[] = [];
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const komsu = kovalar.get(`${cx + dx},${cy + dy}`);
+        if (komsu) aday.push(...komsu);
+      }
+    }
+    aday.sort((a, b) => (a.wallet < b.wallet ? -1 : a.wallet > b.wallet ? 1 : 0));
+    listeler.set(k, aday.slice(0, KOY_TAVAN).map((p) => ozet(p, now)));
+  }
+
+  // 3) Gönder — herkes kendi hücresinin listesini alır, KENDİSİ çıkarılmış
+  for (const p of list) {
+    if (p.ws.readyState !== WebSocket.OPEN) continue;
+    const liste = p.gorunur ? listeler.get(hucreOf(p.x, p.y)) : undefined;
+    // ⚠️ Kendini listeden çıkarmak burada, gönderirken: hücre listesi ORTAK,
+    // kişiye özel kopya çıkarmak paylaşmanın anlamını yok ederdi.
+    const others = liste ? liste.filter((o) => o.n !== short(p.wallet)) : [];
+    try {
+      p.ws.send(JSON.stringify({ t: 'peers', peers: others }));
+    } catch { /* yazılamıyorsa bir sonraki turda düşecek */ }
+  }
+}
+
+/** Yayınlanan hayalet özeti — balon yalnız TAZEYSE ekleniyor */
+function ozet(p: Peer, now: number) {
+  const balonlu = p.sonMesaj !== null && now - p.sonMesajAt < BALON_OMRU_MS;
+  return {
+    n: short(p.wallet),
+    x: Math.round(p.x), y: Math.round(p.y),
+    f: p.facingRight ? 1 : 0,
+    a: p.aura ?? undefined,
+    // ⚠️ Balon MEVCUT çerçeveye biniyor, ayrı mesaj YOK. 30 hayaletin
+    // tipik olarak 0-2'si balon taşır; ayrı bir yayın kurmak bant
+    // genişliğini iki katına çıkarırdı.
+    b: balonlu ? p.sonMesaj ?? undefined : undefined,
+    bt: balonlu ? now - p.sonMesajAt : undefined,
+  };
 }
 
 let timer: NodeJS.Timeout | null = null;
@@ -131,23 +282,46 @@ export function attachPresence(server: Server) {
     if (!wallet) { ws.close(4001, 'oturum_yok'); return; }
 
     const week = bossWeek(new Date());
+    // ⚠️ ODA BAĞLANTI ANINDA BELLİ ve değişmiyor: köy ve boss odası zaten AYRI
+    // bağlantılar açıyor (`lib/chat.ts` vs `lib/presence.ts`). Oda değiştirmek
+    // için mesaj tipi eklemek, olmayan bir esnekliğin bedelini ödemek olurdu.
+    // ⚠️ Varsayılan KÖY: `room` göndermeyen ESKİ istemci köye düşer ve boss
+    // odasına sızmaz. Ters varsayılan güvenli değildi.
+    const oda = url.searchParams.get('room') === 'boss' ? 'boss' : KOY;
     peers.set(ws, {
       ws, wallet, week, x: 0, y: 0, facingRight: true, aura: null,
       lastSeen: Date.now(),
       gorunur: false,   // konum gelene kadar hayalet DEĞİL (bkz. alan başlığı)
       tag: null,
+      guildId: null,
+      oda,
+      sonMesaj: null,
+      sonMesajAt: 0,
     });
 
     // Lonca etiketini bir kez çek — hata olursa sohbet etiketsiz devam eder
-    tagOf(wallet).then((t) => {
+    // ⚠️ Geçmiş, lonca BİLİNDİKTEN SONRA gönderiliyor. Önce hemen
+    // gönderiliyordu; lonca kanalı gelince o sıra yanlış oldu — bağlanan
+    // loncalı oyuncu kendi lonca geçmişini ASLA görmezdi (sorgu henüz
+    // dönmemiş olurdu). Sorgu başarısız olursa yalnız dünya geçmişi gider.
+    const gecmisGonder = (gid: string | null) => {
+      try {
+        ws.send(JSON.stringify({ t: 'chat_history', msgs: sonMesajlar(gid) }));
+      } catch { /* yok */ }
+    };
+    tagOf(wallet).then((g) => {
       const p = peers.get(ws);
-      if (p) p.tag = t;
-    }).catch(() => { /* etiket süs, bağlantıyı bozmaz */ });
-
-    // ⚠️ Sohbet geçmişi BAĞLANIRKEN gönderiliyor. Yoksa odaya giren kişi boş
-    // bir pencere görür ve "kimse yok" sanır — oysa iki dakika önce konuşma
-    // vardı. Sosyal katmanın ilk izlenimi budur.
-    try { ws.send(JSON.stringify({ t: 'chat_history', msgs: sonMesajlar() })); } catch { /* yok */ }
+      if (p) { p.tag = g?.tag ?? null; p.guildId = g?.id ?? null; }
+      // ⚠️ Bağlantı bu arada kapanmış olabilir — `p` yoksa gönderme.
+      if (!p) return;
+      // ⚠️ LONCA DURUMUNU SUNUCU SÖYLÜYOR, istemci ayrıca SORMUYOR.
+      // İstemci `/guild/mine` çekseydi iki ayrı gerçek olurdu: bağlantı
+      // kurulduktan sonra loncaya katılan oyuncunun arayüzü sekmeyi AÇAR,
+      // ama soketin kaydı hâlâ loncasız olduğu için mesajları sessizce
+      // düşerdi. Kanalı yönlendiren kayıt ne diyorsa arayüz onu göstermeli.
+      try { ws.send(JSON.stringify({ t: 'me', g: p.tag })); } catch { /* yok */ }
+      gecmisGonder(g?.id ?? null);
+    }).catch(() => { gecmisGonder(null); });
 
     ws.on('message', (raw) => {
       const p = peers.get(ws);
@@ -159,7 +333,7 @@ export function attachPresence(server: Server) {
       if (raw.toString().length > 512) return;
       try {
         const m = JSON.parse(raw.toString()) as {
-          t?: unknown; c?: unknown;
+          t?: unknown; c?: unknown; k?: unknown;
           x?: unknown; y?: unknown; f?: unknown; a?: unknown;
         };
         // ⚠️ `Number(...)` İLE ZORLAMA YAPMA. `Number(null)` = 0 ve 0 sonlu
@@ -170,16 +344,47 @@ export function attachPresence(server: Server) {
         // ── SOHBET ──
         // ⚠️ Aynı soket, farklı mesaj tipi. `t` yoksa eski konum mesajıdır
         // (geriye uyum) — istemcinin eski sürümü kırılmasın.
+        // ⚠️ KALP ATIŞI. Köy bağlantısı konumu ÇİZİM DÖNGÜSÜNDEN gönderiyor
+        // ve `requestAnimationFrame` ARKA PLANDAKİ SEKMEDE DURUYOR. Yani
+        // sekme değiştiren oyuncu 20 saniyede `IDLE_MS`e takılıp odadan
+        // atılıyordu; geri döndüğünde soketi kapalı, sohbeti sessiz.
+        // ÖLÇÜLDÜ: iki sekmeli denemede sunucu sürekli tek bağlantı
+        // gösteriyordu ve bunu yayın hatası sandım.
+        // `setInterval` gizli sekmede ÇALIŞIYOR (rAF ve rIC'nin aksine),
+        // istemci oradan atıyor.
+        if (m.t === 'ping') { p.lastSeen = Date.now(); return; }
+
         if (m.t === 'say') {
           const metin = temizle(m.c);
           if (!metin) return;
-          // ⚠️ Hız sınırı BURADA. Express ara katmanı bu trafiği hiç görmüyor.
+          // ⚠️ KANAL İSTEMCİDEN GELİYOR ama HEDEF sunucuda belirleniyor:
+          // istemci "guild" diyebilir, kime gideceğine `p.guildId` karar
+          // verir. İstemcinin verdiği bir lonca kimliğine güvenmek, başka
+          // loncanın kanalına yazmak demekti.
+          const kanal: Kanal = m.k === 'guild' ? 'guild' : 'world';
+          // ⚠️ HIZ SINIRI KANALLAR ARASI ORTAK ve kanal seçiminden ÖNCE.
+          // Kanal başına ayrı sayaç, spam bütçesini ikiye katlardı: aynı
+          // kişi dünyaya 8, loncaya 8 mesaj atardı.
           if (!konusabilir(p.wallet)) return;
           p.lastSeen = Date.now();   // konuşmak da canlılık işareti
-          const msg = kaydet(short(p.wallet), metin, Date.now(), p.tag);
-          // Odadaki HERKESE — gönderen dahil (kendi mesajını görmeli)
-          for (const [sock] of peers) {
+          const msg = kaydet(short(p.wallet), metin, Date.now(), p.tag, kanal, p.guildId);
+          // Loncasız biri lonca kanalına yazdıysa mesaj hiç doğmaz.
+          if (!msg) return;
+          // ⚠️ BALON İÇİN SON MESAJ. Metin SUNUCUNUN temizlediği hâli
+          // (`temizle` zaten kırpıyor ve 180 karakterle sınırlıyor);
+          // istemci ayrıca kısaltıyor — 180 karakterlik bir balon köyü kapatır.
+          // ⚠️ BALON YALNIZ DÜNYA KANALINDA. Lonca mesajı balona çıksaydı
+          // özel konuşma köy meydanında herkesin okuyabileceği bir yazıya
+          // dönüşürdü — kanalı sunucuda ayırmanın anlamı kalmazdı.
+          if (kanal === 'world') {
+            p.sonMesaj = metin;
+            p.sonMesajAt = Date.now();
+          }
+          // Dünya: herkese (gönderen dahil — kendi mesajını görmeli).
+          // Lonca: yalnız aynı `guildId`.
+          for (const [sock, o] of peers) {
             if (sock.readyState !== WebSocket.OPEN) continue;
+            if (kanal === 'guild' && o.guildId !== p.guildId) continue;
             try { sock.send(JSON.stringify({ t: 'chat', msg })); } catch { /* yok */ }
           }
           return;
@@ -208,10 +413,16 @@ export function attachPresence(server: Server) {
 }
 
 /** Admin/izleme için — o an odada kaç kişi var */
-export function presenceCount(): { total: number; byWeek: Record<number, number> } {
+export function presenceCount(): {
+  total: number; byWeek: Record<number, number>; village: number;
+} {
   const byWeek: Record<number, number> = {};
-  for (const p of peers.values()) byWeek[p.week] = (byWeek[p.week] ?? 0) + 1;
-  return { total: peers.size, byWeek };
+  let village = 0;
+  for (const p of peers.values()) {
+    byWeek[p.week] = (byWeek[p.week] ?? 0) + 1;
+    if (p.oda === KOY) village++;
+  }
+  return { total: peers.size, byWeek, village };
 }
 
 /**

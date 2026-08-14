@@ -40,6 +40,16 @@ const PENCERE_TAVANI = 8;
 
 export const MAX_UZUNLUK = 180;
 
+/**
+ * Sohbet kanalı.
+ *
+ * ⚠️ `world` HERKESE, `guild` yalnız aynı loncaya. Kanal AYRIMI SUNUCUDA
+ * yapılmak zorunda: istemcide filtrelemek, lonca konuşmasını herkesin
+ * soketine göndermek demekti — bir sekmede ağ sekmesini açan herkes
+ * okurdu. Bu kozmetik değil, güvenlik sınırı.
+ */
+export type Kanal = 'world' | 'guild';
+
 export interface ChatMessage {
   /** kısa cüzdan — tam adres yayınlanmaz */
   n: string;
@@ -47,9 +57,15 @@ export interface ChatMessage {
   m: string;
   /** SUNUCU zaman damgası (ms) — istemciden gelen zaman kabul edilmez */
   at: number;
+  /** lonca etiketi (varsa) — isim yanında rozet */
+  g?: string;
+  /** kanal — istemci sekmeye ayırıyor */
+  c: Kanal;
 }
 
+/** Dünya geçmişi tek halka; lonca geçmişi LONCA BAŞINA ayrı halka */
 const gecmis: ChatMessage[] = [];
+const loncaGecmisi = new Map<string, ChatMessage[]>();
 /** cüzdan → son gönderim zamanları (spam penceresi) */
 const gonderimler = new Map<string, number[]>();
 
@@ -110,11 +126,28 @@ export function konusabilir(wallet: string, now = Date.now()): boolean {
   return true;
 }
 
-/** Mesajı geçmişe ekle ve yayınlanacak hâlini döndür */
+/**
+ * Mesajı geçmişe ekle ve yayınlanacak hâlini döndür.
+ *
+ * ⚠️ `guildId` VERİLMEZSE lonca mesajı DÜNYAYA DÜŞMEZ, hiç kaydedilmez —
+ * `null` döner. Sessizce dünyaya yazsaydı loncasız birinin lonca sekmesine
+ * yazdığı özel konuşma bütün odaya gitmiş olurdu.
+ */
 export function kaydet(
   kisaAd: string, metin: string, now = Date.now(), etiket?: string | null,
-): ChatMessage {
-  const msg: ChatMessage = { n: kisaAd, m: metin, at: now, ...(etiket ? { g: etiket } : {}) };
+  kanal: Kanal = 'world', guildId?: string | null,
+): ChatMessage | null {
+  const msg: ChatMessage = {
+    n: kisaAd, m: metin, at: now, c: kanal, ...(etiket ? { g: etiket } : {}),
+  };
+  if (kanal === 'guild') {
+    if (!guildId) return null;
+    const halka = loncaGecmisi.get(guildId) ?? [];
+    halka.push(msg);
+    if (halka.length > HISTORY) halka.splice(0, halka.length - HISTORY);
+    loncaGecmisi.set(guildId, halka);
+    return msg;
+  }
   gecmis.push(msg);
   // ⚠️ Sınırsız büyüyen dizi, uzun ömürlü süreçte sessiz bir bellek
   // sızıntısıdır. Baştan kırp.
@@ -122,13 +155,23 @@ export function kaydet(
   return msg;
 }
 
-/** Odaya yeni girene gösterilecek son mesajlar */
-export function son(): ChatMessage[] {
-  return gecmis.slice();
+/**
+ * Odaya yeni girene gösterilecek son mesajlar.
+ *
+ * ⚠️ Loncalıya KENDİ lonca geçmişi de eklenir. Eklenmeseydi lonca sekmesi
+ * her yeniden bağlanışta boş açılır ve "burada kimse konuşmuyor" izlenimi
+ * verirdi — sosyal katmanı öldüren tam olarak budur.
+ */
+export function son(guildId?: string | null): ChatMessage[] {
+  const dunya = gecmis.slice();
+  if (!guildId) return dunya;
+  const lonca = loncaGecmisi.get(guildId) ?? [];
+  return [...dunya, ...lonca].sort((a, b) => a.at - b.at).slice(-HISTORY);
 }
 
 /** Test/kapanış — süreç içi durum sıfırlanır */
 export function temizleHepsi() {
   gecmis.length = 0;
+  loncaGecmisi.clear();
   gonderimler.clear();
 }
