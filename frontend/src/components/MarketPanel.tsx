@@ -211,8 +211,12 @@ export function MarketPanel({
     // hepsi aynı olsaydı sıralama düğmeleri hiçbir şey değiştirmez ve
     // "çalışıyor" diye yanlış izlenim verirdi.
     if (isTestMode()) {
-      setBook(TEST_LISTINGS as unknown as Listing[]);
-      setMine(TEST_MY_LISTINGS.listings as unknown as Listing[]);
+      // ⚠️ `as unknown as Listing[]` KALDIRILDI — tip denetimini kapatıyordu.
+      // Aynı hata `gameSession.ts`te 9 sahte veride vardı ve dört sessiz
+      // yanlışa yol açmıştı (bkz. `testMode.ts`). Fixture artık
+      // `satisfies Listing[]` ile doğrulanıyor.
+      setBook(TEST_LISTINGS);
+      setMine(TEST_MY_LISTINGS.listings);
       setEscrow(TEST_MY_LISTINGS.escrowedGold);
       setLoading(false);
       return;
@@ -318,6 +322,29 @@ export function MarketPanel({
         title="Player to player"
         sub="Sell your gold to another player for $GRAVE. The game never mints the token — every coin comes out of someone else’s wallet."
       />
+
+      {/* ⚠️ TOKEN YOKKEN DÜRÜST UYARI.
+          Sunucuda YALNIZ `buyListing` kapalı (503 `token_yok`); İLAN AÇMAK
+          serbest ve gold ANINDA emanete gidiyor. Yani oyuncu bugün 8.000
+          gold'u listeleyebilir ve onu HİÇ KİMSE alamaz — çünkü $GRAVE henüz
+          yok. Panelde bunu söyleyen tek şey satın alma düğmesinin üstündeki
+          "AWAITING $GRAVE" yazısıydı ve o belirsiz: "alıcının GRAVE'ini mi
+          bekliyor" diye okunuyor.
+          Exchange zaten bu sebeple dürüstçe kilitli; market de aynı cümleyi
+          kurmalı. Gold kilitli KALMIYOR (iptal her an mümkün) ama oyuncu
+          bunu bilerek karar vermeli. */}
+      {!tokenLive && (
+        <div style={{
+          marginBottom: 10, padding: '9px 11px', borderRadius: 8,
+          border: `1px solid ${C.candle}55`, background: 'rgba(239,167,46,0.10)',
+          fontSize: 11.5, color: C.boneDim, lineHeight: 1.5,
+        }}>
+          <b style={{ color: C.candle }}>$GRAVE has not launched yet.</b> You can
+          list gold and it will wait in escrow, but <b style={{ color: C.bone }}>nobody
+          can buy it until the token exists</b>. Cancel any listing at any time to
+          take your gold back.
+        </div>
+      )}
 
       {/* ── İSTATİSTİK ŞERİDİ ──
           ⚠️ "En iyi fiyat" bir marketin ilk sorusu ve panelde HİÇ YOKTU.

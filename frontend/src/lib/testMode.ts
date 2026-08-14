@@ -27,7 +27,7 @@
  */
 import type {
   BossState, CryptState, DuelBoard, FollowState, GearView,
-  GuildState, PvpSeasonState, QuestState, SkillState,
+  GuildState, Listing, PvpSeasonState, QuestState, SkillState,
 } from '@/lib/gameSession';
 
 export function isTestMode(): boolean {
@@ -325,7 +325,7 @@ export const TEST_LISTINGS = [
     priceGrave: '408', status: 'active', createdAt: '2026-08-11T08:15:00Z', buyer: null },
   { id: 'mk6', seller: 'Ashwa1ker00000000000000000000000000000000000', goldAmount: 3400,
     priceGrave: '7480', status: 'active', createdAt: '2026-08-10T22:10:00Z', buyer: null },
-];
+] satisfies Listing[];
 
 /** ⚠️ Kendi ilanım — `mk4` defterde de var, "HIDE MINE" filtresi ölçülebilsin. */
 export const TEST_MY_LISTINGS = {

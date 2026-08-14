@@ -15,33 +15,42 @@ import { contributeToVault } from './crypt.js';
 import { trackQuest } from './quests.js';
 
 /** Defter kalemi türü. Yeni bir gold yolu açan HER uç buraya bir tür eklemeli. */
-export type LedgerKind =
-  | 'run'            // koşu ödülü (musluk)
-  | 'forge'          // kalıcı yükseltme
-  | 'charm'          // tek koşuluk tılsım
-  | 'reliquary'      // kozmetik çekilişi
-  | 'dust'           // tozla hedefli alım (gold hareketi yok, iz için)
-  | 'ossuary'        // anıt seviyesi
-  | 'wager'          // bahis yatırımı (koşu açılırken yanar)
-  | 'market_list'    // ilana kilitlenen gold (escrow)
-  | 'market_cancel'  // escrow'dan geri dönen gold
-  | 'crypt'          // Crypt Vault'tan haftalık çekim (YENİ GOLD DEĞİL — bkz. crypt.ts)
-  | 'crypt_deed'     // deed alımı. ⚠️ SINK_KINDS'ta YOK: kasaya katkı yapmaz,
-                     // yoksa oyuncu kendi alımından pay alırdı. Tamamen imha.
-  | 'skill'          // beceri ağacı respec'i. ⚠️ GÜÇ SATMIYOR — oyuncu zaten
-                     // sahip olduğu gücü yeniden diziyor; sonsuz, tekrarlanabilir
-                     // ve hiçbir şey ÜRETMEYEN bir sink.
-  | 'guild'          // lonca kurma + hazine bağışı. ⚠️ GERİ ÇEKİLEMEZ —
-                     // çekilebilseydi lonca oyuncular arası transfer kanalı olurdu.
-  | 'reforge'        // ekipman yükseltme + yeniden dizme. ⚠️ SONSUZ SINK ve
-                     // hiçbir şey ÜRETMİYOR: gold gidiyor, karşılığında
-                     // oyuncunun ZATEN sahip olduğu parça yeniden diziliyor.
-  | 'pet';           // bağlama + yükseltme + füzyon + ikinci yuva.
-                     // ⚠️ Reforge'un AKSİNE bu SONLU bir sink ve GÜÇ SATIYOR.
-                     // Kabul edilebilir olmasının tek sebebi TAVANI olması
-                     // (bkz. pets.ts PET_CAP): tavansız olsaydı gold sınırsız
-                     // güce çevrilir ve "derinlik parayla aşılamaz" duruşu
-                     // çökerdi. Sonsuz sink Ossuary olarak KALIYOR.
+/**
+ * TÜM defter türleri — TEK KAYNAK.
+ *
+ * ⚠️ NİYE DİZİ: `LedgerKind` sadece bir tip birliğiydi ve tipler derlemede
+ * SİLİNİYOR, yani çalışma zamanında "hangi türler var" diye sorulamıyordu.
+ * Sonucu ölçüldü: `crypt.ts` SINK_KINDS'ta `pet` ve `reforge` YOKTU ve
+ * hiçbir test bunu yakalayamadı — testler tek tek birkaç türü kontrol
+ * ediyordu, listenin TAMAMINI değil. Artık tür eklendiğinde `crypt.test`
+ * onu sınıflandırmaya ZORLUYOR.
+ */
+export const LEDGER_KINDS = [
+  'run',            // koşu ödülü (musluk)
+  'forge',          // kalıcı yükseltme
+  'charm',          // tek koşuluk tılsım
+  'reliquary',      // kozmetik çekilişi
+  'dust',           // tozla hedefli alım (gold hareketi yok, iz için)
+  'ossuary',        // anıt seviyesi
+  'wager',          // bahis yatırımı (koşu açılırken yanar)
+  'market_list',    // ilana kilitlenen gold (escrow)
+  'market_cancel',  // escrow'dan geri dönen gold
+  'crypt',          // Crypt Vault'tan haftalık çekim (YENİ GOLD DEĞİL)
+  'crypt_deed',     // deed alımı
+  'skill',          // beceri ağacı respec'i
+  'guild',          // lonca kurma + hazine bağışı
+  'reforge',        // ekipman yükseltme + yeniden dizme
+  'pet',            // bağlama + yükseltme + füzyon + ikinci yuva
+] as const;
+
+/**
+ * Defter türü.
+ *
+ * ⚠️ Her türün ne olduğu ve neden öyle olduğu `crypt.ts` SINK_KINDS /
+ * NON_SINK_KINDS bloklarında yazılı — orası hangi harcamanın Crypt Vault'u
+ * beslediğine karar veriyor ve iki liste birlikte okunmalı.
+ */
+export type LedgerKind = typeof LEDGER_KINDS[number];
 
 export interface LedgerEntry {
   wallet: string;

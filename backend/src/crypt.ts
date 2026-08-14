@@ -23,8 +23,35 @@ import type { LedgerKind } from './ledger.js';
  * doldurup payını geri çekerdi — küçük ama gerçek bir kaçak.
  * ⚠️ `run` YOK: o musluk, harcama değil.
  */
-const SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
+export const SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
   'forge', 'charm', 'reliquary', 'ossuary', 'wager', 'guild', 'skill',
+]);
+
+/**
+ * Kasayı BESLEMEYEN türler — her biri gerekçesiyle.
+ *
+ * ⚠️ NİYE AÇIKÇA LİSTELENİYOR: `pet` ve `reforge` bu listede DE, SINK'te DE
+ * yoktu — yani sessizce dışarıda kalmışlardı ve hiçbir test bunu görmüyordu.
+ * Oysa ikisi de gerçek gold harcaması (bağlama 800–8.000 G, ikinci yuva
+ * 40.000 G; reforge ise dosyada "SONSUZ SINK" diye tanımlı). Bu bir KARAR
+ * mıydı yoksa gözden mi kaçtı, koddan anlaşılamıyordu.
+ * ⚠️ `crypt.test.mts` artık HER `LEDGER_KINDS` üyesinin ikisinden birinde
+ * olmasını şart koşuyor; yeni bir tür eklendiğinde sınıflandırmadan geçemez.
+ */
+export const NON_SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
+  // musluk / iz — harcama değil
+  'run', 'dust', 'market_cancel', 'crypt',
+  // ⚠️ ESCROW: iptal edilince gold geri dönüyor. Katkı alsaydık oyuncu ilan
+  // açıp iptal ederek kasayı kendi gold'uyla doldurup payını çekerdi.
+  'market_list',
+  // ⚠️ Deed alımı: kasaya katkı yapsaydı oyuncu kendi alımından pay alırdı.
+  'crypt_deed',
+  // 🔴 AÇIK KARAR (panel denetimi 2026-08-14): aşağıdaki ikisi kasayı
+  // beslemiyor ve bunun yazılı bir gerekçesi YOKTU. Deed paneli "köyde
+  // yapılan HER alışverişin %10'u kasaya düşer" diyordu — bu ikisi yüzünden
+  // yanlıştı; panel metni düzeltildi. Kasaya EKLENMELİ Mİ, kullanıcının
+  // ekonomi kararı: eklemek kasa girişini artırır ve deed payını değiştirir.
+  'pet', 'reforge',
 ]);
 
 export function isCryptSink(kind: string, gold: number): boolean {

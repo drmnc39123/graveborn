@@ -12,7 +12,8 @@
 import { CRYPT_CUT, cryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { prisma } from './db.js';
-import { claimCrypt, contributeToVault, isCryptSink, vaultState } from './crypt.js';
+import { NON_SINK_KINDS, SINK_KINDS, claimCrypt, contributeToVault, isCryptSink, vaultState } from './crypt.js';
+import { LEDGER_KINDS } from './ledger.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -35,6 +36,21 @@ await prisma.player.createMany({
 
 console.log('\n[1] Hangi harcama kasaya katkı yapar');
 {
+  // ⭐ EKSİKSİZLİK MÜHRÜ — bu testin olmayışı gerçek bir boşluk yarattı.
+  // `pet` ve `reforge` ne SINK_KINDS'ta ne de bir gerekçe listesindeydi;
+  // yani kasayı beslemiyorlardı ve bunu kimse görmüyordu. Testler tek tek
+  // birkaç türü kontrol ediyordu, LİSTENİN TAMAMINI değil.
+  const siniflandirilmamis = LEDGER_KINDS.filter(
+    (k) => !SINK_KINDS.has(k) && !NON_SINK_KINDS.has(k),
+  );
+  check('HER defter türü sınıflandırılmış (sink ya da değil)',
+    siniflandirilmamis.length === 0,
+    siniflandirilmamis.join(', ') || 'hepsi sınıflı');
+  // ⚠️ İki listenin KESİŞİMİ de boş olmalı — bir tür ikisinde birden olamaz
+  const cakisan = LEDGER_KINDS.filter((k) => SINK_KINDS.has(k) && NON_SINK_KINDS.has(k));
+  check('hiçbir tür iki listede birden değil', cakisan.length === 0,
+    cakisan.join(', ') || 'temiz');
+
   check('forge harcaması sink', isCryptSink('forge', -100));
   check('ossuary harcaması sink', isCryptSink('ossuary', -100));
   // ⚠️ ESCROW SİNK DEĞİL: ilan açıp iptal ederek kasayı kendi gold'unla
