@@ -135,7 +135,7 @@ export function SkillPanel({ progress, onChange, onError }: {
                 return (
                   <button key={n.id}
                     onClick={() => { if (acik || !engel) cevir(n); }}
-                    title={engel ?? n.desc}
+                    title={engel ? `${n.desc} — ${engel}` : n.desc}
                     style={{
                       all: 'unset', boxSizing: 'border-box', width: '100%',
                       cursor: acik || !engel ? 'pointer' : 'default',
@@ -173,9 +173,27 @@ export function SkillPanel({ progress, onChange, onError }: {
                         </span>
                         {n.capstone && <Tag tone="gold">CAPSTONE</Tag>}
                       </span>
+                      {/* ⚠️ AÇIKLAMA HER ZAMAN GÖRÜNÜR.
+                          Önce `{engel ?? n.desc}` yazıyordu — yani ön koşulu
+                          karşılanmayan düğümde açıklamanın YERİNE engel
+                          geçiyordu. Sonucu: 20 düğümün 12'sinde (3p ve 6p'lik
+                          PAHALI olanların hepsinde) oyuncu ne aldığını hiç
+                          göremiyordu, sadece "Needs Long Reach" yazıyordu.
+                          Panelin kendi başlığı "bu bitirilecek bir şey değil,
+                          KARAR VERİLECEK bir şey" diyor — körlemesine karar
+                          verilemez. Engel artık açıklamayı gizlemiyor, ALTINA
+                          ekleniyor. */}
                       <span style={{ display: 'block', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.4 }}>
-                        {engel ?? n.desc}
+                        {n.desc}
                       </span>
+                      {engel && (
+                        <span style={{
+                          display: 'block', fontSize: 10, lineHeight: 1.4, marginTop: 1,
+                          color: kilitli ? C.bad : C.candle,
+                        }}>
+                          {engel}
+                        </span>
+                      )}
                     </span>
                     <span style={{
                       flexShrink: 0, fontSize: 11, fontWeight: 900,

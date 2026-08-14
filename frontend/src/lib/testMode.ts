@@ -132,9 +132,22 @@ const W2 = 'Cryptkeep3r000000000000000000000000000000000';
 const W3 = 'B0nesinger00000000000000000000000000000000000';
 const ME = 'TESTwa11et000000000000000000000000000000000';
 
-/** ⚠️ `SkillState` — puan DERİNLİKTEN gelir, burada sadece çizim için sabit. */
+/**
+ * ⚠️ `SkillState` — puan DERİNLİKTEN gelir, burada sadece çizim için sabit.
+ *
+ * ⚠️ DÜĞÜM ID'LERİ GERÇEK OLMAK ZORUNDA. Burada `blade_1`, `blade_2`,
+ * `bulwark_1` yazıyordu — `skills.ts`te BÖYLE DÜĞÜMLER YOK (gerçekleri
+ * `blade_edge`, `blade_reach`, `blade_wide`…). `sanitizeSkills` üçünü de
+ * eliyordu, yani test modunda ağaç HER ZAMAN boş görünüyordu: "12 / 12 PTS",
+ * hiçbir düğüm seçili değil. Seçili düğüm, harcanmış puan, dışlama kilidi
+ * ("Locked out") — denetimde asıl bakılacak durumların hiçbiri görülemiyordu.
+ *
+ * ⚠️ `spent` seçili düğümlerin TOPLAMIYLA tutmalı: blade_edge(1) +
+ * blade_reach(1) + blade_wide(3) = 5. Panel zaten `spentPoints(taslak)`
+ * ile kendi hesaplıyor; tutmazsa sahte veri kendi içinde çelişir.
+ */
 export const TEST_SKILLS = {
-  nodes: ['blade_1', 'blade_2', 'bulwark_1'],
+  nodes: ['blade_edge', 'blade_reach', 'blade_wide'],
   points: 12,
   spent: 5,
   respec: 1_250,
