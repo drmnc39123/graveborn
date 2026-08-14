@@ -377,7 +377,7 @@ export const worldBossAvailable = () => isWallet();
  */
 export async function fetchWorldBoss(): Promise<BossState> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_BOSS as never;
+  if (isTestMode()) return TEST_BOSS;
   return api<BossState>('/worldboss');
 }
 
@@ -662,7 +662,7 @@ export interface CryptState {
 
 export async function fetchCrypt(): Promise<CryptState> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_CRYPT as never;
+  if (isTestMode()) return TEST_CRYPT;
   return api<CryptState>('/crypt');
 }
 
@@ -702,7 +702,7 @@ export interface GuildState {
 
 export async function fetchGuilds(): Promise<GuildState> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_GUILDS as never;
+  if (isTestMode()) return TEST_GUILDS;
   const out = await api<Omit<GuildState, 'wallet'>>('/guild');
   return { ...out, wallet: getWallet() };
 }
@@ -739,7 +739,7 @@ export interface GearView {
 
 export async function fetchGear(): Promise<GearView> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_GEAR as never;
+  if (isTestMode()) return TEST_GEAR;
   return api<GearView>('/gear');
 }
 
@@ -849,7 +849,7 @@ export interface FollowState { rows: FollowRow[]; max: number }
 
 export async function fetchFollows(): Promise<FollowState> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_FOLLOWS as never;
+  if (isTestMode()) return TEST_FOLLOWS;
   return api<FollowState>('/follow');
 }
 
@@ -875,7 +875,7 @@ export interface QuestState {
 
 export async function fetchQuests(): Promise<QuestState> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_QUESTS as never;
+  if (isTestMode()) return TEST_QUESTS;
   return api<QuestState>('/quests');
 }
 
@@ -905,7 +905,7 @@ export interface PvpSeasonState {
 
 export async function fetchPvpSeason(): Promise<PvpSeasonState> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_PVP_SEASON as never;
+  if (isTestMode()) return TEST_PVP_SEASON;
   return api<PvpSeasonState>('/pvp/season');
 }
 
@@ -916,7 +916,7 @@ export async function findDuel(): Promise<DuelRow> {
 
 export async function fetchDuels(): Promise<DuelBoard> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_DUELS as never;
+  if (isTestMode()) return TEST_DUELS;
   return api<DuelBoard>('/duel');
 }
 
@@ -962,7 +962,7 @@ export interface SkillState {
 
 export async function fetchSkills(): Promise<SkillState> {
   // ⚠️ SADECE ÇİZİM İÇİN — bkz. lib/testMode.ts. Üretimde derlenmez.
-  if (isTestMode()) return TEST_SKILLS as never;
+  if (isTestMode()) return TEST_SKILLS;
   return api<SkillState>('/skills');
 }
 

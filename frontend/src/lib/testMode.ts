@@ -20,6 +20,16 @@
 // ⚠️ Sahte veriler GERÇEKÇİ olmalı — hepsi boş/sıfır olsaydı panelleri dolu
 // hâlleriyle göremezdik ve düzeltilecek şey de görünmezdi.
 
+/**
+ * ⚠️ TİPLER SADECE DOĞRULAMA İÇİN — `import type`, çalışma zamanında yok.
+ * `gameSession.ts` bu dosyayı içe aktarıyor; tip içe aktarımı derlemede
+ * silindiği için gerçek bir döngü oluşmuyor.
+ */
+import type {
+  BossState, CryptState, DuelBoard, FollowState, GearView,
+  GuildState, PvpSeasonState, QuestState, SkillState,
+} from '@/lib/gameSession';
+
 export function isTestMode(): boolean {
   if (process.env.NODE_ENV === 'production') return false;
   if (typeof window === 'undefined') return false;
@@ -70,7 +80,7 @@ export const TEST_QUESTS = {
     { id: 'q3', text: 'Spend 2,000 gold', goal: 2000, dust: 25, progress: 2000, done: true, claimed: true },
   ],
   bonus: { dust: 20, ready: true, claimed: false },
-};
+} satisfies QuestState;
 
 export const TEST_GEAR = {
   vaultSize: 24,
@@ -79,17 +89,39 @@ export const TEST_GEAR = {
   // yazılmıştı ve manken BOŞ görünüyordu — sahte veri gerçek şekle
   // uymazsa test modu YALAN SÖYLER, ki o zaman hiç olmamasından beterdir.
   equipped: { skull: 'g3', grasp: 'g1', shroud: 'g4' } as Record<string, string>,
+  // ⚠️ HER EK `kind` TAŞIMAK ZORUNDA ('boon' | 'bane'). Yoktu ve sonuç
+  // ölçüldü: `gearScore` `a.kind === 'boon'` diye bakıyor, alan eksik olunca
+  // HER ARTI EKSİ SAYILIYORDU — panelde kuşanılmış her parça negatif puanla
+  // ("-12.4 pts") ve tüm bonuslar lanet gibi görünüyordu. Tip artık zorluyor
+  // (`satisfies GearView`), ama sebebi burada yazılı kalsın.
+  //
+  // ⚠️ YÜKSEK NADİRLİKTE GERÇEK LANET VAR. Panelin başlığı "ikinci kademenin
+  // üstündeki her parça sana bir şeye mal olur — İKİ SÜTUNU DA OKU" diyor;
+  // sahte veride hiç lanet olmasaydı o cümlenin anlattığı ekran hiç
+  // görünmezdi.
   items: [
     { id: 'g1', slot: 'grasp', rarity: 4, depth: 31, equipped: true,
-      affixes: [{ stat: 'might', value: 0.18 }, { stat: 'crit', value: 0.06 }] },
+      affixes: [
+        { stat: 'might', value: 0.18, kind: 'boon' },
+        { stat: 'crit', value: 0.06, kind: 'boon' },
+        { stat: 'maxHp', value: 0.08, kind: 'bane' },
+      ] },
     { id: 'g2', slot: 'grasp', rarity: 2, depth: 14, equipped: false,
-      affixes: [{ stat: 'might', value: 0.07 }] },
+      affixes: [{ stat: 'might', value: 0.07, kind: 'boon' }] },
     { id: 'g3', slot: 'skull', rarity: 3, depth: 22, equipped: true,
-      affixes: [{ stat: 'maxHp', value: 0.12 }, { stat: 'armor', value: 2 }] },
+      affixes: [
+        { stat: 'maxHp', value: 0.12, kind: 'boon' },
+        { stat: 'armor', value: 2, kind: 'boon' },
+      ] },
     { id: 'g4', slot: 'shroud', rarity: 5, depth: 44, equipped: true,
-      affixes: [{ stat: 'armor', value: 5 }, { stat: 'recovery', value: 0.4 }, { stat: 'maxHp', value: 0.2 }] },
+      affixes: [
+        { stat: 'armor', value: 5, kind: 'boon' },
+        { stat: 'recovery', value: 0.4, kind: 'boon' },
+        { stat: 'maxHp', value: 0.2, kind: 'boon' },
+        { stat: 'moveSpeed', value: 0.09, kind: 'bane' },
+      ] },
     { id: 'g5', slot: 'tread', rarity: 1, depth: 6, equipped: false,
-      affixes: [{ stat: 'moveSpeed', value: 0.04 }] },
+      affixes: [{ stat: 'moveSpeed', value: 0.04, kind: 'boon' }] },
     // ⚠️ `magnet` KESİRLİ (gear.ts: 0.12 = %12), düz sayı DEĞİL. İlk sürümde
     // 12 yazılmıştı ve panel "−1200% pickup range" gösteriyordu. Panelde bir
     // biçimlendirme hatası sandım; ölçünce SAHTE VERİNİN yanlış olduğu çıktı.
@@ -97,9 +129,12 @@ export const TEST_GEAR = {
     // değiştirilir — bu yüzden sahte veri gerçek üreticinin ölçeğini taklit
     // etmek ZORUNDA.
     { id: 'g6', slot: 'sigil', rarity: 3, depth: 28, equipped: false,
-      affixes: [{ stat: 'greed', value: 0.15 }, { stat: 'magnet', value: 0.10 }] },
+      affixes: [
+        { stat: 'greed', value: 0.15, kind: 'boon' },
+        { stat: 'magnet', value: 0.10, kind: 'boon' },
+      ] },
   ],
-};
+} satisfies GearView;
 
 // ⚠️ ŞEKİL `GuildSummary` İLE BİREBİR: id · name · TAG · level · members · CAP.
 // İlk sürümde `tag` ve `cap` YOKTU, `treasury` ise fazladan vardı (o `MyGuild`'e
@@ -115,7 +150,7 @@ export const TEST_GUILDS = {
     { id: 'gu2', name: 'Marrow & Ash', tag: 'ASH', level: 2, members: 8, cap: 15 },
     { id: 'gu3', name: 'Gravebound', tag: 'GRV', level: 5, members: 27, cap: 30 },
   ],
-};
+} satisfies GuildState;
 
 export const TEST_FOLLOWS = {
   max: 20,
@@ -125,7 +160,7 @@ export const TEST_FOLLOWS = {
     { wallet: 'Cryptkeep3r000000000000000000000000000000000', hero: 'priestess', online: false,
       duelRating: 1180, bestStage: 12, bestDepth: 24, recordId: null, recordDepth: 0, blocker: 'offline' },
   ],
-};
+} satisfies FollowState;
 
 const W1 = 'Ashwa1ker00000000000000000000000000000000000';
 const W2 = 'Cryptkeep3r000000000000000000000000000000000';
@@ -151,7 +186,7 @@ export const TEST_SKILLS = {
   points: 12,
   spent: 5,
   respec: 1_250,
-};
+} satisfies SkillState;
 
 /** ⚠️ `DuelBoard` — dört parçası da dolu olmalı, yoksa panel yarım çizer. */
 export const TEST_DUELS = {
@@ -178,7 +213,7 @@ export const TEST_DUELS = {
     ],
     me: { rank: 17, wallet: ME, rating: 1264, wins: 42, losses: 39, hero: 'ranger' },
   },
-};
+} satisfies DuelBoard;
 
 export const TEST_PVP_SEASON = {
   week: 32,
@@ -193,7 +228,7 @@ export const TEST_PVP_SEASON = {
     { week: 31, rank: 2, rating: 1355, cosmetic: 'title_feared', dust: 180 },
     { week: 30, rank: 7, rating: 1240, cosmetic: null, dust: 60 },
   ],
-};
+} satisfies PvpSeasonState;
 
 /**
  * ⚠️ `BossState` — haftalık ortak boss. `art` alanı `sprites.ts` anahtarı
@@ -221,7 +256,7 @@ export const TEST_BOSS = {
     { wallet: 'Cryptkeep3r000000000000000000000000000000000', damage: 96_200 },
   ],
   me: { damage: 210_400, rank: 3 },
-};
+} satisfies BossState;
 
 /** ⚠️ `CryptState` — kademe listesi + kasa + benim kademem. */
 export const TEST_CRYPT = {
@@ -233,7 +268,7 @@ export const TEST_CRYPT = {
   ],
   vault: { balance: 84_500, owners: 37, totalWeight: 96 },
   me: { tier: 2, claimedWeek: 31 },
-};
+} satisfies CryptState;
 
 /**
  * ⚠️ `TicketView[]` — destek bölümü. Boş dizi de geçerli bir durum ama
