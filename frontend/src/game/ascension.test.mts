@@ -133,16 +133,33 @@ for (const asc of [0, 3, 6, 10]) {
 }
 const k0 = olcum[0], kMax = olcum[olcum.length - 1];
 
-// ⭐ ASIL DEĞİŞMEZ: koşuyu bitiren şey SAAT DEĞİL ÖLÜM olmalı — HER kademede.
+// ⭐ ASIL DEĞİŞMEZ: ZORLUK GERÇEKTEN ISIRMALI — en üst kademede koşuyu
+// bitiren şey saat DEĞİL ölüm olmalı.
 //
-// ⚠️ Bu kontrolün ilk hâli yanlış yazılmıştı: "0. kademe hâlâ süre tavanına
-// çarpıyor" diyordu, yani DÜZELTİLMESİ GEREKEN HATANIN VARLIĞINI şart
-// koşuyordu. Ölçüm sırasında asıl kök neden bulununca (düşman hasarı
-// derinlikle hiç ölçeklenmiyordu) 0. kademe de ölümle bitmeye başladı ve
-// test kırmızı yandı. Eşiği gevşetmek değil, DEĞİŞMEZİ düzeltmek gerekiyordu.
-const tavanaCarpan = olcum.reduce((s, o) => s + o.tavan, 0);
-check('hiçbir kademede koşuyu SAAT bitirmiyor (duvar HP, takvim değil)',
-  tavanaCarpan === 0, `${tavanaCarpan}/${olcum.length * SEEDS} koşu tavana çarptı`);
+// ⚠️ BU İDDİA 2026-08-14'TE DEĞİŞTİ (kullanıcı kararı). Önceki hâli
+// "HİÇBİR kademede saat bitirmesin" diyordu ve o dönem doğruydu: koşular
+// düşman hasarı derinlikle ölçeklenmediği için saatle bitiyordu, yani test
+// bir HATAYI kovalıyordu. O kök neden düzeltildi.
+//
+// ⚠️ SONRA İKİNCİ BİR ŞEY ORTAYA ÇIKTI: bu dosyanın `smartPick`i BOZUKTU
+// (`o.kind === 'weapon'` ve `o.stat` — ikisi de motorun `Offer` tipinde YOK),
+// yani RASTGELE oynayan bir oyuncu simüle ediyordu ve o oyuncunun canı
+// bitiyordu. `simPlayer.mts` ile yetkin oyuncuya geçilince 36 koşunun 11'i
+// 30 dk tavanına çarptı ve test kırmızı yandı.
+//
+// KARAR: 30 dakika bir HATA değil, KASITLI KOŞU UZUNLUĞU (VS'in modeli de
+// bu — 30 dakika hayatta kalırsan kazanırsın). Yani düşük kademede tavana
+// çarpmak DOĞRU davranış: oyuncu koşuyu tamamlamıştır.
+//
+// Değişmez artık şu: ASCENSION'IN İŞİ ZORLAŞTIRMAK. En üst kademede oyuncu
+// hâlâ 30 dakika hayatta kalıyorsa katman hiçbir şey yapmıyor demektir.
+// Ölçüldü: kademe 10'da 0/9 koşu tavana çarpıyor (16,2 dk'da ölüyor),
+// kademe 0'da ise koşular tamamlanıyor — istenen şekil tam olarak bu.
+check('EN ÜST kademede saat değil ÖLÜM bitiriyor (katman gerçekten ısırıyor)',
+  kMax.tavan === 0, `en üst kademede ${kMax.tavan}/${SEEDS} koşu tavana çarptı`);
+// Düşük kademede tavana çarpmak serbest ama BİLGİ olarak basılıyor —
+// dağılım bozulursa (ör. en üst kademe de tamamlanmaya başlarsa) görülsün.
+console.log(`     tavan dağılımı: ${olcum.map((o) => `A${o.asc}:${o.tavan}/${SEEDS}`).join(' · ')}`);
 check('0. kademe hâlâ uzun bir koşu (katman oyunu kısaltmadı)', k0.sec > 15 * 60,
   `${(k0.sec / 60).toFixed(1)} dk`);
 check('zorluk gerçekten derinliği düşürüyor', kMax.depth < k0.depth,
