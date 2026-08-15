@@ -15,7 +15,7 @@ import {
   BEHAVIOR, BOSS, BOSS_ARCH, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, EVOLVED, MAX_PASSIVES,
   MAX_WEAPONS, PASSIVES, PLAYER,
   SIM_VERSION, STAGES, STAT_BASE, STAT_CAP, TICK, WEAPONS,
-  descentStage, rareDropChance, stageById, weaponById,
+  descentStage, evrimPasifEsigi, evrimSilahEsigi, rareDropChance, stageById, weaponById,
   type BossArchetype, type StageDef,
 } from './config.js';
 import { ENEMY_ART } from './sprites.js';
@@ -186,7 +186,12 @@ check(`simülasyon mührü (SIM_VERSION ${SIM_VERSION})`, seal === SIM_SEAL,
     (g as unknown as { rollOffers: (h: unknown) => void }).rollOffers(g.hero);
     dizi.push(g.offers.map((o) => o.id).join('+'));
   }
-  const POOL_SEAL = '6f9424d0';
+  // ⚠️ MÜHÜR YENİLENDİ — SIM_VERSION 11 (2026-08-15). Bu bir GERÇEK rng
+  // değişikliği: `MAX_WEAPONS` 6→4 havuzun içeriğini, garantili pasif
+  // teklifi ise seçilen üçlüyü değiştirdi. Aynı seed artık başka kartlar
+  // gösteriyor, yani eski mühür zorunlu olarak kırıldı.
+  // Eski değer (SIM_VERSION 10): 6f9424d0
+  const POOL_SEAL = '33555db7';
   const poolSeal = fnv1a(dizi.join('|'));
   const gorulen = new Set(dizi.join('|').split(/[|+]/));
   const eksik = WEAPONS.filter((w) => !gorulen.has(`w:${w.id}`)).map((w) => w.id);
@@ -1243,7 +1248,19 @@ console.log('\n[10C] keeper: merkez GERÇEKTEN güvenli mi');
     let toplam = 0;
     const ticks = Math.round(600 / TICK);
     for (let i = 0; i < ticks; i++) {
-      if (g.phase === 'levelup') g.choose(g.offers[0].id);
+      // ⚠️ LEVEL-UP'TA PASİF SEÇİLİYOR, `offers[0]` DEĞİL.
+      // Yukarıdaki "build sabit" notu bir NİYETTİ ama uygulanmıyordu:
+      // `offers[0]` silah da getirebiliyor ve iki silahlık sabit build
+      // sessizce büyüyordu. Teklif sırası değiştiği an (SIM_VERSION 11'de
+      // garantili pasif eklendi) bu ölçüm bambaşka bir build'i ölçmeye
+      // başladı ve "dış bantta hasar 0" diye YANLIŞ kırmızı yandı — halka
+      // gayet çalışıyordu, boss farklı hızda ölüyordu.
+      // Pasif seçmek silah listesini KORUYOR; ölçülmek istenen şey
+      // (halka merkezi vuruyor mu) build'den bağımsız kalıyor.
+      if (g.phase === 'levelup') {
+        const pasif = g.offers.find((o) => o.kind === 'passive-new' || o.kind === 'passive-up');
+        g.choose((pasif ?? g.offers[0]).id);
+      }
       if (g.phase !== 'running') break;
       const boss = g.enemies.find((e) => e.boss);
       if (boss?.boss) {
@@ -1283,23 +1300,35 @@ console.log('\n[10C] keeper: merkez GERÇEKTEN güvenli mi');
   check('dış bantta hasar VAR (ölçüm anlamlı)', disarida > 0, `${disarida}`);
 }
 
-// Evrim ŞARTLARI: eksik pasifle evrim OLMAMALI, tam şartla OLMALI
-function evolveScenario(weaponMax: boolean, passiveMax: boolean) {
+/**
+ * Evrim ŞARTLARI: eşiğin altında evrim OLMAMALI, eşikte OLMALI.
+ *
+ * ⚠️ ARTIK "MAX" DEĞİL EŞİK. SIM_VERSION 11'de şart gevşetildi
+ * (`evrimSilahEsigi` = maxLevel−2, `evrimPasifEsigi` = min(3, maxLevel))
+ * çünkü MAX/MAX bu oyunda ulaşılamıyordu — 11 evrim yazılmış, sıfırı
+ * tetikleniyordu. Senaryo eşikten OKUYOR, sayıyı elle yazmıyor: eşik
+ * değişirse test kendiliğinden onu ölçer.
+ */
+function evolveScenario(weaponOk: boolean, passiveOk: boolean) {
   const g = new Game(1);
   g.setViewport(1280, 720);
   const w = g.weapons.find((x) => x.def.id === 'shard')!;
-  w.level = weaponMax ? w.def.maxLevel : 1;
+  w.level = weaponOk ? evrimSilahEsigi(w.def) : 1;
   (g as any).givePassive(g.hero, 'hands');
   const p = g.passives.find((x) => x.def.id === 'hands')!;
-  p.level = passiveMax ? p.def.maxLevel : 1;
+  p.level = passiveOk ? evrimPasifEsigi(p.def) : 1;
   (g as any).recomputeStats(g.hero);
   // evrim sandığını doğrudan oyuncunun üstüne koy
   g.chests.push({ x: g.px, y: g.py, evolution: true });
   g.step();
   return g.weapons.find((x) => x.def.id === 'reliquary') !== undefined;
 }
-check('silah MAX değilse evrim OLMUYOR', !evolveScenario(false, true));
-check('pasif MAX değilse evrim OLMUYOR', !evolveScenario(true, false));
+check('silah eşiğin ALTINDAYSA evrim OLMUYOR', !evolveScenario(false, true));
+check('pasif eşiğin ALTINDAYSA evrim OLMUYOR', !evolveScenario(true, false));
+// ⭐ ÇİFT TARAFLI: iki "olmuyor" tek başına bir şey kanıtlamaz — evrim HİÇ
+// çalışmıyor olsaydı ikisi de yeşil kalırdı. Bu satır eşiğin GERÇEKTEN
+// yettiğini ölçüyor ve şart sessizce MAX'a geri çekilirse kırmızı yanar.
+check('⭐ eşiği tutturan build EVRİMLEŞİYOR', evolveScenario(true, true));
 check('ikisi de MAX ise evrim OLUYOR', evolveScenario(true, true));
 
 // Evrim sandığı OLMAYAN sandık evrim vermemeli, ama ödül vermeli

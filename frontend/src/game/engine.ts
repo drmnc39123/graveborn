@@ -10,6 +10,7 @@ import { SpatialHash } from './spatial';
 import {
   BOSS, BOSS_ARCH, CHEST_RADIUS, DESCENT, CONTACT_HIT_CD, COOLDOWN_FLOOR, ENEMIES, EVOLUTIONS, GEM,
   MAX_PASSIVES, MAX_WEAPONS, PASSIVES, PLAYER, RUN, SPAWN, STAGES, STAT_BASE, STAT_CAP, TICK,
+  evrimPasifEsigi, evrimSilahEsigi,
   WEAPONS, ASCENSION, BEHAVIOR, ascensionDropMul, bossArchetypeOf, descentStage, rareDropAmount,
   rareDropChance, startLevelFor, weaponById,
   weaponCooldownAt, weaponCountAt, weaponDamageAt, xpForLevel,
@@ -1154,15 +1155,36 @@ export class Game {
   }
 
   /**
-   * VS evrim kuralı: taban silah MAX + gereken pasif MAX + evrim sandığı.
-   * Uygun ilk eşleşme evrimleşir (VS'te de sandık başına bir evrim).
+   * Evrim kuralı: taban silah YETERİNCE YÜKSEK + gereken pasif YETERİNCE
+   * YÜKSEK + evrim sandığı. Uygun ilk eşleşme evrimleşir (VS'te de sandık
+   * başına bir evrim).
+   *
+   * 🔴 ŞART GEVŞETİLDİ (2026-08-15): eskiden VS'in birebir kuralıydı —
+   * silah MAX (lv8) + pasif MAX (lv5). ÖLÇÜLDÜ ve o şart bu oyunda
+   * ULAŞILAMAZDI: 13 hedefli seçim istiyor, ilerlemiş oyuncu 23 seçim
+   * alıyor ve bunları 4 silah + 6 pasife dağıtmak zorunda. Her kararını
+   * tek çifte harcayan KASITLI bir avcı bile silahı ancak lv4,8'e
+   * çıkarabiliyordu. Sonuç: 11 evrim yazılmış, sıfırı tetikleniyor.
+   *
+   * VS'te aynı şart çalışıyor çünkü VS oyuncusu koşu başına 60-100
+   * level-up alıyor; bizde 23. Kuralı kopyalamak yetmiyor, ONU BESLEYEN
+   * TEMPOYU da kopyalamak gerekiyordu — o yapılamayınca şart uyarlandı.
+   *
+   * ÖLÇÜM (6 seed, yarı Forge, kasıtlı avcı — `MAX_WEAPONS` 4 ile):
+   *     şart MAX/MAX          → evrim 0
+   *     şart maxLevel-2 / 3   → evrim 1,7 koşu başına
+   *
+   * ⚠️ MAKUL OYUNCU YİNE 0 GÖRÜYOR ve bu bilinçli kabul: evrim NİYET
+   * istiyor, kaza değil. VS'te de oyuncu tarifi öğrenip ona göre kuruyor.
+   * Buradaki iş "kazara evrim" üretmek değil, DENEYENİN ULAŞABİLMESİNİ
+   * sağlamaktı. Level-up kartındaki evrim ipucu bu yüzden kritik.
    */
   private tryEvolve(h: Hero): boolean {
     for (const ev of EVOLUTIONS) {
       const w = h.weapons.find((x) => x.def.id === ev.weapon);
-      if (!w || w.level < w.def.maxLevel) continue;
+      if (!w || w.level < evrimSilahEsigi(w.def)) continue;
       const p = h.passives.find((x) => x.def.id === ev.passive);
-      if (!p || p.level < p.def.maxLevel) continue;
+      if (!p || p.level < evrimPasifEsigi(p.def)) continue;
 
       const to = weaponById(ev.to);
       if (!to) continue;
@@ -2424,6 +2446,18 @@ export class Game {
     const weaponOffers = shuffled.filter((o) => o.kind === 'weapon-up' || o.kind === 'weapon-new');
     const picked: Offer[] = [];
     if (weaponOffers.length) picked.push(weaponOffers[0]);
+    // ⚠️ GARANTİLİ PASİF — yukarıdaki garantili silahın SİMETRİĞİ.
+    // Silah garantisi vardı, pasif garantisi YOKTU. `MAX_WEAPONS` 4'e
+    // inince havuzda silah yükseltmelerinin payı arttı ve ölçümde pasifler
+    // aç kaldı (6 yuvanın 2,2'si). Artık her level-up'ta en az bir pasif
+    // seçeneği MASADA — almak oyuncunun kararı.
+    // ⚠️ Bu, pasif açlığını tek başına ÇÖZMÜYOR: ölçümdeki vekil oyuncu
+    // silah yükseltmesini (77 puan) yeni pasiften (62) önde tutuyor ve
+    // sayı yerinde kaldı. Vekili sonucu güzelleştirmek için değiştirmek
+    // ölçüm aletini kurcalamak olurdu. Yapısal olan şey artık doğru:
+    // seçenek her zaman sunuluyor.
+    const passiveOffers = shuffled.filter((o) => o.kind === 'passive-up' || o.kind === 'passive-new');
+    if (passiveOffers.length) picked.push(passiveOffers[0]);
     for (const o of shuffled) {
       if (picked.length >= 3) break;
       if (picked.includes(o)) continue;

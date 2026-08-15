@@ -9,6 +9,7 @@
 // ⚠️ Tüm stiller INLINE · MOR YOK · oyuncu metinleri İngilizce.
 
 import { EVOLUTIONS, PASSIVES, WEAPONS, EVOLVED, weaponById,
+  evrimPasifEsigi, evrimSilahEsigi,
   weaponCooldownAt, weaponCountAt, weaponDamageAt } from '@/game/config';
 import { useState } from 'react';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
@@ -46,16 +47,25 @@ function evolutionHint(id: string, kind: string, level: number | undefined,
   const evolvedDef = EVOLVED.find((w) => w.id === evo.to);
   if (!def || !gerekenPasif || !evolvedDef) return null;
 
-  const silahMax = (level ?? 0) + 1 >= def.maxLevel;   // bu seçimden SONRA
-  const pasifMax = (sahipPasif?.level ?? 0) >= gerekenPasif.maxLevel;
+  // ⚠️ EŞİKLER `config.ts`TEN OKUNUYOR, elle YAZILMIYOR.
+  // Burada `>= def.maxLevel` ve `>= gerekenPasif.maxLevel` yazılıydı ve
+  // motorun şartı gevşetilince (SIM_VERSION 11) İPUCU ESKİ KURALI
+  // ANLATMAYA DEVAM ETTİ: oyuncuya "max'a çıkar" diyordu, oysa evrim daha
+  // erken tetikleniyordu, ve "EVOLUTION READY" rozeti hiç görünmüyordu.
+  // Eşiği iki yere yazmak onların ayrışması demek — tek kaynak şart.
+  const silahEsik = evrimSilahEsigi(def);
+  const pasifEsik = evrimPasifEsigi(gerekenPasif);
+  const silahHazir = (level ?? 0) + 1 >= silahEsik;   // bu seçimden SONRA
+  const pasifHazir = (sahipPasif?.level ?? 0) >= pasifEsik;
 
-  if (silahMax && pasifMax) {
+  if (silahHazir && pasifHazir) {
     return { tone: 'blood' as const, text: `EVOLUTION READY · ${evolvedDef.name}` };
   }
-  if (silahMax) {
-    return { tone: 'dim' as const, text: `Needs ${gerekenPasif.name} (${sahipPasif?.level ?? 0}/${gerekenPasif.maxLevel})` };
+  if (silahHazir) {
+    return { tone: 'dim' as const, text: `Needs ${gerekenPasif.name} (${sahipPasif?.level ?? 0}/${pasifEsik})` };
   }
-  return { tone: 'dim' as const, text: `Evolves into ${evolvedDef.name} at max` };
+  // ⚠️ "at max" DEĞİL, gerçek eşik yazılıyor — oyuncu hedefi bilmeli.
+  return { tone: 'dim' as const, text: `Evolves into ${evolvedDef.name} at Lv ${silahEsik}` };
 }
 
 export function LevelUpCard({ offer, index, onPick, weapons, passives }: {

@@ -56,7 +56,15 @@ export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana 
 // bir fazladan `rng.next()` bile tüketmiyor, bit bit eskisiyle aynı.
 // Sürüm yine de artıyor çünkü oyunun DAVRANIŞI değişti ve bunu sürüm
 // numarası söylemeli.
-export const SIM_VERSION = 10;
+// v11: EVRİM GEÇİŞİ — iki değişiklik, ikisi de ÖLÇÜMLE seçildi.
+//   1. level-up tekliflerinde GARANTİLİ PASİF (garantili silahın simetriği)
+//   2. evrim şartı gevşedi: silah `maxLevel-2`, pasif `min(3, maxLevel)`
+// ⚠️ `MAX_WEAPONS` 6→4 de DENENDİ ve GERİ ALINDI — pasifleri 5,8/6'dan
+// 1/6'ya çökertiyordu. Gerekçe `MAX_WEAPONS` tanımında yazılı.
+// ⚠️ GERÇEK BİR RNG DEĞİŞİKLİĞİ: teklif havuzu ve seçilen kartlar değişti,
+// yani aynı seed BAŞKA bir koşu üretiyor. Mühür zorunlu olarak yenilendi.
+// Gerekçe ve ölçümler `MAX_WEAPONS` ile `EVOLUTIONS` tanımlarında.
+export const SIM_VERSION = 11;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */
@@ -1189,6 +1197,27 @@ export const BOSSES: readonly BossSpawn[] = [
 export const CHEST_RADIUS = 22;
 
 /** Aynı anda taşınabilecek silah sayısı (VS: 6) */
+/**
+ * Bir koşuda taşınabilecek silah sayısı.
+ *
+ * ⚠️ 4'E İNDİRİLDİ VE GERİ ALINDI (2026-08-15) — ölçüm kararı çürüttü,
+ * not duruyor ki aynı yol tekrar denenmesin.
+ *
+ * Fikir şuydu: evrim tetiklenmiyor çünkü 23 seçim 12 yuvaya dağılıyor ve
+ * hiçbir silah maxlanmıyor. Yuvayı 4'e indirmek build'i yakınsatıyor ve
+ * gerçekten işe yaradı — silah lv4,8 → 6,7, kasıtlı avcı evrimleşti.
+ *
+ * AMA BEDELİ ÖLÇÜLDÜ VE AĞIRDI: pasifler 5,8/6'dan **1/6**'ya çöktü.
+ * Silah yuvası azalınca havuzdaki silah YÜKSELTMELERİ pasifleri dışlıyor
+ * (`smartPick`: weapon-up 80−3L, passive-new 62 — silah lv6'ya kadar
+ * kazanıyor). Yani 11 ölü evrim, 17 kullanılmayan pasife takas ediliyordu.
+ * `MAX_PASSIVES` 4'e indirmek de çözmedi (yine 1/6) — bağlayıcı olan yuva
+ * sayısı değil, teklif rekabeti.
+ *
+ * ⚠️ ASIL ÇÖZÜM YUVA DEĞİL, ŞARTTI: 6 yuva + garantili pasif teklifi +
+ * gevşetilmiş evrim şartı ile pasif 5,8/6 KALDI ve makul oyuncu evrim
+ * görmeye başladı. Bkz. `engine.ts` `tryEvolve` ve `rollOffers`.
+ */
 export const MAX_WEAPONS = 6;
 /** Alan hasarı (aura/orbit) aynı düşmana en sık bu aralıkla vurur */
 export const CONTACT_HIT_CD = 0.42;
@@ -1586,6 +1615,25 @@ export interface PassiveDef {
   perLevel: number;
   maxLevel: number;
   desc: string;
+}
+
+/**
+ * EVRİM EŞİKLERİ — TEK KAYNAK.
+ *
+ * ⚠️ NİYE FONKSİYON: eşikler iki yerde okunuyor — motor (`tryEvolve`) ve
+ * arayüz (`LevelUpCard` evrim ipucu). Sayı iki yere elle yazıldığında
+ * AYRIŞTI ve tam da öyle oldu: motorun şartı gevşetildi (`maxLevel-2` /
+ * `min(3, maxLevel)`) ama ipucu hâlâ `>= maxLevel` diyordu. Sonuç: oyuncuya
+ * "max'a çıkar" deniyor, oysa evrim daha erken tetikleniyor — ve
+ * "EVOLUTION READY" rozeti hiç görünmüyordu.
+ *
+ * ⚠️ Eşiği değiştireceksen SADECE BURAYI değiştir.
+ */
+export function evrimSilahEsigi(def: WeaponDef): number {
+  return Math.max(1, def.maxLevel - 2);
+}
+export function evrimPasifEsigi(def: PassiveDef): number {
+  return Math.min(3, def.maxLevel);
 }
 
 export const PASSIVES: readonly PassiveDef[] = [

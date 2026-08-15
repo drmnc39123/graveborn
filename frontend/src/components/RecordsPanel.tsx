@@ -6,7 +6,7 @@
 // "yakında" ekranı göstermek gereksiz olurdu.
 
 import { useEffect, useMemo, useState } from 'react';
-import { STAGES, depthGold } from '@/game/config';
+import { STAGES, depthGold, MAX_WEAPONS } from '@/game/config';
 import { FORGE, costOf, spentOn } from '@/game/forge';
 import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton, BTN } from '@/components/ui/kit';
@@ -124,9 +124,14 @@ function Armoury({ progress }: { progress: Progress }) {
 
   return (
     <>
+      {/* ⚠️ SAYI `MAX_WEAPONS`TEN OKUNUYOR, elle YAZILMIYOR. Burada "six"
+          yazılıydı ve yuva sayısı 4'e inince metin sessizce YALAN söylemeye
+          başlayacaktı — oyuncuya asla dolduramayacağı iki yuva vaat eden bir
+          cümle. Sabitten türeyen metin yalan söyleyemez. */}
       <p style={{ margin: '0 0 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
         Weapons appear as level-up choices once you have earned them. You can
-        carry six in a single run.
+        carry {MAX_WEAPONS} in a single run — the fewer you spread across,
+        the further each one levels.
       </p>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 10 }}>

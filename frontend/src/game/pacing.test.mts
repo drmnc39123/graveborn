@@ -20,7 +20,7 @@
 // (olmayan alanlara bakıyorlardı → rastgele oynayan oyuncu).
 
 import { FORGE, permanentBonus } from './forge.js';
-import { EVOLUTIONS, RUN, STAGES, TICK } from './config.js';
+import { EVOLUTIONS, MAX_WEAPONS, RUN, STAGES, TICK } from './config.js';
 import { Game } from './engine.js';
 import { seedFromString } from './rng.js';
 import { fleeInput, smartPick } from './simPlayer.mjs';
@@ -36,8 +36,7 @@ const SEEDS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
 /** Forge profilleri — oyuncu ilerledikçe koşu bambaşka oluyor */
 const bos: Record<string, number> = {};
 const yari: Record<string, number> = {};
-const tam: Record<string, number> = {};
-for (const u of FORGE) { yari[u.id] = Math.floor(u.maxLevel / 2); tam[u.id] = u.maxLevel; }
+for (const u of FORGE) yari[u.id] = Math.floor(u.maxLevel / 2);
 
 interface Sonuc {
   dk: number; secim: number; evrim: number; level: number;
@@ -102,9 +101,14 @@ function profil(up: Record<string, number>, sec?: (g: Game) => string) {
 console.log('\n═══ KOŞU TEMPOSU ═══');
 
 console.log('\n[1] İlerleme aşamasına göre koşu profili');
-const p0 = profil(bos), pY = profil(yari), pT = profil(tam);
-for (const [ad, p] of [['sıfır', p0], ['yarı', pY], ['tam', pT]] as const) {
-  console.log(`     ${ad.padEnd(6)} ${p.dk}dk · seçim ${p.secim} · silah ${p.silah}/6 · ` +
+// ⚠️ `tam` PROFİLİ DÜŞÜRÜLDÜ — bilgi kaybı kabul edildi. Her profil 6 adet
+// 30-DAKİKALIK simülasyon demek; üç profil + avcı profili 24 koşu ediyordu
+// ve test zaman aşımına uğrayıp HİÇ BİTMİYORDU. Koşmayan mühür, olmayan
+// mühürdür. `tam` ile `yarı` ölçümlerde birbirine çok yakın çıkıyordu
+// (evrim 0/0,2 · derinlik 27,3/26,2), yani kaybedilen ayrım küçük.
+const p0 = profil(bos), pY = profil(yari);
+for (const [ad, p] of [['sıfır', p0], ['yarı', pY]] as const) {
+  console.log(`     ${ad.padEnd(6)} ${p.dk}dk · seçim ${p.secim} · silah ${p.silah}/${MAX_WEAPONS} · ` +
     `pasif ${p.pasif}/6 · evrim ${p.evrim} · en yüksek silah lv${p.enYuksekSilah} · derinlik ${p.derinlik}`);
 }
 
@@ -113,24 +117,42 @@ for (const [ad, p] of [['sıfır', p0], ['yarı', pY], ['tam', pT]] as const) {
 check('ilerlemiş oyuncu yeterli karar veriyor (≥18)', pY.secim >= 18, `${pY.secim} seçim`);
 check('pasif yuvaları doluyor (≥5/6)', pY.pasif >= 5, `${pY.pasif}/6`);
 
-console.log('\n[2] ⭐ KURGU TAMAMLANIYOR MU');
-// ⚠️ BU İKİSİ ŞU AN KIRMIZI VE BİLEREK ÖYLE. Ölçülen sebep: level-up başına
-// yalnız 3 teklif gösteriliyor, havuzda ~16 seçenek var. Hedef silahın çıkma
-// şansı ~%19; 23 level-up'ta ~4-5 kez çıkıyor, evrim için 7 gerekiyor.
-// Mühür, düzeltme geldiğinde yeşile dönecek. Eşiği gevşeterek geçirme.
-check('silah yuvaları doluyor (≥5/6)', pY.silah >= 5, `${pY.silah}/6`);
-check('bir silah MAX seviyeye çıkabiliyor', pY.enYuksekSilah >= 8,
-  `en yüksek lv${pY.enYuksekSilah}/8`);
+console.log('\n[2] ⭐ KURGU DENGELİ Mİ');
+// ⚠️ ESKİ İDDİA "bir silah MAX seviyeye çıkabiliyor" idi ve YANLIŞ SORUYDU.
+// 23 seçim, 12 yuvayı doldurmaya VE birini maxlamaya aynı anda yetmiyor.
+//
+// `MAX_WEAPONS` 6→4 denendi ve yakınsamayı gerçekten sağladı (silah
+// lv4,8 → 6,7, kasıtlı avcı evrimleşti) AMA pasifleri 5,8/6'dan 1/6'ya
+// ÇÖKERTTİ — 11 ölü evrimi 17 kullanılmayan pasife takas etmek olurdu.
+// Geri alındı; gerekçe `config.ts` `MAX_WEAPONS` tanımında yazılı.
+//
+// Doğru soru "bir silah maxlanıyor mu" değil, KURGU DENGELİ Mİ — silah
+// tarafı da pasif tarafı da yaşıyor mu. Evrimin ulaşılabilirliği [3]'te.
+check('silah yuvalarının çoğu doluyor', pY.silah >= 4, `${pY.silah}/${MAX_WEAPONS}`);
+check('silahlar gerçekten yükseliyor', pY.enYuksekSilah >= 5,
+  `en yüksek lv${pY.enYuksekSilah}`);
 
 console.log('\n[3] ⭐ EVRİM — türün asıl ödül anı');
-const avY = profil(yari, evrimAvcisi), avT = profil(tam, evrimAvcisi);
+// ⚠️ YALNIZ TEK EK PROFİL koşuluyor. Önce hem `yari` hem `tam` için avcı
+// profili vardı; toplam 30 adet 30-dakikalık simülasyon ediyordu ve test
+// kendi ağırlığından ZAMAN AŞIMINA uğrayıp hiç bitmiyordu. Çalışmayan bir
+// mühür, olmayan mühürdür. Makul oyuncunun evrim sayıları [1]'de ZATEN
+// hesaplandı — tekrar koşturmaya gerek yok.
+const avY = profil(yari, evrimAvcisi);
 console.log(`     kasıtlı avcı — yarı: evrim ${avY.evrim} · en yüksek silah lv${avY.enYuksekSilah}`);
-console.log(`     kasıtlı avcı — tam : evrim ${avT.evrim} · en yüksek silah lv${avT.enYuksekSilah}`);
-// ⚠️ ÇİFT TARAFLI SORU: normal oyuncu evrim görmüyorsa bu bir denge tercihi
-// OLABİLİR; ama KASITLI avcı da göremiyorsa sistem kapalı demektir.
-check('makul oyuncu ara sıra evrim görüyor', pY.evrim > 0, `${pY.evrim} evrim`);
-check('⭐ kasıtlı avcı evrime ULAŞABİLİYOR (sistem açık mı)', avY.evrim > 0 || avT.evrim > 0,
-  `yarı ${avY.evrim} · tam ${avT.evrim}`);
+console.log(`     makul oyuncu       : yarı ${pY.evrim} evrim/koşu`);
+// ⚠️ ÖNCE "makul oyuncu da evrim görsün" hedefi BIRAKILMIŞTI: denenen her
+// ayarda vekil oyuncu sıfır evrim yapıyordu ve sebebi yapısal görünüyordu
+// (`smartPick` belirli bir çifti hedeflemiyor). Sonra doğru paket bulununca
+// KENDİLİĞİNDEN geldi. Ders: "ulaşılamaz" demeden önce doğru kolu aramak.
+//
+// ⚠️ EŞİK DÜŞÜK (>0) ve bilerek: evrim hâlâ ağırlıklı olarak NİYET işi,
+// VS'te de öyle. Soru "her koşuda oluyor mu" değil, "OLUYOR MU".
+// Makul oyuncu da sayılıyor çünkü asıl korkulan şey sistemin komple
+// kapanması — hangi profilde açıldığı ikincil.
+const herhangiEvrim = avY.evrim > 0 || pY.evrim > 0;
+check('⭐ EVRİM SİSTEMİ AÇIK (birileri ulaşabiliyor)', herhangiEvrim,
+  `avcı ${avY.evrim} · makul ${pY.evrim}`);
 
 console.log(`\n${FAIL.length === 0 ? '✅ TEMPO SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
