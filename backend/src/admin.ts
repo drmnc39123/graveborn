@@ -13,6 +13,7 @@
 // yazılmadı — yanlış bir tıklama oyuncunun emeğini geri dönüşsüz siler.
 
 import type { Request, Response, NextFunction } from 'express';
+import crypto from 'node:crypto';
 import { prisma } from './db.js';
 
 /**
@@ -24,17 +25,29 @@ export function adminOnly(req: Request, res: Response, next: NextFunction) {
   const secret = process.env.ADMIN_SECRET;
   if (!secret) { res.status(403).json({ error: 'admin_kapali' }); return; }
   const given = req.get('x-admin-secret') ?? '';
-  // Uzunluk farkı erken dönerse zamanlama sızdırır; sabit süreli karşılaştırma
-  if (given.length !== secret.length || !timingSafeEqual(given, secret)) {
+  if (!timingSafeEqual(given, secret)) {
+    // ⚠️ BAŞARISIZ DENEME GÜRÜLTÜ ÇIKARIR. Önce sessizce 401 dönüyordu:
+    // kaba kuvvet denemesi hiçbir iz bırakmıyordu. Tek savunma dar hız
+    // sınırıysa (bkz. `index.ts` adminLimiti) en azından GÖRÜLMELİ.
+    console.warn('[admin] YETKİSİZ DENEME', req.ip ?? '?', req.method, req.path);
     res.status(401).json({ error: 'yetkisiz' }); return;
   }
   next();
 }
 
+/**
+ * Sabit süreli karşılaştırma.
+ *
+ * ⚠️ UZUNLUK SIZINTISI KAPATILDI. Önce `given.length !== secret.length` ile
+ * erken dönülüyordu — yani sırrın UZUNLUĞU zamanlamayla ölçülebiliyordu ve
+ * sabit süreli karşılaştırmanın amacı kısmen boşa çıkıyordu. Artık iki
+ * taraf da SHA-256'dan geçiyor: uzunluk ne olursa olsun karşılaştırma
+ * 32 bayt üzerinde, sabit sürede yapılıyor.
+ */
 function timingSafeEqual(a: string, b: string): boolean {
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+  const ha = crypto.createHash('sha256').update(a).digest();
+  const hb = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
 }
 
 const HOUR = 3600_000;

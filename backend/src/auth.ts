@@ -41,7 +41,17 @@ export function isValidWallet(w: unknown): w is string {
  */
 export async function verifyTurnstile(token: unknown, ip?: string): Promise<boolean> {
   const secret = process.env.TURNSTILE_SECRET;
-  if (!secret) return true;                       // kapalı
+  if (!secret) {
+    // ⚠️ ÜRETİMDE SESSİZCE AÇIK BIRAKILAMAZ. Sır tanımsızken kontrol
+    // TAMAMEN atlanıyordu — yani üretimde `TURNSTILE_SECRET` unutulursa
+    // bot kapısı ardına kadar açık kalır ve HİÇBİR uyarı çıkmaz.
+    // Hız sınırı cüzdan anahtarlı, cüzdan üretmek ise bedava: tek gerçek
+    // hesap-açma yavaşlatıcısı bu kontrol.
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[GÜVENLİK] TURNSTILE_SECRET TANIMSIZ — bot kontrolü KAPALI');
+    }
+    return true;                                  // kapalı (yerel geliştirme)
+  }
   if (typeof token !== 'string' || !token) return false;
 
   try {

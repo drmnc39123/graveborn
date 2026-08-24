@@ -131,6 +131,30 @@ const kimlikLimiti = rateLimit({
 });
 for (const yol of ['/auth/nonce', '/auth/verify']) app.use(yol, kimlikLimiti);
 
+/**
+ * ADMİN UÇLARI — kaba kuvvete karşı en dar kapı.
+ *
+ * ⚠️ NİYE EKLENDİ: `/admin/*` yalnızca genel 300/dk sınırındaydı ve o sınır
+ * jetonsuz istekte IP anahtarlı. Yani **dakikada 300 sır denemesi**,
+ * kilitleme yok, alarm yok. `ADMIN_SECRET` kısa ya da tahmin edilebilirse
+ * panel düşer — ve panel oyuncu verisini, ekonomiyi ve (yakında) grant
+ * yeteneğini taşıyor.
+ *
+ * ⚠️ ANAHTAR IP: admin sırrı doğrulanmadan cüzdan kimliği zaten yok;
+ * `kimlik` yardımcısı burada IP'ye düşerdi. Açıkça IP yazmak niyeti
+ * belirsiz bırakmıyor.
+ *
+ * ⚠️ 20/dk MEŞRU KULLANIMI ENGELLEMİYOR: panel açılışta 4-5 uç çağırıyor,
+ * bir oyuncu dosyası açmak 1 uç. Dakikada 20, insan hızının çok üstünde
+ * ama kaba kuvvet için kullanılamaz.
+ */
+const adminLimiti = rateLimit({
+  windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false,
+  keyGenerator: (req: express.Request) => ipKeyGenerator(req.ip ?? ''),
+  message: { error: 'cok_fazla_istek' },
+});
+app.use('/admin', adminLimiti);
+
 /** Koşu bu süreden eski ise kapatılamaz — açık runId biriktirip sonra toplu kullanmayı engeller */
 const RUN_TTL_MS = 45 * 60 * 1000;
 
