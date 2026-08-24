@@ -696,6 +696,28 @@ const finishSchema = z.object({
   deepestCleared: z.number().int().min(0).max(100000),
   rareGold: z.number().int().min(0).max(100000000),
   cleared: z.boolean(),
+  /**
+   * 🔴 EKSİKTİ — VE PET BAĞLAMA SİSTEMİNİ TAMAMEN ÖLÜ BIRAKIYORDU.
+   *
+   * zod `z.object()` bilinmeyen anahtarları VARSAYILAN OLARAK SİLER
+   * (`.passthrough()` yok). Şema bu alanı tanımadığı için `body.data`ya hiç
+   * geçmiyordu → `applyKills` ilk satırda `return before` → `kills` sayacı
+   * HİÇ İLERLEMİYORDU.
+   *
+   * Sonuç: motor sayıları gönderiyor (`engine.ts` koşu sonu), `pets.ts`
+   * `s.kills[def.bindsFrom]` okuyor, ama sayaç sonsuza kadar 0 —
+   * **kill eşiğine bağlı hiçbir pet asla bağlanamıyordu.** 12 petin tamamı
+   * "parayla alınamaz, öldürerek hak edilir" diye tasarlanmıştı; pratikte
+   * "hiç kimse alamaz" oluyordu.
+   *
+   * ⚠️ Güvenlik: iddia SERBEST DEĞİL. `applyKills` toplam iddiayı
+   * `killTavani` ile oranlıyor (bkz. çağrı yeri) — tavan zaten doğru
+   * yazılmıştı, sadece kendisine hiç veri ulaşmıyordu.
+   * ⚠️ Anahtar sayısı sınırlı: düşman tipi sayısı sabit, ama yine de
+   * `.record()` ile tip zorlanıyor ki devasa bir nesne ayrıştırılmasın.
+   */
+  killsByType: z.record(z.string().max(32), z.number().int().min(0).max(1000000))
+    .optional(),
 });
 
 app.post('/run/finish', wrap(async (req, res) => {
@@ -819,7 +841,11 @@ app.post('/run/finish', wrap(async (req, res) => {
   // "parayla alınamaz" koşulu; kırpılmasaydı istemci tek koşuda bütün
   // legendary pet'lerin kill eşiğini uydurabilirdi.
   const killTavani = maxKills(run.mode, run.stageId, s.progress ? paidDepth(s.progress, run.stageId) : 0, run.ascension);
-  const yeniKills = applyKills(before.kills ?? {}, (body.data as { killsByType?: unknown }).killsByType, killTavani);
+  // ⚠️ Cast KALDIRILDI — şema artık alanı tanıyor, tip biliniyor. Cast
+  // durduğu sürece "alan şemada yok" hatası TİP TARAFINDAN GİZLENİYORDU:
+  // `as { killsByType?: unknown }` derleyiciye sussun diyordu ve gerçekte
+  // her zaman `undefined` gelen bir değeri meşru gösteriyordu.
+  const yeniKills = applyKills(before.kills ?? {}, body.data.killsByType, killTavani);
 
   // ⚠️ SIRA ÖNEMLİ: `saved` DİZİNİN İLK ELEMANI. Defter kaydını başa koymak
   // `saved`'a oyuncu satırı yerine defter satırını verirdi ve yanıt sessizce
