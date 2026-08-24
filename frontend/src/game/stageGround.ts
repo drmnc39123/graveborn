@@ -27,6 +27,19 @@ const MAX_CHUNKS = 120;
 const images = new Map<string, HTMLImageElement>();
 const chunks = new Map<string, HTMLCanvasElement>();
 /**
+ * ÖNCEDEN DERECELENDİRİLMİŞ DEKOR — `src + derece` başına bir kez boyanır.
+ *
+ * ⚠️ NİYE VAR: `drawStageDecor` HER KAREDE `ctx.filter` kuruyordu ve bu
+ * dosyanın kendi notu (`chunkCanvas` içinde) tam bunu yasaklıyor:
+ * *"`ctx.filter` her karede kullanılsa pahalı olurdu — chunk'ta bedava."*
+ * Zemin dersi almıştı, dekor almamıştı. Canvas2D'de `filter` non-`none`
+ * iken HER `drawImage` ayrı bir kompozit katmanına gidiyor.
+ *
+ * ⚠️ ÖLÇÜLDÜ (`perf.test.mts`): kare başına 1 `filter` ataması — testin tek
+ * kırmızısıydı. Artık sıfır: derecelendirme sprite'a bir kez pişiyor.
+ */
+const gradedDecor = new Map<string, HTMLCanvasElement>();
+/**
  * Önbelleğin kime ait olduğu. ⚠️ ARTIK SADECE bölüm id'si DEĞİL: Descent'te
  * sanat DERİNLİK BANDINA göre değişiyor (`descentArt`), yani anahtar
  * `"stageId:bant"` olmak zorunda. Yalnız id tutulsaydı bant değişince
@@ -50,6 +63,7 @@ const DESCENT_ESIK = DESCENT_BANT;
 /** Yeni koşu / yeni derinlik: bölüm değiştiyse önbellek geçersiz */
 export function resetStageGround() {
   chunks.clear();
+  gradedDecor.clear();
   builtFor = '';
 }
 
@@ -76,6 +90,42 @@ function pickTile(art: StageArt, r: number): string {
     if (t < acc) return art.ground[i];
   }
   return art.ground[0];
+}
+
+/**
+ * Derecelendirilmiş dekor sprite'ı — yoksa pişirir.
+ *
+ * ⚠️ EKSİK GÖRSEL ÖNBELLEĞE ALINMAZ. `chunkCanvas` ile aynı kural: görseller
+ * asenkron yükleniyor, yarım yüklenmiş bir sprite pişirilirse sonsuza kadar
+ * bozuk kalırdı.
+ */
+function gradedSprite(src: string, sat: number, bright: number): CanvasImageSource | null {
+  const im = img(src);
+  if (!im) return null;
+  const key = `${src}|${sat.toFixed(3)}|${bright.toFixed(3)}`;
+  const hit = gradedDecor.get(key);
+  if (hit) return hit;
+  if (typeof document === 'undefined') return im;
+
+  const w = im.naturalWidth, h = im.naturalHeight;
+  if (!w || !h) return im;   // henüz yüklenmedi — bu kare ham çiz, pişirme
+
+  const off = document.createElement('canvas');
+  off.width = w; off.height = h;
+  const octx = off.getContext('2d');
+  if (!octx) return im;
+  octx.imageSmoothingEnabled = false;
+  octx.filter = `saturate(${sat}) brightness(${bright})`;
+  octx.drawImage(im, 0, 0);
+
+  // ⚠️ Tavan `chunks` ile aynı gerekçe: sınırsız büyüyen önbellek uzun
+  // oturumda sessiz bir bellek sızıntısıdır.
+  if (gradedDecor.size >= MAX_CHUNKS) {
+    const ilk = gradedDecor.keys().next().value;
+    if (ilk) gradedDecor.delete(ilk);
+  }
+  gradedDecor.set(key, off);
+  return off;
 }
 
 function chunkCanvas(art: StageArt, stageId: number, cx: number, cy: number): HTMLCanvasElement | null {
@@ -214,9 +264,9 @@ export function drawStageDecor(
   const y1 = Math.floor((py + h / 2) / TILE) + pad;
 
   ctx.save();
-  // Enkaz da zeminle aynı derecelendirmeden geçsin — yoksa koyu bir arazinin
-  // üstünde parlak sprite'lar yüzer gibi durur. Tek set/reset, tüm enkaz için.
-  ctx.filter = `saturate(${art.grade.sat}) brightness(${art.grade.bright + 0.12})`;
+  // ⚠️ `ctx.filter` BURADAN KALKTI. Enkaz yine zeminle aynı derecelendirmeden
+  // geçiyor ama artık sprite başına BİR KEZ pişiyor (`gradedSprite`), her
+  // karede değil. Gerekçe ve ölçüm önbelleğin tanımında.
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
       const r = tileHash(tx, ty, stageId + 7919);
@@ -228,7 +278,10 @@ export function drawStageDecor(
         acc += dusuk ? d.chance * 0.5 : d.chance;
         if (r >= acc) continue;
 
-        const im = img(variantOf(d.src, tileHash(tx, ty, stageId + 104729)));
+        const im = gradedSprite(
+          variantOf(d.src, tileHash(tx, ty, stageId + 104729)),
+          art.grade.sat, art.grade.bright + 0.12,
+        );
         if (!im) break;
         // Hücre içinde küçük bir kayma — ızgaraya dizilmiş görünmesin
         const jx = (tileHash(tx, ty, 31) - 0.5) * TILE * 0.6;
