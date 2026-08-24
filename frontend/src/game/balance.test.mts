@@ -77,7 +77,29 @@ check('tüm ağaç 250 saatin altında', agacSaat < 250, `${agacSaat.toFixed(0)}
 check('tek bir hat 25 saatin altında', enPahaliHat / GOLD_SAAT < 25,
   `${(enPahaliHat / GOLD_SAAT).toFixed(1)} saat`);
 
-console.log('\n[4] Fiyat sırası ile GÜÇ sırası çelişiyor mu');
+console.log('\n[4] ÖLÇÜM YÖNTEMİ — hattı TEK TEK değerlemek YANLIŞ');
+// ⭐ ÖLÇÜLDÜ (12 seed × 30 dk, `_defprobe.mts`, taban derinlik 8,2):
+//     health max ........  8,7  (+0,5)
+//     armor  max ........  8,6  (+0,4)
+//     recovery max ......  9,1  (+0,9)
+//     ÜÇÜ BİRDEN ....... 16,6  (+8,4)   ← toplamları 1,8 değil 8,4
+//     might max .........  9,9  (+1,7)
+//     duration max ......  8,8  (+0,6)
+//
+// SAVUNMA BİR EŞİK SİSTEMİ. Üç hat tek tek eşiğin ALTINDA kalıyor ve
+// "ölü" görünüyor; birlikte eşiği geçip derinliği İKİYE KATLIYOR. Yani
+// "bu hat ne kazandırıyor" sorusunun tek-hat cevabı YOKTUR — eşikli bir
+// sistemde toplamsal analiz yalan söyler.
+// ⚠️ Bir hattı TEK BAŞINA ölçüp "gereksiz" diye SİLME veya UCUZLATMA.
+//
+// ⚠️ DERİNLİK GÜRÜLTÜLÜ BİR ÖLÇÜT. `pspeed` 0→3→5→7→10 kademelerinde
+// derinlik 8,2 · 7,6 · 7,1 · 8,5 · 6,7 çıkıyor — girdi tek yönlü artarken
+// çıktı zikzak. Aynı koşularda kill/dk 111 · 110 · 112 · 120 · 106, yani
+// %7 bandında KARARLI. Saldırı hattı yargılarken kill/dk kullan.
+// `pspeed` sonucu: ZARARLI DEĞİL, ATIL — kill hızını ölçülebilir biçimde
+// hiç değiştirmiyor ama 28.619 gold (6,1 saat) istiyor.
+
+console.log('\n[5] Fiyat sırası ile GÜÇ sırası çelişiyor mu');
 // ⚠️ ÖLÇÜLDÜ (12 seed × 30 dk, `_defprobe`): savunma hatları taban 8,2
 // derinliğe göre health +0,5 · armor +0,4 · recovery +0,9 katıyor.
 // Yani ÖLÜ DEĞİLLER — ama `health` 69.316 gold ile ağacın EN PAHALI hattı
