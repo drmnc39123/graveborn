@@ -178,6 +178,23 @@ export function maxRareGold(
    * kademe değil, `/run/start`'ta doğrulanıp kaydedilen kademe kullanılıyor.
    */
   ascension = 0,
+  /**
+   * ⚠️ SÜRE — koşunun GERÇEKTEN ne kadar sürdüğü (sunucu saati).
+   *
+   * 🔴 NİYE EKLENDİ: bu fonksiyon yalnız İDDİA EDİLEN derinliğe bakıyordu ve
+   * descent dalında `top = deepestCleared + 1` yazıyor — yani `deepestCleared:0`
+   * gönderen SIFIR SANİYELİK bir koşu bile derinlik 1'in tam havuzunu
+   * alıyordu. Üstüne `headroom()` koşulsuz `MIN_DROP_HEADROOM = 5` taban
+   * ekliyor, `dropMax` ile çarpılıyor.
+   *
+   * ÖLÇÜLDÜ: taze hesap ~142 gold/koşu × 900 koşu/saat (hız sınırının izin
+   * verdiği) = **~128.000 gold/saat**, dürüst oyunun ~21 katı. Forge ağacının
+   * tamamı ~2 saatte. Ve `capped` yanmıyordu — koşu TEMİZ görünüyordu.
+   *
+   * ⚠️ `acceptDepth` bu deliği kapatmıyor: derinlik 0 iddiası zaten
+   * doğru, kırpılacak bir şey yok. Delik `+1` payında.
+   */
+  elapsedSec = Infinity,
 ): number {
   const st = stageById(stageId);
   if (!st) return 0;
@@ -207,7 +224,62 @@ export function maxRareGold(
     if (def.boss) bosses += 1;
   }
   // En derin seviyenin miktar tavanı — hepsi oradan düşmüş gibi say
-  return Math.ceil(headroom(expected) * dropMax(top)) + bosses * CHEST_ALLOWANCE;
+  const ham = Math.ceil(headroom(expected) * dropMax(top)) + bosses * CHEST_ALLOWANCE;
+
+  // ⚠️ SÜRE ORANI — `+1` payının bedeli. İçinde bulunulan (bitmemiş) derinliğin
+  // tamamını saymak dürüst oyuncu için doğru; ama hiç oynamamış bir koşu için
+  // bedava gold demek. Oran, o derinlikte GERÇEKTEN geçirilen sürenin payı:
+  // sıfır saniye → sıfır pay, tam süre → bugünküyle birebir aynı.
+  // Dürüst koşu her zaman 1'de kalır (derin koşularda `elapsedSec` çok büyük).
+  if (!Number.isFinite(elapsedSec)) return ham;
+  const birDerinlikSn = (descentStage(stageId, top, ascension).enemyCount
+    / descentStage(stageId, top, ascension).spawnRate) * TIME_SAFETY;
+  const oran = birDerinlikSn > 0 ? Math.min(1, Math.max(0, elapsedSec) / birDerinlikSn) : 1;
+  return Math.ceil(ham * oran);
+}
+
+/**
+ * BÖLÜM TEMİZLEME İDDİASI — kampanyanın süre tabanı.
+ *
+ * 🔴 NİYE VAR: `cleared` DOĞRULANMAYAN bir istemci boolean'ıydı. `acceptDepth`
+ * derinlik iddiasını fizikle kesiyor ama o kontrol `mode !== 'campaign'` ile
+ * başlıyor — yani kampanyanın hiçbir alt sınırı yoktu.
+ *
+ * SÖMÜRÜ (ölçüldü): `POST /run/start {mode:'campaign', stageId:N}` ardından
+ * `POST /run/finish {cleared:true}`. İki istek, sıfır saniye. Merdiven sıralı
+ * olduğu için ~20 istekte TÜM kampanya biter. Zarar iki katmanlı:
+ *   1. Her bölümün `firstClearGold`u alınır (~81.600 gold, Forge ağacının %32'si)
+ *   2. ⭐ ASIL ZARAR: `cleared[stageId]` descent'in kapısı (`canStart`) —
+ *      taze bir hesap anında bölüm 10 descent'ine ve Wilderness ekipman
+ *      musluğuna girer. Bölüm 10 derinlik ödülü bölüm 1'in 2,35 katı.
+ * Üstelik `capped` yanmadığı için admin panelinde koşu TEMİZ görünüyordu.
+ *
+ * ⚠️ TABAN MOTORUN KENDİ SAYISINDAN türüyor, uydurma bir sabit değil:
+ * `enemyCount / spawnRate` — `minDescentSeconds` ile AYNI formül, aynı
+ * `TIME_SAFETY` payı. Arayüzdeki "MIN 1m 15s" etiketi de bu sayı.
+ */
+export function acceptCleared(
+  mode: string, stageId: number, claimed: unknown, elapsedSec: number,
+): { cleared: boolean; capped: boolean; reason: string[] } {
+  const reason: string[] = [];
+  if (mode !== 'campaign' || !claimed) return { cleared: false, capped: false, reason };
+
+  const st = stageById(stageId);
+  if (!st) return { cleared: false, capped: false, reason };
+
+  // Süre bilinmiyorsa (saf hesaplar, testler) sınır uygulanmaz —
+  // `maxDepthInTime` ile aynı duruş.
+  if (!Number.isFinite(elapsedSec)) return { cleared: true, capped: false, reason };
+
+  const taban = (st.enemyCount / st.spawnRate) * TIME_SAFETY;
+  if (elapsedSec < taban) {
+    reason.push(
+      `bölüm ${stageId} temizlendi iddiası → ${Math.round(elapsedSec)} sn, `
+      + `en az ${Math.round(taban)} sn gerekiyor`,
+    );
+    return { cleared: false, capped: true, reason };
+  }
+  return { cleared: true, capped: false, reason };
 }
 
 /**
@@ -405,9 +477,14 @@ export function settleRun(
   if (kabul.capped) capped = true;
   reason.push(...kabul.reason);
 
+  // 1b) Bölüm temizleme iddiası — kampanyanın süre tabanı (bkz. acceptCleared)
+  const temiz = acceptCleared(mode, stageId, claim.cleared, elapsedSec);
+  if (temiz.capped) capped = true;
+  reason.push(...temiz.reason);
+
   // 2) Nadir düşüş iddiası — yapısal tavana kırp
   const rawGold = Math.max(0, Math.floor(Number(claim.rareGold) || 0));
-  const goldCap = maxRareGold(mode, stageId, depth, greedCeiling(before), ascension);
+  const goldCap = maxRareGold(mode, stageId, depth, greedCeiling(before), ascension, elapsedSec);
   let rareGold = rawGold;
   if (rareGold > goldCap) {
     rareGold = goldCap;
@@ -436,7 +513,7 @@ export function settleRun(
   // 4) Ödülü OYUNUN KENDİ fonksiyonu hesaplasın — exploit kapısı orada
   const run: RunResult = {
     mode, stageId,
-    cleared: mode === 'campaign' && !!claim.cleared,
+    cleared: temiz.cleared,
     deepestCleared: depth,
     rareGold,
   };
