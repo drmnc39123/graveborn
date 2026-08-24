@@ -730,12 +730,24 @@ app.post('/run/finish', wrap(async (req, res) => {
   if (!run || run.wallet !== wallet) { res.status(404).json({ error: 'kosu_yok' }); return; }
   // Tek kullanımlık: aynı koşu iki kez ödül alamaz
   if (run.claimedAt) { res.status(409).json({ error: 'zaten_kapatildi' }); return; }
+
   if (Date.now() - run.startedAt.getTime() > RUN_TTL_MS) {
     await prisma.run.update({ where: { id: run.id }, data: { claimedAt: new Date(), awarded: 0 } });
     res.status(410).json({ error: 'kosu_zaman_asimi' }); return;
   }
 
   const player = await getOrCreatePlayer(wallet);
+  // ⚠️ BAN KONTROLÜ BURADA EKSİKTİ. `/run/start` banlı oyuncuyu engelliyordu
+  // ama AÇIK bir koşusu olan biri ban yedikten SONRA onu kapatıp ödülünü
+  // alabiliyordu. Tek koşuluk bir sızıntı ama ban "bundan sonra hiçbir şey
+  // kazanamazsın" demektir; istisnası olmamalı.
+  // ⚠️ Koşu yine de KAPATILIYOR (aşağıdaki `claimedAt`) — açık bırakmak
+  // banlı hesabın koşu yuvasını sonsuza kadar meşgul ederdi.
+  if (player.banned) {
+    await prisma.run.update({ where: { id: run.id }, data: { claimedAt: new Date(), awarded: 0 } });
+    res.status(403).json({ error: 'yasakli' });
+    return;
+  }
   const before = toProgress(player);
   const elapsedSec = (Date.now() - run.startedAt.getTime()) / 1000;
 
@@ -846,6 +858,32 @@ app.post('/run/finish', wrap(async (req, res) => {
   // `as { killsByType?: unknown }` derleyiciye sussun diyordu ve gerçekte
   // her zaman `undefined` gelen bir değeri meşru gösteriyordu.
   const yeniKills = applyKills(before.kills ?? {}, body.data.killsByType, killTavani);
+
+  /**
+   * ⚠️ KOŞULLU KAPAMA — yarışı burada kesiyoruz.
+   *
+   * Yukarıdaki `if (run.claimedAt)` kontrolü ile aşağıdaki yazma ARASINDA
+   * bir pencere vardı: aynı `runId` ile iki eşzamanlı istek ikisi de
+   * kontrolü geçip transaction'a girebiliyordu. Gold MUTLAK yazıldığı için
+   * ikiye katlanmıyordu AMA `dust: { increment: bahisTozu }` çiftleniyor ve
+   * `ledgerWrite` iki satır atıyordu — yani DEFTER YALAN SÖYLÜYORDU.
+   * Defterin doğruluğu bu projede bir değişmez (`/admin/economy` "GOLD
+   * BASILMIŞ" uyarısı ona dayanıyor).
+   *
+   * `updateMany` + `claimedAt: null` koşulu atomik: yarışı yalnız BİRİ
+   * kazanır, diğeri `count === 0` alır ve 409 döner.
+   *
+   * ⚠️ TAKAS AÇIK: kapama artık ödeme HESAPLANDIKTAN sonra ama yazmadan
+   * ÖNCE. Sunucu tam bu iki adım arasında çökerse koşu "kapatılmış ama
+   * ödenmemiş" kalır — oyuncu ödülünü kaybeder. Alternatifi (önce yaz,
+   * sonra kapat) çift ödeme riskiydi; bozuk defter, kayıp tek ödülden
+   * beterdir ve kayıp admin panelinden telafi edilebilir.
+   */
+  const kilit = await prisma.run.updateMany({
+    where: { id: run.id, claimedAt: null },
+    data: { claimedAt: new Date() },
+  });
+  if (kilit.count === 0) { res.status(409).json({ error: 'zaten_kapatildi' }); return; }
 
   // ⚠️ SIRA ÖNEMLİ: `saved` DİZİNİN İLK ELEMANI. Defter kaydını başa koymak
   // `saved`'a oyuncu satırı yerine defter satırını verirdi ve yanıt sessizce
