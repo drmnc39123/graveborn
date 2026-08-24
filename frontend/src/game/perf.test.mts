@@ -17,6 +17,18 @@
 //
 // ⚠️ ÖLÇÜM ALETİ ORTAK: `simPlayer.mts`. Kendi yapay oyuncunu YAZMA — bu
 // depoda iki kez denendi, ikisi de yalan söyledi.
+//
+// ── TARAYICIDA ÖLÇÜLEN (2026-08-24, gerçek koşu, `window.__gbGame` ile
+//    sahne elle dolduruldu) ──
+//   3 düşman .................. 193 fps
+//   400 düşman EKRANDA ........ 137 fps
+//   400 düşman EKRAN DIŞINDA .. 195 fps   ← kırpma çalışıyor
+// Yani ekran dışındaki 400 düşman artık HİÇBİR ŞEYE mal olmuyor (taban
+// fps'e dönüyor). Kırpma olmadan ikisi de 137 olurdu.
+// ⚠️ Bu sayılar bir GELİŞTİRME MAKİNESİNDEN. Oyuncunun donanımı farklı;
+// mutlak fps değil ARADAKİ FARK anlamlı. Node tarafı `drawImage` sayamıyor
+// (sprite yüklenmiyor), o yüzden kırpmanın gerçek kazancı yalnız burada
+// görülebiliyor — ölçümü tekrar edeceksen aynı yolu kullan.
 
 import { DESCENT, RUN, STAGES, TICK, weaponById } from './config.js';
 import { FORGE, permanentBonus } from './forge.js';
