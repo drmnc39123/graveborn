@@ -168,6 +168,9 @@ export function render(
   // kamera oyuncuyu ortalar
   ctx.save();
   ctx.translate(cx - focus.px, cy - focus.py);
+  // ⚠️ Kırpma penceresi kamerayla AYNI ANDA kuruluyor — ikisi ayrışırsa
+  // ekranın kenarında görünmeyen düşmanlar olur, ve bu sessiz bir hatadır.
+  kirpmaKur(focus.px, focus.py, w, h);
 
   pumpEffects(g, dt);
   pumpPetFx(g, dt);
@@ -227,12 +230,44 @@ function drawArenaEdge(ctx: CanvasRenderingContext2D, g: Game) {
   ctx.stroke();
 }
 
+/**
+ * GÖRÜŞ ALANI KIRPMASI — ekranda olmayan şeyi çizme.
+ *
+ * ⚠️ NİYE VAR: hiç yoktu. `drawEnemies` `g.enemies` dizisinin TAMAMINI
+ * geziyordu ve derin inişte o dizi 420'ye kadar çıkıyor (`DESCENT.aliveMax`).
+ * 1280×720'de aynı anda ~90 düşman sığıyor — yani en kötü durumda çizimlerin
+ * dörtte üçü ekran DIŞINA gidiyordu. Her biri ayrıca `sprites.ts` içinde
+ * `Map.get` + `img.complete` + `naturalWidth` DOM okuması yapıyor.
+ *
+ * ⚠️ SİMÜLASYONA DOKUNMUYOR. Yalnız çizim atlanıyor; düşman yaşamaya,
+ * vurmaya, ölmeye devam ediyor. `SIM_SEAL` bu yüzden bozulmuyor.
+ *
+ * ⚠️ PAY GENİŞ (`KIRP_PAY`): sprite'lar merkez noktalarından büyük çiziliyor
+ * (boss 120+ px) ve gölgeleri aşağı taşıyor. Dar bir pay, kenardaki büyük
+ * düşmanın yarısını kırpar — kırpmanın görünür olması, olmamasından beterdir.
+ */
+const KIRP_PAY = 160;
+let kirpX0 = -Infinity, kirpY0 = -Infinity, kirpX1 = Infinity, kirpY1 = Infinity;
+
+function kirpmaKur(focusX: number, focusY: number, w: number, h: number) {
+  kirpX0 = focusX - w / 2 - KIRP_PAY;
+  kirpX1 = focusX + w / 2 + KIRP_PAY;
+  kirpY0 = focusY - h / 2 - KIRP_PAY;
+  kirpY1 = focusY + h / 2 + KIRP_PAY;
+}
+
+/** Dünya noktası ekrana (paylı) düşüyor mu */
+function gorunur(x: number, y: number): boolean {
+  return x >= kirpX0 && x <= kirpX1 && y >= kirpY0 && y <= kirpY1;
+}
+
 function drawGems(ctx: CanvasRenderingContext2D, g: Game) {
   if (!g.gems.length) return;
   ctx.fillStyle = C.candle;
   ctx.beginPath();
   for (let i = 0; i < g.gems.length; i++) {
     const m = g.gems[i];
+    if (!gorunur(m.x, m.y)) continue;   // ekran dışı mücevher path'e girmesin
     ctx.moveTo(m.x, m.y - 5);
     ctx.lineTo(m.x + 4, m.y);
     ctx.lineTo(m.x, m.y + 5);
@@ -366,6 +401,7 @@ function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
   const flashing: typeof g.enemies = [];
   for (let i = 0; i < g.enemies.length; i++) {
     const e = g.enemies[i];
+    if (!gorunur(e.x, e.y)) continue;   // ekran dışı — çizme (bkz. gorunur)
     if (e.art) {
       // ── DÜŞMÜŞ ŞAMPİYON: boss'un görseli ARKETİPİNDEN gelir ────────
       // Boyut kademeden (`e.art` = boss_mini/mega/nightmare), silüet
@@ -560,6 +596,7 @@ function drawProjectiles(ctx: CanvasRenderingContext2D, g: Game) {
   const fallback: typeof g.projectiles = [];
   for (let i = 0; i < g.projectiles.length; i++) {
     const p = g.projectiles[i];
+    if (!gorunur(p.x, p.y)) continue;   // ekran dışı mermi çizilmesin
     // ⚠️ Her silahın KENDİ mermisi. Eskiden 16 silah tek sprite'ı paylaşıyordu
     // ve oyuncu neyi kuşandığını ekrandan anlayamıyordu.
     const art = p.wid ? weaponArt(p.wid).bullet : undefined;

@@ -191,6 +191,31 @@ if (kb('drawImage') === 0) {
 console.log(`     path/kare ${kb('path')} · text/kare ${Math.round(c.text / KARE)}`);
 check('kare başına gradient tahsisi makul (<12)', kb('gradient') < 12, `${kb('gradient')}`);
 
+console.log('[2b] Gorus alani kirpmasi GERCEKTEN calisiyor mu');
+{
+  // CIFT TARAFLI KANIT. `drawImage` Node'da her zaman 0 oldugu icin
+  // "0 < 145" gibi bir iddia BOS GECERDI. Bunun yerine AYNI sahne iki kez
+  // ciziliyor: normal, ve tum varliklar ekranin cok disina isinlanmis halde.
+  // Kirpma calisiyorsa ikinci cizim BELIRGIN sekilde daha az is yapmali.
+  // Kirpma sokulurse bu test kirmizi yanar — asil isi bu.
+  const ga = derinSahne('kirp', 60);
+  isit(ga, 12);
+  const KR = 10;
+  const a = sayanCtx();
+  for (let i = 0; i < KR; i++) render(a.ctx, ga, 1280, 720, 1, TICK);
+  const yakin = (a.c.path + a.c.drawImage) / KR;
+  for (const e of ga.enemies) { e.x += 50000; e.y += 50000; }
+  for (const m of ga.gems) { m.x += 50000; m.y += 50000; }
+  for (const pr of ga.projectiles) { pr.x += 50000; pr.y += 50000; }
+  const b = sayanCtx();
+  for (let i = 0; i < KR; i++) render(b.ctx, ga, 1280, 720, 1, TICK);
+  const uzak = (b.c.path + b.c.drawImage) / KR;
+  console.log(`     ekranda ${Math.round(yakin)} cizim · hepsi uzakta ${Math.round(uzak)} cizim`);
+  check('ekran disi varliklar CIZILMIYOR (kirpma aktif)', uzak < yakin * 0.85,
+    `${Math.round(uzak)} vs ${Math.round(yakin)}`);
+}
+
+
 console.log('\n[3] Tavanlar — sınırsız büyüyen dizi var mı');
 const gc = derinSahne('perf-cap', 60);
 isit(gc, 20);
