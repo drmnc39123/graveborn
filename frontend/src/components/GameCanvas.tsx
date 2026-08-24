@@ -544,11 +544,21 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
             <div style={{ padding: '4px 8px 0' }}>
               <Bar pct={xpPct / 100} variant="01" scale={3} label />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
-              <span style={{ color: C.candle }}>LV {hud.level}</span>
+            {/* ⚠️ ORTA BLOK GERÇEKTEN ORTADA. Önce `space-between` vardı ve
+                üç çocuk EŞİT DEĞİLDİ: sol "LV 1" ~55 px, sağ "0:09 · 8 kill ·
+                🔊 · EXIT" ~220 px. `space-between` yalnız boşlukları eşitler,
+                merkezi değil — orta blok farkın yarısı kadar SOLA kayıyordu
+                ve kullanıcı bunu ekranda gördü.
+                Çözüm: yanlara EŞİT PAY (`flex: 1`), ortaya sabit genişlik
+                (`flex: 0 0 auto`). Artık sağ blok büyüse de (uzun süre,
+                6 haneli kill) orta blok yerinden oynamıyor.
+                ⚠️ `minWidth: 0` ŞART: onsuz yan bloklar içeriklerinden
+                küçülemez ve dar ekranda satır taşar. */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
+              <span style={{ flex: 1, minWidth: 0, color: C.candle }}>LV {hud.level}</span>
               {/* Bölüm ilerlemesi — bitirilebilir oyunda oyuncunun en çok istediği bilgi.
                   Descent'te bunun yerini DERİNLİK alır: tek anlamlı skor odur. */}
-              <span style={{ textAlign: 'center', lineHeight: 1.15 }}>
+              <span style={{ flex: '0 0 auto', textAlign: 'center', lineHeight: 1.15 }}>
                 <span style={{ display: 'block', fontSize: 10, letterSpacing: 1.6,
                   color: hud.mode === 'descent' ? C.candle : C.boneFaint, fontWeight: 900 }}>
                   {hud.mode === 'descent' ? `DEPTH ${hud.depth}` : hud.stageName.toUpperCase()}
@@ -566,7 +576,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                   {hud.remaining} <span style={{ fontSize: 11, color: C.boneDim }}>left</span>
                 </span>
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center',
+                justifyContent: 'flex-end', gap: 8 }}>
                 {/* ⚠️ Süre HUD'da HİÇ görünmüyordu — `fmtTime` tanımlıydı ama
                     sadece ölüm ekranında kullanılıyordu. Survivors türünde
                     "kaç dakikadayım" en temel bilgi. */}
