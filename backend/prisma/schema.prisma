@@ -184,6 +184,24 @@ model Run {
   /// Postgres Int (INT4) 2.147.483.647'de taşıyor — seed'lerin YARISI koşuyu
   /// 500 ile düşürüyordu. Aralıklı olduğu için üretimde teşhisi çok zor olurdu.
   seed       BigInt
+  /// ⚠️ KOŞUYU ÜRETEN MOTOR SÜRÜMÜ (`@game/config` SIM_VERSION).
+  ///
+  /// Seed tek başına bir koşuyu TARİF ETMİYOR — seed + motor sürümü ediyor.
+  /// SIM_VERSION arttığı an aynı seed başka bir koşu üretir; sürüm
+  /// yazılmazsa hangi koşunun kaydedildiği geri bulunamaz.
+  ///
+  /// ⚠️ 0 = SÜRÜM DAMGASINDAN ÖNCE açılmış koşu (ya da sürümünü bildirmeyen
+  /// eski istemci). Gerçek bir SIM_VERSION asla 0 değil, bu yüzden 0 hiçbir
+  /// sürüme EŞİT ÇIKMAZ — eski kayıtlar kendiliğinden "tekrar oynatılamaz"
+  /// sayılır. Kasıtlı olarak GÜVENLİ TARAFA kapalı.
+  ///
+  /// ⚠️ İSTEMCİNİN BEYANI. Motorun sürümünü sunucu ÖLÇEMEZ; ölçebildiği tek
+  /// şey kendi derlediği sabit. Beyan yalan olabilir — ama yalan söylemek,
+  /// değiştirilmiş bir motoru çalıştırmaktan DAHA ZAYIF bir saldırı ve o
+  /// zaten `acceptDepth` süre tabanıyla sınırlanıyor. Buradaki alanın işi
+  /// hile yakalamak değil, DÜRÜST bir sürüm atlamasının sessizce yanlış
+  /// sonuç üretmesini engellemek.
+  simVersion Int    @default(0)
   /// 'campaign' | 'descent'
   mode       String
   stageId    Int
@@ -250,6 +268,16 @@ model DuelRecord {
   stageId Int
   /// ⚠️ BigInt — seed uint32 ve INT4 taşıyor (bkz. Run.seed)
   seed    BigInt
+  /// ⚠️ KAYDIN OYNANDIĞI MOTOR SÜRÜMÜ — seed'in yarısı bu.
+  ///
+  /// Meydan okuyan bu seed'i KENDİ motorunda oynuyor. Sürümler ayrıldığı an
+  /// iki taraf farklı koşular oynamış olur ve kazanan sessizce değişebilir.
+  /// `duelBlocker` bu alanı `SIM_VERSION` ile karşılaştırıyor; tutmuyorsa
+  /// kayda meydan okunamıyor (bkz. @game/duel STALE_RECORD).
+  ///
+  /// ⚠️ 0 = damga öncesi kayıt → hiçbir sürüme eşit değil → oynanamaz.
+  /// Sahibi yeni motorda bir koşu bitirdiğinde kayıt kendiliğinden tazelenir.
+  simVersion Int   @default(0)
   /// SUNUCUNUN KABUL ETTİĞİ derinlik — iddia değil
   depth   Int
   /// challengeRating(stage, depth, ascension) — tabloyu sıralamak için

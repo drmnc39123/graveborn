@@ -621,6 +621,22 @@ const startSchema = z.object({
   startDepth: z.number().int().min(1).max(100000).optional(),
   /** İstenen ascension kademesi — `resolveAscension` hak edilene kırpar */
   ascension: z.number().int().min(0).max(50).optional(),
+  /**
+   * ⚠️ İSTEMCİNİN MOTOR SÜRÜMÜ (`@game/config` SIM_VERSION).
+   *
+   * Seed tek başına bir koşuyu tarif etmiyor — seed + motor sürümü ediyor.
+   * Bu alan olmadan, sürüm atladıktan sonra kaydedilen bir düello kaydının
+   * hangi motorda koştuğu geri bulunamıyordu.
+   *
+   * ⚠️ ÖDÜLE HİÇ DOKUNMUYOR. Tek kullanıldığı yer düello kaydı yayınlamak
+   * (bkz. duel.publishRecord): sürüm sunucununkiyle tutmuyorsa kayıt
+   * yazılmıyor, ama koşu normal başlıyor ve normal ödüyor. Eski bir sekme
+   * yüzünden kimse gold kaybetmemeli.
+   *
+   * `optional` — sürümünü bildirmeyen istemci 0 damgası alır ve 0 hiçbir
+   * SIM_VERSION'a eşit değil, yani kayıt yayınlamaz. Güvenli tarafa kapalı.
+   */
+  simVersion: z.number().int().min(0).max(100000).optional(),
 });
 
 app.post('/run/start', wrap(async (req, res) => {
@@ -697,6 +713,12 @@ app.post('/run/start', wrap(async (req, res) => {
   await prisma.run.create({
     data: {
       id: runId, wallet, seed: BigInt(seed), hero: p.hero,
+      // ⚠️ İSTEMCİNİN BEYANI, sunucunun sabiti DEĞİL — ve bu kasıtlı.
+      // Sunucununkini damgalasaydık, dağıtım penceresinde (Railway v12'ye
+      // geçmiş, Vercel hâlâ v11 sunuyor) v11 motorda koşulan bir koşuya v12
+      // yazılır ve ondan doğan düello kaydı SESSİZCE yalan söylerdi. Beyan
+      // uymadığında kayıt hiç yayınlanmıyor (bkz. publishRecord).
+      simVersion: body.data.simVersion ?? 0,
       mode: body.data.mode, stageId: body.data.stageId,
       startDepth: Math.max(1, startDepth),
       ascension,
@@ -956,8 +978,11 @@ app.post('/run/finish', wrap(async (req, res) => {
   // ⚠️ DÜELLO KAYDI da buradan yayınlanıyor — ve SADECE kırpılmamış koşudan.
   // Şüpheli bir iddiadan doğan kayıt, ona meydan okuyan HERKESİN puanını
   // bozardı.
+  // ⚠️ SÜRÜM DE GEÇİYOR: kayıt, koşuyu ÜRETEN motorun sürümü sunucununkiyle
+  // aynı değilse yayınlanmıyor. Yayınlansaydı ona meydan okuyan herkes
+  // başka bir koşu oynar ve kazanan sessizce değişirdi.
   await publishRecord(wallet, run.mode, run.stageId, Number(run.seed), ulasilan,
-    run.ascension, s.capped);
+    run.ascension, s.capped, run.simVersion);
   // ⚠️ GÖREVLER SUNUCUNUN KABUL ETTİĞİ DEĞERLE — `ulasilan` zaten süre
   // tabanına kırpılmış derinlik, istemcinin iddiası değil. Kırpılmış koşu
   // görev de saymaz: şüpheli bir iddiadan ödül doğmamalı.
@@ -1309,9 +1334,17 @@ app.post('/duel/start', wrap(async (req, res) => {
   if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
   const p = toProgress(player);
 
+  // ⚠️ Meydan okuyanın motor sürümü — zod ile ayrıştırılıyor, ham `any`
+  // olarak geçirilmiyor. Sayı değilse `undefined` kalır ve `resolveChallenge`
+  // onu 0 sayıp kapıda durdurur (bkz. oradaki başlık).
+  const simBeyan = z.number().int().min(0).max(100000).safeParse(req.body?.simVersion);
+
   let ch;
   try {
-    ch = await resolveChallenge(wallet, req.body?.recordId, p.cleared as unknown as Record<string, boolean>);
+    ch = await resolveChallenge(
+      wallet, req.body?.recordId, p.cleared as unknown as Record<string, boolean>,
+      simBeyan.success ? simBeyan.data : undefined,
+    );
   } catch (e) {
     if (e instanceof DuelError) { res.status(e.status).json({ error: e.code }); return; }
     throw e;
@@ -1333,6 +1366,10 @@ app.post('/duel/start', wrap(async (req, res) => {
   await prisma.run.create({
     data: {
       id: runId, wallet, seed: BigInt(ch.seed), hero: p.hero,
+      // ⚠️ KAYDIN sürümü damgalanıyor — meydan okuyan tam olarak o motorun
+      // koşusunu oynuyor. `resolveChallenge` ikisinin de sunucununkine eşit
+      // olduğunu zaten doğruladı.
+      simVersion: ch.simVersion,
       mode: 'duel', stageId: ch.stageId, startDepth: 1, ascension: 0,
       // ⚠️ HEDEF DONDURULUYOR — bkz. duel.ts başlığı
       duelDefender: ch.defender, duelTargetDepth: ch.targetDepth, duelDefRating: ch.defRating,

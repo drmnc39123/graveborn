@@ -26,7 +26,7 @@ import {
   utcDay,
   type Progress, type RunResult,
 } from '@/game/progress';
-import { STAGES, maxAscensionFor } from '@/game/config';
+import { STAGES, SIM_VERSION, maxAscensionFor } from '@/game/config';
 import type { CosmeticSlot } from '@/game/cosmetics';
 import { wagerPayout, wagerWon } from '@/game/wager';
 import { CHARM_SLOTS } from '@/game/charms';
@@ -545,7 +545,18 @@ export async function startRun(
     skills?: Partial<Record<string, number>>;
   }>(
     '/run/start',
-    { method: 'POST', body: { mode, stageId, startDepth: wantStartDepth, ascension: wantAscension } },
+    {
+      method: 'POST',
+      body: {
+        mode, stageId, startDepth: wantStartDepth, ascension: wantAscension,
+        // ⚠️ HANGİ MOTOR KOŞTUĞUNU BİLDİR. Seed tek başına bir koşuyu tarif
+        // etmiyor — seed + motor sürümü ediyor. Sunucu bunu koşuya damgalıyor
+        // ve düello kaydını sadece sürüm kendisininkiyle uyuşuyorsa
+        // yayınlıyor; yoksa kayıt, ona meydan okuyan herkese sessizce başka
+        // bir koşu oynatırdı (bkz. backend duel.publishRecord).
+        simVersion: SIM_VERSION,
+      },
+    },
   );
   // ⚠️ SUNUCUNUN döndürdüğü değer kullanılır, istenen değil. Motoru başka bir
   // derinlikte kurmak koşuyu doğrulanamaz hale getirirdi.
@@ -935,7 +946,11 @@ export async function startDuel(recordId: string): Promise<RunTicket & {
     guildGrowth?: number; gear?: Partial<Record<string, number>>;
     skills?: Partial<Record<string, number>>;
     duel: { defender: string; target: number; stageId: number };
-  }>('/duel/start', { method: 'POST', body: { recordId } });
+    // ⚠️ Kendi motor sürümümüzü de bildiriyoruz: sunucu hem KAYDIN hem
+    // BİZİM sürümümüzü kendi sabitiyle karşılaştırıyor. Uyuşmazsa koşu hiç
+    // açılmıyor ve sebebi yazılı geliyor — sessizce başka bir koşu oynamak,
+    // kaybedeni sebebini hiç öğrenemeyeceği bir maça sokardı.
+  }>('/duel/start', { method: 'POST', body: { recordId, simVersion: SIM_VERSION } });
   return {
     runId: out.runId, seed: out.seed, charms: out.charms ?? [],
     startDepth: 1, ascension: 0,

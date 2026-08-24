@@ -47,7 +47,7 @@ import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, FONT, glass } from '@/lib/theme';
 import { installAudioUnlock, installUiClickSound, play } from '@/game/sfx';
-import { getMode, getWallet } from '@/lib/session';
+import { ApiError, getMode, getWallet } from '@/lib/session';
 import {
   buyUpgrade, engineModeOf, finishBossRun, finishRun as settleRun, loadSessionProgress,
   setHero as saveHero, startBossRun, startDuel, startRun,
@@ -414,7 +414,15 @@ export default function PlayPage() {
     heroSaveRef.current
       .then(() => startDuel(recordId))
       .then((t) => setScreen({ kind: 'stage', stageId: t.duel.stageId, mode: 'duel', ticket: t }))
-      .catch((e) => setNote(e instanceof Error ? e.message : 'The challenge could not be opened.'));
+      // ⚠️ `ApiError.code` gösteriliyor, `message` DEĞİL: `message` "400 ..."
+      // diye başlıyor ve sunucunun yazdığı cümlenin önüne bir durum kodu
+      // yapıştırıyordu. Motor sürümü uyuşmazlığında oyuncunun okuyacağı şey
+      // tam olarak sebep olmalı (bkz. @game/duel STALE_RECORD).
+      .catch((e) => setNote(
+        e instanceof ApiError ? e.code
+          : e instanceof Error ? e.message
+            : 'The challenge could not be opened.',
+      ));
   }, []);
 
   /**

@@ -9,6 +9,7 @@
 //
 // Çalıştır:  npx tsx src/follow.test.mts
 
+import { SIM_VERSION } from '@game/config';
 import { prisma } from './db.js';
 import { FOLLOW_MAX, follow, listFollows, unfollow } from './follow.js';
 import { publishRecord, settleDuel } from './duel.js';
@@ -86,7 +87,7 @@ console.log('\n[3] ⭐ Meydan okuma durumu listede');
   check('kaydı olmayanın recordId yok', kayitsiz.recordId === null);
 
   // Kayıt yayınla → meydan okunabilir olmalı
-  await publishRecord(w(1), 'descent', 1, 4242, 30, 0, false);
+  await publishRecord(w(1), 'descent', 1, 4242, 30, 0, false, SIM_VERSION);
   l = await listFollows(w(0), CLEARED);
   const hedef = l.rows.find((r) => r.wallet === w(1))!;
   check('kayıt varsa meydan okunabilir', hedef.blocker === null && !!hedef.recordId,

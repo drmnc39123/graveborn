@@ -15,10 +15,17 @@
 // ⚠️ DÜELLO GOLD ÖDEMİYOR. Puan ödüyor (sıfır toplamlı, enflasyon
 // yaratamaz) ve toz — o da GÜNLÜK SERT TAVANLI, çünkü düello sınırsız
 // oynanabiliyor.
+//
+// ⚠️ SEED TEK BAŞINA BİR KOŞUYU TARİF ETMİYOR — seed + MOTOR SÜRÜMÜ ediyor.
+// `SIM_VERSION` arttığı an aynı seed başka bir koşu üretir (bkz.
+// game/config.ts ve sim.test.mts SIM_SEAL). Bu yüzden her kayıt sürümüyle
+// birlikte yazılıyor ve sürüm tutmayan kayda MEYDAN OKUNAMIYOR — yoksa
+// meydan okuyan, savunanın hiç karşılaşmadığı bir koşuyu oynar ve kazanan
+// sessizce değişir.
 
 import crypto from 'node:crypto';
-import { DUEL, duelBlocker, duelWon, nextRatings } from '@game/duel';
-import { challengeRating } from '@game/config';
+import { DUEL, duelBlocker, duelWon, nextRatings, STALE_ENGINE } from '@game/duel';
+import { challengeRating, SIM_VERSION } from '@game/config';
 import { utcDay } from '@game/progress';
 import { prisma } from './db.js';
 import { markPvpMatch } from './pvpSeason.js';
@@ -37,12 +44,26 @@ export class DuelError extends Error {
  *
  * ⚠️ KIRPILMIŞ KOŞU KAYIT OLMAZ. Leaderboard'daki kuralın aynısı: şüpheli
  * bir iddiadan doğan kayıt, başkalarının puanını da bozar.
+ *
+ * ⚠️ BAŞKA SÜRÜMDE KOŞULMUŞ KOŞU DA KAYIT OLMAZ (`runSim`). Sunucu koşan
+ * motoru ölçemiyor; ölçebildiği tek şey kendi derlediği `SIM_VERSION`.
+ * Koşu açılışında bildirilen sürüm buna uymuyorsa (dağıtım penceresinde
+ * frontend ile backend bir süre ayrışabiliyor) kayıt YAZILMAZ. Yazsaydık
+ * kayda yanlış sürüm damgalanır ve ona meydan okuyan HERKES sessizce başka
+ * bir koşu oynardı — düzeltilmesi imkânsız, teşhisi çok zor bir adaletsizlik.
+ *
+ * ⚠️ ÖDÜLÜ ETKİLEMEZ. Sadece kayıt yayınlanmıyor; oyuncu koşusunun gold'unu
+ * ve rekorunu normal alıyor. Eski bir sekme yüzünden kimse ödül kaybetmemeli.
  */
 export async function publishRecord(
   wallet: string, mode: string, stageId: number, seed: number, depth: number,
-  ascension: number, capped: boolean,
+  ascension: number, capped: boolean, runSim: number,
 ): Promise<void> {
   if (mode !== 'descent' || capped || depth < 1) return;
+  if (runSim !== SIM_VERSION) {
+    console.warn('[duel:surum-atlandi]', wallet, `kosu=${runSim} sunucu=${SIM_VERSION}`);
+    return;
+  }
   const rating = challengeRating(stageId, depth, ascension);
   if (!Number.isFinite(rating) || rating <= 0) return;
 
@@ -56,20 +77,27 @@ export async function publishRecord(
     // ⚠️ KOŞULLU: araya giren daha iyi bir koşu ezilmesin
     await prisma.duelRecord.updateMany({
       where: { id: mevcut.id, depth: { lt: depth } },
-      data: { seed: BigInt(seed), depth, rating, createdAt: new Date() },
+      data: { seed: BigInt(seed), depth, rating, simVersion: SIM_VERSION, createdAt: new Date() },
     });
     return;
   }
   try {
     await prisma.duelRecord.create({
-      data: { id: crypto.randomUUID(), wallet, stageId, seed: BigInt(seed), depth, rating },
+      data: {
+        id: crypto.randomUUID(), wallet, stageId, seed: BigInt(seed), depth, rating,
+        // ⚠️ SUNUCUNUN sürümü yazılıyor, istemcinin beyanı DEĞİL. Beyan
+        // yukarıdaki kapıda zaten buna eşit olduğu doğrulandı; damgayı
+        // sunucudan almak, kapının ileride gevşemesi hâlinde bile kaydın
+        // uydurma bir sürümle yazılmasını imkânsız kılıyor.
+        simVersion: SIM_VERSION,
+      },
     });
   } catch {
     // Eşzamanlı iki koşu aynı anda ilk kaydı açtıysa tekil kısıt patlar —
     // ikincisi güncelleme yoluna düşsün.
     await prisma.duelRecord.updateMany({
       where: { wallet, stageId, depth: { lt: depth } },
-      data: { seed: BigInt(seed), depth, rating, createdAt: new Date() },
+      data: { seed: BigInt(seed), depth, rating, simVersion: SIM_VERSION, createdAt: new Date() },
     });
   }
 }
@@ -139,6 +167,10 @@ export async function board(wallet: string, cleared: Record<string, boolean>): P
         blocker: duelBlocker({
           challenger: wallet, defender: r.wallet, hoursSince: saat,
           stageCleared: !!cleared[String(r.stageId)],
+          // ⚠️ Eski sürümde yazılmış kayıt tabloda GÖRÜNÜYOR ama düğmesi
+          // kapalı ve SEBEBİ yazıyor. Gizlemek, oyuncuya kaydın nereye
+          // kaybolduğunu hiç anlatmazdı.
+          recordSim: r.simVersion, engineSim: SIM_VERSION,
         }),
       };
     }),
@@ -198,6 +230,9 @@ export async function findMatch(
         blocker: duelBlocker({
           challenger: wallet, defender: r.wallet, hoursSince: saat,
           stageCleared: !!cleared[String(r.stageId)],
+          // ⚠️ Sürümü tutmayan kayıt EŞLEŞMEDE DE eleniyor — "bul" düğmesi
+          // doğrulamayı atlayan bir arka kapı olmamalı (bkz. başlık).
+          recordSim: r.simVersion, engineSim: SIM_VERSION,
         }),
         fark: Math.abs(r.player.duelRating - me.duelRating),
       };
@@ -213,9 +248,15 @@ export async function findMatch(
       const son = sonuncu.get(r.wallet);
       return son && (simdi - son.getTime()) / 3_600_000 < DUEL.cooldownHours;
     });
-    throw new DuelError(sogumada
-      ? 'You have answered everyone recently. Come back in a few hours.'
-      : 'No records on stages you have cleared. Clear another stage first.');
+    // ⚠️ SÜRÜM SEBEBİ AYRI SÖYLENİYOR. Motor sürümü yeni atlamışsa tablodaki
+    // kayıtların TAMAMI bir anda oynanamaz hâle gelir; "temizlenmiş bölümde
+    // kayıt yok" demek oyuncuyu hiç çözemeyeceği bir işe yollardı.
+    const eskiSurum = adaylar.length > 0 && adaylar.every((r) => r.simVersion !== SIM_VERSION);
+    throw new DuelError(eskiSurum
+      ? 'Every posted record predates the current engine build. They refresh as players descend again.'
+      : sogumada
+        ? 'You have answered everyone recently. Come back in a few hours.'
+        : 'No records on stages you have cleared. Clear another stage first.');
   }
 
   const kazanan = uygun[0].r;
@@ -284,10 +325,24 @@ export async function ladder(wallet: string, limit = 10): Promise<{
  *
  * ⚠️ ARAYÜZDE GİZLENEN DÜĞME BİR KORUMA DEĞİLDİR — aynı `duelBlocker`
  * burada da çalışıyor. Kural tek yerde yazılı, iki yerde uygulanıyor.
+ *
+ * ⚠️ SÜRÜM KAPISI BURADA, tabloda değil. Tablo bir GÖRÜNÜM; kayıt kimliğini
+ * elinde tutan biri düğmeyi hiç görmeden doğrudan `/duel/start` çağırabilir.
+ * Uyuşmazlıkta koşu AÇILMIYOR — sessizce başka bir koşu açmak, kaybedeni
+ * sebebini hiç öğrenemeyeceği bir maça sokardı.
  */
 export async function resolveChallenge(
   wallet: string, recordId: unknown, cleared: Record<string, boolean>,
-): Promise<{ stageId: number; seed: number; defender: string; targetDepth: number; defRating: number }> {
+  /**
+   * Meydan okuyanın motorunun sürümü — istemcinin beyanı. `undefined` =
+   * sürümünü bildirmeyen (eski) istemci; kasıtlı olarak 0 sayılıyor, yani
+   * hiçbir sürüme uymuyor ve kapıdan geçemiyor. Güvenli tarafa kapalı.
+   */
+  challengerSim: number | undefined,
+): Promise<{
+  stageId: number; seed: number; defender: string; targetDepth: number;
+  defRating: number; simVersion: number;
+}> {
   if (typeof recordId !== 'string' || !recordId) throw new DuelError('gecersiz_kayit');
   const rec = await prisma.duelRecord.findUnique({
     where: { id: recordId },
@@ -295,6 +350,12 @@ export async function resolveChallenge(
   });
   if (!rec) throw new DuelError('kayit_yok', 404);
   if (rec.player.banned) throw new DuelError('rakip_yasakli', 403);
+
+  // ⚠️ MEYDAN OKUYANIN KENDİ MOTORU da güncel olmalı. Kayıt sunucuyla aynı
+  // sürümde olsa bile, günlerdir açık duran bir sekme ESKİ motoru
+  // çalıştırıyor: seed aynı, koşu başka. Bu dal kayıt tarafından AYRI, çünkü
+  // yapılacak şey de ayrı — oyuncunun sayfayı yenilemesi yeterli.
+  if ((challengerSim ?? 0) !== SIM_VERSION) throw new DuelError(STALE_ENGINE);
 
   const son = await prisma.duel.findFirst({
     where: { challenger: wallet, defender: rec.wallet },
@@ -306,11 +367,16 @@ export async function resolveChallenge(
   const engel = duelBlocker({
     challenger: wallet, defender: rec.wallet, hoursSince: saat,
     stageCleared: !!cleared[String(rec.stageId)],
+    // ⚠️ `STALE_RECORD` buradan çıkıyor — tekrar oynatma bu kapıda ölüyor.
+    recordSim: rec.simVersion, engineSim: SIM_VERSION,
   });
   if (engel) throw new DuelError(engel);
 
   return {
     stageId: rec.stageId,
+    // Koşuya damgalanacak sürüm — kaydınkiyle AYNI olmak zorunda ve
+    // yukarıdaki kapı bunu garantiledi.
+    simVersion: rec.simVersion,
     // ⚠️ SEED KAYITTAN. Yeni seed üretmek düellonun tek adalet dayanağını
     // yok ederdi: iki oyuncu farklı koşuları oynayıp karşılaştırılırdı.
     seed: Number(rec.seed),

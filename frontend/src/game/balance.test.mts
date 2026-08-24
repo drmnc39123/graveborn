@@ -78,7 +78,7 @@ check('tek bir hat 25 saatin altında', enPahaliHat / GOLD_SAAT < 25,
   `${(enPahaliHat / GOLD_SAAT).toFixed(1)} saat`);
 
 console.log('\n[4] ÖLÇÜM YÖNTEMİ — hattı TEK TEK değerlemek YANLIŞ');
-// ⭐ ÖLÇÜLDÜ (12 seed × 30 dk, `_defprobe.mts`, taban derinlik 8,2):
+// ⭐ ÖLÇÜLDÜ (12 seed × 30 dk, `balance.probe.mts`, taban derinlik 8,2):
 //     health max ........  8,7  (+0,5)
 //     armor  max ........  8,6  (+0,4)
 //     recovery max ......  9,1  (+0,9)

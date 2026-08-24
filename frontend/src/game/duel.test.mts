@@ -11,9 +11,13 @@
 // Çalıştır:  npx tsx src/game/duel.test.mts
 
 import {
-  DUEL, DUEL_TIERS, duelBlocker, duelTier, duelWon, dustForWin,
+  DUEL, DUEL_TIERS, STALE_ENGINE, STALE_RECORD, duelBlocker, duelTier, duelWon, dustForWin,
   expectedScore, nextRatings,
 } from './duel.js';
+
+// ⚠️ Sürüm kontrolü DIŞINDAKİ testlerde iki taraf da bu sabiti kullanıyor:
+// motor sürümü ilgisiz olduğu için değil, EŞİT olduğu için engel çıkmasın.
+const SIM = 11;
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -111,26 +115,79 @@ console.log('\n[5] ⭐ GÜVENLİK: kendine ve aynı rakibe sonsuz meydan okuma')
 {
   // ⚠️ Kendine meydan okumak, iki tarafı da aynı hesap olduğu için puanı
   // serbestçe şişirmenin en kolay yolu olurdu.
-  const kendi = duelBlocker({ challenger: 'A', defender: 'A', hoursSince: 999, stageCleared: true });
+  const kendi = duelBlocker({ challenger: 'A', defender: 'A', hoursSince: 999, stageCleared: true, recordSim: SIM, engineSim: SIM });
   check('kendine meydan okunamıyor', !!kendi, kendi ?? '');
 
-  const soguma = duelBlocker({ challenger: 'A', defender: 'B', hoursSince: 1, stageCleared: true });
+  const soguma = duelBlocker({ challenger: 'A', defender: 'B', hoursSince: 1, stageCleared: true, recordSim: SIM, engineSim: SIM });
   check('soğuma süresi içinde REDDEDİLİYOR', !!soguma, soguma ?? '');
   check('soğuma sebebi KALAN SÜREYİ söylüyor', !!soguma && /\d+h/.test(soguma), soguma ?? '');
 
-  const sonra = duelBlocker({ challenger: 'A', defender: 'B', hoursSince: DUEL.cooldownHours, stageCleared: true });
+  const sonra = duelBlocker({ challenger: 'A', defender: 'B', hoursSince: DUEL.cooldownHours, stageCleared: true, recordSim: SIM, engineSim: SIM });
   check('soğuma bitince geçiyor', sonra === null);
 
-  const kilitli = duelBlocker({ challenger: 'A', defender: 'B', hoursSince: 999, stageCleared: false });
+  const kilitli = duelBlocker({ challenger: 'A', defender: 'B', hoursSince: 999, stageCleared: false, recordSim: SIM, engineSim: SIM });
   check('temizlenmemiş bölüme meydan okunamıyor', !!kilitli, kilitli ?? '');
 
   // İlk düello (hiç geçmiş yok)
   check('ilk düello serbest',
-    duelBlocker({ challenger: 'A', defender: 'B', hoursSince: Infinity, stageCleared: true }) === null);
+    duelBlocker({ challenger: 'A', defender: 'B', hoursSince: Infinity, stageCleared: true, recordSim: SIM, engineSim: SIM }) === null);
 
   // Sebepler boş metin olmamalı
   const hepsi = [kendi, soguma, kilitli].filter(Boolean) as string[];
   check('hiçbir sebep boş değil', hepsi.every((s) => s.trim().length > 5));
+}
+
+console.log('\n[5b] ⭐ MÜHÜR: MOTOR SÜRÜMÜ — eski kayıt tekrar OYNATILAMAZ');
+{
+  // 🔴 BU BİR SESSİZ ADALETSİZLİKTİ. Düellonun tek dayanağı "aynı seed →
+  // aynı koşu"; bu eşitlik SADECE iki taraf aynı motoru çalıştırdığında
+  // geçerli. `SIM_VERSION` 11'den 12'ye çıktığında (nearestEnemyTo ızgara
+  // yerine düz tarama) aynı seed BAŞKA bir koşu üretmeye başladı — v11'de
+  // kaydedilmiş bir düello v12'de tekrar oynatılınca meydan okuyan,
+  // savunanın HİÇ karşılaşmadığı bir koşuyu oynayıp onun derinliğiyle
+  // kıyaslanıyordu. Kazanan sessizce değişebilirdi ve kimse sebebini
+  // göremezdi.
+  //
+  // ⚠️ ÇİFT TARAFLI ÖLÇÜM. Sadece "uyuşmazlık reddediliyor" demek yetmez:
+  // her şeyi reddeden bir kontrol de o testi geçer. Uyuşma hâlinin GEÇTİĞİ
+  // de aynı yerde ölçülüyor.
+  const ortak = { challenger: 'A', defender: 'B', hoursSince: Infinity, stageCleared: true };
+
+  const eski = duelBlocker({ ...ortak, recordSim: 11, engineSim: 12 });
+  check('⭐ ESKİ sürümde kaydedilmiş kayıt REDDEDİLİYOR', eski === STALE_RECORD, eski ?? 'null');
+
+  const yeni = duelBlocker({ ...ortak, recordSim: 12, engineSim: 12 });
+  check('⭐ AYNI sürüm GEÇİYOR (kontrol her şeyi reddetmiyor)', yeni === null, yeni ?? 'null');
+
+  // Diğer yön: kayıt sunucudan İLERİDE (frontend yeni, backend eski dağıtım
+  // penceresi). Bu da uyuşmazlık — tek yönlü bir karşılaştırma yanlış olurdu.
+  const ileri = duelBlocker({ ...ortak, recordSim: 12, engineSim: 11 });
+  check('⭐ İLERİ sürümlü kayıt da REDDEDİLİYOR', ileri === STALE_RECORD, ileri ?? 'null');
+
+  // ⚠️ 0 = damga öncesi kayıt. Gerçek bir SIM_VERSION asla 0 değil, bu yüzden
+  // eski satırlar KENDİLİĞİNDEN oynanamaz sayılmalı — güvenli tarafa kapalı.
+  const damgasiz = duelBlocker({ ...ortak, recordSim: 0, engineSim: 12 });
+  check('⭐ DAMGASIZ (0) eski kayıt oynanamıyor', damgasiz === STALE_RECORD, damgasiz ?? 'null');
+
+  // ⚠️ SÜRÜM KONTROLÜ DİĞER ŞARTLARDAN ÖNCE. Sürüm tutmuyorsa oynanacak koşu
+  // zaten rakibin koşusu değil; "önce bölümü temizle" demek oyuncuyu
+  // çözemeyeceği bir işe yollardı.
+  const ikisiDe = duelBlocker({
+    ...ortak, stageCleared: false, recordSim: 11, engineSim: 12,
+  });
+  check('sürüm sebebi bölüm sebebinden ÖNCE geliyor', ikisiDe === STALE_RECORD, ikisiDe ?? 'null');
+
+  // Kendine meydan okuma sürümden de ÖNCE — Elo şişirme her hâlükârda kapalı
+  const kendine = duelBlocker({
+    ...ortak, defender: 'A', recordSim: 11, engineSim: 12,
+  });
+  check('kendine meydan okuma sürümden bağımsız kapalı',
+    !!kendine && kendine !== STALE_RECORD, kendine ?? 'null');
+
+  // İki sebep AYRI cümle: yapılacak şey de ayrı (birinde bekle, diğerinde yenile)
+  check('kayıt ve motor sebepleri AYRI', STALE_RECORD !== STALE_ENGINE);
+  check('iki sebep de oyuncuya NE YAPACAĞINI söylüyor',
+    /refresh|descen/i.test(STALE_RECORD) && /reload/i.test(STALE_ENGINE));
 }
 
 console.log('\n[6] ⭐ EKONOMİ: toz musluğunun SERT tavanı');

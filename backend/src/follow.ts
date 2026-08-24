@@ -11,6 +11,7 @@
 
 import crypto from 'node:crypto';
 import { duelBlocker } from '@game/duel';
+import { SIM_VERSION } from '@game/config';
 import { prisma } from './db.js';
 import { onlineWallets } from './presence.js';
 
@@ -55,7 +56,7 @@ export async function listFollows(
     prisma.duelRecord.findMany({
       where: { wallet: { in: hedefler } },
       orderBy: { rating: 'desc' },
-      select: { id: true, wallet: true, stageId: true, depth: true },
+      select: { id: true, wallet: true, stageId: true, depth: true, simVersion: true },
     }),
     prisma.duel.findMany({
       where: { challenger: wallet, defender: { in: hedefler } },
@@ -65,7 +66,7 @@ export async function listFollows(
   ]);
 
   const online = onlineWallets();
-  const enIyiKayit = new Map<string, { id: string; stageId: number; depth: number }>();
+  const enIyiKayit = new Map<string, { id: string; stageId: number; depth: number; simVersion: number }>();
   for (const k of kayitlar) if (!enIyiKayit.has(k.wallet)) enIyiKayit.set(k.wallet, k);
   const sonuncu = new Map<string, Date>();
   for (const d of sonMaclar) if (!sonuncu.has(d.defender)) sonuncu.set(d.defender, d.createdAt);
@@ -89,6 +90,10 @@ export async function listFollows(
         ? duelBlocker({
             challenger: wallet, defender: t, hoursSince: saat,
             stageCleared: !!cleared[String(k.stageId)],
+            // ⚠️ Takip listesi de aynı kapıdan geçiyor. Buradaki "CHALLENGE"
+            // düğmesi `/duel/start`'a gidiyor; tabloda engellenip burada
+            // engellenmeyen bir yol, kuralı olmayan bir yol demekti.
+            recordSim: k.simVersion, engineSim: SIM_VERSION,
           })
         : 'They have not posted a descent yet.',
     });

@@ -7,13 +7,16 @@
 //   3. YARIŞ — asenkron ladder'da aynı oyuncuya aynı anda iki kişi meydan
 //      okuyabiliyor; puan yazımı birbirini EZMEMELİ
 //   4. TOZ TAVANI — düello sınırsız oynanabiliyor
+//   5. MOTOR SÜRÜMÜ — seed tek başına bir koşuyu tarif etmiyor; sürüm
+//      atladığında aynı seed BAŞKA bir koşu üretiyor (bkz. [12])
 //
 // Çalıştır:  npx tsx src/duel.test.mts
 
 import { DUEL, nextRatings } from '@game/duel';
-import { challengeRating } from '@game/config';
+import { challengeRating, SIM_VERSION } from '@game/config';
 import { utcDay } from '@game/progress';
 import { prisma } from './db.js';
+import { STALE_ENGINE, STALE_RECORD } from '@game/duel';
 import { board, findMatch, ladder, publishRecord, resolveChallenge, settleDuel } from './duel.js';
 
 const FAIL: string[] = [];
@@ -35,7 +38,7 @@ console.log('\n═══ DÜELLO (SUNUCU) ═══');
 
 console.log('\n[1] ⭐ Kayıt yayınlama — yalnızca İYİLEŞİYOR');
 {
-  await publishRecord(w(1), 'descent', 1, 12345, 30, 0, false);
+  await publishRecord(w(1), 'descent', 1, 12345, 30, 0, false, SIM_VERSION);
   let rec = await prisma.duelRecord.findUniqueOrThrow({
     where: { wallet_stageId: { wallet: w(1), stageId: 1 } },
   });
@@ -44,32 +47,32 @@ console.log('\n[1] ⭐ Kayıt yayınlama — yalnızca İYİLEŞİYOR');
 
   // ⚠️ DAHA KÖTÜ KOŞU KAYDI DÜŞÜRMEMELİ: düşürebilseydi oyuncu bilerek
   // "kolay hedef" bırakıp rakiplerinin puanını çalardı.
-  await publishRecord(w(1), 'descent', 1, 999, 12, 0, false);
+  await publishRecord(w(1), 'descent', 1, 999, 12, 0, false, SIM_VERSION);
   rec = await prisma.duelRecord.findUniqueOrThrow({
     where: { wallet_stageId: { wallet: w(1), stageId: 1 } },
   });
   check('daha KÖTÜ koşu kaydı düşürmüyor', rec.depth === 30 && Number(rec.seed) === 12345,
     `d${rec.depth} seed${rec.seed}`);
 
-  await publishRecord(w(1), 'descent', 1, 777, 44, 0, false);
+  await publishRecord(w(1), 'descent', 1, 777, 44, 0, false, SIM_VERSION);
   rec = await prisma.duelRecord.findUniqueOrThrow({
     where: { wallet_stageId: { wallet: w(1), stageId: 1 } },
   });
   check('daha İYİ koşu kaydı yükseltiyor', rec.depth === 44 && Number(rec.seed) === 777);
 
   // ⚠️ KIRPILMIŞ koşu kayıt olmaz — ona meydan okuyan HERKESİN puanı bozulur
-  await publishRecord(w(1), 'descent', 1, 555, 900, 0, true);
+  await publishRecord(w(1), 'descent', 1, 555, 900, 0, true, SIM_VERSION);
   rec = await prisma.duelRecord.findUniqueOrThrow({
     where: { wallet_stageId: { wallet: w(1), stageId: 1 } },
   });
   check('KIRPILMIŞ koşu kayıt olmuyor', rec.depth === 44, `d${rec.depth}`);
 
-  await publishRecord(w(1), 'campaign', 1, 1, 50, 0, false);
+  await publishRecord(w(1), 'campaign', 1, 1, 50, 0, false, SIM_VERSION);
   check('kampanya koşusu kayıt olmuyor',
     (await prisma.duelRecord.count({ where: { wallet: w(1) } })) === 1);
 
   // Eşzamanlı yayınlama tekil kısıtta patlamamalı
-  await Promise.all([50, 60, 55].map((d) => publishRecord(w(2), 'descent', 2, 4242, d, 0, false)));
+  await Promise.all([50, 60, 55].map((d) => publishRecord(w(2), 'descent', 2, 4242, d, 0, false, SIM_VERSION)));
   const r2 = await prisma.duelRecord.findUniqueOrThrow({
     where: { wallet_stageId: { wallet: w(2), stageId: 2 } },
   });
@@ -81,7 +84,7 @@ console.log('\n[2] ⭐ SEED KAYITTAN geliyor — düellonun tek adalet dayanağ�
   const rec = await prisma.duelRecord.findUniqueOrThrow({
     where: { wallet_stageId: { wallet: w(1), stageId: 1 } },
   });
-  const ch = await resolveChallenge(w(0), rec.id, CLEARED);
+  const ch = await resolveChallenge(w(0), rec.id, CLEARED, SIM_VERSION);
   check('seed rakibin kaydından', ch.seed === Number(rec.seed), `${ch.seed}`);
   check('bölüm kayıttan', ch.stageId === rec.stageId);
   check('hedef derinlik kayıttan', ch.targetDepth === rec.depth, `${ch.targetDepth}`);
@@ -94,7 +97,7 @@ console.log('\n[3] ⭐ GÜVENLİK: kendine / kilitli bölüme / soğumada meydan
     where: { wallet_stageId: { wallet: w(1), stageId: 1 } },
   });
   const dene = async (wallet: string, id: string, cleared: Record<string, boolean>) => {
-    try { await resolveChallenge(wallet, id, cleared); return 'gecti'; }
+    try { await resolveChallenge(wallet, id, cleared, SIM_VERSION); return 'gecti'; }
     catch (e) { return e instanceof Error && e.constructor.name === 'DuelError' ? 'red' : `patladi:${e}`; }
   };
   check('kendi kaydına meydan okunamıyor', (await dene(w(1), kendi.id, CLEARED)) === 'red');
@@ -242,7 +245,7 @@ console.log('\n[10] ⭐ EŞLEŞME BULMA — puan YAKINLIĞINA göre');
   await prisma.player.update({ where: { wallet: w(2) }, data: { duelRating: 1010 } });
   await prisma.player.update({ where: { wallet: w(3) }, data: { duelRating: 1900 } });
   for (const [i, d] of [[1, 20], [2, 30], [3, 40]] as const) {
-    await publishRecord(w(i), 'descent', 5, 1000 + i, d, 0, false);
+    await publishRecord(w(i), 'descent', 5, 1000 + i, d, 0, false, SIM_VERSION);
   }
 
   const m = await findMatch(w(0), YALNIZ);
@@ -307,6 +310,93 @@ console.log('\n[11] Sıralama tablosu');
 
 await prisma.duel.deleteMany({ where: { challenger: { startsWith: P } } });
 await prisma.duel.deleteMany({ where: { defender: { startsWith: P } } });
+console.log('\n[12] ⭐ MÜHÜR: MOTOR SÜRÜMÜ — ESKİ KAYIT TEKRAR OYNATILAMAZ');
+{
+  // 🔴 SESSİZ ADALETSİZLİK. Düellonun tek dayanağı "aynı seed → aynı koşu";
+  // bu eşitlik SADECE iki taraf AYNI motoru çalıştırdığında geçerli.
+  // `SIM_VERSION` 11 → 12 çıktığında (nearestEnemyTo ızgara yerine düz
+  // tarama) aynı seed başka bir koşu üretmeye başladı: v11'de kaydedilmiş
+  // bir düello v12'de tekrar oynatılınca meydan okuyan, savunanın HİÇ
+  // karşılaşmadığı bir koşuyu oynayıp onun derinliğiyle kıyaslanıyordu.
+  // Kazanan sessizce değişebilirdi.
+  //
+  // ⚠️ ÇİFT TARAFLI. "Uyuşmazlık reddediliyor" tek başına hiçbir şey
+  // kanıtlamaz — her şeyi reddeden bir kapı da o testi geçer. Uyuşma
+  // hâlinin GEÇTİĞİ her adımda aynı yerde ölçülüyor.
+  const ESKI = SIM_VERSION - 1;
+  const CL = { '7': true };
+
+  // ── a) Kayıt sürümüyle birlikte yazılıyor mu ──
+  await publishRecord(w(1), 'descent', 7, 31337, 25, 0, false, SIM_VERSION);
+  const taze = await prisma.duelRecord.findUniqueOrThrow({
+    where: { wallet_stageId: { wallet: w(1), stageId: 7 } },
+  });
+  check('⭐ kayıt SÜRÜMÜYLE yazılıyor', taze.simVersion === SIM_VERSION,
+    `simVersion=${taze.simVersion} (SIM_VERSION=${SIM_VERSION})`);
+
+  // ── b) Başka sürümde koşulmuş koşu kayıt YAYINLAMIYOR ──
+  // ⚠️ Bu koşu DAHA İYİ (d90 > d25). Sürüm kapısı olmasaydı kaydı
+  // yükseltirdi ve kayda yanlış sürüm damgalanırdı.
+  await publishRecord(w(1), 'descent', 7, 4242, 90, 0, false, ESKI);
+  const sonra = await prisma.duelRecord.findUniqueOrThrow({
+    where: { wallet_stageId: { wallet: w(1), stageId: 7 } },
+  });
+  check('⭐ ESKİ motorda koşulan DAHA İYİ koşu kaydı GÜNCELLEMİYOR',
+    sonra.depth === 25 && Number(sonra.seed) === 31337, `d${sonra.depth} seed${sonra.seed}`);
+  check('damgasız (0) koşu da kayıt yayınlamıyor',
+    (await (async () => {
+      await publishRecord(w(2), 'descent', 7, 555, 40, 0, false, 0);
+      return prisma.duelRecord.count({ where: { wallet: w(2), stageId: 7 } });
+    })()) === 0);
+
+  // ── c) GÜNCEL sürüm hâlâ geçiyor (kapı her şeyi reddetmiyor) ──
+  await publishRecord(w(2), 'descent', 7, 909, 40, 0, false, SIM_VERSION);
+  check('⭐ GÜNCEL sürümlü koşu kayıt AÇIYOR (kapı her şeyi reddetmiyor)',
+    (await prisma.duelRecord.count({ where: { wallet: w(2), stageId: 7 } })) === 1);
+
+  // ── d) Tekrar oynatma: kayıt eskiyse koşu AÇILMIYOR ──
+  const dene = async (id: string, challengerSim: number) => {
+    try { await resolveChallenge(w(0), id, CL, challengerSim); return null; }
+    catch (e) { return e instanceof Error ? e.message : String(e); }
+  };
+
+  check('⭐ GÜNCEL kayda meydan okunabiliyor', (await dene(taze.id, SIM_VERSION)) === null);
+
+  // Kaydı elle ESKİ sürüme düşür — sürüm atlamış bir üretim veritabanının
+  // birebir hâli.
+  await prisma.duelRecord.update({ where: { id: taze.id }, data: { simVersion: ESKI } });
+  const redKayit = await dene(taze.id, SIM_VERSION);
+  check('⭐ ESKİ sürümlü kayda meydan okuma REDDEDİLİYOR', redKayit === STALE_RECORD, redKayit ?? 'gecti');
+
+  // ⚠️ Sebep OKUNABİLİR bir cümle olmalı — 'gecersiz_kayit' gibi bir kod
+  // oyuncuya kaydın neden oynanamadığını anlatmazdı.
+  check('sebep oyuncuya SÖYLENİYOR (kod değil, cümle)',
+    !!redKayit && redKayit.includes(' ') && /engine/i.test(redKayit), redKayit ?? '');
+
+  // ── e) Meydan okuyanın KENDİ motoru eskiyse de açılmıyor ──
+  await prisma.duelRecord.update({ where: { id: taze.id }, data: { simVersion: SIM_VERSION } });
+  const redMotor = await dene(taze.id, ESKI);
+  check('⭐ ESKİ motorlu istemci meydan okuyamıyor', redMotor === STALE_ENGINE, redMotor ?? 'gecti');
+  const redBeyansiz = await dene(taze.id, 0);
+  check('sürümünü BİLDİRMEYEN istemci de meydan okuyamıyor', redBeyansiz === STALE_ENGINE,
+    redBeyansiz ?? 'gecti');
+  check('⭐ ikisi de güncelken YİNE geçiyor', (await dene(taze.id, SIM_VERSION)) === null);
+
+  // ── f) Tablo ve eşleşme aynı kapıdan geçiyor mu ──
+  await prisma.duelRecord.update({ where: { id: taze.id }, data: { simVersion: ESKI } });
+  const b = await board(w(0), CL);
+  const satir = b.rows.find((r) => r.id === taze.id);
+  check('⭐ eski kayıt TABLODA görünüyor ama düğmesi kapalı',
+    !!satir && satir.blocker === STALE_RECORD, satir?.blocker ?? 'satir yok');
+
+  // ⚠️ Eşleşme bulucu da elemeli — "bul" düğmesi doğrulamayı atlayan bir
+  // arka kapı OLMAMALI (bkz. duel.ts findMatch başlığı).
+  const m = await findMatch(w(0), CL);
+  check('⭐ eşleşme bulucu eski kaydı SEÇMİYOR', m.id !== taze.id, `secilen=${m.wallet}`);
+
+  await prisma.duelRecord.update({ where: { id: taze.id }, data: { simVersion: SIM_VERSION } });
+}
+
 await prisma.duelRecord.deleteMany({ where: { wallet: { startsWith: P } } });
 await prisma.player.deleteMany({ where: { wallet: { startsWith: P } } });
 

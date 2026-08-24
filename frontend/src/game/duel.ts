@@ -125,6 +125,39 @@ export function duelTier(rating: number): DuelTier {
 // ── DOĞRULAMA ─────────────────────────────────────────────────────────
 
 /**
+ * ⚠️ SÜRÜM UYUŞMAZLIĞINDA TEKRAR GEÇERSİZDİR.
+ *
+ * Düellonun tek adalet dayanağı "aynı seed → aynı koşu". Bu eşitlik SADECE
+ * iki taraf AYNI motoru çalıştırdığında geçerli: `SIM_VERSION` arttığı an
+ * aynı seed BAŞKA bir koşu üretir (bkz. game/config.ts SIM_VERSION ve
+ * sim.test.mts SIM_SEAL).
+ *
+ * Somut örnek: SIM_VERSION 11'de kaydedilmiş bir düello 12 ile tekrar
+ * oynatılırsa düşman sırası değişir — meydan okuyan, savunanın HİÇ
+ * karşılaşmadığı bir koşuyu oynayıp onun derinliğiyle kıyaslanır. Sonuç
+ * sessizce ters dönebilir ve kimse sebebini göremez.
+ *
+ * Bu yüzden eski sürümde yazılmış kayıt OYNANMAZ. Silinmiyor da: sahibi yeni
+ * motorda bir koşu bitirdiğinde kaydı kendiliğinden tazeleniyor.
+ */
+export const STALE_RECORD: string =
+  'Recorded on an older engine build — the replay would not match. It refreshes on their next descent.';
+
+/**
+ * Meydan okuyanın KENDİ motoru eskiyse (sekmesi açık kalmış istemci).
+ *
+ * ⚠️ `STALE_RECORD`'DAN AYRI CÜMLE, çünkü yapılacak şey de ayrı: burada
+ * sayfayı yenilemek yetiyor, orada beklemek gerekiyor. Tek mesaja
+ * indirseydik oyuncunun yarısı boşuna beklerdi.
+ *
+ * ⚠️ İkisi de `: string` olarak yazılı, literal tip DEĞİL — literal olsaydı
+ * `STALE_RECORD !== STALE_ENGINE` derleyicide "örtüşme yok" hatası verir ve
+ * ikisinin ayrı kaldığını ölçen test yazılamazdı.
+ */
+export const STALE_ENGINE: string =
+  'Your game build is out of date — reload the page before challenging.';
+
+/**
  * Meydan okuma geçerli mi. `null` = geçerli, aksi hâlde SEBEP.
  *
  * ⚠️ SUNUCU DA BUNU ÇAĞIRIYOR. Arayüzde gizlenen bir düğme bir koruma
@@ -137,10 +170,25 @@ export function duelBlocker(opts: {
   hoursSince: number;
   /** meydan okuyan bu bölümü temizlemiş mi */
   stageCleared: boolean;
+  /**
+   * Kaydın oynandığı motor sürümü (`DuelRecord.simVersion`). 0 = sürüm
+   * damgasından ÖNCE yazılmış kayıt — hangi motorda koştuğu bilinmiyor.
+   *
+   * ⚠️ ZORUNLU ALAN, isteğe bağlı DEĞİL. Opsiyonel olsaydı bir çağıran onu
+   * geçirmeyi unuttuğunda kontrol sessizce kapanırdı — tam da bu dosyanın
+   * önlemeye çalıştığı sessiz yanlış sonuç.
+   */
+  recordSim: number;
+  /** meydan okuyanın çalıştıracağı motorun sürümü — `SIM_VERSION` */
+  engineSim: number;
 }): string | null {
   // ⚠️ Kendine meydan okumak: Elo'da iki tarafı da aynı hesap olan bir maç
   // puanı serbestçe şişirmenin en kolay yolu olurdu.
   if (opts.challenger === opts.defender) return 'You cannot answer your own record.';
+  // ⚠️ MOTOR SÜRÜMÜ — bkz. STALE_RECORD başlığı. Bu kontrol bölüm/soğuma
+  // kontrollerinden ÖNCE gelmeli: sürüm tutmuyorsa oynanacak koşu zaten
+  // rakibin koştuğu koşu değil, diğer şartların bir anlamı kalmıyor.
+  if (opts.recordSim !== opts.engineSim) return STALE_RECORD;
   if (!opts.stageCleared) return 'Clear this stage before you challenge its record.';
   if (opts.hoursSince < DUEL.cooldownHours) {
     const kalan = Math.ceil(DUEL.cooldownHours - opts.hoursSince);
