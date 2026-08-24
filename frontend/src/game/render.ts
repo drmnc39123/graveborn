@@ -261,6 +261,56 @@ function gorunur(x: number, y: number): boolean {
   return x >= kirpX0 && x <= kirpX1 && y >= kirpY0 && y <= kirpY1;
 }
 
+/**
+ * PİŞİRİLMİŞ PARILTI — yörünge küresi gibi radyal parıltılar için.
+ *
+ * ⚠️ NİYE VAR: `drawOrbits` her karede küre BAŞINA bir `createRadialGradient`
+ * + üç `addColorStop` + üç şablon dizesi üretiyordu. `stats.amount` +5 olan
+ * bir build'de tek yörünge silahı için kare başına **7 gradient + 21 dize**.
+ * Motorun titizlikle kaçındığı GC baskısını çizim tarafı geri getiriyordu.
+ *
+ * ⚠️ NİYE ÖNBELLEKLENEBİLİR: küre HER KARE başka yerde ama GÖRÜNÜMÜ aynı —
+ * radyal gradyan öteleme altında değişmez. Bir kez küçük bir tuvale pişirip
+ * konuma `drawImage` ile basmak birebir aynı pikselleri verir.
+ *
+ * ⚠️ Anahtar tona VE yarıçapa bağlı: evrimleşmiş silah farklı ton kullanıyor
+ * (Litany altın, Black Vespers buz mavisi) ve alan pasifleri yarıçapı
+ * büyütüyor. Tek anahtar kullanmak evrimi görsel olarak yok sayardı.
+ */
+const glowCache = new Map<string, HTMLCanvasElement>();
+
+function glowSprite(tr: number, tg: number, tb: number, r: number): CanvasImageSource | null {
+  if (typeof document === 'undefined') return null;
+  const rr = Math.max(2, Math.round(r));
+  const key = `${tr},${tg},${tb}|${rr}`;
+  const hit = glowCache.get(key);
+  if (hit) return hit;
+
+  const size = rr * 2;
+  const off = document.createElement('canvas');
+  off.width = size; off.height = size;
+  const o = off.getContext('2d');
+  if (!o) return null;
+  const gd = o.createRadialGradient(rr, rr, 0, rr, rr, rr);
+  gd.addColorStop(0, `rgba(${Math.min(255, tr + 30)},${Math.min(255, tg + 30)},${Math.min(255, tb + 30)},0.95)`);
+  gd.addColorStop(0.6, `rgba(${tr},${tg},${tb},0.5)`);
+  gd.addColorStop(1, `rgba(${tr},${tg},${tb},0)`);
+  o.fillStyle = gd;
+  o.beginPath();
+  o.arc(rr, rr, rr, 0, Math.PI * 2);
+  o.fill();
+
+  // ⚠️ Tavan — ton × yarıçap kombinasyonu teoride sınırsız (alan pasifi her
+  // seviyede yarıçapı değiştiriyor). Sınırsız önbellek uzun oturumda sessiz
+  // bir bellek sızıntısıdır; `stageGround` ile aynı duruş.
+  if (glowCache.size >= 64) {
+    const ilk = glowCache.keys().next().value;
+    if (ilk) glowCache.delete(ilk);
+  }
+  glowCache.set(key, off);
+  return off;
+}
+
 function drawGems(ctx: CanvasRenderingContext2D, g: Game) {
   if (!g.gems.length) return;
   ctx.fillStyle = C.candle;
@@ -554,14 +604,22 @@ function drawOrbits(ctx: CanvasRenderingContext2D, g: Game) {
       // Silahın KENDİ tonu — Litany altın, evrimi Black Vespers buz mavisi.
       // Eskiden ikisi de aynı altın gradyandı, evrim görsel olarak yok sayılıyordu.
       const [tr, tg, tb] = weaponArt(w.def.id).tint;
-      const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, orbR);
-      grad.addColorStop(0, `rgba(${Math.min(255, tr + 30)},${Math.min(255, tg + 30)},${Math.min(255, tb + 30)},0.95)`);
-      grad.addColorStop(0.6, `rgba(${tr},${tg},${tb},0.5)`);
-      grad.addColorStop(1, `rgba(${tr},${tg},${tb},0)`);
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(ox, oy, orbR, 0, Math.PI * 2);
-      ctx.fill();
+      // ⚠️ Kare başına gradient YOK — parıltı ton+yarıçap başına bir kez
+      // pişiyor (bkz. `glowSprite`). Piksel çıktısı birebir aynı.
+      const gl = glowSprite(tr, tg, tb, orbR);
+      if (gl) {
+        ctx.drawImage(gl, ox - orbR, oy - orbR, orbR * 2, orbR * 2);
+      } else {
+        // Node/SSR: `document` yok — testler ve sunucu tarafı için yedek yol
+        const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, orbR);
+        grad.addColorStop(0, `rgba(${Math.min(255, tr + 30)},${Math.min(255, tg + 30)},${Math.min(255, tb + 30)},0.95)`);
+        grad.addColorStop(0.6, `rgba(${tr},${tg},${tb},0.5)`);
+        grad.addColorStop(1, `rgba(${tr},${tg},${tb},0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ox, oy, orbR, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.restore();
     }
   }

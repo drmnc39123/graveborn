@@ -2,7 +2,30 @@
 // Denge değişikliği = sadece bu dosya. Motor bu sabitleri okur, kendi sayısı yoktur.
 
 export const TICK = 1 / 60; // sabit timestep — simülasyon 60Hz, render ayrı
-export const MAX_CATCHUP = 5; // bir frame'de en fazla 5 tick (sekme arka plana gidince donma olmasın)
+/**
+ * Bir animasyon karesinde en fazla kaç simülasyon adımı koşulur.
+ *
+ * 🔴 5 → 2 (2026-08-24). 5 bir ÇARPANDI: yavaş bir kare `acc`u biriktiriyor,
+ * sonraki karede 2-5 `step()` koşuluyor, o kare daha da yavaşlıyor — geri
+ * besleme. Kullanıcının tarif ettiği şey düzgün bir fps düşüşü değil,
+ * SARSINTIYDI (hıçkırık) ve sebebi tam olarak bu döngü.
+ *
+ * ⚠️ TAKAS AÇIK: 2 ile oyun ağır yük altında STUTTER yerine hafif AĞIR
+ * ÇEKİME giriyor. Hayatta kalma oyununda okunabilir yavaşlama, okunamayan
+ * sıçramadan iyidir.
+ *
+ * ⚠️ SİMÜLASYONA DOKUNMUYOR: `step()` başına içerik aynı, yalnız kaç
+ * adımın bir KAREYE sığdığı değişiyor. Aynı seed aynı adım dizisini
+ * üretiyor → `SIM_SEAL` bozulmuyor.
+ *
+ * ⚠️ SÖMÜRÜ YÖNÜ GÜVENLİ: yavaş istemci aynı derinliğe DAHA ÇOK duvar
+ * saati harcıyor, yani sunucunun süre tabanı (`maxDepthInTime`) daha kolay
+ * sağlanıyor — kırpma dürüst oyuncuyu vurmuyor, yalancıya kapı açmıyor.
+ *
+ * ⚠️ Arka plan sekmesinden dönüş `dt` kırpması ve `acc` boşaltmasıyla
+ * çözülüyor (`GameCanvas.tsx`), bu sayıyla değil.
+ */
+export const MAX_CATCHUP = 2;
 
 /**
  * SİMÜLASYON SÜRÜMÜ — RNG akışını değiştiren her değişiklikte ARTAR.
