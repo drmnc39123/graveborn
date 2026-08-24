@@ -25,6 +25,30 @@
 //   400 düşman EKRAN DIŞINDA .. 195 fps   ← kırpma çalışıyor
 // Yani ekran dışındaki 400 düşman artık HİÇBİR ŞEYE mal olmuyor (taban
 // fps'e dönüyor). Kırpma olmadan ikisi de 137 olurdu.
+// ── ⭐ TAKİP SORGUSU — KASMANIN ASIL KAYNAĞI (2026-08-24, tarayıcı) ──
+// Ölçüm `?test=1&depth=60` derinlik kancasıyla yapıldı (GameCanvas).
+//
+// Gerçek, ulaşılabilir kurgu (4 silah lv8, 400 düşman, ~34 mermi):
+//   step 0,37 ms · render 1,53 ms · kare 1,9 ms · en kötü kare 6,8 ms
+//   → KASMA YOK. Şikâyet edilen şey bu senaryo değil.
+//
+// Mermi bulutu zorlandığında (6 takip silahı, amount×6, duration×3):
+//   ÖNCE : step 14,35 ms · en kötü kare 29,8 ms (34 fps)
+//   KONTROL GRUBU (aynı mermi sayısı, `seek = 0`):
+//          takipli 13,19 ms → takipsiz 5,85 ms
+//          yani takip sorgusu tek başına `step()`in **%56'sı**
+//   SONRA: 832 mermide step 5,2 ms → mermi başına **7 kat** ucuz
+//
+// SEBEP: `nearestEnemyTo` 900 px yarıçapla ızgaraya soruyordu. Hücre 64 px →
+// 29×29 = **841 `Map.get()`** per mermi, oysa sahnedeki düşman TAVANI 400.
+// Izgara bu yarıçapta düz taramadan pahalıydı. Düz taramaya çevrildi;
+// `sim.test` mührü **DEĞİŞMEDİ** (1d204abe), yani birebir aynı koşu.
+//
+// ⚠️ KALAN: aşırı mermi sayısında darboğaz artık RENDER. 618 mermide kare
+// ortancası 24,4 ms. AMA bu sentetik bir uç — gerçek `amount` pasifi
+// (`echo`) en fazla +2 mermi veriyor. Gerçek bir kurguda ölçülmeden mermi
+// tavanı EKLEME: tavan simülasyonu değiştirir ve mührü kırar.
+//
 // ⚠️ Bu sayılar bir GELİŞTİRME MAKİNESİNDEN. Oyuncunun donanımı farklı;
 // mutlak fps değil ARADAKİ FARK anlamlı. Node tarafı `drawImage` sayamıyor
 // (sprite yüklenmiyor), o yüzden kırpmanın gerçek kazancı yalnız burada

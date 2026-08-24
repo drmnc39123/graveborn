@@ -31,7 +31,28 @@ const check = (n: string, ok: boolean, d = '') => {
   if (!ok) FAIL.push(n);
 };
 
-const SEEDS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'];
+/**
+ * ⚠️ İKİ AYRI SEED KÜMESİ — ÖLÇÜLDÜ, KEYFİ DEĞİL.
+ *
+ * `SEEDS_GENIS` (12) yalnız `yari` profili için. Sebep: "en yüksek silah
+ * seviyesi" istatistiği 6 seed'de YAZI-TURA. Ölçüm (aynı motor, 12 seed):
+ *     tekil : 5 5 6 5 3 5 | 6 7 6 6 4 6
+ *     ilk 6 → 4,83   son 6 → 5,83   12 → 5,33
+ * Yani iki YARIM örneklem tek başına ≥5 eşiğinin iki yanına düşüyor. Bu
+ * eşiği gevşetmek yanlış cevap olurdu; gürültülü olan ÖLÇÜM ALETİYDİ.
+ *
+ * ⚠️ EŞİĞİ DÜŞÜRME. Sayı eşiğin altına düştüyse önce seed sayısını kontrol
+ * et — bu tuzağa bir kez düşüldü (motor değişikliği suçlanacaktı, oysa
+ * 6-seed gürültüsüydü).
+ *
+ * `SEEDS` (6) bilgi amaçlı `sıfır` profili ve kasıtlı avcı için yeterli:
+ * ikisinin de üzerinde keskin bir eşik YOK.
+ * ⚠️ Toplam süre bütçesi ~6 dk. Her seed 30 DAKİKALIK bir simülasyon;
+ * kümeleri büyütmeden önce `time npx tsx ...` ile ölç (bkz. [3] başlığı).
+ */
+const SEEDS = ['p1', 'p2', 'p3'];
+const SEEDS_GENIS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6',
+  'p7', 'p8', 'p9', 'p10', 'p11', 'p12'];
 
 /** Forge profilleri — oyuncu ilerledikçe koşu bambaşka oluyor */
 const bos: Record<string, number> = {};
@@ -88,8 +109,9 @@ function evrimAvcisi(g: Game): string {
 }
 
 const ort = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
-function profil(up: Record<string, number>, sec?: (g: Game) => string) {
-  const r = SEEDS.map((s) => kos(s, up, sec));
+function profil(up: Record<string, number>, sec?: (g: Game) => string,
+  seeds: readonly string[] = SEEDS) {
+  const r = seeds.map((s) => kos(s, up, sec));
   const o = (k: keyof Sonuc) => +ort(r.map((x) => x[k])).toFixed(1);
   return {
     dk: o('dk'), secim: o('secim'), evrim: o('evrim'), level: o('level'),
@@ -106,7 +128,7 @@ console.log('\n[1] İlerleme aşamasına göre koşu profili');
 // ve test zaman aşımına uğrayıp HİÇ BİTMİYORDU. Koşmayan mühür, olmayan
 // mühürdür. `tam` ile `yarı` ölçümlerde birbirine çok yakın çıkıyordu
 // (evrim 0/0,2 · derinlik 27,3/26,2), yani kaybedilen ayrım küçük.
-const p0 = profil(bos), pY = profil(yari);
+const p0 = profil(bos), pY = profil(yari, undefined, SEEDS_GENIS);
 for (const [ad, p] of [['sıfır', p0], ['yarı', pY]] as const) {
   console.log(`     ${ad.padEnd(6)} ${p.dk}dk · seçim ${p.secim} · silah ${p.silah}/${MAX_WEAPONS} · ` +
     `pasif ${p.pasif}/6 · evrim ${p.evrim} · en yüksek silah lv${p.enYuksekSilah} · derinlik ${p.derinlik}`);

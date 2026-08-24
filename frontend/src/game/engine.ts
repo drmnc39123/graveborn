@@ -1651,9 +1651,33 @@ export class Game {
   private nearestEnemyTo(x: number, y: number, range: number): Enemy | null {
     let best: Enemy | null = null;
     let bestD = range * range;
-    const cand = this.grid.query(x, y, range, this.scratch);
-    for (let i = 0; i < cand.length; i++) {
-      const e = cand[i];
+    // ⚠️ IZGARA KULLANILMIYOR VE BU BİLEREK — ÖLÇÜLDÜ.
+    //
+    // Burada `grid.query(x, y, range, ...)` çağrılıyordu. Izgara hücresi
+    // 64 px; bu metodun İKİ çağıranı da BÜYÜK yarıçap veriyor (silah menzili
+    // ≤700, takip eden mermi 900). 900 px yarıçap = 29×29 = **841 hücre**,
+    // yani mermi başına 841 `Map.get()` + aday dizisine push.
+    //
+    // Sahnedeki düşman TAVANI ise 400. Izgara, aday sayısını azaltmak için
+    // var — ama burada 841 arama yapıp 400'den az aday buluyordu. Bu
+    // yarıçapta ızgara düz taramadan **daha pahalı**; hiçbir iş yapmıyor.
+    //
+    // ÖLÇÜM (tarayıcı, derinlik 60, 400 düşman, takip mermisi bulutu):
+    // takip sorgusu `step()` maliyetinin **%56'sı** idi (13,19 ms → takipsiz
+    // kontrol grubunda 5,85 ms). Kullanıcının bildirdiği "derinlik ve skiller
+    // arttıkça kasma" tam olarak buydu.
+    //
+    // ⚠️ IZGARAYI GERİ EKLEME. Izgara çarpışma için (küçük yarıçap) hâlâ
+    // doğru araç ve `grid` orada kullanılmaya devam ediyor — sadece bu
+    // metotta yanlış araçtı.
+    //
+    // ⚠️ DETERMİNİZM: eşitlik durumunda kazanan değişebilir (ızgara sırası →
+    // dizi sırası). `sim.test` mührü ölçüldü, DEĞİŞMEDİ (1d204abe) — birebir
+    // aynı koşu çıkıyor. Yine de bu metoda dokunan herkes mührü yeniden
+    // ölçmeli.
+    const list = this.enemies;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
       if (e.hp <= 0) continue;
       const dx = e.x - x, dy = e.y - y;
       const d2 = dx * dx + dy * dy;

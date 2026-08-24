@@ -87,7 +87,20 @@ export const MAX_CATCHUP = 2;
 // ⚠️ GERÇEK BİR RNG DEĞİŞİKLİĞİ: teklif havuzu ve seçilen kartlar değişti,
 // yani aynı seed BAŞKA bir koşu üretiyor. Mühür zorunlu olarak yenilendi.
 // Gerekçe ve ölçümler `MAX_WEAPONS` ile `EVOLUTIONS` tanımlarında.
-export const SIM_VERSION = 11;
+// v12: HEDEFLEME ARTIK BİR TICK GERİDE DEĞİL — kasma ölçümünden çıktı.
+// `nearestEnemyTo` ızgaraya soruyordu; `step()` sırası şöyle:
+//     rebuildGrid() → spawn() → moveEnemies() → fire() → moveProjectiles()
+// yani ızgara SORGULANDIĞINDA bir tick eskiydi: o tick doğan düşmanı hiç
+// görmüyor, hareket edeni yanlış hücrede arıyordu. Düz taramaya geçince
+// hedefleme canlı listeyi okuyor — daha DOĞRU, ama farklı bir koşu.
+// ⚠️ SEBEP PERFORMANSTI, ama etkisi davranışsal: 900 px yarıçap ÷ 64 px
+// hücre = mermi başına 841 `Map.get()` iken sahnede en fazla 400 düşman
+// var. Ölçüm: takip sorgusu `step()`in %56'sı, düzeltmeden sonra mermi
+// başına 7 kat ucuz. Rakamlar `perf.test.mts` başlığında.
+// ⚠️ `sim.test` MÜHRÜ DEĞİŞMEDİ (1d204abe) ve BU YETMEDİ — kampanya
+// mühründe fark doğmuyor, ama `pacing.test` derin inişte farkı yakaladı.
+// DERS: hash mührü tek başına yeterli kapsama DEĞİL.
+export const SIM_VERSION = 12;
 
 export const RUN = {
   /** Güvenlik tavanı — bölüm bitmese bile run bu sürede kapanır (takılma koruması) */

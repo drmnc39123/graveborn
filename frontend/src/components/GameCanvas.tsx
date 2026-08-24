@@ -210,7 +210,30 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     setConfirmExit(false);  // "Try Again" sonrası duraklama takılı kalmasın
     preloadAll(hero); // sprite'ları erken istemeye başla (yüklenene kadar daireye düşer)
     preloadKit();     // HUD'un çerçeveleri de aynı anda istensin
-    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, startDepth, ascension, allowedWeapons ?? null, pets ?? []);
+    /**
+     * ⚠️ TEST MODUNDA DERİNLİK ATLAMA — `?test=1&depth=60`.
+     *
+     * NİYE VAR: kasma şikâyeti DERİN inişte ortaya çıkıyor (420 düşman
+     * tavanı, kalabalık build, mermi bulutu) ama oraya oynayarak ulaşmak
+     * dakikalar sürüyor ve ilerlemiş bir kayıt gerektiriyor. Ölçülemeyen
+     * şey düzeltilemez: `perf.test.mts` Node'da `drawImage` sayamıyor
+     * (sprite yüklenmiyor), yani çizim maliyeti YALNIZCA tarayıcıda
+     * görülebiliyor.
+     *
+     * ⚠️ ÜRETİMDE YOK: `isTestMode()` production'da sabit `false` döner ve
+     * bundler ölü kodu atar (bkz. `lib/testMode.ts`). Bu bir exploit değil —
+     * sunucu ödülü kendi `startDepth`ine göre veriyor (`resolveStartDepth`),
+     * istemcinin başladığı derinliğe DEĞİL. Derin başlayan bir istemci
+     * yalnız kendi ekranında derin görünür, ödülü sunucu kırpar.
+     */
+    let baslangicDerinligi = startDepth;
+    if (isTestMode() && mode === 'descent') {
+      try {
+        const d = Number(new URLSearchParams(window.location.search).get('depth'));
+        if (Number.isFinite(d) && d > 1) baslangicDerinligi = Math.min(500, Math.floor(d));
+      } catch { /* sorgu okunamadı — normal başla */ }
+    }
+    const game = new Game(runSeed, stage, permRef.current ?? {}, mode, hero, baslangicDerinligi, ascension, allowedWeapons ?? null, pets ?? []);
 
     /**
      * 🔴 GÖRÜŞ ALANI HER KOŞUDA MÜHÜRLENİYOR — pencere boyutu oyunu
