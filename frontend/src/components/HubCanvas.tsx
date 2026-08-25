@@ -12,6 +12,7 @@ import { isTestMode } from '@/lib/testMode';
 import { koyTutamagi } from '@/lib/chat';
 import { unlockAudio, play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
+import { cubukTak } from '@/lib/stick';
 
 type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
 
@@ -179,30 +180,12 @@ export function HubCanvas({
         window.removeEventListener('keyup', onKeyUp);
       });
 
-      let origin = { x: 0, y: 0 };
-      const onTouchStart = (e: TouchEvent) => {
-        const t = e.touches[0];
-        origin = { x: t.clientX, y: t.clientY };
-        stickRef.current = { active: true, dx: 0, dy: 0 };
-      };
-      const onTouchMove = (e: TouchEvent) => {
-        if (!stickRef.current.active) return;
-        const t = e.touches[0];
-        const dx = t.clientX - origin.x, dy = t.clientY - origin.y;
-        const mag = Math.hypot(dx, dy) || 1;
-        const k = Math.min(1, mag / 46) / mag;
-        stickRef.current = { active: true, dx: dx * k, dy: dy * k };
-        e.preventDefault();
-      };
-      const onTouchEnd = () => { stickRef.current = { active: false, dx: 0, dy: 0 }; };
-      canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-      canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-      canvas.addEventListener('touchend', onTouchEnd);
-      cleanups.push(() => {
-        canvas.removeEventListener('touchstart', onTouchStart);
-        canvas.removeEventListener('touchmove', onTouchMove);
-        canvas.removeEventListener('touchend', onTouchEnd);
-      });
+      // ⚠️ SANAL JOYSTICK ORTAK MODÜLDE (`lib/stick.ts`). Buradaki kopya
+      // `touchcancel` DİNLEMİYORDU: telefonda gelen çağrı/bildirim dokunuşu
+      // iptal edince `touchend` gelmiyor ve çubuk BASILI KALIYORDU — karakter
+      // oyuncu ekrana bir daha dokunana kadar tek yöne yürüyordu. Ortak
+      // modül ikisini de dinliyor. Yeniden içeri kopyalama.
+      cleanups.push(cubukTak(canvas, stickRef));
 
       let last = performance.now(), t = 0, hintAcc = 0;
       /**

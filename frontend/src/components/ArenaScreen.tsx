@@ -24,6 +24,7 @@ import { duelTier } from '@/game/duel';
 import { fetchPvpSeason, type PvpSeasonState } from '@/lib/gameSession';
 import { isTestMode, TEST_PVP_SEASON } from '@/lib/testMode';
 import { C, FONT, glass } from '@/lib/theme';
+import { CUBUK_BOS, cubukTak, type Cubuk } from '@/lib/stick';
 
 const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
 
@@ -204,6 +205,13 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
 function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handleRef = useRef<ArenaHandle | null>(null);
+  /**
+   * ⭐ DOKUNMATİK HAREKET — THE PIT telefonda HİÇ oynanamıyordu.
+   * Arena yalnız bir HAREKET VEKTÖRÜ gönderiyor (`h.send`); silahlar
+   * kendiliğinden ateş ediyor. Yani joystick tek başına yeterli — eksik
+   * olan tek şey buydu, girdi kodu SADECE klavye dinliyordu.
+   */
+  const cubukRef = useRef<Cubuk>(CUBUK_BOS);
   const [hud, setHud] = useState({ me: 100, them: 100, myKills: 0, theirKills: 0, behind: 0, bagli: false });
 
   useEffect(() => {
@@ -219,6 +227,10 @@ function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => vo
 
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
+    // ⚠️ ORTAK MODÜL. Bu joystick `GameCanvas` ve `HubCanvas`ta zaten iki
+    // kez yazılmıştı ve ikisi AYRIŞMIŞTI (`touchcancel` birinde vardı,
+    // diğerinde yoktu). Üçüncü kopyayı yazma — `lib/stick.ts` kullan.
+    const cubukSok = cubukTak(canvas, cubukRef);
     let raf = 0;
     let son = performance.now();
 
@@ -227,12 +239,19 @@ function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => vo
       son = now;
 
       // ── GİRDİ → SUNUCU ──
-      const x = (tuslar.has('d') || tuslar.has('arrowright') ? 1 : 0)
+      let x = (tuslar.has('d') || tuslar.has('arrowright') ? 1 : 0)
         - (tuslar.has('a') || tuslar.has('arrowleft') ? 1 : 0);
-      const y = (tuslar.has('s') || tuslar.has('arrowdown') ? 1 : 0)
+      let y = (tuslar.has('s') || tuslar.has('arrowdown') ? 1 : 0)
         - (tuslar.has('w') || tuslar.has('arrowup') ? 1 : 0);
+      // ⚠️ ÇUBUK KLAVYEYİ EZİYOR (`GameCanvas` ile aynı duruş): parmak
+      // ekrandaysa niyet odur. Toplamak iki girdinin birbirini iptal
+      // etmesine yol açardı.
+      if (cubukRef.current.active) { x = cubukRef.current.dx; y = cubukRef.current.dy; }
       const m = Math.hypot(x, y) || 1;
-      h.send(x / m, y / m);
+      // ⚠️ Çubuk zaten birim çemberde ve YARIM itilebilir; bölerek
+      // normalize etmek yavaş yürüyüşü tam hıza çevirirdi.
+      if (cubukRef.current.active) h.send(x, y);
+      else h.send(x / m, y / m);
 
       // ── SUNUCUDAN GELEN KARELERİ UYGULA ──
       h.catchUp();
@@ -263,6 +282,7 @@ function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => vo
       cancelAnimationFrame(raf);
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
+      cubukSok();
       h.close();
       handleRef.current = null;
     };
@@ -273,7 +293,12 @@ function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => vo
 
   return (
     <div style={{ position: 'absolute', inset: 0, background: C.void }}>
-      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      {/* ⚠️ `touchAction: 'none'` ŞART. Olmadan tarayıcı parmağın
+          sürüklenmesini sayfa kaydırması sanıyor ve `touchmove` HİÇ
+          gelmiyor — joystick sessizce ölü kalır. Diğer iki canvas'ta
+          (GameCanvas, HubCanvas) zaten yazılıydı; burada yoktu çünkü
+          dokunmatik girdi hiç yoktu. */}
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
 
       {/* ⚠️ İKİ CAN ÇUBUĞU DA GÖRÜNMEK ZORUNDA. "Son ayakta kalan" bir maçta
           tek bilinmesi gereken şey rakibin ne kadar dayandığı; onu göremezsen

@@ -29,6 +29,7 @@ import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
 import { isTestMode } from '@/lib/testMode';
+import { cubukTak } from '@/lib/stick';
 
 /**
  * Bant eşiğinde gösterilen tek satır.
@@ -324,29 +325,10 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
 
-    // dokunmatik: ekrana basılan yer merkez, sürükleme yön verir (sanal joystick)
-    let touchOrigin = { x: 0, y: 0 };
-    const onTouchStart = (e: TouchEvent) => {
-      const t = e.touches[0];
-      touchOrigin = { x: t.clientX, y: t.clientY };
-      stickRef.current = { active: true, dx: 0, dy: 0 };
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (!stickRef.current.active) return;
-      const t = e.touches[0];
-      const dx = t.clientX - touchOrigin.x;
-      const dy = t.clientY - touchOrigin.y;
-      const max = 46; // bu mesafede tam hız
-      const m = Math.hypot(dx, dy) || 1;
-      const k = Math.min(1, m / max) / m;
-      stickRef.current = { active: true, dx: dx * k, dy: dy * k };
-      e.preventDefault();
-    };
-    const onTouchEnd = () => { stickRef.current = { active: false, dx: 0, dy: 0 }; };
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd);
-    canvas.addEventListener('touchcancel', onTouchEnd);
+    // ⚠️ SANAL JOYSTICK ORTAK MODÜLDE (`lib/stick.ts`). Buradaki kopya
+    // `HubCanvas`taki ikizinden AYRIŞMIŞTI (orada `touchcancel` yoktu) ve
+    // `ArenaScreen`e üçüncü kez yazılmak üzereydi. Yeniden içeri kopyalama.
+    const cubukSok = cubukTak(canvas, stickRef);
 
     // ── döngü: sabit timestep + akümülatör ──
     let raf = 0;
@@ -533,10 +515,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
-      canvas.removeEventListener('touchstart', onTouchStart);
-      canvas.removeEventListener('touchmove', onTouchMove);
-      canvas.removeEventListener('touchend', onTouchEnd);
-      canvas.removeEventListener('touchcancel', onTouchEnd);
+      cubukSok();
       // ⚠️ SOKET MUTLAKA KAPANIR. Kapanmazsa oyuncu köye dönse bile odada
       // hayaleti kalır ve herkes "orada duran ama hareket etmeyen" birini
       // görür — sunucu 20 sn sonra düşürür ama o 20 saniye yanlış bilgi.
