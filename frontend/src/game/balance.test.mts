@@ -13,10 +13,10 @@
 // Ölçüme dayanan sayılar aşağıda YORUM olarak yazılı, tekrar üretilebilir.
 
 import { CHARMS } from './charms.js';
-import { FORGE, permanentBonus, totalCost, treeTotalCost } from './forge.js';
+import { FORGE, costOf, permanentBonus, totalCost, treeTotalCost } from './forge.js';
 import { PULL_COST } from './cosmetics.js';
 import { BIND, PETS, collectionTotalCost, petTotalCost } from './pets.js';
-import { STAGES } from './config.js';
+import { STAGES, depthGold } from './config.js';
 import { Game } from './engine.js';
 import { seedFromString } from './rng.js';
 
@@ -176,6 +176,83 @@ check('ilk (common) pet bağlamak 1 saatin altında',
 check('tüm koleksiyon (füzyonsuz) Forge ağacının 5 katını geçmiyor',
   collectionTotalCost() <= treeTotalCost() * 5,
   `${(collectionTotalCost() / treeTotalCost()).toFixed(1)}× ağaç`);
+
+console.log('\n[7] ⭐ KAMPANYA → İNİŞ GEÇİŞİ');
+// 🔴 AÇIK BULGU — ÖLÇÜLDÜ, İKİ DÜZELTME DENENDİ, İKİSİ DE GERİ ALINDI.
+//
+// SORUN: kampanya bitişinde oyuncu ağacın 164 seviyesinden **126'sını
+// (%77)** hemen alabiliyor; sonraki 10 derinlik yalnız ~4.200 gold =
+// **1 seviye** ekliyor. Endgame döngüsü olan İNİŞ, ağaçta neredeyse
+// hiçbir şey satın almıyor.
+//   kampanya 201.000 gold / ~3,6 saat = 55.833 gold/saat
+//   iniş                              =  4.700 gold/saat  → **11,9 KAT**
+//
+// ⚠️ KAMPANYA GELİRİNİ KESMEK BU SORUN İÇİN KÖTÜ BİR KOL — ÖLÇÜLDÜ:
+//   kesinti yok  kampanya 201.000 · d0 %77 · iniş 40 derinlikte 14 seviye
+//   %20 kesinti  160.800        · d0 %72 · 17 seviye
+//   %36 kesinti  128.640        · d0 %68 · 19 seviye
+// Yani geliri üçte bir kesmek bile 14→19. Anlamlı iyileşmeyi (31 seviye)
+// yalnız %67'lik agresif kesinti veriyordu ve O DA KAMPANYAYI BOZUYORDU.
+//
+// ⚠️ NİYE BOZUYOR: `campaign.test` oyuncunun Forge gücünü kampanyanın
+// KENDİ gold'undan türetiyor (`butce += st.firstClearGold` → `permFor`).
+// Kampanya zorluğu kendi ödemesine göre ayarlanmış. Ölçülen sonuçlar:
+//   66.000 (doğrusal 300→4.980): bölüm 14/21/25 BİTİRİLEMEZ, kampanya
+//                                  3,6 → 4,6 saat
+//   128.383 (300·s^1.1)          : bitirilebilirlik DÜZELDİ, süre 3,6'ya
+//                                  döndü, ama 17/24/25 akranlarından SİVRİLDİ
+// ⚠️ KAMPANYA GOLD'UNU TEKRAR KESMEYE ÇALIŞMA — zorluğu da birlikte
+// yeniden ayarlamadan olmuyor, ve `hpMul` ile ayar denemesi bu depoda
+// İKİ KEZ başarısız oldu (bkz. kampanya dengesi notları).
+//
+// KALAN İKİ KOL (denenmedi): iniş ödülünü yükseltmek (toplam gold arzini
+// büyütür — token ayağını ilgilendirir) ya da ağacı büyütmek (şu an
+// zaten 124-135 saat).
+
+/** Verilen bütçeyle ağaçtan kaç seviye alınır (hep en ucuzu seçerek) */
+function seviyeSayisi(butce: number): number {
+  const lv: Record<string, number> = {};
+  let spent = 0, levels = 0;
+  for (;;) {
+    let best: { id: string; cost: number } | null = null;
+    for (const u of FORGE) {
+      const cur = lv[u.id] ?? 0;
+      if (cur >= u.maxLevel) continue;
+      const c = costOf(u, cur);
+      if (!best || c < best.cost) best = { id: u.id, cost: c };
+    }
+    if (!best || spent + best.cost > butce) break;
+    spent += best.cost; lv[best.id] = (lv[best.id] ?? 0) + 1; levels += 1;
+  }
+  return levels;
+}
+const toplamSeviye = FORGE.reduce((n, u) => n + u.maxLevel, 0);
+const kampanyaGold = STAGES.reduce((n, st) => n + st.firstClearGold, 0);
+let inis40 = 0;
+for (let i = 1; i <= 40; i++) inis40 += depthGold(5, i);
+const d0 = seviyeSayisi(kampanyaGold);
+const d40 = seviyeSayisi(kampanyaGold + inis40);
+console.log(`     kampanya ${kampanyaGold.toLocaleString('en-US')} gold → ${d0}/${toplamSeviye} seviye ` +
+  `(%${Math.round((d0 / toplamSeviye) * 100)})  🔴 hedef: %60 altı`);
+console.log(`     +40 derinlik → ${d40}/${toplamSeviye} (iniş ${d40 - d0} seviye satın alıyor)`);
+
+// ⚠️ ONBOARDING KURALI KODA GEÇİRİLDİ. `forge.ts` "ucuz giriş: ilk
+// bölümün ardından hemen bir şey alınabilmeli" diyor; bu bir YORUMDU ve
+// hiçbir şey onu ölçmüyordu. Kampanya ödülünü düşürme denemesinde tam
+// bu kuralın kırılma riski vardı (düz ölçekleme bölüm 1'i 105'e indiriyordu).
+const enUcuzSeviye = Math.min(...FORGE.map((u) => costOf(u, 0)));
+check('bölüm 1 en ucuz Forge seviyesini karşılıyor (ucuz giriş)',
+  STAGES[0].firstClearGold >= enUcuzSeviye,
+  `b1 ${STAGES[0].firstClearGold} G vs en ucuz seviye ${enUcuzSeviye} G`);
+
+// ⚠️ MONOTONLUK: "bölüm 1-5 sabit, 6+ ölçekle" denendi ve ödülü bölüm
+// 5→6 arasında %68 GERİ DÜŞÜRÜYORDU (kampanya gold'unun %96'sı bölüm
+// 6-25'te). Bir sonraki bölüm hep daha çok ödemeli.
+let monoton = true;
+for (let i = 1; i < STAGES.length; i++) {
+  if (STAGES[i].firstClearGold < STAGES[i - 1].firstClearGold) monoton = false;
+}
+check('kampanya ödül eğrisi monoton artan', monoton);
 
 console.log(`\n${FAIL.length === 0 ? '✅ DENGE SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
