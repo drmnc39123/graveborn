@@ -52,6 +52,56 @@ export function HubCanvas({
     if (hubRef.current) hubRef.current.hero = hero;
   }, [hero]);
 
+  /**
+   * ⭐ PORTALA GİRME — telefonda TEK YOL BU.
+   *
+   * ⚠İ ÖLÇÜLDÜ: köyde hareket çalışıyordu (dokunmatik joystick var,
+   * aşağıda), ama portal kartı "Press E" diyordu ve telefonda E TUŞU YOK.
+   * Yani oyuncu joystick'le portala varıyor, kartı görüyor ve GİREMİYOR:
+   * köy telefonda çıkmaz sokaktı. `interact()` efekt kapanışının içinde
+   * tanımlı olduğu için React tarafındaki kart ona ulaşamıyordu — ref bunu
+   * bağlıyor.
+   * ⚠️ Kartı salt-görsel bir kutuya geri çevirme.
+   */
+  const interactRef = useRef<(() => void) | null>(null);
+
+  /**
+   * Kaba işaretçi (parmak) mi? — köyün tuş ipuçlarını buna göre yazıyoruz.
+   *
+   * ⚠️ BAŞLANGIÇ DEĞERİ `false` VE EFEKTTE ÖLÇÜLÜYOR. `matchMedia` sunucuda
+   * yok; ilk render'da okumak hydration uyuşmazlığı üretir.
+   *
+   * ⚠️ SADECE `matchMedia` YETMİYOR — ÖLÇÜLDÜ. Yalnız `(pointer: coarse)`
+   * ile yazılmıştı ve mobil görünümde `matchMedia(...).matches` sayfada
+   * `true` olmasına rağmen ipucu masaüstü metnini gösteriyordu: sorgu mount
+   * anında okunuyor, sonradan değişince `change` olayı GÜVENİLİR biçimde
+   * gelmiyor (tarayıcı cihaz öykünmesinde hiç gelmedi). Üç kaynak birden
+   * okunuyor:
+   *   1. `(pointer: coarse)` — masaüstü/dokunmatik ayrımı
+   *   2. `maxTouchPoints` — öykünmede ve gerçek telefonda mount anında hazır
+   *   3. İLK `touchstart` — kanıtın kendisi; parmak ekrana değdiyse tartışma biter
+   * ⚠️ Tek kaynağa geri dönme.
+   */
+  const [kaba, setKaba] = useState(false);
+  useEffect(() => {
+    const olc = () => {
+      const mq = typeof window.matchMedia === 'function'
+        && window.matchMedia('(pointer: coarse)').matches;
+      if (mq || (navigator.maxTouchPoints ?? 0) > 0) setKaba(true);
+    };
+    olc();
+    // ⚠️ Bir kez: parmak değdiyse geri dönüş yok, dinleyiciyi tutmaya gerek yok.
+    const dokunma = () => setKaba(true);
+    window.addEventListener('touchstart', dokunma, { once: true, passive: true });
+    const mq = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(pointer: coarse)') : null;
+    mq?.addEventListener('change', olc);
+    return () => {
+      window.removeEventListener('touchstart', dokunma);
+      mq?.removeEventListener('change', olc);
+    };
+  }, []);
+
   const [hint, setHint] = useState<Hint | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [debug, setDebug] = useState(false);
@@ -109,6 +159,9 @@ export function HubCanvas({
         if (hub.atTravel) { play('chest'); warp(hub, hub.atTravel.toX, hub.atTravel.toY); return; }
         if (hub.atDoor) { play('chest'); ob(hub.atDoor.id); }
       };
+
+      interactRef.current = interact;
+      cleanups.push(() => { interactRef.current = null; });
 
       const onKeyDown = (e: KeyboardEvent) => {
         const k = e.key.toLowerCase();
@@ -268,9 +321,25 @@ export function HubCanvas({
         </div>
       )}
 
+      {/* ⚠️ KART ARTIK BİR DÜĞME — telefonda portala girmenin TEK yolu.
+          Salt-görsel bir kutuya geri çevirme: E tuşu olmayan cihazda köy
+          çıkmaz sokağa dönüşür (oyuncu portala varır, kartı görür, giremez). */}
       {hint && (
         <div style={{ position: 'absolute', bottom: 26, left: '50%', transform: 'translateX(-50%)', width: 'min(92vw, 330px)' }}>
-          <div style={{ ...glass(13), padding: '13px 18px', textAlign: 'center' }}>
+          <button
+            type="button"
+            onClick={() => interactRef.current?.()}
+            style={{
+              ...glass(13), padding: '13px 18px', textAlign: 'center',
+              display: 'block', width: '100%', cursor: 'pointer',
+              font: 'inherit', color: 'inherit',
+              // ⚠️ Parmak hedefi. 44 px, dokunmatik için yaygın alt sınır;
+              // kartın kendi dolgusu bunu zaten geçiyor ama panel içerik
+              // alanı daralınca kırpılmasın diye açıkça yazılı.
+              minHeight: 44,
+              // ⚠️ Çift dokunuşta yakınlaştırmayı ve gecikmeyi kes.
+              touchAction: 'manipulation',
+            }}>
             <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 2, marginBottom: 3,
               color: hint.kind === 'fight' ? C.blood : hint.kind === 'travel' ? C.ok : C.ice }}>
               {hint.kind === 'fight' ? 'FIGHT PORTAL' : hint.kind === 'travel' ? 'TRAVEL PORTAL' : 'BUILDING'}
@@ -278,9 +347,12 @@ export function HubCanvas({
             <div style={{ fontSize: 16, fontWeight: 900, color: C.bone }}>{hint.title}</div>
             <div style={{ fontSize: 12, color: C.boneDim, marginTop: 2 }}>{hint.sub}</div>
             <div style={{ marginTop: 10, fontSize: 12, fontWeight: 800, color: C.candle }}>
-              Press <span style={{ padding: '2px 7px', borderRadius: 5, background: 'rgba(239,167,46,0.16)', border: `1px solid ${C.candle}55` }}>E</span>
+              {/* ⚠️ Parmakla gelen oyuncuya OLMAYAN bir tuş gösterme. */}
+              {kaba ? 'TAP TO ENTER' : (
+                <>Press <span style={{ padding: '2px 7px', borderRadius: 5, background: 'rgba(239,167,46,0.16)', border: `1px solid ${C.candle}55` }}>E</span></>
+              )}
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -302,7 +374,11 @@ export function HubCanvas({
           ⚠️ Ölçüm ipucu üretimde de gerekli: yeni oyuncu köye düşünce nasıl
           yürüyeceğini bilmiyor. O kısım kalıyor. */}
       <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 11, color: debug ? C.blood : C.boneFaint }}>
-        WASD / arrows · E to interact
+        {/* ⚠️ TELEFONDA OLMAYAN TUŞLARI YAZMA. Bu şerit her cihazda
+            "WASD / arrows · E to interact" diyordu; parmakla gelen oyuncuya
+            hem yanlış hem de tek gerçek yolu (ekrana basılı tutup sürükle)
+            gizleyen bir talimattı. */}
+        {kaba ? 'Drag to move · tap the card' : 'WASD / arrows · E to interact'}
         {(process.env.NODE_ENV !== 'production' || debug) && (
           <> · <b>F1</b> {debug ? 'collision ON' : 'collision'}</>
         )}
