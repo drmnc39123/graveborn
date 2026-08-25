@@ -225,11 +225,13 @@ export function PetPanel({ progress, onChange, onError }: {
           kapatırdı ama üç yatay satır düzeni "hepsi kayık ve sığmıyor"
           şikâyetinin DÜZELTMESİ — sarma geri gelirse kartlar yine birbirinden
           farklı görünür. Dar sütun zaten boşluğu görünmez hâle getiriyor.
-          ⚠️ `minmax(360px)` — kart içeriği (portre + ad + rol + düğmeler)
-          bunun altında sıkışır; dar ekranda kendiliğinden tek sütuna düşer. */}
+          ⚠️ `minmax(min(360px, 100%))` — çıplak `360px` YAZMA. "Dar ekranda
+          kendiliğinden tek sütuna düşer" yazıyordu ve YARI YANLIŞTI: sütun
+          SAYISI 1'e düşer ama genişliği 360 px KALIR. Ölçüldü: 375 px
+          telefonda içerik alanı 227 px, yani kartın sağı kesiliyordu. */}
       <div style={{
         display: 'grid', gap: 8,
-        gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(360px, 100%), 1fr))',
         alignItems: 'start',
       }}>
       {PETS.map((def) => {

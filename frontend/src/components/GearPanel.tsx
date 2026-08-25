@@ -180,7 +180,7 @@ export function GearPanel({ progress, onChange, onError }: {
           <div style={{
             display: 'grid', gap: 9,
             gridTemplateColumns: takili[secili.slot] && !secili.equipped
-              ? 'repeat(auto-fit, minmax(150px, 1fr))' : '1fr',
+              ? 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))' : '1fr',
           }}>
             <ItemBody item={secili} label={secili.equipped ? 'WORN NOW' : 'SELECTED'} />
             {/* ⚠️ Karşılaştırma sütunu YALNIZCA takas varsa çıkar. Boş bir

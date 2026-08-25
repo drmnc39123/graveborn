@@ -1019,10 +1019,15 @@ export default function PlayPage() {
                 "geri dönüşsüz / ağır eylem". Panel kapatmak ikisi de değil.
                 Artık BTN.action ve içeriğe göre ölçülü genişlikte.
                 ⚠️ Kolay vurulur kalıyor (240 px, ortada) — küçültmek
-                erişilebilirlikten çalmak olurdu. */}
+                erişilebilirlikten çalmak olurdu.
+                ⚠️ AMA ÇIPLAK `240` DEĞİL: ÖLÇÜLDÜ, 375 px'lik telefonda panel
+                içerik alanı **227 px** ve bu düğme paneli 13 px taşıran TEK
+                öğeydi. `min(240px, 100%)` masaüstünde aynı 240 px'i verir,
+                dar ekranda içerik alanına oturur — erişilebilirlikten hiçbir
+                şey çalmadan taşmayı bitirir. */}
             <div style={{ marginTop: 16, textAlign: 'center' }}>
               <PixelButton variant={BTN.action} scale={2} onClick={() => setPanel(null)}
-                style={{ minWidth: 240, fontSize: 12, letterSpacing: 1.5 }}>
+                style={{ minWidth: 'min(240px, 100%)', fontSize: 12, letterSpacing: 1.5 }}>
                 CLOSE
               </PixelButton>
             </div>

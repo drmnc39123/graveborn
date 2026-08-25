@@ -345,7 +345,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
           satır içeriği (ikon + ad + nadirlik + düğme) 300'ün altında sıkışır. */}
       <div style={{
         display: 'grid', gap: 7,
-        gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(300px, 100%), 1fr))',
       }}>
         {list.map((def) => {
           const have = owned.has(def.id);

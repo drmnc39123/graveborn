@@ -67,10 +67,16 @@ export function ForgePanel({
           sağda). Panel genişledi diye içerik esnetilmez; genişlik yeni bir
           sütuna dönüşür. Reliquary ve Binding'de aynı düzeltme yapıldı.
           ⚠️ `minmax(380px)` — kart içeriği (ad + LV + NOW→NEXT + seviye
-          boncukları + fiyat düğmesi) bunun altında sıkışır. */}
+          boncukları + fiyat düğmesi) bunun altında sıkışır.
+          ⚠️ `min(380px, 100%)` — ÇIPLAK `380px` YAZMA. ÖLÇÜLDÜ: 375 px'lik
+          telefonda panel içerik alanı **227 px**, ızgara ise **380 px**
+          kalıyordu — 153 px taşma. `minmax` alt sınırı SERT bir tabandır;
+          sadece sütun SAYISI 1'e düşer, genişliği düşmez. Fiyat düğmesi
+          kartın sağında olduğu için telefonda SATIN ALMA DÜĞMESİ EKRAN
+          DIŞINDA kalıyordu. */}
       <div style={{
         display: 'grid', gap: 7,
-        gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(380px, 100%), 1fr))',
         alignItems: 'start',
       }}>
         {FORGE.map((u) => {

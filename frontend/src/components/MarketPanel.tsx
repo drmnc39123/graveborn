@@ -364,15 +364,19 @@ export function MarketPanel({
           ⚠️ `PixelButton`ın kendi `active` durumu (Selected dokusu) kullanılıyor;
           ayrı bir sekme bileşeni yazmaya gerek yok. `Tab` ilkeli 44px KARE ikon
           sekmesi — "BROWSE" metnini kırpardı. */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+      {/* ⚠️ `flexWrap` ŞART — ÖLÇÜLDÜ. İki sekme 150+150+6 = 306 px istiyor,
+          375 px'lik telefonda panel içerik alanı ise 227 px: sarma olmadan
+          "SELL YOUR GOLD" sekmesi ekranın dışında kalıyordu, yani oyuncu
+          gold satma ekranına telefondan HİÇ ulaşamıyordu. */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
         <PixelButton variant={BTN.action} scale={2} active={sekme === 'browse'}
           onClick={() => setSekme('browse')}
-          style={{ minWidth: 150, fontSize: 11.5, letterSpacing: 1 }}>
+          style={{ minWidth: 'min(150px, 100%)', fontSize: 11.5, letterSpacing: 1 }}>
           BROWSE
         </PixelButton>
         <PixelButton variant={BTN.action} scale={2} active={sekme === 'sell'}
           onClick={() => setSekme('sell')}
-          style={{ minWidth: 150, fontSize: 11.5, letterSpacing: 1 }}>
+          style={{ minWidth: 'min(150px, 100%)', fontSize: 11.5, letterSpacing: 1 }}>
           SELL YOUR GOLD
         </PixelButton>
       </div>
@@ -457,7 +461,7 @@ export function MarketPanel({
                ekranda kendiliğinden tek sütuna düşüyor. */
             <div style={{
               display: 'grid', gap: 8,
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
             }}>
               {gorunen.map((l) => (
                 <ListingRow key={l.id} listing={l}
@@ -494,7 +498,7 @@ export function MarketPanel({
                düşüyor. */
             <div style={{
               display: 'grid', gap: 12, alignItems: 'start',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(420px, 100%), 1fr))',
             }}>
               <div style={{ ...glass(10), padding: '12px 14px', border: `1px solid ${C.border}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 9 }}>

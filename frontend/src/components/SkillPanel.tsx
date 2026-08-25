@@ -121,7 +121,7 @@ export function SkillPanel({ progress, onChange, onError }: {
           uzun dalın boyuna esner ve düğümlerin arası açılırdı. */}
       <div style={{
         display: 'grid', gap: 10, alignItems: 'start',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(330px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(330px, 100%), 1fr))',
       }}>
       {BRANCHES.map((b) => {
         const dugumler = SKILL_TREE.filter((n) => n.branch === b.id);

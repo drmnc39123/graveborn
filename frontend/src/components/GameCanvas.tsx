@@ -734,7 +734,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
             */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(236px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(236px, 100%), 1fr))',
             gap: 12, width: '100%', maxWidth: 980, alignItems: 'stretch',
           }}>
             {/* ⚠️ KADEMELİ BELİRİŞ — üç kart aynı anda patlamıyor, 70 ms arayla

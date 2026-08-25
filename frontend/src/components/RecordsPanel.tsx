@@ -202,7 +202,7 @@ function MyRecord({ progress }: { progress: Progress }) {
         Everything the village knows about you.
       </p>
 
-      <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))' }}>
         <Stat label="Stages cleared" value={`${stats.cleared} / ${STAGES.length}`} />
         <Stat label="Deepest descent" value={stats.deepest > 0 ? `Depth ${stats.deepest}` : '—'} accent />
         <Stat label="Gold earned" value={stats.earned.toLocaleString('en-US')} accent />

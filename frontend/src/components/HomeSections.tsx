@@ -147,7 +147,7 @@ export function HomeSections() {
 
       {/* ── DÖNGÜ ── */}
       <Section kicker="WHAT YOU ACTUALLY DO" title="Clear, descend, spend, go deeper">
-        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))' }}>
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(min(190px, 100%), 1fr))' }}>
           {[
             ['01', 'Clear a stage', `${STAGES.length} of them, each with its own horde and its own boss.`],
             ['02', 'Take the stair', 'The Descent opens underneath. It does not end; you do.'],
@@ -196,7 +196,7 @@ export function HomeSections() {
 
       {/* ── ÖZELLİKLER ── */}
       <Section kicker="WHAT IS IN THERE" title="Six doors off the square">
-        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
+        <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(min(250px, 100%), 1fr))' }}>
           {FEATURES.map((f) => (
             <div key={f.tag} style={{ ...box(), padding: '15px 14px' }}>
               <div style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: 1.6, color: C.candle }}>{f.tag}</div>
