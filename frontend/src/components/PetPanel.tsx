@@ -14,7 +14,7 @@
 import { useState } from 'react';
 import {
   BIND, FUSE_COPIES, FUSE_GOLD, MYTHIC_CAP, PETS, SLOT2,
-  bindKillsNeeded, petCap, petEffect, petLevelCost, type PetDef,
+  bindKillsNeeded, petCap, petEffect, petLevelCost, petSpent, petTotalCost, type PetDef,
 } from '@/game/pets';
 import { RARITY } from '@/game/cosmetics';
 import { PET_ART } from '@/game/sprites';
@@ -246,6 +246,18 @@ export function PetPanel({ progress, onChange, onError }: {
         const takiliMi = takili.includes(def.id);
 
         const yukseltmeBedeli = lv < tavan ? petLevelCost(def, lv, mythic) : Infinity;
+        // ⭐ TAVANA KADAR KALAN. Kart yalnızca BİR SONRAKİ seviyeyi
+        // gösteriyordu ve bu ölçüldüğünde yanıltıcı çıktı: bir legendary'yi
+        // tavana çıkarmak 369.656 gold = **79 SAAT** oyun, mythic ise
+        // 1.261.230 = **268 saat** — tüm Forge ağacının (126 saat) 2,1 KATI.
+        // Oyuncu "LV 3 · 76 G" yazısına bakıp ucuz sanarak giriyordu.
+        // ⚠️ `petSpent` ve `petTotalCost` ZATEN YAZILMIŞTI ve `petSpent`in
+        // yorumu "kartta 'ne yatırdım' sorusu" diyordu — ama ikisi de hiçbir
+        // yerde kullanılmıyordu. Bu depoda tekrar eden sınıf: hesaplanan ama
+        // ekrana hiç çıkmayan veri.
+        const tavanaKadar = bagli && lv < tavan
+          ? petTotalCost(def, mythic) - petSpent(def, lv, mythic)
+          : 0;
         const fuseHazir = def.rarity === 'legendary' && !mythic && kopya >= FUSE_COPIES;
 
         return (
@@ -398,6 +410,15 @@ export function PetPanel({ progress, onChange, onError }: {
                 </div>
               )}
             </div>
+
+            {/* ⭐ TAVANIN GERÇEK BEDELİ — tek seviyenin değil, kalanın TOPLAMI.
+                ⚠️ Bu satırı kaldırma: oyunun EN DERİN gold sink'i bu ve oyuncu
+                neye başladığını başka hiçbir yerden göremiyor. */}
+            {tavanaKadar > 0 && (
+              <div style={{ marginTop: 6, fontSize: 10.5, color: C.boneDim, textAlign: 'right' }}>
+                LV{tavan} costs {tavanaKadar.toLocaleString('en-US')} G more
+              </div>
+            )}
 
             {/* ── 3. SATIR: DÜĞMELER ──
                 ⚠️ HER ZAMAN KENDİ SATIRINDA ve sağa yaslı. Metnin yanına

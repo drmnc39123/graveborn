@@ -15,6 +15,7 @@
 import { CHARMS } from './charms.js';
 import { FORGE, permanentBonus, totalCost, treeTotalCost } from './forge.js';
 import { PULL_COST } from './cosmetics.js';
+import { BIND, PETS, collectionTotalCost, petTotalCost } from './pets.js';
 import { STAGES } from './config.js';
 import { Game } from './engine.js';
 import { seedFromString } from './rng.js';
@@ -116,6 +117,40 @@ console.log(`     en ucuz  : ${enUcuz.name} (${totalCost(enUcuz).toLocaleString(
 check('en pahalı hat en ucuzun 5 katından fazla değil',
   totalCost(enPahali) / totalCost(enUcuz) <= 5,
   `${(totalCost(enPahali) / totalCost(enUcuz)).toFixed(1)}×`);
+
+console.log('\n[6] Pet merdiveni — oyunun EN DERİN gold sink’i');
+// ⭐ ÖLÇÜLDÜ: bir pet'i tavanına çıkarmanın bedeli (bind + tüm seviyeler),
+// ~4.700 gold/saat musluk hızıyla saate çevrilmiş:
+//     common     1.907 gold =   0,4 saat
+//     rare      11.403        =   2,4
+//     epic      66.640        =  14,2
+//     legendary 369.656       =  78,7
+//     MYTHIC  1.261.230       = 268,3   ← tüm Forge ağacının (126 saat) 2,1 KATI
+//
+// ⚠️ BU BİR HATA DEĞİL, kasıtlı uzun kuyruk sink'i — ama oyuncuya
+// SÖYLENMESİ ŞART. Kart yalnızca "LV 3 · 76 G" gösteriyordu; 79 saatlik
+// bir taahhüde ucuz sanarak giriliyordu. `PetPanel` artık tavana kadar
+// kalanı yazıyor.
+// ⚠️ `petSpent` / `petTotalCost` / `collectionTotalCost` YAZILMIŞTI ve
+// ÜÇÜ DE HİÇBİR YERDE KULLANILMIYORDU — üstelik `petSpent`in yorumu
+// "kartta 'ne yatırdım' sorusu", `collectionTotalCost`unki "denge testi
+// kullanır" diyordu. Bu dosya artık gerçekten kullanıyor.
+const petSaat = (g: number) => g / GOLD_SAAT;
+for (const r of ['common', 'rare', 'epic', 'legendary'] as const) {
+  const örnek = PETS.find((x) => x.rarity === r);
+  if (!örnek) continue;
+  const t = BIND[r].gold + petTotalCost(örnek, false);
+  console.log(`     ${r.padEnd(10)} ${t.toLocaleString('en-US').padStart(9)} gold = ${petSaat(t).toFixed(1)} saat`);
+}
+// ⚠️ ONBOARDING EŞİĞİ: ilk pet ulaşılabilir olmalı. Bir oyuncu ilk
+// oturumunda hiçbir pet'e dokunamıyorsa sistem onun için YOK demektir.
+const ilkPet = PETS.find((x) => x.rarity === 'common');
+check('ilk (common) pet bağlamak 1 saatin altında',
+  ilkPet !== undefined && petSaat(BIND.common.gold) < 1,
+  `${(petSaat(BIND.common.gold) * 60).toFixed(0)} dk`);
+check('tüm koleksiyon (füzyonsuz) Forge ağacının 5 katını geçmiyor',
+  collectionTotalCost() <= treeTotalCost() * 5,
+  `${(collectionTotalCost() / treeTotalCost()).toFixed(1)}× ağaç`);
 
 console.log(`\n${FAIL.length === 0 ? '✅ DENGE SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
