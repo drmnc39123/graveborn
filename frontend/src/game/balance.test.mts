@@ -118,6 +118,31 @@ check('en pahalı hat en ucuzun 5 katından fazla değil',
   totalCost(enPahali) / totalCost(enUcuz) <= 5,
   `${(totalCost(enPahali) / totalCost(enUcuz)).toFixed(1)}×`);
 
+// ── 🔴 AÇIK BULGU: FİYAT–GÜÇ TERSLİĞİ (denendi, GERİ ALINDI) ──
+//
+// Ölçüm (12 seed × 30 dk, tek hat maxlanmış, taban kill/dk 111 · derinlik 8,2):
+//     amount max   kill/dk 132 · derinlik 14,2 · koşu gold 707 · 30.778 G
+//     might  max   kill/dk 129 · derinlik  9,9 · koşu gold 432 · 69.316 G
+// `amount` `might`ten 2,25 KAT UCUZ ve her üç ölçütte daha iyi. Üstelik
+// `forge.ts`in kendi yorumu "oyunu değiştiren alımlar pahalı KALMALI" diyor
+// — yani sayı, dosyanın kendi yazılı niyetiyle çelişiyor.
+//
+// ⚠️ DÜZELTME DENENDİ VE GERİ ALINDI. `amount` baseCost 3360 → 7600
+// (toplam 30.778 → 69.616) yapıldı; `forge.test`in "ilk derinliklerde de
+// ilerleme var" mührü KIRILDI. Sebep ölçüldü:
+//     ORİJİNAL fiyat: derinlik 0 → 126 seviye · derinlik 10 → 127
+//     YENİ fiyat    : derinlik 0 → 126 seviye · derinlik 10 → 126
+// Yani o mühür TEK SEVİYELİK payla geçiyormuş; fiyat artışı erken inişten
+// o basamağı siliyor. Mühür işini yaptı, değişiklik geri alındı.
+//
+// ⚠️ ASIL SORUN DAHA DERİNDE ve benim değişikliğimden ÖNCE de vardı:
+// kampanyayı bitiren oyuncu 201.000 gold ile başlıyor ve ağacın 126
+// seviyesini HEMEN alabiliyor. Sonraki 10 derinlik yalnız ~4.200 gold
+// ekliyor = 1 seviye. Erken iniş ağaçta neredeyse hiçbir şey satın almıyor.
+// Fiyatı düzeltmeden ÖNCE bu ele alınmalı; yoksa her fiyat artışı aynı
+// mühre takılır.
+// ⚠️ Eşiği GEVŞETME — mühür doğru şeyi ölçüyor.
+
 console.log('\n[6] Pet merdiveni — oyunun EN DERİN gold sink’i');
 // ⭐ ÖLÇÜLDÜ: bir pet'i tavanına çıkarmanın bedeli (bind + tüm seviyeler),
 // ~4.700 gold/saat musluk hızıyla saate çevrilmiş:
