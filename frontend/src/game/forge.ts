@@ -129,35 +129,7 @@ export const FORGE: readonly ForgeUpgrade[] = [
   // ⚠️ Bu ikisinde growth DEĞİL baseCost yükseltildi: sadece 3 seviyeleri var,
   // geometrik büyüme 3 adımda anlamlı bir toplam üretemiyor. Oyunu değiştiren
   // alımlar pahalı KALMALI, yoksa erken oyunda alınıp eğriyi düzleştirirler.
-  //
-  // ⭐ `amount` 3360 → 7600 (toplam 30.778 → 69.616). ÖLÇÜLDÜ, göz kararı değil.
-  // 12 seed × 30 dk, tek hat maxlanmış, taban kill/dk 111 · derinlik 8,2:
-  //     amount max   kill/dk 132 · derinlik 14,2 · koşu gold 707 · 30.778 G
-  //     might  max   kill/dk 129 · derinlik  9,9 · koşu gold 432 · 69.316 G
-  // `amount` `might`ten 2,25 KAT UCUZ ve her üç ölçütte de daha iyiydi —
-  // ağacın açık ara en iyi alımı, aynı zamanda en ucuz üçüncü hattıydı.
-  //
-  // ⚠️ YENİ BİR TASARIM KARARI DEĞİL: hemen üstteki cümle zaten "oyunu
-  // değiştiren alımlar pahalı KALMALI" diyor. Sayı o niyete uymuyordu;
-  // niyeti değil sayıyı düzelttim. Artık en pahalı hat kademesinde.
-  //
-  // ⚠️ BU DEĞİŞİKLİK BİR KEZ DENENDİ VE GERİ ALINDI. `forge.test`in "ilk
-  // derinliklerde de ilerleme var" mührü kırılıyordu, çünkü ESKİ kampanya
-  // eğrisinde o mühür TEK SEVİYELİK payla geçiyordu (d0 126 → d10 127) ve
-  // fiyat artışı o basamağı siliyordu. Kampanya eğrisi düzeltilince
-  // (`config.ts` `firstClearGold`) pay geri geldi (d0 89 → d10 91) ve
-  // değişiklik geçti. SIRA ÖNEMLİYDİ: önce boşluk, sonra fiyat.
-  //
-  // ⚠️ `area` (63.161) ve `pspeed` (28.619) da ölçümde atıl/negatif çıktı
-  // ama BİLEREK DOKUNULMADI: aynı ölçüm setinde savunma hatları tek tek
-  // "ölü" görünüp BİRLİKTE derinliği ikiye katladı (eşik sistemi). Tek-hat
-  // ölçümüne bakıp fiyat oynatmak o tuzağa düşmek olur; önce kombinasyon
-  // testi lazım. Ayrıntı: `balance.probe.mts` başlığı.
-  //
-  // ⚠️ MÜHÜR ETKİLENMEZ: Forge seviyeleri mühürlenen koşuya girmiyor
-  // (`sim.test` `permanentBonus({})` ile koşuyor). Geri almak için tek
-  // sayı: 7600 → 3360.
-  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 7600, growth: 2.4, unit: 'flat' },
+  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 3360, growth: 2.4, unit: 'flat' },
   { id: 'revival', name: 'Second Burial', desc: '+1 revival per run', stat: 'revival', perLevel: 1, maxLevel: 3, baseCost: 2640, growth: 2.4, unit: 'flat' },
 ] as const;
 
