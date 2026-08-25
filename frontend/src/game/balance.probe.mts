@@ -50,14 +50,32 @@
 //   "gereksiz" diye silme veya ucuzlatma.
 // · FİYAT–GÜÇ TERSLİĞİ: `amount` 30.778 gold ile `might`ten (69.316) hem
 //   ucuz hem her iki ölçütte daha iyi.
-// · `area` en pahalı üçüncü hat ve TABANIN ALTINDA. Şüphe: `wArea` iki
-//   yerde alan değil MESAFE büyütüyor — `engine.ts` `maxDist` (bumerang
-//   sürünün dışına uçuyor) ve `orbitRadius` (orb'lar oyuncudan uzaklaşıyor,
-//   oysa sürü oyuncunun etrafında). Motorun kendi yorumu aynı tuzağı
-//   `projSpeed` için yazmış ve MESAFEYE bağlayarak çözmüş; `area` için
-//   yapılmamış. ⚠️ DOĞRULANMADI — kontrollü deney yapılmadan motora dokunma.
+// · `area` en pahalı üçüncü hat ve tam havuzda TABANIN ALTINDA (kill/dk
+//   111 → 98). ⚠️ SEBEP BULUNAMADI — kurduğum hipotez ÇÜRÜDÜ, aşağıda.
 // · `greed` çalışıyor (+%70 gold, tasarım +%72) ama derinliğe etkisi yok;
 //   bu doğru, gold statı.
+//
+// ── ⚠️ ÇÜRÜYEN HİPOTEZ: "`area` MESAFE büyüttüğü için zararlı" ──
+//
+// İDDİA: `wArea` iki yerde alan değil mesafe büyütüyor — `maxDist`
+// (bumerang sürünün dışına uçar) ve `orbitRadius` (orb'lar oyuncudan
+// uzaklaşır, oysa sürü oyuncunun etrafında). Motorun kendi yorumu (~2169)
+// aynı tuzağı `projSpeed` için yazıp MESAFEYE bağlayarak çözmüş.
+//
+// DENEY: silah havuzunu tek desene sabitleyip area'yı açtım (12 seed × 30 dk).
+//   litany (orbit)     132 → 127  (−%4)   düşmeli → TUTTU
+//   sickle (boomerang) 137 → 136  (−%1)   düşmeli → TUTMADI
+//   lash   (sweep)     138 → 138  (−%1)   ARTMALI → TUTMADI
+//   ward   (aura)      139 → 147  (+%6)   artmalı → TUTTU
+//
+// Dört tahminden ikisi tuttu = doğrulama DEĞİL. Üstelik izole silahlarda
+// ortalama etki ~0 iken tam havuzda −%12 çıkıyor; yani −%12'yi `area`
+// tek başına açıklamıyor, kurgu bileşimi de işin içinde.
+//
+// ⚠️ MOTORA DOKUNMA. `maxDist`/`orbitRadius`taki `wArea` çarpanını
+// kaldırmak için ELDE KANIT YOK ve değişiklik mührü kırar.
+// ⚠️ AMA FİYAT SORUNU DURUYOR: ölçülebilir tek kazanan aura (+%6) ve hat
+// 63.161 gold (13,4 saat) istiyor. Mekanizma bilinmese de fiyat yüksek.
 
 import { permanentBonus } from './forge.js';
 import { RUN, STAGES, TICK } from './config.js';
