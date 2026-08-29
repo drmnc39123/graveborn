@@ -286,6 +286,25 @@ console.log(`
   KAMPANYA TOPLAMI (ortancalar): ${(toplamSn / 3600).toFixed(1)} SAAT (${(toplamSn / 60).toFixed(0)} dk)
 `);
 
+// ⚠️⚠️ BU KONTROL 7 SEEDDE BİR YAZI-TURA — ÖLÇÜLDÜ (2026-08-26).
+//
+// b21 için Forge bütçesi tek yönlü artırıldığında bitirme oranı:
+//     122.900 → 7/7 · 141.335 → 2/7 · 159.770 → 3/7
+//     184.350 → 7/7 · 215.075 → 7/7 · 245.800 → 7/7
+// Daha güçlü oyuncu ASLA daha kötü olamaz; bu zikzak build piyangosudur.
+// Forge değişince düşmanlar farklı anlarda ölüyor, mücevherler farklı
+// toplanıyor, seviye atlama kayıyor ve BAMBAŞKA bir build çıkıyor — aynı
+// ders bu dosyanın kendi başlığında da yazılı.
+//
+// AYNI kötü pencerede 21 seed ile gerçek oran **12/21 = %57**; eşik ise
+// 5/7 = %71. Yani İKİ ŞEY BİRDEN doğru:
+//   1. b21 o güç penceresinde gerçekten eşiğin ALTINDA (%57)
+//   2. 7 seed %57 ile %71'i AYIRAMAZ (aynı örneklem 2/7 ile 7/7 arası zıplar)
+//
+// ⚠️ EŞİĞİ GEVŞETME. Örneklem yetersiz; önce seed sayısı, sonra denge.
+// Bu tuzağa bu depoda ÜÇ KEZ düşüldü: `pacing.test` "en yüksek silah"
+// 6 seedde yazı-turaydı (ilk 6 → 4,83 · son 6 → 5,83), `forge.test`
+// "ilk derinliklerde ilerleme" TEK SEVİYELİK payla geçiyordu, ve bu.
 check(`TÜM bölümler bitirilebiliyor (${SEED_SAYISI} seedin en az ${Math.ceil(SEED_SAYISI * 2 / 3)}'i)`, bitmeyen.length === 0,
   bitmeyen.length ? `takılan: ${bitmeyen.join(', ')}` : `${STAGES.length}/${STAGES.length}`);
 // ── SİVRİLİK: bir bölüm KOMŞULARINA GÖRE slog mu ──
@@ -340,6 +359,26 @@ check(`TÜM bölümler bitirilebiliyor (${SEED_SAYISI} seedin en az ${Math.ceil(
     cukur.length ? `çukur: ${cukur.join(', ')}` : 'tamam');
 }
 // ⚠️ Kullanıcının şikâyetiydi: "10 bölümde oyun mu biter". Ölçülen hedef.
+//
+// 🔴 BU EŞİK BAYAT — ÖLÇÜLDÜ (2026-08-26, ikili arama).
+// `ea0a71c` (evrim sistemi açıldı) kampanyayı 3,6 → **2,7 saate** düşürdü:
+//     ccc4127 ✅ 3,6 saat · 521a257 ✅ 3,6 saat · ea0a71c ❌ 2,7 · HEAD ❌ 2,7
+// Yani kırılma tam o commit'te ve SEBEBİ BİR GERİLEME DEĞİL: oyuncu her
+// bölümde daha hızlı (−0,1 … −7,3 dk) ve bitirme oranı çoğu bölümde
+// İYİLEŞTİ (b17 5/7→7/7 · b20 6/7→7/7 · b22 6/7→7/7).
+//
+// ⚠️ ETKİ EVRİMDEN DEĞİL, GARANTİLİ PASİFTEN: bu testin yapay oyuncusu
+// hiçbir bütçede evrim yapmıyor (0/21 ölçüldü). `ea0a71c`in ikinci yarısı —
+// level-up tekliflerinde garantili pasif — oyuncuya normalde atlayacağı
+// pasifleri veriyor ve güçlendiriyor.
+//
+// KARAR GEREKİYOR (kullanıcıya sorulmalı, tek başına değiştirme):
+//   (a) eşiği yeniden temellendir — 3 saat evrim ÖNCESİ oyuncuya göre
+//       ayarlanmıştı; kontrolün niyeti ("10 bölümde bitmesin") 2,7 saatte
+//       de karşılanıyor
+//   (b) kampanyayı güçlendir — ama bu, ölçülmüş bir İYİLEŞTİRMEYİ geri
+//       almak olur
+// ⚠️ `ea0a71c`i GERİ ALMA: 11 evrim ölü duruyordu, açılması kasıtlıydı.
 check('kampanya ilk geçişi 3 saatten uzun', toplamSn > 3 * 3600,
   `${(toplamSn / 3600).toFixed(1)} saat`);
 
