@@ -94,7 +94,7 @@ export function Tag({ children, tone = 'dim', title }: {
   const map = {
     dim: { fg: C.boneDim, bg: 'rgba(255,255,255,0.06)', bd: 'rgba(255,255,255,0.10)' },
     gold: { fg: C.candle, bg: 'rgba(239,167,46,0.13)', bd: `${C.candle}44` },
-    blood: { fg: '#e4657a', bg: 'rgba(160,18,38,0.18)', bd: 'rgba(160,18,38,0.5)' },
+    blood: { fg: C.badText, bg: 'rgba(160,18,38,0.18)', bd: 'rgba(160,18,38,0.5)' },
     ok: { fg: C.ok, bg: 'rgba(95,158,74,0.15)', bd: 'rgba(95,158,74,0.42)' },
     bad: { fg: C.bad, bg: 'rgba(200,50,74,0.15)', bd: 'rgba(200,50,74,0.42)' },
   }[tone];

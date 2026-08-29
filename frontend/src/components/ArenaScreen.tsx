@@ -378,7 +378,7 @@ function Result({ setup, end, onAgain, onExit }: {
           THE PIT
         </div>
         <div style={{ fontSize: 28, fontWeight: 900, marginTop: 4, marginBottom: 6,
-          color: end.winner === null ? C.boneDim : kazandim ? C.candle : '#e4657a' }}>
+          color: end.winner === null ? C.boneDim : kazandim ? C.candle : C.badText }}>
           {end.winner === null ? 'No result' : kazandim ? 'Last one standing' : 'You fell first'}
         </div>
         <div style={{ fontSize: 12, color: C.boneFaint, marginBottom: 16, lineHeight: 1.55 }}>

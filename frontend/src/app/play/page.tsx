@@ -657,7 +657,7 @@ export default function PlayPage() {
               THE ANSWERING
             </div>
             <div style={{ fontSize: 28, fontWeight: 900, marginBottom: 4,
-              color: payout.duel.won ? C.candle : '#e4657a' }}>
+              color: payout.duel.won ? C.candle : C.badText }}>
               {payout.duel.won ? 'You went deeper' : 'You fell short'}
             </div>
             <div style={{ fontSize: 12.5, color: C.boneFaint, marginBottom: 16, lineHeight: 1.5 }}>
@@ -697,7 +697,7 @@ export default function PlayPage() {
             {payout.duel.capped && (
               <div style={{ marginTop: 12, padding: '9px 11px', borderRadius: 8,
                 background: 'rgba(160,18,38,0.14)', border: `1px solid ${C.bad}55`,
-                fontSize: 11.5, color: '#e4657a', lineHeight: 1.5 }}>
+                fontSize: 11.5, color: C.badText, lineHeight: 1.5 }}>
                 Your claim did not fit the time you spent, so it was not counted.
               </div>
             )}
@@ -721,7 +721,7 @@ export default function PlayPage() {
               THE WILDERNESS
             </div>
             <div style={{ fontSize: 26, fontWeight: 900, marginBottom: 4,
-              color: payout.wilderness.extracted ? C.bone : '#e4657a' }}>
+              color: payout.wilderness.extracted ? C.bone : C.badText }}>
               {payout.wilderness.extracted ? 'You walked out' : 'You did not come back'}
             </div>
             <div style={{ fontSize: 12, color: C.boneFaint, marginBottom: 14, lineHeight: 1.5 }}>
@@ -768,7 +768,7 @@ export default function PlayPage() {
             {payout.wilderness.dropped > 0 && (
               <div style={{ marginTop: 10, padding: '9px 11px', borderRadius: 8,
                 background: 'rgba(160,18,38,0.14)', border: `1px solid ${C.bad}55`,
-                fontSize: 11.5, color: '#e4657a', lineHeight: 1.5 }}>
+                fontSize: 11.5, color: C.badText, lineHeight: 1.5 }}>
                 {payout.wilderness.dropped} more piece{payout.wilderness.dropped > 1 ? 's were' : ' was'} left
                 behind — your vault is full. Break something down before you go out again.
               </div>
@@ -1273,7 +1273,7 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, enIyiHat, on
         }}>
           <div style={{ padding: '10px 13px 0' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 900, fontSize: 13, color: '#e4657a', letterSpacing: 0.5 }}>⛏ THE DESCENT</span>
+              <span style={{ fontWeight: 900, fontSize: 13, color: C.badText, letterSpacing: 0.5 }}>⛏ THE DESCENT</span>
               {bestDepth > 0
                 ? <Tag tone="gold">BEST · DEPTH {bestDepth}</Tag>
                 : <Tag>NEVER ENTERED</Tag>}
@@ -1403,7 +1403,7 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, enIyiHat, on
             </div>
             <div style={{ fontSize: 11.5, color: C.boneDim, lineHeight: 1.5, margin: '5px 0 8px' }}>
               Gear drops every {GEAR.everyDepths} depths. Nothing you find is
-              yours until you walk out — <b style={{ color: '#e4657a' }}>die down
+              yours until you walk out — <b style={{ color: C.badText }}>die down
               there and you come back with nothing</b>.
             </div>
             <button onClick={() => onPick(s.id, 'wilderness', 1, 0)}

@@ -227,7 +227,7 @@ export function SkillPanel({ progress, onChange, onError }: {
                 <span key={k} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
                   padding: '3px 8px', borderRadius: 5, fontSize: 11, fontWeight: 800,
-                  color: iyi ? C.candleSoft : '#e4657a',
+                  color: iyi ? C.candleSoft : C.badText,
                   background: iyi ? 'rgba(239,167,46,0.12)' : 'rgba(160,18,38,0.14)',
                   border: `1px solid ${iyi ? `${C.candle}44` : `${C.bad}55`}`,
                 }}>
@@ -254,7 +254,7 @@ export function SkillPanel({ progress, onChange, onError }: {
             <div style={{
               marginBottom: 8, padding: '9px 11px', borderRadius: 8,
               background: 'rgba(160,18,38,0.14)', border: `1px solid ${C.bad}55`,
-              fontSize: 11.5, color: '#e4657a', lineHeight: 1.5, fontFamily: FONT.ui,
+              fontSize: 11.5, color: C.badText, lineHeight: 1.5, fontFamily: FONT.ui,
             }}>
               You are unlearning {cikarilan.length} {cikarilan.length > 1 ? 'paths' : 'path'}.
               That costs <b>{bedel.toLocaleString('en-US')} gold</b> — you keep the

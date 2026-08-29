@@ -112,7 +112,7 @@ export function GearPanel({ progress, onChange, onError }: {
         <div style={{
           marginBottom: 12, padding: '9px 12px', borderRadius: 8,
           background: 'rgba(160,18,38,0.14)', border: `1px solid ${C.bad}55`,
-          fontSize: 11.5, color: '#e4657a', lineHeight: 1.5, fontFamily: FONT.ui,
+          fontSize: 11.5, color: C.badText, lineHeight: 1.5, fontFamily: FONT.ui,
         }}>
           Your vault is full. Anything you find in the Wilderness will be left
           behind until you break something down.
@@ -398,7 +398,7 @@ function ItemBody({ item, label, muted = false }: {
             fontSize: 11.5, lineHeight: 1.45,
             // ⚠️ Lanet AYNI PUNTODA, sadece renk farklı. Küçültmek bedeli
             // gizlemek olurdu.
-            color: a.kind === 'boon' ? C.candleSoft : '#e4657a',
+            color: a.kind === 'boon' ? C.candleSoft : C.badText,
           }}>
             {affixText(a)}
           </div>

@@ -32,6 +32,20 @@ export const C = {
   ok: '#5f9e4a', // yeşil — onay (çürük yeşili tonunda)
   warn: '#efa72e',
   bad: '#a01226',
+  /**
+   * OLUMSUZ **METİN** — `bad` okunmadığı için var, süs değil. ÖLÇÜLDÜ,
+   * panel zeminlerinde (#1c140e / #2b1f16 / #0a0806) kontrast:
+   *   bad       #a01226 → 2,26 · 1,99 · 2,48   ✗ (3:1 bile değil)
+   *   bloodSoft #c8324a → 3,47 · 3,06 · 3,82   ✗ (gövde metni 4,5 ister)
+   *   badText   #e4657a → 5,57 · 4,92 · 6,13   ✓ WCAG AA
+   *
+   * ⚠️ YENİ RENK EKLENMEDİ. Bu ton ZATEN 12 yerde, 5 dosyada sert
+   * kodluydu — yani paletin dışında, kimsenin ayarlayamadığı 15. renk
+   * olarak yaşıyordu. Var olan gerçek buraya taşındı.
+   * ⚠️ ZEMİN OLARAK KULLANMA — bu bir METİN rengi. Zemin ve çerçeve için
+   * `blood` / `bloodSoft` duruyor.
+   */
+  badText: '#e4657a',
 
   border: 'rgba(227,216,192,0.14)', // kemik bazlı ince kenar
 } as const;
