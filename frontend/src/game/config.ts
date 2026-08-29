@@ -313,7 +313,32 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 21, name: 'Where the Wood Ends', enemyCount: 1560, firstClearGold: 13300,
-    spawnRate: 8.0, maxAlive: 420, enemies: ['bird', 'fiend', 'dire_rat', 'bone_archer', 'grave_knight'],
+    /**
+     * ⭐ `fiend` → `bone_thrall` — ÖLÇÜLDÜ (2026-08-26, 15 seed × 4 bütçe).
+     *
+     * SORUN: b21 kampanyanın TEK aykırısıydı. 15 seedle b1–b20 %100
+     * bitiyor, b21 %67. Eşik sorunu değil, bölümün kendi sorunu.
+     *
+     * VARYANT DENEYİ (60 koşu/varyant, bütçe aralığı boyunca):
+     *     şu anki (bird+fiend circler)  43/60 = %72
+     *     fiend → hulk                  43/60 = %72   (hiç işe yaramadı)
+     *     fiend → bone_thrall           52/60 = %87   ← seçilen
+     *     fiend → skeleton              42/60 = %70   (kötüleşti)
+     *     bird  → hulk                  48/60 = %80
+     *
+     * ⚠️ İLK TEŞHİSİM EKSİKTİ: "iki circler `aimed` mermiden kaçıyor"
+     * dedim, ama `hulk` da kaçıngan değil ve HİÇ fayda vermedi. Verinin
+     * gösterdiği asıl şey ERİŞİLEBİLİRLİK + XP: `bone_thrall` sürü
+     * davranışlı (oyuncuya GELİR) ve xp 10 verir; `fiend` 5, `skeleton` 2,
+     * `hulk` 14 ama hızı 26 — kaçan oyuncuya yetişemiyor.
+     *
+     * ⚠️ ÇARPANLARA DOKUNULMADI. `hpMul` ile kampanya ayarı bu depoda İKİ
+     * KEZ denendi ve İKİ KEZ başarısız oldu (kontrollü deneyde hpMul ×5,5
+     * süreyi yalnız %3 değiştirdi). Çözüm her seferinde ROSTER oldu.
+     * ⚠️ Bölümün orman kimliği KORUNDU: `bird` + `dire_rat` duruyor ve
+     * bu ikisi hiçbir komşu bölümde yok.
+     */
+    spawnRate: 8.0, maxAlive: 420, enemies: ['bird', 'bone_thrall', 'dire_rat', 'bone_archer', 'grave_knight'],
     hpMul: 10.27, speedMul: 1.58, damageMul: 5.8,
     boss: { hp: 201_000, speed: 68, damage: 200, radius: 64, art: 'boss_mini', label: 'The Last Root' },
   },
