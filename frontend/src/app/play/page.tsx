@@ -28,6 +28,7 @@ import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { ProfileCard } from '@/components/ProfileCard';
+import { ReadyCard } from '@/components/ReadyCard';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
 import { MotionStyles, Reveal, motionOff, useCountUpInt } from '@/components/ui/motion';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
@@ -630,6 +631,22 @@ export default function PlayPage() {
             wallet={wallet}
             onOpen={() => setPanel('tavern')}
           />
+        </div>
+      )}
+
+      {/* ⚠️ SAĞ KOLON — MİNİMAP'İN ALTINA HİZALI, üstüne DEĞİL.
+          Hemen yukarıdaki not "sağ üste konulamaz" diyor ve haklı: minimap
+          canvas'ın İÇİNDE çiziliyor (`hubRender.drawMinimap`), yani HTML
+          onun üstüne biner. Ölçüldü: minimap 172×116, konumu
+          `x = w - 186, y = 14`, 4 px kenarlıkla y=10–134 arasını kaplıyor.
+          Kart `top: 146` ile hemen altında başlıyor ve `width: 180` ile
+          minimap'in DIŞ genişliğine (172+8) hizalı — sağ kenarları aynı
+          dikeyde. Bu bir tesadüf değil, ölçüyle seçildi.
+          ⚠️ Minimap boyutu değişirse (`MINI_W`/`MINI_H`) bu iki sayı da
+          değişmeli. */}
+      {!panel && progress && (
+        <div style={{ position: 'absolute', top: 146, right: 10, zIndex: 6, width: 180 }}>
+          <ReadyCard progress={progress} />
         </div>
       )}
 
