@@ -46,12 +46,17 @@ export interface DockGroup {
   members: readonly string[];
 }
 
+// ⚠️ RENKLER PALETTEN OKUNUYOR, LİTERAL DEĞİL. Dördü de `C`nin birebir
+// kopyasıydı (`#a01226`=blood · `#efa72e`=candle · `#5f9e4a`=ok ·
+// `#8a97a3`=ice). Bu sessiz bir tuzak: paleti ayarlayan kişi navbarın da
+// değiştiğini sanır, oysa burası kendi kopyasını tuttuğu için ESKİ renkte
+// kalırdı — ve navbar oyunun en görünür yüzeyi.
 export const GROUPS: readonly DockGroup[] = [
   // Dövüş önce: oyuncunun oyuna girdiği yer en solda ve en görünür olmalı.
-  { id: 'fight', label: 'FIGHT', color: '#a01226', members: ['quests', 'boss', 'duel', 'pit'] },
-  { id: 'power', label: 'POWER', color: '#efa72e', members: ['upgrade', 'paths', 'gear', 'pets', 'shop'] },
-  { id: 'spend', label: 'SPEND', color: '#5f9e4a', members: ['market', 'exchange', 'reliquary'] },
-  { id: 'people', label: 'PEOPLE', color: '#8a97a3', members: ['daily', 'watch', 'guild', 'tavern'] },
+  { id: 'fight', label: 'FIGHT', color: C.blood, members: ['quests', 'boss', 'duel', 'pit'] },
+  { id: 'power', label: 'POWER', color: C.candle, members: ['upgrade', 'paths', 'gear', 'pets', 'shop'] },
+  { id: 'spend', label: 'SPEND', color: C.ok, members: ['market', 'exchange', 'reliquary'] },
+  { id: 'people', label: 'PEOPLE', color: C.ice, members: ['daily', 'watch', 'guild', 'tavern'] },
 ] as const;
 
 /** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */

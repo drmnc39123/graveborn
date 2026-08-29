@@ -171,7 +171,7 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
         </div>
 
         {hata && (
-          <div style={{ marginBottom: 12, fontSize: 11.5, color: C.bad }}>{hata}</div>
+          <div style={{ marginBottom: 12, fontSize: 11.5, color: C.badText }}>{hata}</div>
         )}
 
         {durum.k === 'queue' ? (

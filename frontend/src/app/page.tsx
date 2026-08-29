@@ -139,7 +139,7 @@ export default function Home() {
           </div>
         )}
         {err === 'baglanti' && (
-          <div style={{ ...glass(10), padding: '10px 14px', fontSize: 11.5, color: C.bad, fontFamily: FONT.ui }}>
+          <div style={{ ...glass(10), padding: '10px 14px', fontSize: 11.5, color: C.badText, fontFamily: FONT.ui }}>
             Could not reach the server. The demo still works.
           </div>
         )}

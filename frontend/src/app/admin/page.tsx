@@ -164,7 +164,7 @@ export default function AdminPage() {
               background: `linear-gradient(180deg, ${C.bloodSoft}, ${C.blood})` }}>
             GİRİŞ
           </button>
-          {err && <div style={{ marginTop: 10, fontSize: 12, color: C.bad }}>{err}</div>}
+          {err && <div style={{ marginTop: 10, fontSize: 12, color: C.badText }}>{err}</div>}
         </div>
       </main>
     );
@@ -176,7 +176,7 @@ export default function AdminPage() {
         <h1 style={{ margin: 0, fontSize: 20, color: C.bone }}>GRAVEBORN · Admin</h1>
         <button onClick={() => void refresh()} style={btn}>Yenile</button>
       </div>
-      {err && <div style={{ marginTop: 10, fontSize: 12, color: C.bad }}>{err}</div>}
+      {err && <div style={{ marginTop: 10, fontSize: 12, color: C.badText }}>{err}</div>}
 
       {/* ── GENEL BAKIŞ ── */}
       {ov && (

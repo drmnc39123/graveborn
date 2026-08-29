@@ -144,7 +144,7 @@ export function ForgePanel({
                 {/* Parası yetmiyorsa NE KADAR eksik olduğu yazsın — "alamıyorum"
                     tek başına bilgi değil, hedef değil. */}
                 {!maxed && !can && (
-                  <div style={{ fontSize: 10.5, color: C.bad, marginTop: 7 }}>
+                  <div style={{ fontSize: 10.5, color: C.badText, marginTop: 7 }}>
                     {eksik.toLocaleString('en-US')} more gold needed
                   </div>
                 )}

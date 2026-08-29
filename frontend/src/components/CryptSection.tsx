@@ -156,7 +156,7 @@ export function CryptSection({ progress, onChange, onError }: {
               {sonraki.blurb}
             </div>
             {!alabilir && progress.gold < bedel && (
-              <div style={{ marginTop: 6, fontSize: 11, color: C.bad }}>
+              <div style={{ marginTop: 6, fontSize: 11, color: C.badText }}>
                 {(bedel - progress.gold).toLocaleString('en-US')} more gold needed
               </div>
             )}

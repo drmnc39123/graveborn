@@ -113,7 +113,7 @@ export function StallPanel({ progress, onChange }: {
                   </div>
                   <div style={{ fontSize: 11.5, color: C.boneDim, marginTop: 3 }}>{c.desc}</div>
                   {!dolu && !parasiVar && (
-                    <div style={{ fontSize: 10.5, color: C.bad, marginTop: 5 }}>
+                    <div style={{ fontSize: 10.5, color: C.badText, marginTop: 5 }}>
                       {eksik.toLocaleString('en-US')} more gold needed
                     </div>
                   )}

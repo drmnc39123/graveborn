@@ -639,7 +639,7 @@ export default function PlayPage() {
         <div onClick={() => setNote(null)}
           style={{ position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
             zIndex: 7, ...glass(10), padding: '10px 16px', cursor: 'pointer',
-            fontSize: 12, color: C.bad, maxWidth: 'min(92vw, 420px)', textAlign: 'center' }}>
+            fontSize: 12, color: C.badText, maxWidth: 'min(92vw, 420px)', textAlign: 'center' }}>
           {note}
         </div>
       )}

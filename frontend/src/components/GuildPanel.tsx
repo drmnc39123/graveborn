@@ -152,7 +152,7 @@ export function GuildPanel({ progress, onChange, onError }: {
           </PixelButton>
           {/* ⚠️ Kurucu için sonuç GERİ ALINAMAZ — düğmeye basmadan önce yazılı olmalı */}
           {kurucu && (
-            <div style={{ marginTop: 6, fontSize: 11, color: C.bad, lineHeight: 1.45 }}>
+            <div style={{ marginTop: 6, fontSize: 11, color: C.badText, lineHeight: 1.45 }}>
               You founded this guild. Leaving dissolves it for everyone, and the
               treasury is lost. There is no way to hand it over.
             </div>
@@ -187,7 +187,7 @@ export function GuildPanel({ progress, onChange, onError }: {
           </PixelButton>
         </div>
         {progress.gold < GUILD_COST && (
-          <div style={{ marginTop: 6, fontSize: 11, color: C.bad }}>
+          <div style={{ marginTop: 6, fontSize: 11, color: C.badText }}>
             {(GUILD_COST - progress.gold).toLocaleString('en-US')} more gold needed
           </div>
         )}
