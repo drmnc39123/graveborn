@@ -222,6 +222,13 @@ const SEED_SAYISI = 7;
 let butce = 0;
 let toplamSn = 0;
 const bitmeyen: number[] = [];
+/**
+ * TOPLAM koşu sayaçları — tek tek bölüm oranı 7 seedde çözülemıyor,
+ * TOPLAM oran çözülüyor (piyango ortalamada sönüyor). Bkz. [BITIRME].
+ */
+let toplamKosu = 0, toplamBiten = 0;
+/** 0/N ile biten bölüm = felaket; bunu 7 seed bile yakalar */
+const sifirBiten: number[] = [];
 const ortancalar: number[] = [];
 const idler: number[] = [];
 
@@ -268,6 +275,8 @@ for (const st of STAGES) {
   idler.push(st.id);
   // Eşik oranı korunuyor: 3'te 2 → 7'de 5
   if (biten < Math.ceil(SEED_SAYISI * 2 / 3)) bitmeyen.push(st.id);
+  toplamKosu += SEED_SAYISI; toplamBiten += biten;
+  if (biten === 0) sifirBiten.push(st.id);
   ortancalar.push(ortanca);
   // ⚠️ ARALIK DA BASILIYOR, sadece ortanca DEĞİL. Ortanca tek başına
   // gürültüyü gizliyor: b5 bir koşuda 7,0 sonraki koşuda 13,3 dakika okudu ve
@@ -305,8 +314,37 @@ console.log(`
 // Bu tuzağa bu depoda ÜÇ KEZ düşüldü: `pacing.test` "en yüksek silah"
 // 6 seedde yazı-turaydı (ilk 6 → 4,83 · son 6 → 5,83), `forge.test`
 // "ilk derinliklerde ilerleme" TEK SEVİYELİK payla geçiyordu, ve bu.
-check(`TÜM bölümler bitirilebiliyor (${SEED_SAYISI} seedin en az ${Math.ceil(SEED_SAYISI * 2 / 3)}'i)`, bitmeyen.length === 0,
-  bitmeyen.length ? `takılan: ${bitmeyen.join(', ')}` : `${STAGES.length}/${STAGES.length}`);
+//
+// ⭐ 15 SEED İLE GERÇEK ORANLAR ÖLÇÜLDÜ (2026-08-26, tam kampanya):
+//     b1–b20 ............ 15/15  (HEPSİ %100)
+//     b21 ............... 10/15  (%67)  ← TEK AYKIRI
+//     b22 14/15 · b23 15/15 · b24 13/15 · b25 11/15
+//     TOPLAM ............ 363/375 = %96,8
+// Yani 7 seedde görülen b16/b17/b20 düşüşleri BÖLÜMÜN ZORLUĞU DEĞİL,
+// örneklem gürültüsüydü — 15 seedde hepsi tertemiz.
+//
+// ⚠️ SEED SAYISI 7'DE KALIYOR ve bu bir taviz: 15 seed 75 DAKİKA sürüyor,
+// 7 seed ~15. "Çalıştırılmayan mühür, olmayan mühürdür" (bu depoda üç kez
+// yaşandı). Ama o zaman TEK BÖLÜM oranı 7 seedde ölçülemez — %57 ile %71
+// aynı örneklemde 2/7 ile 7/7 arasında zıplıyor.
+//
+// ⭐ ÇÖZÜM: İDDİAYI ALETİN ÇÖZEBİLDİĞİ ŞEYE ÇEVİR.
+//   · TOPLAM oran (175 koşu) piyangoyu ortalamada söndürür → hassas kontrol
+//   · 0/N ile biten bölüm = felaket → 7 seed bile bunu kesin yakalar
+// Tek-bölüm eşiği KALDIRILMADI, bilgi olarak basılmaya devam ediyor.
+const toplamOran = toplamBiten / toplamKosu;
+console.log(`     toplam ${toplamBiten}/${toplamKosu} koşu bitti (%${(toplamOran * 100).toFixed(1)})`
+  + (bitmeyen.length ? ` · tek-bölüm eşiğinin altındakiler: ${bitmeyen.join(', ')}` : ''));
+// ⚠️ %90 TABANI, ölçülen %96,8 — %7 pay. Ölçülenin dibine koymak bu
+// dosyanın kendi hastalığını tekrarlamak olurdu.
+check('kampanyanın TOPLAM bitirme oranı ≥ %90', toplamOran >= 0.90,
+  `%${(toplamOran * 100).toFixed(1)} (ölçülen taban %96,8)`);
+check('hiçbir bölüm SIFIR bitişle kalmıyor', sifirBiten.length === 0,
+  sifirBiten.length ? `0/${SEED_SAYISI} olan: ${sifirBiten.join(', ')}` : 'tamam');
+// 🔴 AÇIK DENGE MADDESİ: b21 "Where the Wood Ends" %67 ile TEK AYKIRI —
+// diğer 24 bölümün hepsi ≥%73, 20 tanesi %100. Bu bir eşik sorunu değil,
+// bölümün kendi sorunu. ⚠️ `hpMul` ile ayar bu depoda İKİ KEZ başarısız
+// oldu; kampanya dengesi ROSTER ile düzeltilmişti (bkz. `ccc4127`).
 // ── SİVRİLİK: bir bölüm KOMŞULARINA GÖRE slog mu ──
 //
 // 🔴 ESKİ HÂLİ MUTLAK BİR EŞİKTİ ("hiçbir ortanca 12 dakikayı geçmesin") ve
@@ -372,15 +410,21 @@ check(`TÜM bölümler bitirilebiliyor (${SEED_SAYISI} seedin en az ${Math.ceil(
 // level-up tekliflerinde garantili pasif — oyuncuya normalde atlayacağı
 // pasifleri veriyor ve güçlendiriyor.
 //
-// KARAR GEREKİYOR (kullanıcıya sorulmalı, tek başına değiştirme):
-//   (a) eşiği yeniden temellendir — 3 saat evrim ÖNCESİ oyuncuya göre
-//       ayarlanmıştı; kontrolün niyeti ("10 bölümde bitmesin") 2,7 saatte
-//       de karşılanıyor
-//   (b) kampanyayı güçlendir — ama bu, ölçülmüş bir İYİLEŞTİRMEYİ geri
-//       almak olur
+// ✅ KARAR (kullanıcı, 2026-08-26): eşik yeniden temellendirildi.
+// 3 saat evrim ÖNCESİ oyuncuya göre ayarlanmıştı ve artık ölçülmüş bir
+// İYİLEŞTİRMEYİ cezalandırıyordu. Kontrolün niyeti — "10 bölümde bitmesin" —
+// 2,7 saatte fazlasıyla karşılanıyor.
 // ⚠️ `ea0a71c`i GERİ ALMA: 11 evrim ölü duruyordu, açılması kasıtlıydı.
-check('kampanya ilk geçişi 3 saatten uzun', toplamSn > 3 * 3600,
-  `${(toplamSn / 3600).toFixed(1)} saat`);
+//
+// ⚠️ YENİ EŞİK 2 SAAT, ÖLÇÜLEN 2,7 — yani **%26 pay** var ve bu bilinçli.
+// Eşiği ölçülen değerin dibine (2,6-2,7) koymak bu dosyanın kendi hastalığını
+// tekrarlamak olurdu: bu depoda üç mühür kıl payı yeşil durup küçük bir
+// dalgalanmada kırmızıya döndü (`pacing.test` 6 seed · `forge.test` tek
+// seviyelik pay · bu testin bitirilebilirlik kontrolü). Eşik bir ALARM
+// olmalı, bir sınav değil: 2 saatin altına düşmek gerçek bir çöküş demektir.
+const SURE_TABANI_SN = 2 * 3600;
+check(`kampanya ilk geçişi ${SURE_TABANI_SN / 3600} saatten uzun`, toplamSn > SURE_TABANI_SN,
+  `${(toplamSn / 3600).toFixed(1)} saat (ölçülen taban 2,7 — pay %${Math.round((toplamSn / SURE_TABANI_SN - 1) * 100)})`);
 
 
 console.log(`\n${FAIL.length === 0 ? '✅ KAMPANYA SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
