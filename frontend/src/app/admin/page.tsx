@@ -55,10 +55,17 @@ interface Detail {
 type Sort = 'capped' | 'gold' | 'new';
 
 /** Defter kalemlerinin okunur adları — ham anahtar operatöre bir şey söylemiyor */
+// ⚠️ EKSİK TÜRLER TAMAMLANDI. Yalnız 9 tür yazılıydı; kalan 7'si defterde
+// ham İngilizce id olarak görünüyordu (`crypt_deed`, `reforge`, `guild`…).
+// `LEDGER_KINDS` 16 tür taşıyor — biri eksik kalırsa ekran onu ham basar.
 const KIND_TR: Record<string, string> = {
   run: 'koşu ödülü', forge: 'Forge', charm: 'tılsım', reliquary: 'çekiliş',
   dust: 'tozla alım', ossuary: 'anıt', wager: 'bahis',
   market_list: 'ilan (escrow)', market_cancel: 'ilan iptali',
+  crypt: 'kasa çekimi', crypt_deed: 'deed alımı', skill: 'beceri respec',
+  guild: 'lonca', reforge: 'ekipman', pet: 'yoldaş', boon: 'ekipman eki',
+  // ⭐ Yönetici vermesi — defterin en çok denetlenmesi gereken satırı
+  admin_grant: 'YÖNETİCİ VERDİ',
 };
 
 interface TicketRow {
@@ -78,6 +85,12 @@ export default function AdminPage() {
   const [eco, setEco] = useState<Economy | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [q, setQ] = useState('');
+  /** ⭐ Verme formu — kullanıcının açıkça istediği "item grant" yeteneği */
+  const [grantGold, setGrantGold] = useState('');
+  const [grantDust, setGrantDust] = useState('');
+  const [grantSebep, setGrantSebep] = useState('');
+  const [grantMesaj, setGrantMesaj] = useState<string | null>(null);
+  const [grantMesgul, setGrantMesgul] = useState(false);
 
   useEffect(() => {
     const s = sessionStorage.getItem(K_SECRET);
@@ -133,6 +146,41 @@ export default function AdminPage() {
     try { setDetail(await call<Detail>(`/admin/player/${wallet}`)); }
     catch { setErr('Oyuncu dosyası alınamadı.'); }
   }, [call]);
+
+  /**
+   * ⭐ VERME — sunucuya gönder, sonra dosyayı TAZELE.
+   *
+   * ⚠️ Dosya yeniden çekiliyor: yeni bakiye VE yeni defter satırı aynı
+   * ekranda görünsün. Yerelde sayıyı artırmak daha hızlı olurdu ama
+   * defteri göstermezdi — ve buradaki asıl vaat "verilen gold izlenebilir".
+   */
+  const ver = async (wallet: string) => {
+    const g = grantGold.trim() ? Number(grantGold) : 0;
+    const d = grantDust.trim() ? Number(grantDust) : 0;
+    if (!Number.isInteger(g) || !Number.isInteger(d)) {
+      setGrantMesaj('Tam sayı gir.'); return;
+    }
+    // ⚠️ ONAY METNİ NE VERİLDİĞİNİ AÇIKÇA YAZIYOR. Boş bir "emin misin?"
+    // yanlış hesaba yapılan vermeyi durdurmaz — onayın işi rakamı ve
+    // cüzdanı bir kez daha göstermek.
+    const ozet = `${wallet}\n\ngold ${g >= 0 ? '+' : ''}${g} · toz ${d >= 0 ? '+' : ''}${d}`
+      + `\nsebep: ${grantSebep.trim()}\n\nonaylıyor musun?`;
+    if (!confirm(ozet)) return;
+    setGrantMesgul(true); setGrantMesaj(null);
+    try {
+      await call('/admin/grant', {
+        method: 'POST',
+        body: JSON.stringify({ wallet, gold: g, dust: d, reason: grantSebep.trim() }),
+      });
+      setGrantGold(''); setGrantDust(''); setGrantSebep('');
+      setGrantMesaj('✓ verildi');
+      await openDetail(wallet);
+    } catch (e) {
+      setGrantMesaj(e instanceof Error ? e.message : 'Verilemedi.');
+    } finally {
+      setGrantMesgul(false);
+    }
+  };
 
   const toggleBan = async (wallet: string, banned: boolean) => {
     if (!confirm(`${wallet}\n\n${banned ? 'BANLA' : 'banı kaldır'}?`)) return;
@@ -255,6 +303,24 @@ export default function AdminPage() {
               {s === 'capped' ? 'kırpılana göre' : s === 'gold' ? 'gold\'a göre' : 'yeniye göre'}
             </button>
           ))}
+          {/* ⚠️ ARAMA KUTUSU EKLENDİ — filtre ZATEN YAZILMIŞTI ama hiçbir
+              girdiye bağlı değildi: `setQ` kod tabanında HİÇ çağrılmıyordu,
+              yani aşağıdaki `.filter(...)` satırı ölü koddu ve yönetici
+              cüzdan arayamıyordu. Bu depoda tekrar eden sınıf: yazılmış ama
+              son adımda bağlanmamış özellik. */}
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="cüzdan ara…"
+            style={{
+              marginLeft: 'auto', minWidth: 'min(200px, 100%)', padding: '5px 9px',
+              background: 'rgba(0,0,0,0.35)', border: `1px solid ${C.border}`,
+              borderRadius: 6, color: C.bone, fontSize: 12, fontFamily: 'inherit',
+            }}
+          />
+          {q && (
+            <button onClick={() => setQ('')} style={btn}>temizle</button>
+          )}
         </div>
         <Table head={['Cüzdan', 'Gold', 'Bölüm', 'Karakter', 'Koşu', 'KIRPILAN', 'Gold/sa', 'Koşu/sa', '']}>
           {players
@@ -456,6 +522,46 @@ export default function AdminPage() {
               <Stat label="Toz" value={detail.player.dust ?? 0} />
               <Stat label="Durum" value={detail.player.banned ? 'BANLI' : 'aktif'}
                 tone={detail.player.banned ? 'bad' : undefined} />
+            </div>
+
+            {/* ⭐ VERME — telafi, destek, etkinlik ödülü.
+                ⚠️ SEBEP ZORUNLU ve bu bir form kaprisi değil: gerekçesiz
+                verilen gold denetlenemez. Altı ay sonra "bu 50.000 nereden
+                geldi" sorusunun tek cevabı bu alan ve defterdeki kaydı.
+                ⚠️ Verilen gold DEFTERDEN geçiyor (`admin_grant`), yani hemen
+                aşağıdaki tabloda ve `/admin/economy` musluk toplamında
+                GÖRÜNÜYOR. Defterden geçmeseydi ekonomi panosu yalan söylerdi.
+                ⚠️ Negatif de yazılabilir (geri alma) ama sunucu bakiyeyi
+                negatife düşürmeyi reddeder. */}
+            <h3 style={{ margin: '18px 0 0', fontSize: 13, color: C.bone }}>Ver / geri al</h3>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+              <input value={grantGold} onChange={(e) => setGrantGold(e.target.value)}
+                placeholder="gold (ör. 5000 veya -5000)" inputMode="numeric"
+                style={{ width: 190, padding: '5px 9px', background: 'rgba(0,0,0,0.35)',
+                  border: `1px solid ${C.border}`, borderRadius: 6, color: C.bone,
+                  fontSize: 12, fontFamily: 'inherit' }} />
+              <input value={grantDust} onChange={(e) => setGrantDust(e.target.value)}
+                placeholder="toz" inputMode="numeric"
+                style={{ width: 90, padding: '5px 9px', background: 'rgba(0,0,0,0.35)',
+                  border: `1px solid ${C.border}`, borderRadius: 6, color: C.bone,
+                  fontSize: 12, fontFamily: 'inherit' }} />
+              <input value={grantSebep} onChange={(e) => setGrantSebep(e.target.value)}
+                placeholder="sebep (zorunlu)"
+                style={{ flex: 1, minWidth: 'min(200px, 100%)', padding: '5px 9px',
+                  background: 'rgba(0,0,0,0.35)', border: `1px solid ${C.border}`,
+                  borderRadius: 6, color: C.bone, fontSize: 12, fontFamily: 'inherit' }} />
+              <button
+                disabled={grantMesgul || grantSebep.trim().length < 3
+                  || (!grantGold.trim() && !grantDust.trim())}
+                onClick={() => { void ver(detail.player.wallet); }}
+                style={{ ...btn, ...(grantMesgul ? {} : btnOn) }}>
+                {grantMesgul ? '…' : 'VER'}
+              </button>
+              {grantMesaj && (
+                <span style={{ fontSize: 11.5, color: grantMesaj.startsWith('✓') ? C.ok : C.badText }}>
+                  {grantMesaj}
+                </span>
+              )}
             </div>
 
             {/* ⚠️ ASIL YENİ ŞEY: gold hareketleri. "Bu hesap gold'u nereden

@@ -1669,6 +1669,68 @@ app.get('/admin/presence', adminOnly, wrap(async (_req, res) => {
   res.json(presenceCount());
 }));
 
+/**
+ * ⭐ YÖNETİCİ VERMESİ — telafi, destek, etkinlik ödülü.
+ *
+ * ⚠️ DEFTERDEN GEÇİYOR VE BU PAZARLIKSIZ. `withLedger` kullanılıyor, yani
+ * bakiye güncellemesi ile defter kaydı AYNI transaction'da. Doğrudan
+ * `player.update` çağırmak kısa yoldu ve tam da bu depoda yazılı olan
+ * hatayı üretirdi: "yalan söyleyen bir defter hiç defter olmamasından
+ * KÖTÜDÜR" (`ledger.ts` başlığı). Üstelik `/admin/economy` musluk
+ * toplamını defterden okuyor — buradan geçmeyen gold, ekonomi panosunda
+ * GÖRÜNMEZ ve panelin kendi bütünlük uyarısı kör kalırdı.
+ *
+ * ⚠️ `rev` İYİMSER KİLİDİ ZORUNLU: yönetici verirken oyuncu oynuyor
+ * olabilir. Kilitsiz yazmak koşu ödülünü ya da vermeyi sessizce ezerdi.
+ *
+ * ⚠️ SEBEP ZORUNLU. Gerekçesiz verilen gold denetlenemez; altı ay sonra
+ * "bu 50.000 nereden geldi" sorusunun tek cevabı bu alan.
+ *
+ * ⚠️ TAVAN VAR. Yanlış basılan bir sıfır ekonomiyi bozar; tavan yazım
+ * hatasını hatada tutar, kararda değil.
+ *
+ * ⚠️ NEGATİF DE KABUL EDİLİYOR (geri alma) ama bakiyeyi NEGATİFE
+ * DÜŞÜREMEZ — `claimedGhost` negatife düşme hatası bu depoda yaşandı.
+ */
+const GRANT_TAVAN = 1_000_000;
+app.post('/admin/grant', adminOnly, wrap(async (req, res) => {
+  const { wallet, gold, dust, reason } = req.body ?? {};
+  if (!isValidWallet(wallet)) { res.status(400).json({ error: 'gecersiz_cuzdan' }); return; }
+  if (typeof reason !== 'string' || reason.trim().length < 3) {
+    res.status(400).json({ error: 'sebep_zorunlu' }); return;
+  }
+  const g = Number(gold ?? 0), d = Number(dust ?? 0);
+  if (!Number.isInteger(g) || !Number.isInteger(d)) {
+    res.status(400).json({ error: 'tam_sayi_olmali' }); return;
+  }
+  if (g === 0 && d === 0) { res.status(400).json({ error: 'bos_verme' }); return; }
+  if (Math.abs(g) > GRANT_TAVAN || Math.abs(d) > GRANT_TAVAN) {
+    res.status(400).json({ error: 'tavan_asildi', tavan: GRANT_TAVAN }); return;
+  }
+
+  const p = await prisma.player.findUnique({
+    where: { wallet }, select: { gold: true, dust: true, rev: true },
+  });
+  if (!p) { res.status(404).json({ error: 'oyuncu_yok' }); return; }
+  if (p.gold + g < 0 || p.dust + d < 0) {
+    res.status(400).json({ error: 'bakiye_negatife_duserdi', gold: p.gold, dust: p.dust }); return;
+  }
+
+  const detay = `${reason.trim().slice(0, 120)}${d !== 0 ? ` · dust ${d > 0 ? '+' : ''}${d}` : ''}`;
+  // ⚠️ Toz da AYNI transaction'da: `withLedger`in `data` alanı doğrudan
+  // `player.update`e gidiyor. Ayrı yazmak "gold gitti, toz gitmedi"
+  // ihtimalini açardı.
+  const saved = await withLedger(
+    wallet,
+    { gold: { increment: g }, dust: { increment: d } },
+    { kind: 'admin_grant', gold: g, detail: detay },
+    p.rev,
+  );
+  console.warn('[admin] GRANT', wallet, `gold ${g >= 0 ? '+' : ''}${g}`,
+    `dust ${d >= 0 ? '+' : ''}${d}`, '·', reason.trim().slice(0, 80));
+  res.json({ ok: true, gold: saved.gold, dust: saved.dust });
+}));
+
 const port = Number(process.env.PORT ?? 4100);
 // ⚠️ `app.listen`'in DÖNDÜRDÜĞÜ sunucu WebSocket'e veriliyor. Ayrı bir port
 // açmak reverse proxy ve CORS tarafında ikinci bir yapılandırma demekti;

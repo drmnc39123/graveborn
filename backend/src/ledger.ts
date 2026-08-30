@@ -41,6 +41,13 @@ export const LEDGER_KINDS = [
   'guild',          // lonca kurma + hazine bağışı
   'reforge',        // ekipman yükseltme + yeniden dizme
   'pet',            // bağlama + yükseltme + füzyon + ikinci yuva
+  // ⭐ YÖNETİCİ VERMESİ — telafi, destek, etkinlik ödülü. Bir MUSLUK.
+  // ⚠️ DEFTERE YAZILMASI ŞART VE PAZARLIKSIZ: yazılmazsa `/admin/economy`
+  // musluk toplamı yalan söyler ve panelin kendi bütünlük uyarısı KÖR
+  // kalır — yani ekonomiyi izlemek için yapılmış ekran, ekonomiye giren
+  // gold'u göremez. Yöneticinin kendi verdiği gold, defterin en çok
+  // ihtiyaç duyduğu satırdır.
+  'admin_grant',
 ] as const;
 
 /**
