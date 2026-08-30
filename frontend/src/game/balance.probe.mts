@@ -81,7 +81,7 @@ import { permanentBonus } from './forge.js';
 import { RUN, STAGES, TICK } from './config.js';
 import { Game } from './engine.js';
 import { seedFromString } from './rng.js';
-import { fleeInput, smartPick } from './simPlayer.mjs';
+import { fleeInput, smartPick } from './simPlayer.js';
 
 const SEEDS = Array.from({ length: 12 }, (_, i) => `s${i + 1}`);
 const LIMIT = Math.round(RUN.durationSec / TICK) + 10;

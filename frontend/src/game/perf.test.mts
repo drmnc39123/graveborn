@@ -58,7 +58,7 @@ import { DESCENT, RUN, STAGES, TICK, weaponById } from './config.js';
 import { FORGE, permanentBonus } from './forge.js';
 import { Game } from './engine.js';
 import { seedFromString } from './rng.js';
-import { fleeInput, smartPick } from './simPlayer.mjs';
+import { fleeInput, smartPick } from './simPlayer.js';
 import { render } from './render.js';
 
 const FAIL: string[] = [];

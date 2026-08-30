@@ -15,7 +15,7 @@
 // Çalıştır:  npx tsx src/game/ascension.test.mts
 
 import { Game } from './engine.js';
-import { smartPick } from './simPlayer.mjs';
+import { smartPick } from './simPlayer.js';
 import {
   ASCENSION, RUN, STAGES, TICK, ascensionDropMul, ascensionHpMul,
   ascensionUnlockDepth, challengeRating, descentStage, maxAscensionFor,

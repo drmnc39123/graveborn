@@ -29,7 +29,7 @@
 // Çalıştır:  npx tsx src/game/hours.test.mts
 
 import { Game } from './engine.js';
-import { smartPick } from './simPlayer.mjs';
+import { smartPick } from './simPlayer.js';
 import { RUN, STAGES, TICK } from './config.js';
 import { FORGE, permanentBonus, spentOnOne, treeTotalCost } from './forge.js';
 import { seedFromString } from './rng.js';

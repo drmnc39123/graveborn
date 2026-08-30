@@ -36,7 +36,7 @@
 // ORTANCASI — ortalama değil, çünkü tek bir felaket koşu ortalamayı çeker.
 
 import { Game } from './engine.js';
-import { fleeInput, smartPick } from './simPlayer.mjs';
+import { fleeInput, smartPick } from './simPlayer.js';
 import { DESCENT, RUN, STAGES, TICK, checkpointFor, depthGold, descentStage } from './config.js';
 import { CHARMS, CHARM_SLOTS, charmBonus, mergeBonus } from './charms.js';
 import { FORGE, permanentBonus, treeTotalCost } from './forge.js';

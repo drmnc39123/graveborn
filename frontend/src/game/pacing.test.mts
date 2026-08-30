@@ -23,7 +23,7 @@ import { FORGE, permanentBonus } from './forge.js';
 import { EVOLUTIONS, MAX_WEAPONS, RUN, STAGES, TICK } from './config.js';
 import { Game } from './engine.js';
 import { seedFromString } from './rng.js';
-import { fleeInput, smartPick } from './simPlayer.mjs';
+import { fleeInput, smartPick } from './simPlayer.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {

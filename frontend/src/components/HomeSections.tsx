@@ -22,6 +22,7 @@ import { treeTotalCost } from '@/game/forge';
 import { fetchLeaderboard, fetchWorldBoss, type BossState, type LeaderRow } from '@/lib/gameSession';
 import { pixel } from '@/components/ui/kit';
 import { C, FONT } from '@/lib/theme';
+import { HomeAttract } from '@/components/HomeAttract';
 
 const box = (accent = false) => ({
   background: accent
@@ -144,6 +145,20 @@ export function HomeSections() {
   return (
     <div style={{ width: '100%', paddingBottom: 50 }}>
       <style>{`@keyframes gb-strip { from { background-position-x: 0%; } to { background-position-x: 100%; } }`}</style>
+
+      {/* ⭐ EN BAŞTA OYUNUN KENDİSİ — ekran görüntüsü değil, GERÇEK MOTOR.
+          ⚠️ NİYE BURAYA: ölçüldü, ana sayfanın beş bölümünün BEŞİ DE aynı
+          şekildeydi (kicker + başlık + küçük koyu metin kutuları ızgarası)
+          ve oyunun nasıl göründüğüne dair tek kare yoktu. Bir
+          survivors-like'ın vaadi HAREKET; onu yazıyla anlatmak en zayıf
+          anlatım biçimi. İlk bölümden ÖNCE duruyor çünkü ilk soru "bu oyun
+          neye benziyor" — "ne yapıyorsun" ondan sonra gelir.
+          ⚠️ Yeni varlık yok: `Game` + `render` + `simPlayer` zaten depoda.
+          ⚠️ `prefers-reduced-motion` açıkken hiç başlamıyor, ekran dışına
+          çıkınca duruyor (bkz. `HomeAttract`). */}
+      <div style={{ padding: '10px 0 4px' }}>
+        <HomeAttract />
+      </div>
 
       {/* ── DÖNGÜ ── */}
       <Section kicker="WHAT YOU ACTUALLY DO" title="Clear, descend, spend, go deeper">
