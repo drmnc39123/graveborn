@@ -66,7 +66,7 @@ interface Hud {
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
-export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, duelTarget, allowedWeapons, pets, onFinish }: {
+export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, duelTarget, wager = null, allowedWeapons, pets, onFinish }: {
   stage: StageDef;
   /** Forge'dan gelen kalıcı bonuslar — run BAŞLARKEN dondurulur */
   permanent?: Partial<Record<StatKey, number>>;
@@ -119,6 +119,17 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * anlamlı sayısı bu.
    */
   duelTarget?: number;
+  /**
+   * ⭐ Bu koşunun BAHİS HEDEFİ — stake koşu açılırken YANDI.
+   *
+   * ⚠️ NİYE VAR: bahis oyuncunun gold ödeyip kurduğu bir HEDEF ama koşu
+   * ekranı bunu hiç bilmiyordu — `GameCanvas`ın bahis propu YOKTU ve
+   * sunucu da bilete koymuyordu. Oyuncu parasını ödeyip iniyor, hangi
+   * derinliğe ulaşması gerektiğini koşu boyunca göremiyor, ancak koşu
+   * BİTTİKTEN sonra öğreniyordu. Ödenmiş bir amacı gizlemek.
+   * ⚠️ SADECE GÖSTERİM — motora girmiyor, sonucu sunucu belirliyor.
+   */
+  wager?: { stake: number; target: number } | null;
   /**
    * Canlı boss odası: diğer oyuncular görünsün mü.
    * ⚠️ SADECE ÇİZİM — hayaletler motora hiç girmiyor (bkz. lib/presence.ts).
@@ -611,6 +622,37 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
               <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 3, color: C.candle, marginBottom: 4 }}>EVOLVED</div>
               <div style={{ fontSize: 34, fontWeight: 900, color: C.bone, textShadow: `0 0 26px ${C.candle}, 0 2px 0 ${C.void}` }}>
                 {hud.evolution.name}
+              </div>
+            </div>
+          )}
+
+          {/* ⭐ ALT SAĞ: BAHİS HEDEFİ — ekranın tek gerçekten boş köşesiydi.
+              Ölçüldü (1280×720 üretim derlemesi): üst şerit ilerlemeyi,
+              alt sol can+build'i taşıyor, alt sağda HİÇBİR ŞEY yoktu.
+              ⚠️ Buraya süs konulmadı: bahis oyuncunun GOLD ÖDEYİP kurduğu
+              hedef ve stake koşu açılırken YANDI. Hedefi göstermemek,
+              ödenmiş bir amacı gizlemekti — koşu boyunca oyuncu hangi
+              derinliğe ulaşması gerektiğini hiçbir yerde göremiyordu.
+              ⚠️ Bahis yoksa bu köşe BOŞ KALIR. Boş köşeyi doldurmak için
+              süs koymak, sahneyi sebepsiz kapatmak olurdu. */}
+          {wager && wager.target > 0 && (
+            <div style={{
+              position: 'absolute', bottom: 18, right: 12, pointerEvents: 'none',
+              textAlign: 'right', fontFamily: FONT.ui,
+            }}>
+              <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1.6, color: C.boneFaint }}>
+                THE WAGER
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 900, marginTop: 1,
+                // ⚠️ Ulaşınca ALTINA döner: oyuncu hedefi geçtiğini bir
+                // bakışta görmeli, sayıyı okuyup karşılaştırmaya çalışmadan.
+                color: hud.deepestCleared >= wager.target ? C.candle : C.badText }}>
+                DEPTH {wager.target}
+              </div>
+              <div style={{ fontSize: 10, color: C.boneFaint, marginTop: 1 }}>
+                {hud.deepestCleared >= wager.target
+                  ? 'reached'
+                  : `${wager.stake.toLocaleString('en-US')} G staked`}
               </div>
             </div>
           )}

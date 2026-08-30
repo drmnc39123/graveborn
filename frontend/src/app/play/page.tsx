@@ -542,6 +542,11 @@ export default function PlayPage() {
           // haftalık boss'u sebepsiz zorlaştırırdı.
           allowedWeapons={unlockedWeapons(p)}
           duelTarget={screen.mode === 'duel' ? screen.ticket.duel?.target : undefined}
+          // ⭐ BAHİS HEDEFİ — koşunun asıl amacı. Stake koşu AÇILIRKEN yandı;
+          // hedefi ekranda göstermemek, ödenmiş bir amacı gizlemek demekti.
+          // ⚠️ Bilet `progress`ten DEĞİL: bahis koşu açılırken tüketildi ve
+          // kayıtta artık yok — tılsımlarla aynı sebep (bkz. yukarıdaki not).
+          wager={screen.ticket.wager}
           onFinish={finishRun}
         />
       </div>

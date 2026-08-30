@@ -734,7 +734,20 @@ app.post('/run/start', wrap(async (req, res) => {
   // yoksa oynadığı koşu sunucunun doğrulayacağı koşu olmaz.
   // `guildGrowth`: loncanın verdiği XP bonusu (0 = loncasız)
   // `gear`: takılı ekipmanın toplam bonusu — motor bunu `permanent` kanalında okur
-  res.json({ runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth, gear, skills });
+  //
+  // ⭐ `wagerTarget`/`wagerStake` DE DÖNÜYOR — bir DÜZELTME. Bahis yukarıda
+  // gold'u ZATEN YAKTI (`gold: { decrement: bahis.stake }`) ve koşu kaydına
+  // yazıldı, ama istemciye HİÇ söylenmiyordu: oyuncu parasını ödeyip
+  // iniyor ve koşu boyunca hangi derinliğe ulaşması gerektiğini
+  // göremiyordu, hedefi ancak koşu BİTTİKTEN sonra öğreniyordu.
+  // ⚠️ Güvenlik açığı DEĞİL: kazanç kararını yine sunucu veriyor
+  // (`bahisKazandi`, `run.wagerTarget` ile), istemciye giden yalnız
+  // oyuncunun kendi ödediği hedefin GÖSTERİMİ.
+  res.json({
+    runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth, gear, skills,
+    wagerTarget: bahisGecerli ? bahis!.target : 0,
+    wagerStake: bahisGecerli ? bahis!.stake : 0,
+  });
 }));
 
 const finishSchema = z.object({

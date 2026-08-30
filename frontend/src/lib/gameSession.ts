@@ -543,6 +543,8 @@ export async function startRun(
     runId: string; seed: number; charms?: string[]; startDepth?: number; ascension?: number;
     guildGrowth?: number; gear?: Partial<Record<string, number>>;
     skills?: Partial<Record<string, number>>;
+    /** ⭐ Bahis hedefi — sunucu koşu açılırken stake'i YAKTI, hedefi de bildiriyor */
+    wagerTarget?: number; wagerStake?: number;
   }>(
     '/run/start',
     {
@@ -560,8 +562,11 @@ export async function startRun(
   );
   // ⚠️ SUNUCUNUN döndürdüğü değer kullanılır, istenen değil. Motoru başka bir
   // derinlikte kurmak koşuyu doğrulanamaz hale getirirdi.
-  // Cüzdan modunda bahsi SUNUCU takip ediyor (Run satırında) — bilette
-  // taşımaya gerek yok, kapanış yanıtı sonucu bildiriyor.
+  // ⚠️ BU YORUM YANLIŞTI: "cüzdan modunda bahsi sunucu takip ediyor,
+  // bilette taşımaya gerek yok" diyordu. Sunucunun takip etmesi başka şey,
+  // OYUNCUNUN GÖRMESİ başka şey — stake koşu açılırken YANIYOR ve oyuncu
+  // hangi derinliğe ulaşması gerektiğini koşu boyunca hiçbir yerde
+  // görmüyordu. Demo modu bahsi zaten taşıyordu; asıl oyun taşımıyordu.
   return {
     runId: out.runId, seed: out.seed, charms: out.charms ?? [],
     startDepth: Math.max(1, out.startDepth ?? 1),
@@ -577,7 +582,13 @@ export async function startRun(
     gear: (out.gear ?? {}) as RunTicket['gear'],
     // ⚠️ Beceri bonusu da SUNUCUDAN — üçüncü kez aynı kural.
     skills: (out.skills ?? {}) as RunTicket['skills'],
-    wager: null,
+    // ⭐ SADECE GÖSTERİM: kazanç kararı sunucuda kalıyor (`bahisKazandi`,
+    // `run.wagerTarget` ile hesaplanıyor). Buradaki değer koşu ekranındaki
+    // hedef yazısını besliyor, ÖDEMEYİ DEĞİL — istemci hedefi değiştirse
+    // bile sunucunun kararı değişmez.
+    wager: (out.wagerTarget ?? 0) > 0
+      ? { stake: out.wagerStake ?? 0, target: out.wagerTarget!, stageId }
+      : null,
   };
 }
 
