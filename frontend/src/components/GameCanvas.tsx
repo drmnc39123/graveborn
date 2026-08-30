@@ -29,7 +29,7 @@ import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
 import { isTestMode } from '@/lib/testMode';
-import { cubukTak } from '@/lib/stick';
+import { cubukCiz, cubukTak } from '@/lib/stick';
 
 /**
  * Bant eşiğinde gösterilen tek satır.
@@ -425,6 +425,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       if (freeze > 0) {
         freeze = Math.max(0, freeze - dt);
         render(ctx, game, cssW, cssH, dpr, dt, auraRef.current, roomRef.current?.ghosts ?? []);
+      cubukCiz(ctx, stickRef.current, dpr);
         acc = 0;   // ⚠️ birikeni at, yoksa donma bitince tick patlaması gelir
         return;
       }
@@ -447,6 +448,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       roomRef.current?.push(game.px, game.py, game.facingRight, auraRef.current);
 
       render(ctx, game, cssW, cssH, dpr, dt, auraRef.current, roomRef.current?.ghosts ?? []);
+      cubukCiz(ctx, stickRef.current, dpr);
       // render efekt kuyruklarını işledi; biriken donma isteğini şimdi al
       freeze = Math.max(freeze, takeFreeze());
 

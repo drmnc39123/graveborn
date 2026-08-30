@@ -122,9 +122,24 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
           />
         </Card>
         <Card>
+          {/* ⚠️ METİN ÖLÇÜMLE DÜZELTİLDİ. Eskisi "For weaker devices"
+              diyordu, yani PERFORMANS vaat ediyordu. ÖLÇÜLDÜ (400 düşmanlık
+              derin sahne, 30 kare, çizim çağrısı sayımı): ayar toplam işi
+              yalnız **%1,1** azaltıyor — 16.776 → 16.596 çağrı.
+              SEBEBİ YAPISAL: `isLowGfx()` sadece `fx.ts` ve `stageGround.ts`
+              tarafından okunuyor; düşmanları/mermileri/mücevherleri çizen
+              `render.ts` bayrağı HİÇ okumuyor.
+              ⚠️ BU BİR EKSİK DEĞİL: asıl performans kazançları zaten
+              yapısal olarak alındı (görüş alanı kırpması · yörünge
+              parıltısının sprite'a pişirilmesi · `ctx.filter`ın sıcak
+              döngüden çıkarılması). Ayar, güvenle kısabileceğinin sınırında.
+              ⚠️ "Zayıf cihaz" vaadini GERİ EKLEME — tutulamayan bir söz.
+              ⚠️ Ölçüm aletinin sınırı: Node'da sprite yüklenmiyor, yani
+              `drawImage` 0 çıkıyor ve düşmanlar yedek daireyle sayılıyor.
+              Kırılım gerçek tarayıcıyı DEĞİL, çağrı hacmini gösterir. */}
           <Toggle
-            label="Low graphics"
-            hint="Fewer corpses, sparks and atmosphere. For weaker devices — it does not make the game easier."
+            label="Less atmosphere"
+            hint="Fewer corpses, sparks and fog. Calms a crowded screen — it does not make the game easier or noticeably faster."
             on={s.lowGraphics}
             onChange={(v) => patch({ lowGraphics: v })}
           />

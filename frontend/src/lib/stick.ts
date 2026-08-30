@@ -18,6 +18,13 @@ export interface Cubuk {
   active: boolean;
   dx: number;
   dy: number;
+  /**
+   * Parmağın bastığı nokta (CSS px, canvas'a göre) — ÇİZİM için.
+   * ⚠️ Girdi hesabına GİRMEZ; yalnız `cubukCiz` okur. Motora hiçbir şey
+   * taşımıyor, o yüzden simülasyonu etkilemez.
+   */
+  ox?: number;
+  oy?: number;
 }
 
 export const CUBUK_BOS: Cubuk = { active: false, dx: 0, dy: 0 };
@@ -49,7 +56,8 @@ export function cubukTak(
     const t = e.touches[0];
     if (!t) return;
     merkez = { x: t.clientX, y: t.clientY };
-    ref.current = { active: true, dx: 0, dy: 0 };
+    const k = canvas.getBoundingClientRect();
+    ref.current = { active: true, dx: 0, dy: 0, ox: t.clientX - k.left, oy: t.clientY - k.top };
   };
 
   const surukle = (e: TouchEvent) => {
@@ -60,7 +68,7 @@ export function cubukTak(
     const dy = t.clientY - merkez.y;
     const boy = Math.hypot(dx, dy) || 1;
     const k = Math.min(1, boy / TAM_HIZ_PX) / boy;
-    ref.current = { active: true, dx: dx * k, dy: dy * k };
+    ref.current = { active: true, dx: dx * k, dy: dy * k, ox: ref.current.ox, oy: ref.current.oy };
     e.preventDefault();
   };
 
@@ -79,4 +87,48 @@ export function cubukTak(
     canvas.removeEventListener('touchend', birak);
     canvas.removeEventListener('touchcancel', birak);
   };
+}
+
+/**
+ * ⭐ ÇUBUĞU ÇİZ — parmakla oynayan oyuncuya geri bildirim.
+ *
+ * ⚠️ NİYE VAR: joystick GÖRÜNMEZDİ. Üç canvas'ta da dokunmatik girdi
+ * çalışıyordu ama ekranda hiçbir iz yoktu — oyuncu parmağını nereye
+ * bastığını, ne kadar ittiğini, hatta çubuğun çalışıp çalışmadığını
+ * göremiyordu. Görünmeyen bir kontrol, olmayan kontroldür.
+ *
+ * ⚠️ `render.ts`E DOKUNULMADI. Çizim çağıranın döngüsünde, render'dan
+ * SONRA yapılıyor: bu bir HUD katmanı, sahnenin parçası değil. Motora da
+ * girmiyor — `ox/oy` yalnız burada okunuyor, simülasyon etkilenmiyor.
+ *
+ * ⚠️ `ctx.filter` ve `shadowBlur` YOK — projenin sıcak döngü kuralı.
+ *
+ * @param dpr cihaz piksel oranı; çağıran canvas'ı bununla ölçeklediyse
+ *   koordinatlar da ölçeklenmeli.
+ */
+export function cubukCiz(
+  ctx: CanvasRenderingContext2D, c: Cubuk, dpr = 1,
+): void {
+  if (!c.active || c.ox === undefined || c.oy === undefined) return;
+  const x = c.ox * dpr, y = c.oy * dpr;
+  const halka = TAM_HIZ_PX * dpr;
+  const topak = 15 * dpr;
+
+  ctx.save();
+  // dış halka — tam hız mesafesini gösterir
+  ctx.globalAlpha = 0.22;
+  ctx.lineWidth = 2 * dpr;
+  ctx.strokeStyle = '#e3d8c0';
+  ctx.beginPath();
+  ctx.arc(x, y, halka, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // topak — mevcut yön ve büyüklük. `dx/dy` birim çemberde (≤1),
+  // yani halka yarıçapıyla çarpmak doğru konumu verir.
+  ctx.globalAlpha = 0.34;
+  ctx.fillStyle = '#e3d8c0';
+  ctx.beginPath();
+  ctx.arc(x + c.dx * halka, y + c.dy * halka, topak, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }

@@ -24,7 +24,7 @@ import { duelTier } from '@/game/duel';
 import { fetchPvpSeason, type PvpSeasonState } from '@/lib/gameSession';
 import { isTestMode, TEST_PVP_SEASON } from '@/lib/testMode';
 import { C, FONT, glass } from '@/lib/theme';
-import { CUBUK_BOS, cubukTak, type Cubuk } from '@/lib/stick';
+import { CUBUK_BOS, cubukCiz, cubukTak, type Cubuk } from '@/lib/stick';
 
 const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
 
@@ -266,6 +266,7 @@ function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => vo
       const ben = h.side === 0 ? g.hero : g.rival!;
       const rakip = h.side === 0 ? g.rival! : g.hero;
       render(ctx, g, cssW, cssH, dpr, dt, null, [], ben);
+      cubukCiz(ctx, cubukRef.current, dpr);
 
       setHud({
         me: Math.max(0, Math.round((ben.hp / ben.stats.maxHp) * 100)),

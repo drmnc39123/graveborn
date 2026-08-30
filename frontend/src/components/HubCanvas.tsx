@@ -12,7 +12,7 @@ import { isTestMode } from '@/lib/testMode';
 import { koyTutamagi } from '@/lib/chat';
 import { unlockAudio, play } from '@/game/sfx';
 import { C, glass } from '@/lib/theme';
-import { cubukTak } from '@/lib/stick';
+import { cubukCiz, cubukTak } from '@/lib/stick';
 
 type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
 
@@ -261,6 +261,7 @@ export function HubCanvas({
         if (sohbet) sohbet.push(hub.x, hub.y, hub.facingRight);
 
         renderHub(ctx, hub, cssW, cssH, dpr, t, sohbet?.ghosts ?? []);
+        cubukCiz(ctx, stickRef.current, dpr);
 
         // React state ~10Hz — her frame güncellemek re-render fırtınası olur
         hintAcc += dt;
