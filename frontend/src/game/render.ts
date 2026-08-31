@@ -186,6 +186,8 @@ export function render(
   // hiçbir şey değişmiyor.
   drawStageGround(ctx, g.stage.def.id, focus.px, focus.py, w, h, g.stage.depth);
   drawStageDecor(ctx, g.stage.def.id, focus.px, focus.py, w, h, g.stage.depth);
+  // ⚠️ IŞIK ZEMİNDEN SONRA, DÜŞMANLARDAN ÖNCE — bkz. drawTorch başlığı
+  drawTorch(ctx, g, focus);
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
   drawChests(ctx, g);
@@ -263,6 +265,95 @@ function kirpmaKur(focusX: number, focusY: number, w: number, h: number) {
 /** Dünya noktası ekrana (paylı) düşüyor mu */
 function gorunur(x: number, y: number): boolean {
   return x >= kirpX0 && x <= kirpX1 && y >= kirpY0 && y <= kirpY1;
+}
+
+/**
+ * OYUNCUNUN MEŞALESİ — koşu ekranının TEK ışık yapısı.
+ *
+ * 🔴 NİYE EKLENDİ (canlı koşuda ölçüldü, bölüm 1 "The Hollow Wood"):
+ *     renk kovası      41 / 4096
+ *     luminans sapması σ = 6,1
+ *     merkez / köşe    58,0 / 46,6 → oran **1,24**
+ *     piksellerin %99,9'u iki komşu banda sıkışmış (0-40)
+ * Yani savaş sahnesi TEK DÜZ RENKTİ. Karşılaştırma için köy gece 1,99
+ * oranında ve σ 21,5 — oyuncunun en çok baktığı ekran, en düz ekrandı.
+ *
+ * ⚠️ `stageGround.drawAtmosphere` "hem vinyet hem meşale taşıyor hissi"
+ * verdiğini söylüyor ama ölçüm bunu ÇÜRÜTTÜ: o geçişin merkez durağı
+ * `a * 0.05`, yani merkezi neredeyse hiç boyamıyor — sadece KENARLARI
+ * karartıyor. Karartma tek başına ışık üretmez; parlak bir çekirdek yoksa
+ * tonal aralık da yoktur. Bu fonksiyon o çekirdeği ekliyor.
+ *
+ * ⚠️ ZEMİNİ VE DEKORU AYDINLATIR, DÜŞMANLARI DEĞİL. Çağrı sırası bilerek
+ * `drawStageDecor`dan hemen sonra: düşmanlar ışığın ÜSTÜNE çiziliyor ve
+ * kendi parlaklıklarını koruyor. Köydeki kararın aynısı (aktörler
+ * derecelendirilmez): "nerede duruyorum" değişsin, "neyi göreceğim"
+ * değişmesin. Işık düşmanları da yıkasaydı silüetler zeminle karışırdı.
+ *
+ * ⚠️ GRADYAN HER KARE ÜRETİLMEZ — `perf.test.mts` kare başına 12 gradient
+ * tavanı koyuyor ve ölçüm şu an 10'da. Bu yüzden `glowSprite` deseninin
+ * aynısı: yarıçap başına BİR KEZ pişirilip `drawImage` ile basılıyor.
+ * Ekleme maliyeti bir blit; gradient sayacı değişmiyor.
+ */
+const mesaleCache = new Map<number, HTMLCanvasElement>();
+
+function mesaleSprite(r: number): CanvasImageSource | null {
+  if (typeof document === 'undefined') return null;
+  const rr = Math.max(8, Math.round(r));
+  const hit = mesaleCache.get(rr);
+  if (hit) return hit;
+
+  const size = rr * 2;
+  const off = document.createElement('canvas');
+  off.width = size; off.height = size;
+  const o = off.getContext('2d');
+  if (!o) return null;
+  const gd = o.createRadialGradient(rr, rr, 0, rr, rr, rr);
+  // ⚠️ DÜŞÜŞ İKİ KEZ AYARLANDI, ekranda bakılarak. İlk eğri (0,34 → %35'te
+  // 0,17) alfayı yarıçapın üçte birinde YARIYA indiriyordu ve sonuç ekranda
+  // görünür bir disk kenarıydı: meşale değil spot ışığı. Işığın şekli
+  // görünüyorsa o artık atmosfer değil, nesne.
+  // ⚠️ Düz zeminde her ışık kendi şeklini ele verir — bu sahnenin zemini
+  // tek karo tipi olduğu için eğri, normalde gerekenden daha yumuşak.
+  gd.addColorStop(0, 'rgba(255,206,138,0.30)');
+  gd.addColorStop(0.25, 'rgba(246,180,96,0.20)');
+  gd.addColorStop(0.50, 'rgba(232,158,68,0.11)');
+  gd.addColorStop(0.75, 'rgba(214,132,52,0.04)');
+  gd.addColorStop(1, 'rgba(200,120,40,0)');
+  o.fillStyle = gd;
+  o.beginPath();
+  o.arc(rr, rr, rr, 0, Math.PI * 2);
+  o.fill();
+
+  // Tavan — yarıçap nefesle değişiyor, sınırsız önbellek sızıntı olurdu
+  if (mesaleCache.size >= 48) {
+    const ilk = mesaleCache.keys().next().value;
+    if (ilk !== undefined) mesaleCache.delete(ilk);
+  }
+  mesaleCache.set(rr, off);
+  return off;
+}
+
+/**
+ * Meşale taban yarıçapı (dünya px).
+ * ⚠️ 330'DAN BÜYÜTÜLDÜ: dar yarıçap ışığı sahneye karıştırmıyor, sahnenin
+ * ortasına bir daire koyuyordu. Geniş ve zayıf, dar ve güçlüden daha çok
+ * atmosfer üretiyor.
+ */
+const MESALE_R = 430;
+
+function drawTorch(ctx: CanvasRenderingContext2D, g: Game, h: Hero) {
+  // ⚠️ Yarıçap KADEMELİ değişiyor (8 px adım): her karede birkaç piksel
+  // oynasaydı önbellek her karede yeni bir sprite pişirir ve tavanı
+  // döndürüp dururdu — önbellek değil, öğütücü olurdu.
+  const nefes = 1 + Math.sin(g.time * 1.9) * 0.03 + Math.sin(g.time * 0.8) * 0.018;
+  const r = Math.round((MESALE_R * nefes) / 8) * 8;
+  const sp = mesaleSprite(r);
+  if (!sp) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.drawImage(sp, h.px - r, h.py - r, r * 2, r * 2);
+  ctx.restore();
 }
 
 /**
