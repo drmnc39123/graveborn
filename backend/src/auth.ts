@@ -82,14 +82,38 @@ export function buildMessage(wallet: string, nonce: string): string {
   ].join('\n');
 }
 
+/**
+ * Bir cüzdan için AYNI ANDA canlı tutulabilecek nonce sayısı.
+ *
+ * ⚠️ 1 OLAMAZ — hedefli giriş engellemesi tam oradan geliyordu (bkz.
+ * `schema.prisma` `AuthNonce`). Saldırgan kurbanın açık adresiyle nonce
+ * isteyip kurbanın imzalayacağını eziyordu.
+ *
+ * ⚠️ SINIRSIZ DA OLAMAZ: her nonce bir DB satırı ve uç kimliksiz.
+ * 20, IP başına 12/dk sınırıyla birlikte seçildi: bir saldırgan kurbanın
+ * imzaladığı birkaç saniye içinde 20 istek gönderemez.
+ */
+const NONCE_TAVAN = 20;
+
 export async function issueNonce(wallet: string): Promise<string> {
   const nonce = crypto.randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + NONCE_TTL_MS);
-  await prisma.authNonce.upsert({
-    where: { wallet },
-    update: { nonce, expiresAt },
-    create: { wallet, nonce, expiresAt },
+  await prisma.authNonce.create({ data: { nonce, wallet, expiresAt } });
+
+  // ⚠️ BUDAMA: önce süresi dolanlar, sonra tavanı aşan EN ESKİLER.
+  // Sırası önemli — tersi olsaydı süresi dolmuş ölü satırlar tavanı
+  // doldurup canlı nonce'ları attirirdi.
+  await prisma.authNonce.deleteMany({
+    where: { wallet, expiresAt: { lt: new Date() } },
+  }).catch(() => {});
+  const canli = await prisma.authNonce.findMany({
+    where: { wallet }, orderBy: { expiresAt: 'desc' }, select: { nonce: true },
   });
+  if (canli.length > NONCE_TAVAN) {
+    await prisma.authNonce.deleteMany({
+      where: { nonce: { in: canli.slice(NONCE_TAVAN).map((r) => r.nonce) } },
+    }).catch(() => {});
+  }
   return nonce;
 }
 
@@ -98,29 +122,50 @@ export async function issueNonce(wallet: string): Promise<string> {
  * kez kullanılamaz.
  */
 export async function verifySignature(wallet: string, signatureB58: string): Promise<boolean> {
-  const row = await prisma.authNonce.findUnique({ where: { wallet } });
-  if (!row) return false;
-  if (row.expiresAt.getTime() < Date.now()) {
-    await prisma.authNonce.delete({ where: { wallet } }).catch(() => {});
+  // ⚠️ CÜZDANIN TÜM CANLI NONCE'LARI DENENİYOR. Tek satır okumak
+  // saldırganın yazdığı nonce'ı kurbanınkinin yerine koyardı.
+  const simdi = new Date();
+  const rows = await prisma.authNonce.findMany({
+    where: { wallet, expiresAt: { gt: simdi } },
+    orderBy: { expiresAt: 'desc' },
+    take: NONCE_TAVAN,
+  });
+  if (!rows.length) return false;
+
+  let sig: Uint8Array;
+  let pub: Uint8Array;
+  try {
+    sig = bs58.decode(signatureB58);
+    pub = bs58.decode(wallet);
+  } catch {
     return false;
   }
+  if (sig.length !== 64 || pub.length !== 32) return false;
 
-  let ok = false;
-  try {
-    const msg = new TextEncoder().encode(buildMessage(wallet, row.nonce));
-    const sig = bs58.decode(signatureB58);
-    const pub = bs58.decode(wallet);
-    if (sig.length === 64 && pub.length === 32) {
+  for (const row of rows) {
+    let ok = false;
+    try {
+      const msg = new TextEncoder().encode(buildMessage(wallet, row.nonce));
       ok = nacl.sign.detached.verify(msg, sig, pub);
+    } catch {
+      ok = false;
     }
-  } catch {
-    ok = false;
+    if (ok) {
+      // ⚠️ YALNIZ EŞLEŞENİ YAK. Başarılı girişin nonce'u tükenmeli
+      // (tekrar saldırısı), ama diğerlerine dokunulmamalı.
+      await prisma.authNonce.delete({ where: { nonce: row.nonce } }).catch(() => {});
+      return true;
+    }
   }
 
-  // Başarılı da olsa başarısız da olsa nonce yakılır: başarısız denemeler
-  // aynı nonce üzerinde sonsuz tekrar edilemesin.
-  await prisma.authNonce.delete({ where: { wallet } }).catch(() => {});
-  return ok;
+  // ⚠️ BAŞARISIZLIKTA HİÇBİR ŞEY YAKILMIYOR — ve bu bilinçli bir
+  // DEĞİŞİKLİK. Eski kod başarısız denemede de nonce'u siliyordu; çok
+  // nonce'lu tasarımda bu, kapattığımız kapıyı yeniden açardı: saldırgan
+  // çöp bir imza yollayıp kurbanın nonce'unu yakabilirdi.
+  // Yakmama riski YOK: ed25519 imzası çevrimiçi denemeyle bulunamaz;
+  // eski "sonsuz tekrar" gerekçesi kaba kuvvete karşı zaten koruma
+  // sağlamıyordu. Süresi dolanları `issueNonce` buduyor.
+  return false;
 }
 
 // ── Oturum jetonu ──

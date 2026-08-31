@@ -401,10 +401,26 @@ model BossDamage {
 }
 
 // Cüzdan doğrulama için tek kullanımlık metin. İmzalanır, sonra silinir.
+// Giriş nonce'u — imzalanacak tek kullanımlık dize.
+//
+// 🔴 "wallet @id" HEDEFLİ GİRİŞ ENGELLEMESİNE AÇIKTI: cüzdan başına TEK
+// satır olduğu için saldırgan, kurbanın AÇIK adresiyle nonce isteyip
+// kurbanın imzalamak üzere olduğu nonce'ı EZİYORDU. Kurban imzasını
+// yolladığında sunucudaki nonce artık başkaydı ve giriş HİÇ olmuyordu.
+// Adres zaten herkese açık, yani saldırı bedava.
+//
+// ⚠️ ARTIK ANAHTAR NONCE'IN KENDİSİ: bir cüzdanın aynı anda birden çok
+// canlı nonce'u olabilir ve doğrulama hepsini dener. Saldırganın yazdığı
+// nonce, kurbanınkini artık geçersiz kılmıyor.
+// ⚠️ Veri kaybı önemsiz: nonce'lar 5 dakikada zaten sönüyor.
 model AuthNonce {
-  wallet    String   @id
-  nonce     String
+  nonce     String   @id
+  wallet    String
   expiresAt DateTime
+
+  // Doğrulama cüzdana göre arıyor; süre dolmuşları temizlemek de bu indeksle.
+  @@index([wallet])
+  @@index([expiresAt])
 }
 
 // Kapanmış bir haftanın sonucu — sezon tablosunun defteri.
