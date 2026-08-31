@@ -21,7 +21,7 @@ import { useState } from 'react';
 import { STAGES } from '@/game/config';
 import type { Progress } from '@/game/progress';
 import { PixelButton, BTN } from '@/components/ui/kit';
-import { C, FONT, glass } from '@/lib/theme';
+import { C, FONT, thinGlass } from '@/lib/theme';
 
 /**
  * Oyuncu HİÇ koşu bitirdi mi.
@@ -50,7 +50,11 @@ export function FirstRun({ onBegin, onDismiss }: {
       pointerEvents: 'none', fontFamily: FONT.ui,
     }}>
       <div style={{
-        ...glass(14), width: '100%', maxWidth: 440, padding: '16px 18px',
+        // ⚠️ Canvas üstünde → `thinGlass` (yüzey dili katman 1).
+        // Alfa 0,82: bu kart yeni oyuncunun okuyacağı İLK metin, bu yüzden
+        // etkinlik kartından bir tık daha kapalı — ama yine de arkasındaki
+        // köyü gösteriyor, çünkü anlattığı şey tam olarak orası.
+        ...thinGlass(14, 0.82), width: '100%', maxWidth: 440, padding: '16px 18px',
         pointerEvents: 'auto', textAlign: 'center',
         border: `1px solid ${C.blood}66`,
         boxShadow: `0 0 0 1px ${C.blood}22, 0 14px 40px rgba(0,0,0,0.55)`,

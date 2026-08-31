@@ -68,7 +68,44 @@ export const FONT = {
   title: '"GBTitle", "GBText", ui-monospace, "Courier New", monospace',
 } as const;
 
-/** Cam panel — BOMB Miner'daki glass() deseni, GRAVEBORN paletiyle */
+/**
+ * ══════════════════════════════════════════════════════════════════════
+ * YÜZEY DİLİ — hangi kutu nerede kullanılır. TEK KURAL, ÜÇ KATMAN.
+ * ══════════════════════════════════════════════════════════════════════
+ *
+ * 🔴 NİYE YAZILI: depoda İKİ yüzey dili yan yana yaşıyordu — CSS buzlu cam
+ * (`glass`, 95 çağrı / 22 dosya) ve piksel dokuz-dilim çerçeve (`<Panel>`,
+ * 28 çağrı / 18 dosya) — ve hangisinin nerede kullanılacağına dair yazılı
+ * bir kural YOKTU. Sonuç ölçülebilir bir tutarsızlıktı: köyün sağ
+ * kolonunda üst üste duran iki kart (`EventBanner` ve `ReadyCard`)
+ * BİRBİRİNDEN FARKLI yüzey kullanıyordu.
+ *
+ * ── KATMAN 1 · CANVAS'IN ÜSTÜ → `thinGlass(r, alpha)`
+ *    Köyün/koşunun canlı görüntüsünün üstünde duran her şey: navbar, sohbet,
+ *    etkinlik kartı, hazır kartı, portal ipucu, koşu HUD'u, ilk-koşu kartı.
+ *    Amaç arkadaki DÜNYAYI KAPATMAMAK. Alfa göz kararı değil ölçülerek
+ *    seçilir (bkz. `EventBanner`: en kötü zeminde kontrast tablosu).
+ *
+ * ── KATMAN 2 · PANEL KABUĞU → `<Panel>` (ui/kit)
+ *    Tam ekran panelin ÇERÇEVESİ. Piksel sanat dokuz-dilim; oyunun
+ *    kimliğini taşıyan yüzey burası.
+ *
+ * ── KATMAN 3 · PANEL İÇİ KART → `glass(r)`
+ *    Zaten bir panelin ya da karartma perdesinin ÜSTÜNDE duran kartlar.
+ *    Arkasında canlı dünya yok, o yüzden şeffaflığa gerek de yok;
+ *    okunaklılık her şeyin önünde.
+ *
+ * ⚠️ KATMAN 1 İLE 3 ASLA KARIŞMAZ. `glass` bir panel zeminidir: orada
+ * opaklık düşürülemez. `thinGlass` canvas üstü bir yüzeydir: orada
+ * opaklık ARTIRILAMAZ. Tek fonksiyona parametre ekleyip birleştirmek,
+ * birini ayarlarken diğerini sessizce bozmak demekti — `thinGlass`in
+ * kendi notu bunu zaten söylüyor.
+ *
+ * ⚠️ Kural `fx.test` [G] ile mühürlü: canvas üstünde duran bileşenlerde
+ * `glass(` geçemez.
+ */
+
+/** KATMAN 3 — panel içi kart. Canvas üstünde KULLANMA (bkz. yüzey dili). */
 export function glass(radius = 14) {
   return {
     background: 'linear-gradient(180deg, rgba(43,31,22,0.82), rgba(10,8,6,0.9))',

@@ -463,5 +463,54 @@ console.log('\n[F] CANVAS METNİ OYUNUN FONTUNU KULLANIYOR');
     bildirilmemis.length ? bildirilmemis[0] : `bildirilen: ${bildirilen.join(', ')}`);
 }
 
+
+console.log('\n[G] YÜZEY DİLİ — canvas üstünde `glass` kullanılamaz');
+{
+  // 🔴 NİYE VAR: kural `lib/theme.ts`te ZATEN YAZILIYDI ("glass panellerin
+  // zemini, thinGlass canvas üstü") ama hiçbir şey onu zorlamıyordu ve dört
+  // bileşen yanlış taraftaydı. Ölçülebilir sonucu: köyün sağ kolonunda ÜST
+  // ÜSTE duran iki kart (`EventBanner` · `ReadyCard`) farklı yüzey
+  // kullanıyordu — aynı sütunda iki ayrı oyun.
+  //
+  // ⚠️ YAZILI KURAL YETMİYOR, TEST GEREKİYOR. Bu depoda aynı ders üç kez
+  // alındı (`smartPick` üç kopya · `recomputeAll` çağıransız · eksik font
+  // sessizce yedeğe düşüyor): zorlanmayan kural, kural değil yorumdur.
+  //
+  // ⚠️ LİSTE ELLE TUTULUYOR ve öyle kalmalı. "Canvas üstünde mi" sorusunun
+  // kaynaktan otomatik cevabı yok; bileşenin NEREYE konduğu çağıranda
+  // belli oluyor. Yeni bir canvas-üstü bileşen eklenirse buraya da eklenir.
+  const CANVAS_USTU = [
+    'BuildingDock.tsx',   // navbar — köyün üstünde
+    'ChatPanel.tsx',      // sohbet kutusu
+    'EventBanner.tsx',    // etkinlik kartı
+    'NoticeBanner.tsx',   // duyuru şeridi
+    'ProfileCard.tsx',    // sol üst kimlik
+    'ReadyCard.tsx',      // sağ kolon, EventBanner'ın ALTINDA
+    'FirstRun.tsx',       // ilk koşu kartı
+    'HubCanvas.tsx',      // portal ipucu
+    'GameCanvas.tsx',     // koşu HUD'u
+  ];
+
+  const kokDizin = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'components');
+  const ihlal: string[] = [];
+  const eksikDosya: string[] = [];
+  for (const d of CANVAS_USTU) {
+    const p = path.join(kokDizin, d);
+    if (!fs.existsSync(p)) { eksikDosya.push(d); continue; }
+    const metin = fs.readFileSync(p, 'utf8');
+    // ⚠️ `thinGlass(` de `glass(` içeriyor — önce onu ayıkla, yoksa test
+    // doğru kodu ihlal sayar (ölçüm aletinin kendi hatası olurdu).
+    const temiz = metin.replace(/thinGlass\(/g, 'INCE(');
+    // Yorum satırlarındaki `glass(` sayılmaz — gerekçeler ondan bahsediyor.
+    const kodSatirlari = temiz.split('\n').filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
+    if (kodSatirlari.some((l) => /[^A-Za-z]glass\(/.test(l))) ihlal.push(d);
+  }
+
+  check('canvas üstü bileşenlerin hiçbiri `glass(` kullanmıyor', ihlal.length === 0,
+    ihlal.length ? ihlal.join(', ') : `${CANVAS_USTU.length} bileşen tarandı`);
+  check('listedeki her dosya gerçekten var', eksikDosya.length === 0,
+    eksikDosya.length ? `bulunamadı: ${eksikDosya.join(', ')}` : 'liste güncel');
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ EFEKT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

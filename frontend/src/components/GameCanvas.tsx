@@ -21,7 +21,7 @@ import { descentBant } from '@/game/stageArt';
 import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
 import type { RunPet } from '@/game/pets';
-import { C, FONT, glass } from '@/lib/theme';
+import { C, FONT, thinGlass } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon, preloadKit } from '@/components/ui/kit';
 import { Reveal, motionOff } from '@/components/ui/motion';
 import { LevelUpCard } from '@/components/LevelUpCard';
@@ -875,7 +875,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           display: 'flex', justifyContent: 'center', pointerEvents: 'none', padding: '0 16px',
         }}>
           <div style={{
-            ...glass(10), padding: '10px 15px', maxWidth: 460,
+            // ⚠️ Koşu canvas'ının üstünde → `thinGlass` (yüzey dili katman 1)
+            ...thinGlass(10, 0.78), padding: '10px 15px', maxWidth: 460,
             fontFamily: FONT.ui, fontSize: 12.5, lineHeight: 1.5,
             color: C.bone, textAlign: 'center',
             borderColor: `${C.candle}44`,
@@ -897,7 +898,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           <div style={{ fontSize: 26, fontWeight: 900, color: C.bone, marginBottom: 10, textAlign: 'center' }}>
             Leave the run?
           </div>
-          <div style={{ ...glass(12), padding: '12px 16px', maxWidth: 380, marginBottom: 18, fontSize: 12.5, color: C.boneDim, lineHeight: 1.6, textAlign: 'center' }}>
+          <div style={{ ...thinGlass(12, 0.78), padding: '12px 16px', maxWidth: 380, marginBottom: 18, fontSize: 12.5, color: C.boneDim, lineHeight: 1.6, textAlign: 'center' }}>
             {hud.mode === 'descent'
               ? <>You keep every depth you cleared — <b style={{ color: C.candle }}>{hud.deepestCleared}</b> so far.
                   Depth {hud.depth} is unfinished and pays nothing.</>

@@ -26,7 +26,7 @@
 import { charmById } from '@/game/charms';
 import { petById } from '@/game/pets';
 import type { Progress } from '@/game/progress';
-import { C, FONT, glass } from '@/lib/theme';
+import { C, FONT, thinGlass } from '@/lib/theme';
 
 /** Küçük etiket satırı — kartın tek görsel birimi */
 function Satir({ renk, baslik, alt }: { renk: string; baslik: string; alt: string }) {
@@ -54,7 +54,11 @@ export function ReadyCard({ progress }: { progress: Progress }) {
 
   return (
     <div style={{
-      ...glass(11), padding: '9px 11px', fontFamily: FONT.ui,
+      // ⚠️ `thinGlass`, `glass` DEĞİL — ve alfa `EventBanner` ile AYNI (0,80).
+      // İkisi köyün sağ kolonunda ÜST ÜSTE duruyor; farklı yüzey
+      // kullandıklarında iki kart iki ayrı oyundan gelmiş gibi görünüyordu.
+      // 0,80 orada ölçülerek seçildi (parlak taş yolda kontrast 5,04).
+      ...thinGlass(11, 0.80), padding: '9px 11px', fontFamily: FONT.ui,
       // ⚠️ `min(...)` — dar ekranda içerik alanına oturur. Çıplak `214`
       // yazmak bu depoda ölçülmüş bir taşma sınıfı (bkz. panel ızgaraları).
       width: 'min(214px, 100%)',

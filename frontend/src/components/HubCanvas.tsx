@@ -11,7 +11,7 @@ import { preloadKit } from '@/components/ui/kit';
 import { isTestMode } from '@/lib/testMode';
 import { koyTutamagi } from '@/lib/chat';
 import { unlockAudio, play } from '@/game/sfx';
-import { C, glass } from '@/lib/theme';
+import { C, thinGlass } from '@/lib/theme';
 import { cubukCiz, cubukTak } from '@/lib/stick';
 
 type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
@@ -314,7 +314,8 @@ export function HubCanvas({
             type="button"
             onClick={() => interactRef.current?.()}
             style={{
-              ...glass(13), padding: '13px 18px', textAlign: 'center',
+              // ⚠️ Canvas üstünde → `thinGlass` (yüzey dili katman 1)
+              ...thinGlass(13, 0.78), padding: '13px 18px', textAlign: 'center',
               display: 'block', width: '100%', cursor: 'pointer',
               font: 'inherit', color: 'inherit',
               // ⚠️ Parmak hedefi. 44 px, dokunmatik için yaygın alt sınır;
