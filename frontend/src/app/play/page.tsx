@@ -31,7 +31,7 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { ProfileCard } from '@/components/ProfileCard';
 import { ReadyCard } from '@/components/ReadyCard';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
-import { MotionStyles, Reveal, motionOff, useCountUpInt } from '@/components/ui/motion';
+import { MotionStyles, Reveal, motionOff, useCountUpInt, useMotionOff } from '@/components/ui/motion';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
 import { charmBonus, mergeBonus } from '@/game/charms';
@@ -204,6 +204,8 @@ const PANEL_GENISLIK: Record<string, number> = {
 export default function PlayPage() {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: 'hub' });
+  /** Hydration-güvenli hareket bayrağı — bkz. `useMotionOff` */
+  const hareketKapali = useMotionOff();
   /** İniş perdesi — koşu açılırken ağ beklemesini örter (bkz. perdeliBaslat) */
   const [perde, setPerde] = useState<PerdeDurumu | null>(null);
   const [panel, setPanelRaw] = useState<BuildingId | null>(null);
@@ -285,12 +287,17 @@ export default function PlayPage() {
   /**
    * ⚠️ ERKEN DÖNÜŞLERDEN ÖNCE tanımlı olmak zorunda: arena ve boss ekranları
    * da bu kökü kullanıyor ve panel state'inden ÖNCE dönüyorlar.
-   * ⚠️ Render içinde okunuyor — `motionOff()` ayara bağlı ve ayar oturum
-   * ortasında değişebiliyor (Settings paneli). Modül düzeyinde donardı.
+   * ⚠️ Render içinde okunuyor — ayar oturum ortasında değişebiliyor
+   * (Settings paneli). Modül düzeyinde donardı.
+   *
+   * 🔴 `motionOff()` DEĞİL `useMotionOff()`: düz çağrı sunucuda `false`,
+   * istemcide (hareket azaltma açıksa) `true` dönüyordu ve React hydration
+   * uyarısı basıyordu — hareketi azaltan HER oyuncu bu sayfada hata
+   * alıyordu. Kanca ilk render'da sunucuyla aynı cevabı veriyor.
    */
   const EKRAN_KOK: CSSProperties = {
     position: 'fixed', inset: 0,
-    animation: motionOff() ? undefined : `gb-fade ${EKRAN_GECIS_MS}ms ease-out both`,
+    animation: hareketKapali ? undefined : `gb-fade ${EKRAN_GECIS_MS}ms ease-out both`,
   };
 
   /**

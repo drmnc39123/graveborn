@@ -38,6 +38,33 @@ export function motionOff(): boolean {
 }
 
 /**
+ * HYDRATION-GÜVENLİ HAREKET BAYRAĞI — render içinde bunu kullan.
+ *
+ * 🔴 NİYE VAR (gerçek bir hata, konsolda ölçüldü): `motionOff()` SUNUCUDA
+ * her zaman `false` döner (`window` yok) ama İSTEMCİDE, işletim sisteminde
+ * "hareketi azalt" açıksa `true` döner. Render içinde doğrudan çağrıldığı
+ * yerde sunucu ile istemcinin ürettiği HTML ayrışıyor ve React hydration
+ * uyarısı basıyordu:
+ *     Prop `style` did not match.
+ *       Server: "...animation:gb-fade 180ms ease-out both"
+ *       Client: "...position:fixed;inset:0"
+ * Yani hareketi azaltan HER oyuncu `/play` açtığında bu hatayı alıyordu.
+ *
+ * ⚠️ `motionOff()`in SSR'de `false` dönmesi HATA DEĞİL — sunucu tercihi
+ * bilemez. Hata, o değeri İLK İSTEMCİ RENDER'ında değiştirmekti. Bu kanca
+ * ilk render'da sunucuyla AYNI cevabı (`false`) veriyor, gerçek değere
+ * ancak hydration bittikten sonra geçiyor.
+ *
+ * ⚠️ OLAY İŞLEYİCİLERİNDE GEREKMEZ. Orada render zaten bitmiştir; `panel
+ * kapanış` gibi yerlerde düz `motionOff()` doğru ve daha ucuz.
+ */
+export function useMotionOff(): boolean {
+  const [monte, setMonte] = useState(false);
+  useEffect(() => { setMonte(true); }, []);
+  return monte ? motionOff() : false;
+}
+
+/**
  * SAYAN SAYI — bu katmanın en büyük kaldıracı.
  *
  * Forge'da bir seviye alınca gold anında düşüyordu. Sayının SAYMASI, "bir şey
@@ -114,7 +141,9 @@ export function MotionStyles() {
 export function Reveal({ children, delay = 0, style }: {
   children: ReactNode; delay?: number; style?: CSSProperties;
 }) {
-  const kapali = motionOff();
+  // ⚠️ Kanca, düz `motionOff()` DEĞİL — bkz. `useMotionOff` gerekçesi.
+  // Bu ilkeller sunucuda da render edilebiliyor.
+  const kapali = useMotionOff();
   return (
     <div style={{
       animation: kapali ? undefined : `gb-pop 0.34s ease-out ${delay}ms both`,
@@ -140,7 +169,7 @@ export function Fade({ children, keyed, slide = false, style }: {
   slide?: boolean;
   style?: CSSProperties;
 }) {
-  const kapali = motionOff();
+  const kapali = useMotionOff();
   return (
     <div key={keyed} style={{
       animation: kapali ? undefined : `${slide ? 'gb-slide' : 'gb-fade'} 180ms ease-out both`,
