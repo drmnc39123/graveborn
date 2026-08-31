@@ -34,6 +34,7 @@ import type { GearItem, GearSlot } from '@/game/gear';
 import type { StatKey } from '@/game/config';
 import { seedFromString } from '@/game/rng';
 import { api, getMode, getWallet } from '@/lib/session';
+import { kodMetni } from '@/lib/errors';
 
 export interface Settled {
   progress: Progress;
@@ -314,7 +315,7 @@ export interface PullOutcome {
 export async function pullReliquary(current: Progress): Promise<PullOutcome> {
   if (!isWallet()) {
     const out = localPull(current, Math.random(), Math.random());
-    if (out.error || !out.result) throw new Error(out.error ?? 'pull failed');
+    if (out.error || !out.result) throw new Error(kodMetni(out.error ?? 'alinamadi'));
     saveProgress(out.progress);
     return {
       progress: out.progress, id: out.result.cosmetic.id,
@@ -327,7 +328,7 @@ export async function pullReliquary(current: Progress): Promise<PullOutcome> {
 export async function buyCosmeticWithDust(id: string, current: Progress): Promise<Progress> {
   if (!isWallet()) {
     const out = localDustBuy(current, id);
-    if (out.error) throw new Error(out.error);
+    if (out.error) throw new Error(kodMetni(out.error));
     saveProgress(out.progress);
     return out.progress;
   }
@@ -413,7 +414,7 @@ export async function finishBossRun(runId: string, damage: number): Promise<{
 export async function claimAchievement(id: string, current: Progress): Promise<Progress> {
   if (!isWallet()) {
     const out = localClaimAch(current, id);
-    if (out.error) throw new Error(out.error);
+    if (out.error) throw new Error(kodMetni(out.error));
     saveProgress(out.progress);
     return out.progress;
   }
@@ -428,7 +429,7 @@ export async function claimStreak(current: Progress): Promise<{
 }> {
   if (!isWallet()) {
     const out = localClaimStreak(current, utcDay(new Date()));
-    if (out.error) throw new Error(out.error);
+    if (out.error) throw new Error(kodMetni(out.error));
     saveProgress(out.progress);
     return { progress: out.progress, reward: out.reward, days: out.days };
   }
@@ -449,7 +450,7 @@ export function streakAvailable(p: Progress): boolean {
 export async function raiseOssuary(current: Progress): Promise<Progress> {
   if (!isWallet()) {
     const out = localRaise(current);
-    if (out.error) throw new Error(out.error);
+    if (out.error) throw new Error(kodMetni(out.error));
     saveProgress(out.progress);
     return out.progress;
   }
@@ -464,7 +465,7 @@ export async function placeWager(
 ): Promise<Progress> {
   if (!isWallet()) {
     const out = localPlaceWager(current, stageId, stake);
-    if (out.error) throw new Error(out.error);
+    if (out.error) throw new Error(kodMetni(out.error));
     saveProgress(out.progress);
     return out.progress;
   }

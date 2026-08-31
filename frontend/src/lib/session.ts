@@ -13,6 +13,7 @@
 
 import type { Progress } from '@/game/progress';
 import { isTestMode, TEST_WALLET } from '@/lib/testMode';
+import { kodMetni } from '@/lib/errors';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100';
 const K_TOKEN = 'graveborn:token';
@@ -54,9 +55,22 @@ export function signOut() {
 }
 
 // ── HTTP ──
+/**
+ * ⚠️ MESAJ ARTIK OYUNCUNUN OKUYACAĞI CÜMLE, ham kod DEĞİL.
+ *
+ * 🔴 Eskiden mesaj "401 oturum_yok" oluyordu ve arayüzdeki 23 ayrı
+ * `e.message` çağrısı bunu EKRANA BASIYORDU: oyuncu köyde kırmızı bir
+ * kutuda "oturum_yok" görüyordu — hem Türkçe hem bir hata kimliği. Depo
+ * kuralı net: oyuncuya giden metin İngilizce, kod yorumları Türkçe.
+ *
+ * ⚠️ ÇEVİRİ BURADA, ÇAĞRI YERLERİNDE DEĞİL. 23 yeri tek tek düzeltmek her
+ * yeni `catch`in aynı hatayı tekrarlamasına kapı bırakırdı; nitekim
+ * `MarketPanel` kendi küçük tablosunu yazmış ve yalnız 4 kodu kapsıyordu.
+ * ⚠️ `status` ve `code` alanları DURUYOR — gerekirse hâlâ okunabiliyor.
+ */
 export class ApiError extends Error {
   constructor(public status: number, public code: string) {
-    super(`${status} ${code}`);
+    super(kodMetni(code));
   }
 }
 

@@ -30,6 +30,7 @@ import { Fade } from '@/components/ui/motion';
 import { play } from '@/game/sfx';
 import { isTestMode, TEST_LISTINGS, TEST_MY_LISTINGS } from '@/lib/testMode';
 import { C, glass } from '@/lib/theme';
+import { kodMetni } from '@/lib/errors';
 
 /**
  * ⚠️ YEDEK DEĞERLER — gerçeği sunucudan geliyor (`/market/listings`).
@@ -165,7 +166,6 @@ function errSozluk(minGold: number, maxIlan: number): Record<string, string> {
     ilan_siniri: `You can hold ${maxIlan} active listings at a time.`,
     ilan_yok: 'That listing is no longer active.',
     token_yok: '$GRAVE has not launched yet — buying opens with the token.',
-    oturum_yok: 'Connect your wallet to trade.',
   };
 }
 
@@ -202,7 +202,12 @@ export function MarketPanel({
   const ERR = useMemo(() => errSozluk(minGold, maxIlan), [minGold, maxIlan]);
   const humanise = useCallback((e: unknown) => {
     const code = e instanceof Error ? e.message : String(e);
-    return ERR[code] ?? 'Something went wrong. Try again.';
+    // ⚠️ MERKEZE DÜŞÜYOR. Buradaki sözlük yalnız MARKETE ÖZEL ve
+    // PARAMETRELİ mesajları taşıyor ("Minimum listing is 500 gold");
+    // genel kodlar tek kaynakta (). Eskiden burası genel
+    // kodları da kendisi çeviriyordu ve yalnız 4 tanesini kapsıyordu —
+    // kalan her kod ekranda ham görünüyordu.
+    return ERR[code] ?? kodMetni(code);
   }, [ERR]);
 
   const refresh = useCallback(async () => {
