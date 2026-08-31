@@ -3,6 +3,9 @@
 // Kural: aynı renkteki nesneler tek path'te toplanır (ctx durum değişimi pahalı).
 
 import { C, FONT } from '@/lib/theme';
+import {
+  pixelCiz, pixelFontHazir, pixelFontYukle, pixelKapsiyor, pixelOlc,
+} from '@/lib/pixelFont';
 import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
 import type { Enemy, Game, Hero } from './engine';
 import {
@@ -25,6 +28,10 @@ const MAX_FX = 90; // ekranda aynı anda en fazla; sürü ölümünde çizim pat
 
 /** Yeni run başlarken çağrılır — modül seviyesindeki efektler önceki run'dan taşmasın. */
 export function resetEffects() {
+  // ⚠️ Başlık sayfasını KOŞU BAŞINDA iste. Boss ilk kez dakikalar sonra
+  // geliyor; o ana kadar yüklenmiş olur ve isim kartı TTF yedeğiyle bir
+  // kare bile çakmaz.
+  pixelFontYukle('title', 'white');
   deathFx.length = 0;
   petFx.length = 0;   // yeni koşuya önceki koşunun patlamaları taşmasın
   artTime = 0;
@@ -304,10 +311,24 @@ function drawBossIntro(ctx: CanvasRenderingContext2D, g: Game, w: number, h: num
     ctx.textAlign = 'center';
 
     const cy = h * 0.36;
-    // Ad — oyunun başlık yüzü
-    ctx.fillStyle = C.bone;
-    ctx.font = `700 ${Math.round(Math.min(42, w / 16))}px ${FONT.title}`;
-    ctx.fillText(b.label.toUpperCase(), w / 2, cy);
+    // ── AD — oyunun GERÇEK başlık yüzü ──
+    // ⚠️ Piksel bitmap font (bkz. `lib/pixelFont`). TTF `GBTitle` gövde
+    // metniyle aynı dosyaydı; boss adı oyunun en büyük yazısı ve orada
+    // hiyerarşi olmaması en çok burada göze batıyordu.
+    // ⚠️ YEDEK ZORUNLU: sayfa henüz yüklenmemişse ya da ad kapsanmıyorsa
+    // (küçük harf, özel karakter) TTF'e düşülür — boss adı ASLA kaybolmaz.
+    const ad = b.label.toUpperCase();
+    const sayfa = pixelFontHazir('title', 'white');
+    const olcek = Math.max(2, Math.min(4, Math.round(w / 320)));
+    if (sayfa && pixelKapsiyor(sayfa, ad)) {
+      const o = pixelOlc(sayfa, ad, olcek);
+      pixelCiz(ctx, sayfa, ad, w / 2 - o.w / 2, cy - o.h, olcek);
+    } else {
+      pixelFontYukle('title', 'white');
+      ctx.fillStyle = C.bone;
+      ctx.font = `700 ${Math.round(Math.min(42, w / 16))}px ${FONT.title}`;
+      ctx.fillText(ad, w / 2, cy);
+    }
 
     // Altına ince kan çizgisi
     const cizgiW = Math.min(260, w * 0.34) * (1 - k * 0.4);

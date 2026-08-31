@@ -33,6 +33,7 @@
 
 import { useEffect, useState } from 'react';
 import { motionOff } from '@/components/ui/motion';
+import { PixelText } from '@/components/ui/PixelText';
 import { C, FONT } from '@/lib/theme';
 
 /** Perdenin asgari görünme süresi — ağ hızlıysa çakmasın */
@@ -140,12 +141,19 @@ export function DescentCurtain({ durum }: { durum: PerdeDurumu | null }) {
           {durum.kicker}
         </div>
 
+        {/* ⚠️ PİKSEL BAŞLIK FONTU — `GBTitle` (TTF) `GBText` ile aynı dosyaydı,
+            yani başlık ile gövde metni birebir aynı yüzdü. Paketin gerçek
+            başlık yüzü depoda kullanılmadan duruyordu (bkz. `lib/pixelFont`).
+            ⚠️ `PixelText` kapsamayan bir karakterde TTF'e düşer — bölüm adı
+            asla kaybolmaz. */}
         <div style={{
-          fontFamily: FONT.title, fontSize: 30, fontWeight: 700, letterSpacing: 1.2,
-          color: C.bone, lineHeight: 1.15,
+          display: 'flex', justifyContent: 'center',
           animation: anim('gb-perde-yazi 380ms ease-out 60ms both'),
         }}>
-          {durum.hedef}
+          <PixelText scale={3} color="white"
+            fallbackStyle={{ fontSize: 30, color: C.bone, lineHeight: 1.15 }}>
+            {durum.hedef}
+          </PixelText>
         </div>
 
         {/* İnen çizgi — perdenin tek "iniyorum" jesti */}

@@ -44,6 +44,7 @@ import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldB
 import {
   DescentCurtain, PERDE_ASGARI_MS, PERDE_KALKIS_MS, type PerdeDurumu,
 } from '@/components/DescentCurtain';
+import { PixelText } from '@/components/ui/PixelText';
 import { GEAR, SLOT_NAME, affixText, rarityOf } from '@/game/gear';
 import { loadProgress, resolveRunPets, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
@@ -896,7 +897,13 @@ export default function PlayPage() {
         <div onClick={() => setPayout(null)}
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 6 }}>THE VILLAGE SETTLES UP</div>
+            {/* ⚠️ Piksel başlık fontu — kırmızı varyant. Yedek yolu TTF. */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+              <PixelText scale={2} color="red"
+                fallbackStyle={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood }}>
+                THE VILLAGE SETTLES UP
+              </PixelText>
+            </div>
 
             {/* ── ÖDÜL ANI ──
                 ⚠️ IŞIMA YALNIZCA GERÇEKTEN KAZANILDIYSA. Bu ekran üç ayrı
@@ -915,16 +922,21 @@ export default function PlayPage() {
                 }} />
               )}
               <Reveal>
+                {/* ⚠️ RENK VARYANTI DURUMU TAŞIYOR: kazançta altın sayfa,
+                    sıfırda kemik (beyaz) sayfa. Sıfırı altınla yazmak, bu
+                    ekranın üç ayrı "0 gold" cümlesinin tersini söylerdi. */}
                 <div style={{
-                  position: 'relative',
-                  fontFamily: FONT.title,
-                  fontSize: 44, fontWeight: 900, lineHeight: 1.05,
-                  color: odemeToplam > 0 ? C.candle : C.boneDim,
-                  // ⚠️ Gölge SADECE kazançta: sıfırda parlayan bir sayı yalan söyler.
-                  textShadow: odemeToplam > 0 ? '0 0 18px rgba(239,167,46,0.45)' : undefined,
+                  position: 'relative', display: 'flex', justifyContent: 'center',
+                  // Gölge SADECE kazançta — sıfırda parlayan bir sayı yalan söyler.
+                  filter: odemeToplam > 0 ? 'drop-shadow(0 0 12px rgba(239,167,46,0.45))' : undefined,
                 }}>
-                  +{odemeToplam.toLocaleString('en-US')}
-                  <span style={{ fontSize: 16, marginLeft: 6, letterSpacing: 1.6 }}>GOLD</span>
+                  <PixelText scale={3} color={odemeToplam > 0 ? 'gold' : 'white'}
+                    fallbackStyle={{
+                      fontSize: 44, fontWeight: 900, lineHeight: 1.05,
+                      color: odemeToplam > 0 ? C.candle : C.boneDim,
+                    }}>
+                    {`+${odemeToplam.toLocaleString('en-US')} GOLD`}
+                  </PixelText>
                 </div>
               </Reveal>
               {/* Altın çizgi — sayıyı dökümden ayıran tek jest */}

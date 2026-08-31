@@ -285,5 +285,82 @@ console.log('\n[9] Kahraman animasyonları — dosyalar GERÇEKTEN var mı');
     fazla.join(' | ') || 'tam');
 }
 
+
+console.log('\n[10] PİKSEL BAŞLIK FONTU — sayfa + karakter haritası');
+{
+  // 🔴 NİYE VAR: oyunun iki font ailesi (`GBText`/`GBTitle`) AYNI TTF'e
+  // işaret ediyordu — tipografik hiyerarşi yoktu. Paketin gerçek başlık
+  // yüzü ise depoda hiç kullanılmadan duruyordu. Artık kullanılıyor
+  // (`lib/pixelFont.ts`) ve bu testin işi onu ayakta tutmak.
+  //
+  // ⚠️ EN SİNSİ HATA SINIFI: karakter haritasında BİR hücre kayması.
+  // Metin yine çizilir, hiç hata vermez, ama harflerin yarısı yanlış
+  // çıkar. `METIN_HARITA`da `Ñ` harfi N'den sonra geliyor (paketin sırası,
+  // ASCII değil) — atlanırsa sonraki BÜTÜN harfler kayar.
+  const kok = path.dirname(fileURLToPath(import.meta.url));
+  const fontKok = path.join(kok, '..', '..', 'public', 'art', 'ui', 'kit', 'Fonts');
+  const renkler = ['White', 'Gold', 'Red', 'Brown'];
+  const eksikSayfa: string[] = [];
+  for (const aile of ['Title', 'Text']) {
+    for (const r of renkler) {
+      const p = path.join(fontKok, `Font${aile}_${r}.png`);
+      if (!fs.existsSync(p)) eksikSayfa.push(`Font${aile}_${r}.png`);
+    }
+  }
+  check('8 bitmap font sayfasının hepsi diskte', eksikSayfa.length === 0,
+    eksikSayfa.join(', ') || '2 aile × 4 renk');
+
+  // ⚠️ HARİTA KAYNAK DOSYADAN OKUNUYOR, testte KOPYALANMIYOR. Kopya
+  // olsaydı ikisi ayrışır ve test yanlış haritayı doğrularak yeşil kalırdı.
+  const kaynak = fs.readFileSync(path.join(kok, '..', 'lib', 'pixelFont.ts'), 'utf8');
+
+  const baslikParcalari = kaynak
+    .slice(kaynak.indexOf('const BASLIK_HARITA'), kaynak.indexOf('/**\n * METİN SAYFASI'))
+    .match(/'((?:[^'\\]|\\.)*)'/g) ?? [];
+  const baslik = baslikParcalari
+    .map((q) => q.slice(1, -1).replace(/\\'/g, "'").replace(/\\\\/g, '\\'))
+    .join('');
+
+  // BAŞLIK sayfası 26×3 = 78 hücre; harita bunu AŞAMAZ
+  check('başlık haritası ızgaraya sığıyor (≤78)', baslik.length > 0 && baslik.length <= 78,
+    `${baslik.length} karakter`);
+  check('başlık haritası A-Z ile başlıyor',
+    baslik.slice(0, 26) === 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', baslik.slice(0, 26));
+  check('başlık haritasının 2. satırı rakamla başlıyor',
+    baslik.slice(26, 36) === '0123456789', baslik.slice(26, 36));
+
+  // ⚠️ YİNELENEN KARAKTER = TRANSKRİPSİYON HATASI. Aynı harf iki hücreye
+  // yazıldıysa biri yanlış hücreyi gösteriyor demektir.
+  const yinelenen = [...baslik].filter((ch, i) => baslik.indexOf(ch) !== i);
+  check('başlık haritasında yinelenen karakter yok', yinelenen.length === 0,
+    yinelenen.join('') || 'temiz');
+
+  // Oyunun GERÇEKTEN yazdığı başlıklar kapsanıyor mu
+  const ORNEK = ['GRAVEBORN', 'THE HOLLOW WOOD', 'DESCENDING', 'ANSWERING',
+    'THE VILLAGE SETTLES UP', 'THE BARROW', '+3,180 GOLD'];
+  const kapsanmayan = ORNEK.filter((s) => [...s.toUpperCase()]
+    .some((ch) => ch !== ' ' && !baslik.includes(ch)));
+  check('oyunun kullandığı başlıklar TAMAMEN kapsanıyor', kapsanmayan.length === 0,
+    kapsanmayan.join(' | ') || `${ORNEK.length} örnek`);
+
+  // 🔴 GERÇEK BİR HATA YAKALANDI, mühür ondan doğdu: `pixelFont.ts` yazılırken
+  // `padEnd(32, ' ')` içindeki BOŞLUKLAR dosyaya NUL BAYTI (0x00) olarak
+  // gitmişti — dört yerde. Kaynak hâlâ geçerli UTF-8, `tsc` sessiz kalıyor
+  // ve kod tesadüfen çalışıyordu; ama git dosyayı İKİLİ sanıyordu (diff yok,
+  // inceleme yok) ve `ch === ' '` karşılaştırması aslında NUL ile
+  // yapılıyordu. Görünmez karakter = görünmez hata.
+  const kaynakDosyalari = [
+    path.join(kok, '..', 'lib', 'pixelFont.ts'),
+    path.join(kok, 'render.ts'),
+    path.join(kok, 'sprites.ts'),
+    path.join(kok, 'grade.ts'),
+    path.join(kok, 'stageArt.ts'),
+  ];
+  const nulLu = kaynakDosyalari.filter((p) => fs.existsSync(p)
+    && fs.readFileSync(p).includes(0));
+  check('çizim kaynaklarında NUL baytı yok', nulLu.length === 0,
+    nulLu.map((p) => path.basename(p)).join(', ') || `${kaynakDosyalari.length} dosya temiz`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ SAVAŞ GÖRSELLERİ TUTARLI' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
