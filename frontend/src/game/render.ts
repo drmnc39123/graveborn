@@ -4,7 +4,7 @@
 
 import { C, FONT } from '@/lib/theme';
 import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
-import type { Game, Hero } from './engine';
+import type { Enemy, Game, Hero } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey, FX, PET_ART, playerArt } from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx } from './fx';
@@ -223,9 +223,99 @@ export function render(
   // ⚠️ ATMOSFER EN SONDA, ekran uzayında. Kameradan önce çizilseydi dünyayla
   // birlikte kayardı; oyuncunun taşıdığı ışık halesi ekranda SABİT durmalı.
   drawAtmosphere(ctx, g.stage.def.id, w, h, artTime, g.stage.depth);
+  // ⚠️ BOSS GİRİŞİ ATMOSFERİN ÜSTÜNDE: bölümün kendi karartması isim
+  // kartını yutmamalı. Ama hasar vinyetinin ALTINDA — giriş sırasında bile
+  // "vuruldum" sinyali en üstte kalmalı, oyuncu o 2 saniyede hâlâ ölebilir.
+  drawBossIntro(ctx, g, w, h);
   // Hasar vinyeti atmosferin ÜSTÜNDE — yoksa bölümün kendi karartması
   // kırmızıyı yutar ve "vuruldum" sinyali kaybolur.
   drawFxScreen(ctx, w, h);
+}
+
+/**
+ * BOSS GİRİŞİ — ekran uzayında, `boss.intro` süresince.
+ *
+ * 🔴 NİYE VAR: boss'un GELİŞİ diye bir an yoktu. Motorda `intro` durumu
+ * (2 sn, dokunulmaz) ZATEN VARDI ve çizim tarafı onu tek bir kırmızı
+ * halkayla karşılıyordu. Sürüde 400 düşman varken 140 px'lik bir sprite'ın
+ * belirmesi, oyuncunun fark etmediği bir olaydı — üstelik boss'lar sürüyle
+ * AYNI sheet'leri kullanıyor (`sprites.ts`: boss_mega = monster('09')),
+ * yani silüet farkı bile yok, sadece boyut.
+ *
+ * ⚠️ MOTORA HİÇBİR ŞEY YAZILMIYOR. Bu fonksiyon `b.intro`yu OKUYOR;
+ * süreyi, dokunulmazlığı ve bitişi motor yönetiyor. `fx.ts`in kuralı
+ * burada da geçerli: render → engine tek yönlü (`sim.test` [1C]).
+ *
+ * ⚠️ EKRAN UZAYINDA, kamera geri alındıktan SONRA. İsim kartı dünyayla
+ * birlikte kaysaydı boss hareket ederken yazı da kayardı.
+ *
+ * ⚠️ KARARTMA SAHNEYİ YUTMUYOR. Tavan 0,42 ve giriş boyunca AZALIYOR:
+ * oyuncu bu 2 saniyede hâlâ kaçıyor, sürü hâlâ üstüne geliyor. Tam
+ * karartma "sinematik" olurdu ama oyuncuyu göremediği bir şeye çarptırırdı.
+ */
+const ARKETIP_METNI: Record<string, string> = {
+  warden: 'it guards the way down',
+  keeper: 'it keeps what you want',
+  choir: 'it does not sing alone',
+  harrower: 'it comes to you',
+};
+
+function drawBossIntro(ctx: CanvasRenderingContext2D, g: Game, w: number, h: number) {
+  let b: NonNullable<Enemy['boss']> | null = null;
+  for (const e of g.enemies) {
+    if (e.boss && e.boss.intro > 0) { b = e.boss; break; }
+  }
+  if (!b) return;
+
+  // k: 1 → giriş başı, 0 → giriş sonu
+  const k = Math.max(0, Math.min(1, b.intro / BOSS.introSec));
+  // Yazı ilk %15'te girer, son %25'te çıkar — ortada sabit durur
+  const yaziAlfa = Math.min(1, Math.min((1 - k) / 0.15, k / 0.25));
+
+  ctx.save();
+
+  // ── SAHNE KARARMASI ── boss'a bakılsın diye; giriş bitince tamamen kalkar
+  ctx.fillStyle = `rgba(8,6,5,${(0.42 * k).toFixed(3)})`;
+  ctx.fillRect(0, 0, w, h);
+
+  // ── ÜST/ALT BANTLAR ── sinema perdesi gibi AÇILIR (kapanmaz):
+  // giriş başında dar, sonunda yok. Kapanan bantlar oyuncunun görüş
+  // alanını tam da kaçması gereken anda daraltırdı.
+  const bant = Math.round(h * 0.085 * k);
+  if (bant > 0) {
+    ctx.fillStyle = 'rgba(6,5,4,0.72)';
+    ctx.fillRect(0, 0, w, bant);
+    ctx.fillRect(0, h - bant, w, bant);
+  }
+
+  if (yaziAlfa > 0.01) {
+    ctx.globalAlpha = yaziAlfa;
+    ctx.textAlign = 'center';
+
+    const cy = h * 0.36;
+    // Ad — oyunun başlık yüzü
+    ctx.fillStyle = C.bone;
+    ctx.font = `700 ${Math.round(Math.min(42, w / 16))}px ${FONT.title}`;
+    ctx.fillText(b.label.toUpperCase(), w / 2, cy);
+
+    // Altına ince kan çizgisi
+    const cizgiW = Math.min(260, w * 0.34) * (1 - k * 0.4);
+    ctx.fillStyle = C.blood;
+    ctx.fillRect(w / 2 - cizgiW / 2, cy + 12, cizgiW, 2);
+
+    // Arketip satırı — boss'un NE YAPTIĞINI söyler. Dört arketibin dövüş
+    // kalıbı bambaşka; adı tek başına oyuncuya hiçbir şey öğretmiyor.
+    const alt = ARKETIP_METNI[b.arch];
+    if (alt) {
+      ctx.fillStyle = C.boneDim;
+      ctx.font = `400 ${Math.round(Math.min(14, w / 52))}px ${FONT.ui}`;
+      ctx.fillText(alt, w / 2, cy + 34);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.textAlign = 'left';
+  ctx.restore();
 }
 
 function drawArenaEdge(ctx: CanvasRenderingContext2D, g: Game) {
