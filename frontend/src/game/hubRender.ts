@@ -7,7 +7,7 @@
 //
 // PERFORMANS: sadece kameraya girenler çiziliyor.
 
-import { C } from '@/lib/theme';
+import { C, FONT } from '@/lib/theme';
 import { cosmeticById } from './cosmetics';
 import { drawActor, drawFrame, playerArt, villagerArt } from './sprites';
 import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState, type Villager } from './hub';
@@ -531,7 +531,8 @@ function drawKoyOyuncu(ctx: CanvasRenderingContext2D, o: KoyOyuncu) {
 
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = C.bone;
-  ctx.font = '600 10px ui-monospace, monospace';
+  // ⚠️ Oyunun fontu — bkz. `render.ts`teki ölçüm notu.
+  ctx.font = `600 10px ${FONT.ui}`;
   ctx.textAlign = 'center';
   ctx.fillText(o.n, o.x, o.y - HUB_PLAYER.radius - 8);
 
@@ -545,7 +546,7 @@ function drawKoyOyuncu(ctx: CanvasRenderingContext2D, o: KoyOyuncu) {
     // ⚠️ Metin KISALTILIYOR: sunucu 180 karaktere izin veriyor ve o uzunlukta
     // bir balon köyün yarısını kapatır.
     const metin = o.b.length > 40 ? `${o.b.slice(0, 39)}…` : o.b;
-    ctx.font = '600 11px ui-monospace, monospace';
+    ctx.font = `600 11px ${FONT.ui}`;
     const gen = ctx.measureText(metin).width + 14;
     const bx = o.x - gen / 2;
     const by = o.y - HUB_PLAYER.radius - 40;

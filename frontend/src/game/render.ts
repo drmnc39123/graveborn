@@ -2,7 +2,7 @@
 // Kalın hatlı, gotik, düşük detay: 600 varlık çizilirken stil bütçesi düşük olmalı.
 // Kural: aynı renkteki nesneler tek path'te toplanır (ctx durum değişimi pahalı).
 
-import { C } from '@/lib/theme';
+import { C, FONT } from '@/lib/theme';
 import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
 import type { Game, Hero } from './engine';
 import { BULLET, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey, FX, PET_ART, playerArt } from './sprites';
@@ -129,7 +129,11 @@ function drawGhosts(
     // isim — küçük ve soluk; okunabilir ama sahneyi doldurmuyor
     ctx.globalAlpha = 0.5;
     ctx.fillStyle = C.bone;
-    ctx.font = '600 10px ui-monospace, monospace';
+    // ⚠️ OYUNUN FONTU. Buradaki üç canvas metni (hayalet adı, boss
+    // etiketi, köy etiketleri) sistem fontunda çiziliyordu — piksel
+    // sanatın üstünde Segoe UI/Consolas. Ölçüldü: oyun fontu 10 px'te
+    // sistem fontundan daha okunaklı (katı %16 vs %5) ve daha dar.
+    ctx.font = `600 10px ${FONT.ui}`;
     ctx.textAlign = 'center';
     ctx.fillText(p.n, p.x, p.y - PLAYER.radius - 8);
   }
@@ -437,7 +441,7 @@ function drawBossBars(ctx: CanvasRenderingContext2D, g: Game) {
     ctx.strokeRect(x, y, w, h);
 
     ctx.fillStyle = C.bone;
-    ctx.font = '700 11px ui-sans-serif, system-ui, sans-serif';
+    ctx.font = `700 11px ${FONT.ui}`;
     ctx.textAlign = 'center';
     ctx.fillText(b.phase === 1 ? `${e.boss.label} · ENRAGED` : e.boss.label, e.x, y - 6);
     ctx.textAlign = 'left';

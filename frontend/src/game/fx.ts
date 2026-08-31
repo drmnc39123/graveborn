@@ -17,7 +17,7 @@
 // yok → frame düşmesi yok); render katmanı da aynı disipline uymak zorunda.
 
 import type { Game } from './engine';
-import { C } from '@/lib/theme';
+import { C, FONT } from '@/lib/theme';
 import { drawActor, drawCell, ENEMY_ART, FX } from './sprites';
 import { tileHash } from './stageArt';
 import { weaponArt } from './combatArt';
@@ -372,7 +372,21 @@ export function drawFxScreen(ctx: CanvasRenderingContext2D, w: number, h: number
 
 // FONT.ui'yi doğrudan import etmek yerine sabit — `lib/theme` zaten import
 // edildi ama font yığını uzun; her frame string birleştirmesi yapmayalım.
-const FONT_UI = '"FantasyRPGtext", ui-monospace, "Courier New", monospace';
+// 🔴 BU SATIR OYUNUN FONTUNU HİÇ KULLANMIYORDU. `FantasyRPGtext` bu
+// uygulamada TANIMLI DEĞİL — `layout.tsx` yalnız `GBText` ve `GBTitle`
+// bildiriyor ve `public/fonts/` içinde tek dosya var (Pixellari.ttf).
+// Yani hasar sayıları — oyunda en çok görülen metin — sessizce işletim
+// sisteminin `ui-monospace`ına (Windows'ta Consolas) düşüyordu. Piksel
+// sanatın üstünde sistem fontu.
+//
+// ⚠️ Adı `ATTRIBUTION.md`de geçiyor çünkü sanat paketinin fontu buydu; ama
+// o font TTF olarak hiç kurulmadı, paketteki hâli bitmap sayfa
+// (`ui/kit/Fonts/*.png`) ve o sayfalar da kullanılmıyor.
+//
+// ⚠️ ÖLÇÜLDÜ, tahmin değil: 10 px'te oyun fontu sistem fontundan DAHA
+// okunaklı (katı mürekkep %16 vs %5, güçlü mürekkep %83 vs %78) ve daha
+// dar (61 px vs 66 px). Yani bu değişiklik hem kimlik hem okunaklılık.
+const FONT_UI = FONT.ui;
 
 // ── PERF NOTU ─────────────────────────────────────────────────────────
 // Ölçülen tavanlar (420 düşman senaryosu):

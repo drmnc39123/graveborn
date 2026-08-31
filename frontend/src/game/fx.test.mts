@@ -421,5 +421,47 @@ console.log('[11] Teklif id öneki');
 }
 
 
+
+console.log('\n[F] CANVAS METNİ OYUNUN FONTUNU KULLANIYOR');
+{
+  // 🔴 NİYE VAR: canvas'a yazılan BEŞ metnin BEŞİ de işletim sisteminin
+  // fontunu kullanıyordu — piksel sanatın üstünde Segoe UI / Consolas.
+  //   render.ts    → hayalet adı ('ui-monospace'), boss etiketi ('ui-sans-serif')
+  //   hubRender.ts → köy oyuncu adı, konuşma balonu ('ui-monospace')
+  //   fx.ts        → hasar sayıları; `"FantasyRPGtext"` yazıyordu ama o aile
+  //                  bu uygulamada HİÇ TANIMLI DEĞİL (`layout.tsx` yalnız
+  //                  GBText/GBTitle bildiriyor) → sessizce yedeğe düşüyordu.
+  //
+  // ⚠️ SESSİZ BOZULMA SINIFI: eksik font hata vermez, tarayıcı yedeğe düşer
+  // ve ekran "çalışıyor" görünür. Tam da bu depoda tekrar eden hata
+  // (`smartPick` üç kopya, `recomputeAll` çağıransız): kod doğru, çıktı yanlış.
+  const kok = path.join(path.dirname(fileURLToPath(import.meta.url)));
+  const dosyalar = ['render.ts', 'hubRender.ts', 'fx.ts'];
+  const suphe: string[] = [];
+  const bildirilmemis: string[] = [];
+
+  // `layout.tsx`in gerçekten bildirdiği aileler — tek doğruluk kaynağı
+  const layout = fs.readFileSync(path.join(kok, '..', 'app', 'layout.tsx'), 'utf8');
+  const bildirilen = [...layout.matchAll(/font-family: '([^']+)'/g)].map((m) => m[1]);
+
+  for (const d of dosyalar) {
+    const metin = fs.readFileSync(path.join(kok, d), 'utf8');
+    for (const m of metin.matchAll(/\.font = ([`'"][^`'"\n]*[`'"])/g)) {
+      const ifade = m[1];
+      // FONT.ui / FONT.title üzerinden gidiyorsa tamam
+      if (/FONT[._]/.test(ifade) || /FONT_UI/.test(ifade)) continue;
+      // Sabit bir aile adı yazılmışsa, o aile BİLDİRİLMİŞ olmalı
+      const aile = ifade.match(/"([A-Za-z][\w -]*)"/)?.[1];
+      if (aile && !bildirilen.includes(aile)) bildirilmemis.push(`${d}: ${aile}`);
+      else suphe.push(`${d}: ${ifade.slice(0, 44)}`);
+    }
+  }
+
+  check('canvas metninin tamamı FONT üzerinden gidiyor', suphe.length === 0,
+    suphe.length ? suphe[0] : 'sistem fontu kalmadı');
+  check('bildirilmemiş font ailesine atıf YOK', bildirilmemis.length === 0,
+    bildirilmemis.length ? bildirilmemis[0] : `bildirilen: ${bildirilen.join(', ')}`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ EFEKT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
