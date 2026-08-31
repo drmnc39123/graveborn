@@ -203,5 +203,79 @@ console.log('\n[6] Haftalık boss odasının KENDİ sanatı var');
   check('bilinmeyen bölüm hâlâ yedeğe düşüyor', artOf(999) === hollowWood);
 }
 
+
+console.log('\n[7] AYIRT EDİLEBİLİRLİK — "26 bölüm, tek görünüş" mührü');
+{
+  // 🔴 NİYE VAR (ölçüldü): tablo ayrım TASARLAMIŞTI ama GENLİĞİ yoktu.
+  // 26 tint'in ortalama ikili RGB mesafesi 13,5 ve en yakın çiftler 2,0
+  // uzaktaydı ([14,16,22] · [14,16,20] · [16,16,20] · [14,14,20]). Yani
+  // isimleri farklı, ekranda aynı bölümlerdi.
+  //
+  // ⚠️ BU TEST "GÜZEL Mİ" DEMİYOR, "AYIRT EDİLEBİLİR Mİ" DİYOR. Güzellik
+  // ekranda karara bağlanır; burada ölçülen şey iki bölümün birbirinin
+  // yerine geçip geçemeyeceği.
+  const mesafe = (a: readonly number[], b: readonly number[]) =>
+    Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+  const tintler = Object.values(STAGE_ART).map((a) => a.tint);
+  const ikili: number[] = [];
+  for (let i = 0; i < tintler.length; i++) {
+    for (let j = i + 1; j < tintler.length; j++) ikili.push(mesafe(tintler[i], tintler[j]));
+  }
+  const ort = ikili.reduce((s, v) => s + v, 0) / ikili.length;
+  // ⚠️ EŞİK 40 DEĞİL 24 — ve bu bir gevşetme değil, geometri. Tintlerin
+  // hepsi KOYU olmak zorunda (en yüksek kanal 64), yani noktalar 64³'lük
+  // küçük bir küpte yaşıyor. O küpte teorik en iyi ortalama ~44; 24 eşiği
+  // ölçülen 29,4'ün altında güvenli bir taban bırakıyor. Daha yükseğe
+  // zorlamak tintleri doymuş primerlere iter ve sahne çiğ görünür.
+  check('bölüm tintleri ayırt edilebilir (ort. mesafe ≥ 24)', ort >= 24,
+    `ortalama ${ort.toFixed(1)}`);
+  check('hiçbir iki bölüm neredeyse AYNI değil (en yakın ≥ 4)',
+    Math.min(...ikili) >= 4, `en yakın ${Math.min(...ikili).toFixed(1)}`);
+
+  // ⚠️ İNİŞ, GÖRSEL OLARAK DURMAMALI. `descentArt` bant listesini
+  // `Math.min(bant, BANT_TINT.length)` ile kırpıyordu ve liste 4 uzunluktaydı:
+  // **derinlik 40'tan sonrası sonsuza kadar tek renkti.** Test artık d80'e
+  // kadar her 10 derinlikte bir DEĞİŞİM olduğunu zorluyor.
+  const bantTintleri: number[][] = [];
+  for (let d = 5; d <= 85; d += 10) bantTintleri.push([...descentArt(1, d).tint]);
+  const adimlar = bantTintleri.slice(1).map((t, i) => mesafe(t, bantTintleri[i]));
+  check('her bant bir öncekinden GÖRÜNÜR ölçüde farklı (≥ 10)',
+    adimlar.every((v) => v >= 10),
+    `adımlar ${adimlar.map((v) => v.toFixed(0)).join(' · ')}`);
+  check('d40 ile d80 aynı DEĞİL — iniş görsel olarak durmuyor',
+    mesafe(descentArt(1, 40).tint, descentArt(1, 80).tint) >= 10,
+    `mesafe ${mesafe(descentArt(1, 40).tint, descentArt(1, 80).tint).toFixed(1)}`);
+
+  // ⚠️ MERDİVEN MONOTON OLMAMALI. Sürekli kararan bir dizi, 8 bandı yine
+  // tek bir "gittikçe karanlık" hissine indirir. En az bir band bir
+  // öncekinden AÇIK olmalı — iniş karakter değiştirsin, sadece kısılmasın.
+  const lum = (t: readonly number[]) => 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2];
+  const artan = bantTintleri.slice(1).filter((t, i) => lum(t) > lum(bantTintleri[i]));
+  check('bant merdiveni monoton karartma DEĞİL', artan.length >= 1,
+    `${artan.length} bant bir öncekinden açık`);
+
+  // ⚠️ ORTALAMA PARLAKLIK KORUNUYOR. Ayrımı açmanın bedeli sahneyi
+  // topluca aydınlatmak/karartmak OLMAMALI; ölçülen taban 18,8 idi.
+  const ortLum = tintler.reduce((s, t) => s + lum(t), 0) / tintler.length;
+  check('tint ortalama luminansı taban aralığında (14-24)',
+    ortLum >= 14 && ortLum <= 24, `ortalama ${ortLum.toFixed(1)}`);
+
+  // ⚠️ MOR YASAĞI BÖLÜM TABLOSUNDA DA GEÇERLİ. Yukarıdaki [3] yalnız
+  // BANT tintlerini tarıyordu; genlik büyütülürken tam da burada üç tint
+  // mor bölgeye kaymıştı (ör. [20,14,16] → [22,6,11], hue ~337°).
+  const morMuRGB = (r: number, g: number, b: number) => {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx === mn) return false;
+    const d = mx - mn;
+    let h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = ((h * 60) % 360 + 360) % 360;
+    return h >= 265 && h <= 345;
+  };
+  const morBolumler = tintler.filter((t) => morMuRGB(t[0], t[1], t[2]));
+  check('hiçbir BÖLÜM tonu MOR değil', morBolumler.length === 0,
+    morBolumler.length ? JSON.stringify(morBolumler[0]) : `${tintler.length} bölüm tarandı`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ SANAT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

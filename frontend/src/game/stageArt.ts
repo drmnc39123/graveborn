@@ -166,7 +166,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4, 3],
     overlay: [cracks(0.10), cracks2(0.06)],
     grade: { sat: 0.46, bright: 0.56, tintA: 0.38 },
-    tint: [30, 14, 16, 0.62],
+    tint: [43, 8, 13, 0.62],
     fog: 0.30,
     decor: [
       // Işıklar EN BAŞTA — `drawStageDecor` ilk eşleşende duruyor
@@ -181,7 +181,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [6, 5],
     overlay: [grassTuft(0.16)],
     grade: { sat: 0.40, bright: 0.60, tintA: 0.34 },
-    tint: [18, 26, 18, 0.52],
+    tint: [17, 35, 17, 0.52],
     fog: 0.16,
     decor: [tree(0.020), rubble(0.006)],
   },
@@ -191,7 +191,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4, 4],
     overlay: [cracks(0.08), grit(0.05)],
     grade: { sat: 0.48, bright: 0.62, tintA: 0.32 },
-    tint: [14, 16, 22, 0.55],
+    tint: [8, 13, 26, 0.55],
     fog: 0.2,
     decor: [skull(0.010), bones(0.006), { src: `${D}/spr_coffin_1.png`, w: 32, h: 32, shadow: 0.22, chance: 0.003, alpha: 0.85 }],
   },
@@ -201,7 +201,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.10), cracks(0.05)],
     grade: { sat: 0.50, bright: 0.58, tintA: 0.34 },
-    tint: [24, 16, 14, 0.55],
+    tint: [30, 13, 8, 0.55],
     fog: 0.22,
     decor: [bones(0.010), rubble(0.007), { src: `${D}/spr_smashed_objs.png`, w: 32, h: 32, chance: 0.005, alpha: 0.8 }],
   },
@@ -211,7 +211,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.12)],
     grade: { sat: 0.44, bright: 0.62, tintA: 0.32 },
-    tint: [16, 18, 24, 0.55],
+    tint: [13, 17, 30, 0.55],
     fog: 0.2,
     decor: [rubble(0.009), { src: `${R}/spr_old_stone_1.png`, w: 32, h: 32, shadow: 0.2, chance: 0.006, alpha: 0.8 }, skull(0.004)],
   },
@@ -221,7 +221,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [6, 3],
     overlay: [cracks(0.13), cracks2(0.08)],
     grade: { sat: 0.54, bright: 0.60, tintA: 0.34 },
-    tint: [20, 14, 16, 0.58],
+    tint: [21, 8, 11, 0.58],
     fog: 0.24,
     decor: [{ src: `${D}/spr_coffin_2.png`, w: 32, h: 32, shadow: 0.22, chance: 0.008, alpha: 0.9 }, skull(0.008), bones(0.005)],
   },
@@ -231,7 +231,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.08)],
     grade: { sat: 0.42, bright: 0.56, tintA: 0.36 },
-    tint: [12, 20, 22, 0.58],
+    tint: [4, 21, 26, 0.58],
     fog: 0.28,
     decor: [bones(0.012), { src: `${D}/spr_bone_pillow.png`, w: 16, h: 64, chance: 0.004, alpha: 0.75 }, rubble(0.005)],
   },
@@ -241,7 +241,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grassTuft(0.11), grit(0.06)],
     grade: { sat: 0.44, bright: 0.60, tintA: 0.33 },
-    tint: [22, 18, 14, 0.56],
+    tint: [26, 17, 8, 0.56],
     fog: 0.2,
     decor: [tree(0.012), { src: `${R}/spr_broken_wall.png`, w: 64, h: 64, shadow: 0.26, chance: 0.006, alpha: 0.8 }, skull(0.006)],
   },
@@ -251,7 +251,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4, 4],
     overlay: [cracks2(0.06)],
     grade: { sat: 0.42, bright: 0.60, tintA: 0.34 },
-    tint: [16, 16, 20, 0.58],
+    tint: [13, 13, 21, 0.58],
     fog: 0.26,
     decor: [skull(0.016), bones(0.012), { src: `${D}/spr_coffin_1.png`, w: 32, h: 32, shadow: 0.22, chance: 0.004, alpha: 0.85 }],
   },
@@ -261,7 +261,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.12), cracks(0.05)],
     grade: { sat: 0.40, bright: 0.58, tintA: 0.35 },
-    tint: [14, 16, 20, 0.6],
+    tint: [8, 13, 21, 0.6],
     fog: 0.24,
     decor: [
       { src: `${R}/spr_ancient_wall_1.png`, w: 64, h: 64, shadow: 0.26, chance: 0.007, alpha: 0.82 },
@@ -275,7 +275,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 3],
     overlay: [cracks(0.10), grit(0.06)],
     grade: { sat: 0.46, bright: 0.54, tintA: 0.38 },
-    tint: [18, 12, 14, 0.62],
+    tint: [17, 4, 6, 0.62],
     fog: 0.3,
     decor: [
       { src: `${R}/spr_Heros_Tomb.png`, w: 64, h: 64, shadow: 0.3, chance: 0.004, alpha: 0.85 },
@@ -301,7 +301,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.10), cracks2(0.06)],
     grade: { sat: 0.34, bright: 0.52, tintA: 0.40 },
-    tint: [12, 20, 26, 0.62],
+    tint: [4, 21, 35, 0.62],
     fog: 0.34,
     decor: [{ src: `${R}/spr_Ancient_Pillow_1.png`, w: 64, h: 64, shadow: 0.24, chance: 0.006, alpha: 0.8 }, bones(0.010)],
   },
@@ -311,7 +311,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 5],
     overlay: [grit(0.16)],
     grade: { sat: 0.30, bright: 0.56, tintA: 0.36 },
-    tint: [30, 20, 14, 0.58],
+    tint: [43, 21, 8, 0.58],
     fog: 0.30,
     decor: [rubble(0.012), { src: `${R}/spr_Rock_Pile_1.png`, w: 64, h: 64, shadow: 0.26, chance: 0.005, alpha: 0.85 }],
   },
@@ -321,7 +321,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 3],
     overlay: [cracks(0.12), grit(0.05)],
     grade: { sat: 0.42, bright: 0.50, tintA: 0.44 },
-    tint: [10, 22, 32, 0.66],
+    tint: [0, 26, 48, 0.66],
     fog: 0.40,
     decor: [{ src: `${D}/spr_water_bowl.png`, w: 32, h: 32, shadow: 0.18, chance: 0.006, alpha: 0.8 }, bones(0.008), rubble(0.006)],
   },
@@ -331,7 +331,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [cracks(0.18), cracks2(0.10)],
     grade: { sat: 0.52, bright: 0.56, tintA: 0.34 },
-    tint: [30, 24, 10, 0.56],
+    tint: [43, 30, 0, 0.56],
     fog: 0.26,
     decor: [
       { src: `${R}/spr_Ancient_Pillow_2.png`, w: 64, h: 64, shadow: 0.26, chance: 0.007, alpha: 0.82 },
@@ -345,7 +345,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.14), cracks2(0.05)],
     grade: { sat: 0.38, bright: 0.48, tintA: 0.40 },
-    tint: [22, 20, 12, 0.62],
+    tint: [26, 21, 4, 0.62],
     fog: 0.32,
     decor: [bones(0.018), skull(0.014), rubble(0.008)],
   },
@@ -355,7 +355,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 3],
     overlay: [cracks(0.20), grit(0.08)],
     grade: { sat: 0.44, bright: 0.60, tintA: 0.34 },
-    tint: [36, 18, 10, 0.58],
+    tint: [57, 17, 0, 0.58],
     fog: 0.24,
     decor: [rubble(0.014), { src: `${R}/spr_Rock_Pile_1.png`, w: 64, h: 64, shadow: 0.28, chance: 0.006, alpha: 0.85 }],
   },
@@ -365,7 +365,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [cracks2(0.14), grit(0.06)],
     grade: { sat: 0.30, bright: 0.44, tintA: 0.46 },
-    tint: [14, 14, 20, 0.68],
+    tint: [8, 8, 21, 0.68],
     fog: 0.42,
     decor: [
       { src: `${D}/spr_coffin_2.png`, w: 32, h: 32, shadow: 0.24, chance: 0.006, alpha: 0.85 },
@@ -378,7 +378,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [4, 5],
     overlay: [grassTuft(0.10), grit(0.08)],
     grade: { sat: 0.36, bright: 0.54, tintA: 0.38 },
-    tint: [22, 24, 14, 0.58],
+    tint: [26, 30, 8, 0.58],
     fog: 0.28,
     decor: [bones(0.016), tree(0.010), skull(0.010)],
   },
@@ -388,7 +388,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.18), cracks(0.06)],
     grade: { sat: 0.26, bright: 0.46, tintA: 0.46 },
-    tint: [18, 20, 24, 0.68],
+    tint: [17, 21, 30, 0.68],
     fog: 0.38,
     decor: [
       { src: `${R}/spr_ancient_wall_1.png`, w: 64, h: 64, shadow: 0.28, chance: 0.009, alpha: 0.84 },
@@ -401,7 +401,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 5],
     overlay: [cracks2(0.16), grit(0.05)],
     grade: { sat: 0.22, bright: 0.66, tintA: 0.30 },
-    tint: [26, 26, 24, 0.50],
+    tint: [35, 35, 30, 0.50],
     fog: 0.22,
     decor: [
       skull(0.020), bones(0.016),
@@ -414,7 +414,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [4, 5],
     overlay: [grassTuft(0.14), grit(0.06)],
     grade: { sat: 0.32, bright: 0.44, tintA: 0.44 },
-    tint: [14, 22, 16, 0.66],
+    tint: [8, 26, 13, 0.66],
     fog: 0.40,
     decor: [tree(0.028), rubble(0.008), bones(0.006)],
   },
@@ -424,7 +424,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [cracks(0.14), cracks2(0.08)],
     grade: { sat: 0.26, bright: 0.48, tintA: 0.44 },
-    tint: [20, 18, 22, 0.66],
+    tint: [21, 17, 16, 0.66],
     fog: 0.36,
     decor: [
       bones(0.024), skull(0.018),
@@ -437,7 +437,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [cracks(0.24), grit(0.10)],
     grade: { sat: 0.50, bright: 0.58, tintA: 0.36 },
-    tint: [40, 16, 8, 0.60],
+    tint: [64, 13, 0, 0.60],
     fog: 0.26,
     decor: [rubble(0.016), { src: `${R}/spr_Rock_Pile_1.png`, w: 64, h: 64, shadow: 0.3, chance: 0.008, alpha: 0.85 }],
   },
@@ -447,7 +447,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [grit(0.12), cracks2(0.08)],
     grade: { sat: 0.24, bright: 0.42, tintA: 0.48 },
-    tint: [12, 18, 28, 0.70],
+    tint: [4, 17, 39, 0.70],
     fog: 0.46,
     decor: [
       { src: `${R}/spr_Heros_Tomb.png`, w: 64, h: 64, shadow: 0.3, chance: 0.006, alpha: 0.85 },
@@ -461,7 +461,7 @@ export const STAGE_ART: Record<number, StageArt> = {
     weights: [5, 4],
     overlay: [cracks(0.20), cracks2(0.14), grit(0.08)],
     grade: { sat: 0.44, bright: 0.40, tintA: 0.52 },
-    tint: [26, 10, 12, 0.72],
+    tint: [35, 0, 4, 0.72],
     fog: 0.50,
     decor: [
       { src: `${R}/Spr_Ancient_Archway_1_big.png`, w: 96, h: 96, shadow: 0.34, chance: 0.004, alpha: 0.86 },
@@ -504,14 +504,31 @@ export function descentBant(depth: number): number {
  *
  * ⚠️ ARA DEĞER HESAPLANMIYOR, LİSTEDEN SEÇİLİYOR. İki rengi karıştırmak
  * (ör. kahverengiden kırmızıya lineer geçiş) ara tonlarda MOR üretebilir ve
- * bu paletin tek mutlak yasağı o. Her bant elle seçildi: toprak → taş →
- * kemik → kan. Hepsi sıcak/nötr, hiçbiri 265-345° aralığında değil.
+ * bu paletin tek mutlak yasağı o. Her bant ELLE seçildi.
+ *
+ * 🔴 LİSTE 4'TEN 8'E ÇIKTI ve sebebi ölçülmüş bir hataydı: `descentArt`
+ * `Math.min(bant, BANT_TINT.length)` ile kırpıyor, yani **derinlik 40'tan
+ * sonrası SONSUZA KADAR tek renkti**. Oyuncunun en çok vakit geçirdiği
+ * yer — d40+ — inişin görsel olarak DURDUĞU yerdi. Dört rengin kendi
+ * aralarındaki ortalama mesafesi de 8,7 idi; ayırt edilebilir değildi.
+ *
+ * ⚠️ MERDİVEN MONOTON DEĞİL, BİLEREK. Bant 3 (kemik tozu) etrafındakilerden
+ * AÇIK, bant 6 (kül) neredeyse nötr. Sürekli kararan bir dizi, 8 bandı
+ * yine tek bir "gittikçe karanlık" hissine indirirdi; iniş her 10
+ * derinlikte KARAKTER değiştirmeli, sadece kısılmamalı.
+ *
+ * ⚠️ Hiçbiri 265-345° aralığında değil (mor yasağı) — `stageArt.test` bunu
+ * hem bu listede hem bölüm tablosunda mühürlüyor.
  */
 const BANT_TINT: readonly (readonly [number, number, number, number])[] = [
-  [22, 20, 15, 0.56],   // 1 — daha derin toprak
-  [24, 22, 20, 0.62],   // 2 — taş, rengi çekilmiş
-  [28, 20, 19, 0.68],   // 3 — kemik tozu, kızıla dönen
-  [34, 16, 17, 0.74],   // 4+ — kan karanlığı
+  [26, 24, 14, 0.56],   // 1 (d1-10)   — daha derin toprak, sıcak kahve
+  [20, 24, 26, 0.60],   // 2 (d11-20)  — ıslak taş, rengi çekilmiş
+  [40, 34, 22, 0.64],   // 3 (d21-30)  — kemik tozu; bilerek AÇIK bir basamak
+  [10, 22, 34, 0.68],   // 4 (d31-40)  — soğuk su, mavi
+  [46, 20, 6, 0.70],    // 5 (d41-50)  — kor, turuncu
+  [14, 14, 16, 0.72],   // 6 (d51-60)  — kül; neredeyse nötr, "hiçlik" bandı
+  [52, 8, 10, 0.74],    // 7 (d61-70)  — kan karanlığı
+  [6, 16, 26, 0.76],    // 8+ (d71+)   — her şeyin altındaki soğuk boşluk
 ] as const;
 
 /** Katakomp zemini — bant 2'den itibaren tabanın karolarının yerini alır */
