@@ -14,9 +14,30 @@
 // karede yeniden denenir.
 
 import { artOf, descentArt, descentBant, DESCENT_BANT, tileHash, variantOf, type StageArt } from './stageArt';
+// ⚠️ RENK YÖNETİMİ ARTIK ORTAK. Bu dosyanın derecelendirmesi grade.ts'e
+// çıkarıldı ki köy de AYNI dili kullansın — köyün hiç renk yönetimi yoktu ve bu
+// yüzden mum ışıkları parlak zeminde görünmüyordu. Buradaki davranış
+// DEĞİŞMEDİ, yalnız tarifin sahibi değişti.
+import { filtreMetni, gradeli, resetGrade, tintUygula, type Grade } from './grade';
 // ⚠️ Bayrak `fx.ts`te tutuluyor — iki modülün ayrı kopyası olsaydı ayarı
 // açmak birini etkileyip diğerini etkilemezdi. Tek kaynak, tek setter.
 import { isLowGfx } from './fx';
+
+/**
+ * `StageArt`in iki ayrı alanını (`grade` + `tint`) tek bir `Grade`e çevirir.
+ *
+ * ⚠️ `stageArt.ts`teki şekil DEĞİŞTİRİLMEDİ: o dosya 26 bölümün elle
+ * ayarlanmış tablosu ve `tint` orada 4'lü ([r,g,b,a]) çünkü `drawAtmosphere`
+ * dördüncü değeri AYRI bir amaçla (ekran vinyeti) kullanıyor. Tabloyu `Grade`
+ * şekline zorlamak, atmosfer geçişinin alfasını da taşımayı gerektirirdi — iki
+ * farklı iş, tek alanda birleşmemeli.
+ */
+const bolumGradei = (art: StageArt): Grade => ({
+  sat: art.grade.sat,
+  bright: art.grade.bright,
+  tintA: art.grade.tintA,
+  tint: [art.tint[0], art.tint[1], art.tint[2]],
+});
 
 const TILE = 32;
 const CHUNK_TILES = 8;
@@ -26,19 +47,6 @@ const MAX_CHUNKS = 120;
 
 const images = new Map<string, HTMLImageElement>();
 const chunks = new Map<string, HTMLCanvasElement>();
-/**
- * ÖNCEDEN DERECELENDİRİLMİŞ DEKOR — `src + derece` başına bir kez boyanır.
- *
- * ⚠️ NİYE VAR: `drawStageDecor` HER KAREDE `ctx.filter` kuruyordu ve bu
- * dosyanın kendi notu (`chunkCanvas` içinde) tam bunu yasaklıyor:
- * *"`ctx.filter` her karede kullanılsa pahalı olurdu — chunk'ta bedava."*
- * Zemin dersi almıştı, dekor almamıştı. Canvas2D'de `filter` non-`none`
- * iken HER `drawImage` ayrı bir kompozit katmanına gidiyor.
- *
- * ⚠️ ÖLÇÜLDÜ (`perf.test.mts`): kare başına 1 `filter` ataması — testin tek
- * kırmızısıydı. Artık sıfır: derecelendirme sprite'a bir kez pişiyor.
- */
-const gradedDecor = new Map<string, HTMLCanvasElement>();
 /**
  * Önbelleğin kime ait olduğu. ⚠️ ARTIK SADECE bölüm id'si DEĞİL: Descent'te
  * sanat DERİNLİK BANDINA göre değişiyor (`descentArt`), yani anahtar
@@ -63,7 +71,11 @@ const DESCENT_ESIK = DESCENT_BANT;
 /** Yeni koşu / yeni derinlik: bölüm değiştiyse önbellek geçersiz */
 export function resetStageGround() {
   chunks.clear();
-  gradedDecor.clear();
+  // ⚠️ Pişmiş dekor önbelleği artık `grade.ts`te ve KÖYLE ORTAK.
+  // Burada temizlenmesi doğru: bölüm değişimi köyün derecesini de
+  // geçersiz kılmaz ama pişmiş sprite'lar bölüm derecesine bağlı ve
+  // anahtarları dereceyi içeriyor — bayat girdi bırakmanın anlamı yok.
+  resetGrade();
   builtFor = '';
 }
 
@@ -93,39 +105,24 @@ function pickTile(art: StageArt, r: number): string {
 }
 
 /**
- * Derecelendirilmiş dekor sprite'ı — yoksa pişirir.
+ * Dekor sprite'ı — derecelendirmesi `grade.ts`te pişer.
  *
- * ⚠️ EKSİK GÖRSEL ÖNBELLEĞE ALINMAZ. `chunkCanvas` ile aynı kural: görseller
- * asenkron yükleniyor, yarım yüklenmiş bir sprite pişirilirse sonsuza kadar
- * bozuk kalırdı.
+ * ⚠️ BU DOSYANIN KENDİ PİŞİRİCİSİ VARDI ve `grade.ts`teki ile satır satır
+ * aynıydı. Aynı mantığın iki kopyası bu depoda pahalıya mal oldu
+ * (`smartPick` üç yerde yazıldı, ikisi bozuktu) — kopya silindi.
+ *
+ * ⚠️ GÖRSELİ BU DOSYA YÜKLÜYOR (`img`), `grade.ts` DEĞİL. Depoda iki ayrı
+ * görsel yükleyici var; `grade.ts` kendi yükleyicisini seçseydi zemin
+ * karoları iki kez indirilirdi.
+ *
+ * ⚠️ `tintA: 0` BİLEREK. Dekor bugüne kadar tint ALMIYORDU; ortak modüle
+ * geçerken davranışı sessizce değiştirmek, bu turda ölçülen "ne değişti"
+ * sorusunu cevaplanamaz hâle getirirdi. Tint kararı bölüm tablosunun işi.
  */
-function gradedSprite(src: string, sat: number, bright: number): CanvasImageSource | null {
+function gradedSprite(src: string, g: Grade): CanvasImageSource | null {
   const im = img(src);
   if (!im) return null;
-  const key = `${src}|${sat.toFixed(3)}|${bright.toFixed(3)}`;
-  const hit = gradedDecor.get(key);
-  if (hit) return hit;
-  if (typeof document === 'undefined') return im;
-
-  const w = im.naturalWidth, h = im.naturalHeight;
-  if (!w || !h) return im;   // henüz yüklenmedi — bu kare ham çiz, pişirme
-
-  const off = document.createElement('canvas');
-  off.width = w; off.height = h;
-  const octx = off.getContext('2d');
-  if (!octx) return im;
-  octx.imageSmoothingEnabled = false;
-  octx.filter = `saturate(${sat}) brightness(${bright})`;
-  octx.drawImage(im, 0, 0);
-
-  // ⚠️ Tavan `chunks` ile aynı gerekçe: sınırsız büyüyen önbellek uzun
-  // oturumda sessiz bir bellek sızıntısıdır.
-  if (gradedDecor.size >= MAX_CHUNKS) {
-    const ilk = gradedDecor.keys().next().value;
-    if (ilk) gradedDecor.delete(ilk);
-  }
-  gradedDecor.set(key, off);
-  return off;
+  return gradeli(src, im, g);
 }
 
 function chunkCanvas(art: StageArt, stageId: number, cx: number, cy: number): HTMLCanvasElement | null {
@@ -145,7 +142,7 @@ function chunkCanvas(art: StageArt, stageId: number, cx: number, cy: number): HT
   // ve doygun (çim resmen çimen yeşili); sadece üstüne atmosfer katmanı
   // koymak yetmedi, sahne gotik korku değil çocuk RPG'si gibi duruyordu.
   // `ctx.filter` her karede kullanılsa pahalı olurdu — chunk'ta bedava.
-  o.filter = `saturate(${art.grade.sat}) brightness(${art.grade.bright})`;
+  o.filter = filtreMetni(bolumGradei(art));
 
   let eksik = false;
   for (let ty = 0; ty < CHUNK_TILES; ty++) {
@@ -192,10 +189,11 @@ function chunkCanvas(art: StageArt, stageId: number, cx: number, cy: number): HT
   // Eksik görselle önbelleğe alırsak boşluk kalıcı olur
   if (eksik) return null;
 
-  // Bölümün rengini zemine işle — her yol kendi havasını taşısın
-  const [tr, tg, tb] = art.tint;
-  o.fillStyle = `rgba(${tr},${tg},${tb},${art.grade.tintA})`;
-  o.fillRect(0, 0, CHUNK, CHUNK);
+  // Bölümün rengini zemine işle — her yol kendi havasını taşısın.
+  // ⚠️ `source-atop`a geçti (bkz. `tintUygula`): chunk tam dolu olduğu
+  // için sonuç aynı, ama boş piksel kalırsa chunk sınırı artık
+  // görünür bir dikdörtgen olarak boyanmıyor.
+  tintUygula(o, CHUNK, CHUNK, bolumGradei(art));
 
   if (chunks.size >= MAX_CHUNKS) {
     // En eskiyi at — Map ekleme sırasını korur
@@ -278,9 +276,11 @@ export function drawStageDecor(
         acc += dusuk ? d.chance * 0.5 : d.chance;
         if (r >= acc) continue;
 
+        // +0,12 parlaklık: enkaz zeminden bir tık açık kalsın, yoksa
+        // derecelendirilmiş zeminin içinde kayboluyor.
         const im = gradedSprite(
           variantOf(d.src, tileHash(tx, ty, stageId + 104729)),
-          art.grade.sat, art.grade.bright + 0.12,
+          { ...bolumGradei(art), bright: art.grade.bright + 0.12, tintA: 0 },
         );
         if (!im) break;
         // Hücre içinde küçük bir kayma — ızgaraya dizilmiş görünmesin

@@ -13,6 +13,17 @@ import { drawActor, drawFrame, playerArt, villagerArt } from './sprites';
 import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState, type Villager } from './hub';
 import { MAP_TILE } from './mapData';
 import type { MapWorld, WorldObject } from './mapWorld';
+// ⚠️ KÖY ARTIK RENK YÖNETİMİNDEN GEÇİYOR. Ölçülmüştü: köy piksellerinin
+// %93'ü orta tonda, %0,2'si parlak — yani tonal aralık YOKTU ve bu yüzden
+// aşağıdaki `drawLights` mum haleleri hiç görünmüyordu (parlak zeminde
+// additive ışık işlemez). Gerekçenin tamamı `grade.ts`in başlığında.
+import {
+  GUNDUZ, filtreMetni, gradeAnahtari, gradeliGorsel, koyGradei, koyIsikGucu,
+  tintUygula, type Grade,
+} from './grade';
+import { framesFromName } from './sprites';
+import { sunucuSimdi } from '@/lib/gameSession';
+import { isTestMode } from '@/lib/testMode';
 
 /** Sunucudan gelen köy oyuncusu — `lib/chat.ts` `Ghost` ile aynı şekil */
 export interface KoyOyuncu {
@@ -22,6 +33,139 @@ export interface KoyOyuncu {
   b?: string;
   /** balonun yaşı (ms) */
   bt?: number;
+}
+
+// ── ZEMİN ÖNBELLEĞİ ───────────────────────────────────────────────────
+//
+// 🔴 NİYE VAR: `drawTerrain` görünür HER KAROYU her karede tek tek
+// çiziyordu. Harita 96×64 karo, karo 32 px; 1134×922 görünüm + kenar payı
+// ile kare başına ~1.900 `drawImage` (hesaplandı). `stageGround` aynı işi
+// 256 px'lik chunk önbelleğiyle ~20 blit'e indiriyor — köy, oyuncunun en
+// çok durduğu ekran olmasına rağmen bu dersi hiç almamıştı.
+//
+// ⚠️ ANİMASYONLU KARO CHUNK'A PİŞMEZ. Haritada 6 palet girdisi `_stripN`
+// (akan su, tavern ateşi) ve bunlar 5.803 dolu karonun 121'i (%2,1).
+// Chunk'a pişselerdi DONARLARDI; ayrı ve canlı çiziliyorlar. Oran küçük
+// olduğu için kazanç neredeyse tam.
+const KOY_CHUNK_KARO = 8;
+const KOY_CHUNK = MAP_TILE * KOY_CHUNK_KARO;   // 256 px
+const KOY_MAX_CHUNK = 140;
+
+const koyChunks = new Map<string, HTMLCanvasElement>();
+/** Önbellek hangi derece için kuruldu — gün dönünce çöpe gider */
+let koyChunkGrade = '';
+
+/**
+ * Bu karo animasyonlu mu (chunk'a pişemez mi)?
+ *
+ * ⚠️ `drawFrame`in kendi kuralıyla AYNI kaynaktan türüyor (`_stripN` dosya
+ * adı). İki yerde ayrı ayrı karar verilseydi biri karoyu donmuş sayarken
+ * diğeri oynatır ve su hem chunk'ta hem üstünde İKİ KEZ çizilirdi.
+ */
+const animasyonlu = (src: string) => framesFromName(src) > 1;
+
+/**
+ * TEST MODU SAAT KİLİDİ — `?test=1&hour=21`.
+ *
+ * ⚠️ NİYE GEREKLİ: gün döngüsünün üç durumu var ve gerçek zamanda birini
+ * görmek için saatlerce beklemek gerekir. Bu depoda tam bu yüzden bir
+ * özellik "eklendi" sanılıp ekranda hiç görünmemişti — görülemeyen şey
+ * doğrulanamaz.
+ *
+ * ⚠️ ÜRETİMDE YOK. `isTestMode()` production'da sabit `false` döner ve
+ * bundler ölü kodu atar (bkz. `lib/testMode.ts` başlığı). Ayrıca bu bayrak
+ * yalnız RENK seçiyor — ekonomiye, sunucuya, `Progress`e dokunmuyor.
+ *
+ * ⚠️ BİR KEZ OKUNUR. Her karede `URLSearchParams` kurmak, saniyede 60 kez
+ * dize ayrıştırmak olurdu.
+ */
+let testSaat: number | null | undefined;
+
+function testSaati(): number | null {
+  if (testSaat !== undefined) return testSaat;
+  testSaat = null;
+  if (isTestMode()) {
+    try {
+      const h = new URLSearchParams(window.location.search).get('hour');
+      if (h !== null) {
+        const n = Number(h);
+        if (Number.isInteger(n) && n >= 0 && n <= 23) testSaat = n;
+      }
+    } catch { /* okunamazsa gerçek saat */ }
+  }
+  return testSaat;
+}
+
+/**
+ * KÖYÜN O ANKİ DERECESİ.
+ *
+ * ⚠️ Sunucu saati YOKSA GÜNDÜZ. Karanlık bir köy "bir şey bozuk" sinyalidir
+ * ve oyuncunun onu düzeltme yolu yoktur (bkz. `grade.ts` `GUNDUZ`).
+ */
+function koyGrade(): Grade {
+  const zorla = testSaati();
+  // ⚠️ Sabit bir GÜN seçiliyor, `Date.now()` değil: `koyGradei` yalnız UTC
+  // saatine bakıyor ve testin çıktısı günden güne değişmemeli.
+  if (zorla !== null) return koyGradei(Date.UTC(2026, 0, 1, zorla));
+  const now = sunucuSimdi();
+  return now === null ? GUNDUZ : koyGradei(now);
+}
+
+/** Gün döndüyse zemin önbelleğini geçersiz kıl. */
+function koyGradeTazele(g: Grade) {
+  const a = gradeAnahtari(g);
+  if (a === koyChunkGrade) return;
+  koyChunkGrade = a;
+  koyChunks.clear();
+}
+
+/** Bir zemin chunk'ı — yoksa pişirir. Eksik görsel varsa ÖNBELLEĞE ALMAZ. */
+function koyChunkCanvas(
+  world: MapWorld, g: Grade, cx: number, cy: number,
+): HTMLCanvasElement | null {
+  const key = `${cx}:${cy}`;
+  const hit = koyChunks.get(key);
+  if (hit) return hit;
+  if (typeof document === 'undefined') return null;
+
+  const off = document.createElement('canvas');
+  off.width = KOY_CHUNK; off.height = KOY_CHUNK;
+  const o = off.getContext('2d');
+  if (!o) return null;
+  o.imageSmoothingEnabled = false;
+  // ⚠️ `filter` BURADA, chunk başına BİR KEZ. Çizim yolunda `filter` kurmak
+  // bu depoda yasak (`perf.test.mts` kare başına 0 atama istiyor).
+  o.filter = filtreMetni(g);
+
+  let eksik = false;
+  for (let ty = 0; ty < KOY_CHUNK_KARO; ty++) {
+    for (let tx = 0; tx < KOY_CHUNK_KARO; tx++) {
+      const wx = cx * KOY_CHUNK_KARO + tx;
+      const wy = cy * KOY_CHUNK_KARO + ty;
+      if (wx >= world.tileW || wy >= world.tileH) continue;
+      const v = world.tiles[wy * world.tileW + wx];
+      if (!v) continue;
+      const src = world.palette[v - 1];
+      if (!src || animasyonlu(src)) continue;   // canlı çizilecek
+      if (!drawFrame(o, src, tx * MAP_TILE, ty * MAP_TILE, { w: MAP_TILE, h: MAP_TILE })) {
+        eksik = true;
+      }
+    }
+  }
+  o.filter = 'none';
+  // ⚠️ Yarım yüklenmiş görselle pişirilen chunk SONSUZA KADAR bozuk kalır.
+  if (eksik) return null;
+
+  // Tint zeminin ÜSTÜNE; `source-atop` sayesinde boş karolar boyanmıyor,
+  // yoksa chunk sınırı görünür bir dikdörtgen olurdu.
+  tintUygula(o, KOY_CHUNK, KOY_CHUNK, g);
+
+  if (koyChunks.size >= KOY_MAX_CHUNK) {
+    const ilk = koyChunks.keys().next().value;
+    if (ilk !== undefined) koyChunks.delete(ilk);
+  }
+  koyChunks.set(key, off);
+  return off;
 }
 
 /** Balon bu süreden sonra hiç çizilmez (ms) — son 500 ms solarak gider */
@@ -93,9 +237,15 @@ export function renderMenuBackground(
   const viewL = cx - w / 2 - 160, viewR = cx + w / 2 + 160;
   const viewT = cy - h / 2 - 200, viewB = cy + h / 2 + 200;
 
-  drawTerrain(ctx, world, viewL, viewR, viewT, viewB, time);
-  for (const o of world.objects) drawObject(ctx, o, viewL, viewR, viewT, viewB, time);
-  drawMenuLights(ctx, world, time, viewL, viewR, viewT, viewB);
+  // ⚠️ Derece KARE BAŞINA BİR KEZ hesaplanıyor ve aşağıya taşınıyor.
+  // Zemin, dekor ve ışık ŞİDDETİ aynı andan türemeli; ayrı ayrı
+  // sorsalardı saat başı dönüşünde bir kare boyunca zemin gece,
+  // ışık gündüz olurdu.
+  const g = koyGrade();
+  const isik = koyIsikGucu(g);
+  drawTerrain(ctx, world, viewL, viewR, viewT, viewB, time, g);
+  for (const o of world.objects) drawObject(ctx, o, viewL, viewR, viewT, viewB, time, g);
+  drawMenuLights(ctx, world, time, viewL, viewR, viewT, viewB, isik);
   ctx.restore();
 
   drawVignette(ctx, w, h);
@@ -104,7 +254,7 @@ export function renderMenuBackground(
 /** Menüde ışıklar oyuncuya değil sadece zamana bağlı titrer */
 function drawMenuLights(
   ctx: CanvasRenderingContext2D, world: MapWorld, time: number,
-  vl: number, vr: number, vt: number, vb: number,
+  vl: number, vr: number, vt: number, vb: number, isik: number,
 ) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
@@ -112,10 +262,10 @@ function drawMenuLights(
     if (l.x < vl || l.x > vr || l.y < vt || l.y > vb) continue;
     const flick = 0.86 + Math.sin(time * 3.1 + l.x * 0.03) * 0.14;
     const r = l.r * flick;
-    const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
-    g.addColorStop(0, `rgba(239,167,46,${0.30 * flick})`);
-    g.addColorStop(1, 'rgba(239,167,46,0)');
-    ctx.fillStyle = g;
+    const gr = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
+    gr.addColorStop(0, `rgba(239,167,46,${Math.min(0.58, 0.30 * flick * isik).toFixed(3)})`);
+    gr.addColorStop(1, 'rgba(239,167,46,0)');
+    ctx.fillStyle = gr;
     ctx.beginPath();
     ctx.arc(l.x, l.y, r, 0, Math.PI * 2);
     ctx.fill();
@@ -148,7 +298,13 @@ export function renderHub(
   const viewL = camX - w / 2 - 160, viewR = camX + w / 2 + 160;
   const viewT = camY - h / 2 - 200, viewB = camY + h / 2 + 200;
 
-  drawTerrain(ctx, world, viewL, viewR, viewT, viewB, time);
+  // ⚠️ Derece KARE BAŞINA BİR KEZ hesaplanıyor ve aşağıya taşınıyor.
+  // Zemin, dekor ve ışık ŞİDDETİ aynı andan türemeli; ayrı ayrı
+  // sorsalardı saat başı dönüşünde bir kare boyunca zemin gece,
+  // ışık gündüz olurdu.
+  const g = koyGrade();
+  const isik = koyIsikGucu(g);
+  drawTerrain(ctx, world, viewL, viewR, viewT, viewB, time, g);
 
   // ── nesneler + oyuncu, derinlik sıralı ──
   // Nesneler zaten sıralı; oyuncunun sırasını bulup ikiye bölerek çiziyoruz.
@@ -184,7 +340,7 @@ export function renderHub(
   let oi = 0;
   const cizNesne = (o: WorldObject) => {
     const ustte = o.footY >= s.y;
-    drawObject(ctx, o, viewL, viewR, viewT, viewB, time, ustte && occludes(o, s.x, s.y));
+    drawObject(ctx, o, viewL, viewR, viewT, viewB, time, g, ustte && occludes(o, s.x, s.y));
   };
 
   for (const a of aktorler) {
@@ -200,7 +356,8 @@ export function renderHub(
   // ışıklardan önce koyu bir yıkama): meşaleler ve ocak gerçekten yanıyor
   // gibi oldu ama köy KARARDI ve kullanıcı geri aldırdı. Köy oyunun nefes
   // alınan yeri — atmosfer arenanın işi, burası aydınlık kalacak.
-  drawLights(ctx, s, time, viewL, viewR, viewT, viewB);
+  drawPlayerLight(ctx, s.x, s.y, time, isik);
+  drawLights(ctx, s, time, viewL, viewR, viewT, viewB, isik);
   drawInteractGlow(ctx, s, time);
   if (DEBUG.collision) drawCollisionDebug(ctx, s, viewL, viewR, viewT, viewB);
   ctx.restore();
@@ -214,16 +371,31 @@ function occludes(o: WorldObject, px: number, py: number): boolean {
   return px > o.x + 4 && px < o.x + o.w - 4 && py > o.y && py < o.y + o.h;
 }
 
+/**
+ * Durağan dünya nesnesi — bina, ağaç, çit, fener direği.
+ *
+ * ⚠️ NESNELER DE DERECELENDİRİLİYOR, AKTÖRLER DEĞİL. Ayrım bilinçli: zemin
+ * kararırken binalar tam parlaklıkta kalsaydı köy, karanlık bir tarlada
+ * yüzen aydınlık kutulara dönerdi. Oyuncu/köylü/diğer oyuncular ise DIŞARIDA
+ * kalıyor — `hubRender`ın kendi geçmişindeki ders bu: sahnenin tamamına
+ * karartma yıkaması bir kez denendi ve geri alındı, çünkü "kimi göreceğim"
+ * bilgisini de karartıyordu. Burada değişen yalnız "nerede duruyorum".
+ */
 function drawObject(
   ctx: CanvasRenderingContext2D, o: WorldObject,
-  vl: number, vr: number, vt: number, vb: number, time: number, fade = false,
+  vl: number, vr: number, vt: number, vb: number, time: number, g: Grade,
+  fade = false,
 ) {
   if (o.x + o.w < vl || o.x > vr || o.y + o.h < vt || o.y > vb) return;
   if (fade) ctx.globalAlpha = 0.42;
+  // ⚠️ Pişmiş sprite HAM görselle aynı boyutta; hücre matematiği (`cols`,
+  // `rows`, `row`, `col`) bu yüzden değişmeden çalışıyor.
+  const kaynak = gradeliGorsel(o.src, g) as
+    (CanvasImageSource & { width: number; height: number }) | null;
   drawFrame(ctx, o.src, o.x, o.y, {
     w: o.w, h: o.h,
     cols: o.frames, rows: o.rows, row: o.row, col: o.col,
-    fps: o.fps, t: time,
+    fps: o.fps, t: time, kaynak: kaynak ?? undefined,
   });
   if (fade) ctx.globalAlpha = 1;
 }
@@ -231,7 +403,7 @@ function drawObject(
 /** Fener/meşale/ateş parıltısı — sıcak, hafif titreşimli */
 function drawLights(
   ctx: CanvasRenderingContext2D, s: HubState, time: number,
-  vl: number, vr: number, vt: number, vb: number,
+  vl: number, vr: number, vt: number, vb: number, isik: number,
 ) {
   const lights = s.world.lights;
   if (!lights.length) return;
@@ -242,17 +414,67 @@ function drawLights(
     if (l.x + l.r < vl || l.x - l.r > vr || l.y + l.r < vt || l.y - l.r > vb) continue;
     const flicker = 0.86 + Math.sin(time * 3.3 + i * 1.9) * 0.14;
     const r = l.r * flicker;
-    // ⚠️ Gece katmanı için 0.62'ye çıkarılmıştı; gece geri alınınca bu değer
-    // aydınlık sahnede beyaza patlıyordu. Özgün değere döndü.
-    const g = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
-    g.addColorStop(0, 'rgba(255,196,110,0.34)');
-    g.addColorStop(0.45, 'rgba(220,140,50,0.14)');
-    g.addColorStop(1, 'rgba(239,167,46,0)');
-    ctx.fillStyle = g;
+    // ⚠️ ŞİDDET ARTIK GÜNDEN GELİYOR, SABİT DEĞİL. Eski yorum şunu söylüyordu:
+    // *"Gece katmanı için 0.62'ye çıkarılmıştı; gece geri alınınca bu değer
+    // aydınlık sahnede beyaza patlıyordu."* — doğru teşhis, eksik çözüm:
+    // sabit bir değer ya gündüz patlar ya gece görünmez. Zemin karardıkça
+    // ışık güçlenir, aydınlandıkça geri çekilir (bkz. `koyIsikGucu`).
+    const a0 = Math.min(0.62, 0.34 * isik);
+    const a1 = Math.min(0.30, 0.14 * isik);
+    const gr = ctx.createRadialGradient(l.x, l.y, 0, l.x, l.y, r);
+    gr.addColorStop(0, `rgba(255,196,110,${a0.toFixed(3)})`);
+    gr.addColorStop(0.45, `rgba(220,140,50,${a1.toFixed(3)})`);
+    gr.addColorStop(1, 'rgba(239,167,46,0)');
+    ctx.fillStyle = gr;
     ctx.beginPath();
     ctx.arc(l.x, l.y, r, 0, Math.PI * 2);
     ctx.fill();
   }
+  ctx.restore();
+}
+
+/**
+ * OYUNCUNUN FENERİ — köyün gece okunaklılığını taşıyan katman.
+ *
+ * 🔴 NİYE EKLENDİ (ölçüldü): köyü karartmak TEK BAŞINA işe yaramadı.
+ * Gece derecesi denendiğinde histogram düzelmedi, sadece KAYDI — piksellerin
+ * %64,9'u 0-20 bandına indi, %98,6'sı yine iki komşu banda sıkıştı ve parlak
+ * bandı %0,0 oldu. Yani "düz ve aydınlık" yerine "düz ve karanlık" olmuştu;
+ * `hubRender`ın geçmişinde geri alınan denemenin aynısı.
+ *
+ * Sebebi ölçüldü: **köyün tamamında 11 ışık kaynağı var**, hepsi taban
+ * yarıçapta (110 px) ve doğuş görünümünde yalnız 7 tanesi. Karartılacak
+ * kadar ışığı olmayan bir sahneyi karartmak, onu okunmaz yapmaktan başka
+ * bir şey üretmiyor.
+ *
+ * ⚠️ ÇÖZÜM DAHA FAZLA KARARTMA DEĞİL, TAŞINAN IŞIK. Mahzenin zemin
+ * çiziminde bu zaten var (`stageGround` vinyeti "meşale taşıyor" hissi
+ * veriyor); köyde hiç yoktu. Fener oyuncunun çevresinde gerçek bir parlak
+ * çekirdek üretiyor — yani tonal aralık, zemini daha çok karartarak değil,
+ * ÜST ucu geri getirerek açılıyor.
+ *
+ * ⚠️ GÜNDÜZ NEREDEYSE GÖRÜNMEZ. `isik` gündüz ~0,98, gece ~1,25; buradaki
+ * alfa ondan türüyor ve gündüz sahneye pratikte dokunmuyor. Sabit bir fener
+ * gündüz köyünde sarı bir leke olurdu.
+ */
+function drawPlayerLight(
+  ctx: CanvasRenderingContext2D, x: number, y: number, time: number, isik: number,
+) {
+  // Gündüzde iş yok — bedava çıkış, gradyan bile kurulmuyor.
+  if (isik <= 1.02) return;
+  const guc = Math.min(1, (isik - 1.0) / 0.5);
+  const nefes = 1 + Math.sin(time * 2.3) * 0.035 + Math.sin(time * 0.9) * 0.02;
+  const r = 210 * nefes;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const gr = ctx.createRadialGradient(x, y - 6, 0, x, y - 6, r);
+  gr.addColorStop(0, `rgba(255,206,132,${(0.30 * guc).toFixed(3)})`);
+  gr.addColorStop(0.42, `rgba(226,150,62,${(0.13 * guc).toFixed(3)})`);
+  gr.addColorStop(1, 'rgba(239,167,46,0)');
+  ctx.fillStyle = gr;
+  ctx.beginPath();
+  ctx.arc(x, y - 6, r, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -376,25 +598,61 @@ function drawInteractGlow(ctx: CanvasRenderingContext2D, s: HubState, time: numb
 
 function drawTerrain(
   ctx: CanvasRenderingContext2D, world: MapWorld,
-  vl: number, vr: number, vt: number, vb: number, time: number,
+  vl: number, vr: number, vt: number, vb: number, time: number, g: Grade,
 ) {
   const T = MAP_TILE;
+  koyGradeTazele(g);
+
+  // ── 1) DURAĞAN ZEMİN: chunk blit'leri ──
+  const cx0 = Math.max(0, Math.floor(vl / KOY_CHUNK));
+  const cx1 = Math.floor(Math.min(world.w, vr) / KOY_CHUNK);
+  const cy0 = Math.max(0, Math.floor(vt / KOY_CHUNK));
+  const cy1 = Math.floor(Math.min(world.h, vb) / KOY_CHUNK);
+
+  for (let cy = cy0; cy <= cy1; cy++) {
+    for (let cx = cx0; cx <= cx1; cx++) {
+      const ch = koyChunkCanvas(world, g, cx, cy);
+      if (ch) { ctx.drawImage(ch, cx * KOY_CHUNK, cy * KOY_CHUNK); continue; }
+
+      // ⚠️ ÖNBELLEK HAZIR DEĞİLSE ESKİ YOL. Görseller asenkron yükleniyor;
+      // ilk karelerde chunk pişemez ve zemin BOŞ kalırdı. Bu yedek, yükleme
+      // bitene kadar sahneyi ayakta tutuyor.
+      const bx0 = cx * KOY_CHUNK_KARO, by0 = cy * KOY_CHUNK_KARO;
+      for (let ty = 0; ty < KOY_CHUNK_KARO; ty++) {
+        for (let tx = 0; tx < KOY_CHUNK_KARO; tx++) {
+          const wx = bx0 + tx, wy = by0 + ty;
+          if (wx >= world.tileW || wy >= world.tileH) continue;
+          const v = world.tiles[wy * world.tileW + wx];
+          if (!v) continue;
+          const src = world.palette[v - 1];
+          if (!src || animasyonlu(src)) continue;
+          if (!drawFrame(ctx, src, wx * T, wy * T, { w: T, h: T })) {
+            ctx.fillStyle = '#1e2622';
+            ctx.fillRect(wx * T, wy * T, T, T);
+          }
+        }
+      }
+    }
+  }
+
+  // ── 2) AKAN KAROLAR: canlı, chunk'ın üstüne ──
+  // ⚠️ Bunlar da derecelendirilmiş sprite'tan çiziliyor ki durağan
+  // komşularıyla aynı havada olsunlar. Ham çizilselerdi gece köyünde su
+  // parlak bir şerit gibi durur, chunk sınırından daha çok göze batardı.
   const x0 = Math.max(0, Math.floor(vl / T));
   const x1 = Math.min(world.tileW - 1, Math.ceil(vr / T));
   const y0 = Math.max(0, Math.floor(vt / T));
   const y1 = Math.min(world.tileH - 1, Math.ceil(vb / T));
-
   for (let y = y0; y <= y1; y++) {
     for (let x = x0; x <= x1; x++) {
       const v = world.tiles[y * world.tileW + x];
       if (!v) continue;
       const src = world.palette[v - 1];
-      if (!src) continue;
-      // strip'li karolar (akan su) dosya adından anlaşılıp animasyonlu çizilir
-      if (!drawFrame(ctx, src, x * T, y * T, { w: T, h: T, fps: 2.5, t: time })) {
-        ctx.fillStyle = '#1e2622';
-        ctx.fillRect(x * T, y * T, T, T);
-      }
+      if (!src || !animasyonlu(src)) continue;
+      const kaynak = gradeliGorsel(src, g) as
+        (CanvasImageSource & { width: number; height: number }) | null;
+      drawFrame(ctx, src, x * T, y * T,
+        { w: T, h: T, fps: 2.5, t: time, kaynak: kaynak ?? undefined });
     }
   }
 }

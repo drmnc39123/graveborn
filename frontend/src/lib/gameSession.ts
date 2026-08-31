@@ -677,8 +677,37 @@ export interface EventState {
   };
 }
 
+/**
+ * SUNUCU SAATİ İLE CİHAZ SAATİ ARASINDAKİ FARK (ms).
+ *
+ * ⚠️ NİYE MODÜL SEVİYESİNDE: köyün gün döngüsü her karede "şimdi kaç"
+ * sorusunu soruyor. Her kare istek atmak sunucuyu dövmek olurdu; `/events`
+ * zaten sunucunun `now`unu döndürüyor, fark BİR KEZ ölçülüp saklanıyor.
+ *
+ * ⚠️ `null` = HİÇ SENKRONLANMADI. Sıfır ile karıştırılmamalı: sıfır "fark
+ * yok" demek, `null` ise "bilmiyoruz" demek — ve bilmiyorsak köy gündüz
+ * varsayar. Bu ayrım olmasaydı sunucuya hiç ulaşamayan bir oyuncu, cihaz
+ * saati gece ise köyü karanlık görürdü ve bunu düzeltmenin yolu olmazdı.
+ */
+let sunucuKaymasi: number | null = null;
+
+/** Sunucudan `now` taşıyan her cevap bunu besleyebilir. */
+export function sunucuSaatiniIsaretle(sunucuNow: number): void {
+  sunucuKaymasi = sunucuNow - Date.now();
+}
+
+/** Sunucuya göre şimdi (ms) — hiç senkronlanmadıysa `null`. */
+export function sunucuSimdi(): number | null {
+  return sunucuKaymasi === null ? null : Date.now() + sunucuKaymasi;
+}
+
 export async function fetchEvent(): Promise<EventState> {
-  return api<EventState>('/events');
+  const e = await api<EventState>('/events');
+  // ⚠️ Yan etki BİLEREK burada: `/events` şu an sunucu saatini taşıyan tek
+  // uç. Ayrı bir "saat" ucu açmak, her köy açılışına fazladan bir istek
+  // eklemek olurdu — taşınan bilgi zaten bu cevabın içinde.
+  sunucuSaatiniIsaretle(e.now);
+  return e;
 }
 
 // ── THE CRYPT DEED ────────────────────────────────────────────────────

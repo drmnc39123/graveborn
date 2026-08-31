@@ -476,9 +476,22 @@ export function drawFrame(
     /** IZGARA SAYFASI: sütun/satır sayısı ve kullanılacak hücre.
      *  Editörde seçilen kare oyunda da aynı çıksın diye gerekli. */
     cols?: number; rows?: number; row?: number; col?: number;
+    /**
+     * PİŞMİŞ KAYNAK — verilirse `src` yerine BU çizilir.
+     *
+     * ⚠️ NİYE VAR: köy artık renk yönetiminden geçiyor (`grade.ts`) ve
+     * derecelendirilmiş sprite bir `canvas`, bir `Image` değil. `src` yine
+     * ZORUNLU çünkü hücre matematiği dosya adındaki `_stripN`den de
+     * türeyebiliyor — kaynağı değiştirmek o bilgiyi yok etmemeli.
+     *
+     * ⚠️ Pişmiş canvas HAM görselle AYNI BOYUTTA olmak zorunda; `grade.ts`
+     * bunu garanti ediyor (offscreen `naturalWidth/Height` ile kuruluyor).
+     * Farklı boyutta bir kaynak verilirse hücreler kayar.
+     */
+    kaynak?: CanvasImageSource & { width: number; height: number };
   } = {},
 ): boolean {
-  const img = get(src);
+  const img = opts.kaynak ?? get(src);
   if (!img) return false;
 
   // Sütun sayısı: açıkça verilmişse o, yoksa dosya adındaki _stripN
@@ -517,6 +530,16 @@ function get(src: string): HTMLImageElement | null {
   cache.set(src, img);
   return null;
 }
+
+/**
+ * Görsel yükleyicinin DIŞARIYA açılan adı.
+ *
+ * ⚠️ `get` adıyla ihraç EDİLMİYOR: bu modülün dışında `get` hiçbir şey
+ * anlatmaz ve ithal eden tarafta başka `get`lerle karışır. Tek yükleyici
+ * olması ise ŞART — `grade.ts` kendi `new Image()` havuzunu kursaydı aynı
+ * dosya iki kez indirilir ve "yüklendi mi" sorusunun iki ayrı cevabı olurdu.
+ */
+export { get as gorselAl };
 
 /**
  * Bir aktörün frame'lerini önceden istemeye başla.
