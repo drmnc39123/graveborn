@@ -46,6 +46,18 @@ interface Economy {
   redistributed: number;
   vault: { balance: number; filled: number; paid: number; saglikli: boolean };
 }
+
+/**
+ * ⭐ ANOMALİ TARAMASI — "kim beklenenden çok kazanıyor".
+ * ⚠️ `kat` ORTANCA aktif oyuncuya göre. Sabit bir gold/saat eşiği
+ * yazılmadı çünkü bu depoda sabit eşiklerin bayatladığı üç kez ölçüldü.
+ */
+interface Anomali {
+  since: string;
+  ortanca: number;
+  aktifOyuncu: number;
+  satirlar: { wallet: string; kazanc: number; goldSaat: number; kat: number }[];
+}
 interface Detail {
   player: PlayerRow & { cosmetics?: unknown; ossuary?: number; dust?: number };
   runs: RunRow[];
@@ -83,6 +95,7 @@ export default function AdminPage() {
   const [sort, setSort] = useState<Sort>('capped');
   const [onlyCapped, setOnlyCapped] = useState(true);
   const [eco, setEco] = useState<Economy | null>(null);
+  const [anom, setAnom] = useState<Anomali | null>(null);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [q, setQ] = useState('');
   /** ⭐ Verme formu — kullanıcının açıkça istediği "item grant" yeteneği */
@@ -115,13 +128,14 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     setErr(null);
     try {
-      const [o, p, r, e] = await Promise.all([
+      const [o, p, r, e, a] = await Promise.all([
         call<Overview>('/admin/overview'),
         call<{ players: PlayerRow[] }>(`/admin/players?sort=${sort}&limit=50`),
         call<{ runs: RunRow[] }>(`/admin/runs?limit=50${onlyCapped ? '&capped=1' : ''}`),
         call<Economy>('/admin/economy?hours=168'),
+        call<Anomali>('/admin/anomalies?hours=168&limit=12'),
       ]);
-      setOv(o); setPlayers(p.players); setRuns(r.runs); setEco(e);
+      setOv(o); setPlayers(p.players); setRuns(r.runs); setEco(e); setAnom(a);
       call<{ tickets: TicketRow[] }>(`/admin/tickets?status=${ticketFilter}`)
         .then((t) => setTickets(t.tickets))
         .catch(() => { /* talepler süs; panelin geri kalanını bozmasın */ });
@@ -290,6 +304,49 @@ export default function AdminPage() {
               ))}
             </Table>
           )}
+        </section>
+      )}
+
+      {/* ⭐ ANOMALİ — "kim beklenenden çok kazanıyor".
+          ⚠️ `goldPerHour` (oyuncu tablosunda) BAKİYE ÷ hesap yaşı, yani
+          BİRİKTİRMEYİ ölçüyor. Her şeyini Forge'a yatıran oyuncu orada
+          masum görünür; gold basıp harcayan da öyle. Buradaki sayı
+          DEFTERDEKİ POZİTİF HAREKETLER — gerçekten kazanılan gold.
+          ⚠️ `kat` ORTANCA aktif oyuncuya göre, sabit bir eşiğe göre değil:
+          bu depoda sabit eşiklerin bayatladığı ÜÇ KEZ ölçüldü.
+          ⚠️ BU BİR SUÇLAMA DEĞİL, SIRALAMA. Yeni derinlik açan dürüst
+          oyuncu da kısa süre yüksek çıkar — karar `KIRPILAN` sütunu ve
+          defter satırlarıyla birlikte verilir. */}
+      {anom && anom.satirlar.length > 0 && (
+        <section style={{ marginTop: 22 }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 15, color: C.bone }}>
+            Anomali · son 7 gün
+          </h2>
+          <p style={{ margin: '0 0 8px', fontSize: 11.5, color: C.boneFaint, lineHeight: 1.5 }}>
+            {anom.aktifOyuncu} aktif oyuncu · ortanca {anom.ortanca.toLocaleString('en-US')} gold/saat.
+            {' '}Kat, o ortancaya göre. Yüksek kat tek başına suç değil — KIRPILAN sütununa ve
+            defterine bak.
+          </p>
+          <Table head={['Cüzdan', 'Kazanç (7g)', 'Gold/saat', 'Ortancanın katı']}>
+            {anom.satirlar.map((a) => (
+              <tr key={a.wallet}>
+                <Td mono title={a.wallet}>
+                  <button onClick={() => void openDetail(a.wallet)}
+                    style={{ ...btn, padding: '2px 6px' }}>
+                    {a.wallet.slice(0, 4)}…{a.wallet.slice(-4)}
+                  </button>
+                </Td>
+                <Td>{a.kazanc.toLocaleString('en-US')}</Td>
+                <Td>{a.goldSaat.toLocaleString('en-US')}</Td>
+                {/* ⚠️ 10 KAT UYARI EŞİĞİ — ölçülmüş bir sınır değil, GÖZE
+                    ÇARPTIRMA eşiği. Sayı zaten ekranda; renk yalnız
+                    operatörün önce nereye bakacağını söylüyor. */}
+                <Td tone={a.kat >= 10 ? 'bad' : a.kat >= 4 ? 'warn' : undefined}>
+                  {a.kat > 0 ? `${a.kat}×` : '—'}
+                </Td>
+              </tr>
+            ))}
+          </Table>
         </section>
       )}
 

@@ -51,7 +51,7 @@ import {
   TicketError, adminList as ticketAdminList, closeTicket, myTickets, openTicket,
   openTicketCount, reply as ticketReply,
 } from './ticket.js';
-import { economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
+import { anomalies, economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
 import { Prisma } from '@prisma/client';
 
 /** Nullable Json'u boşaltmanın tek doğru yolu — `undefined` "dokunma" demek */
@@ -1693,6 +1693,21 @@ app.get('/admin/presence', adminOnly, wrap(async (_req, res) => {
  * DÜŞÜREMEZ — `claimedGhost` negatife düşme hatası bu depoda yaşandı.
  */
 const GRANT_TAVAN = 1_000_000;
+/**
+ * ⭐ ANOMALİ TARAMASI — "kim beklenenden çok kazanıyor".
+ * ⚠️ Eşik sabit sayı DEĞİL, ortanca aktif oyuncuya göre KAT — gerekçe
+ * `ledger.ts` içindeki `anomalies` başlığında: bu depoda sabit eşiklerin
+ * bayatladığı ÜÇ KEZ ölçüldü.
+ */
+app.get('/admin/anomalies', adminOnly, wrap(async (req, res) => {
+  const hours = Number(req.query.hours ?? 168);
+  const limit = Number(req.query.limit ?? 20);
+  res.json(await anomalies(
+    Number.isFinite(hours) ? Math.min(Math.max(hours, 1), 24 * 90) : 168,
+    Number.isFinite(limit) ? limit : 20,
+  ));
+}));
+
 app.post('/admin/grant', adminOnly, wrap(async (req, res) => {
   const { wallet, gold, dust, reason } = req.body ?? {};
   if (!isValidWallet(wallet)) { res.status(400).json({ error: 'gecersiz_cuzdan' }); return; }

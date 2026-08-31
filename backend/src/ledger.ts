@@ -240,3 +240,72 @@ export async function ledgerOf(wallet: string, limit = 60) {
     at: r.at.toISOString(),
   }));
 }
+
+/**
+ * ⭐ ANOMALİ TARAMASI — "kim beklenenden çok kazanıyor".
+ *
+ * ⚠️ NİYE `goldPerHour` YETMİYOR: `admin.ts` zaten bir `goldPerHour`
+ * hesaplıyor ama o BAKİYE ÷ hesap yaşı — yani BİRİKTİRMEYİ ölçüyor,
+ * kazanmayı değil. Her şeyini Forge'a yatıran oyuncu orada masum görünür;
+ * gold basıp harcayan biri de öyle. Burada ölçülen şey DEFTERDEKİ POZİTİF
+ * HAREKETLER, yani gerçekten kazanılan gold.
+ *
+ * ⚠️ EŞİK SABİT SAYI DEĞİL, DAĞILIMA GÖRE. "Saatte 50.000'i geçen şüpheli"
+ * yazmak kolaydı ama bu depoda sabit eşiklerin bayatladığı ÜÇ KEZ ölçüldü
+ * (kampanya süre tabanı · pacing silah seviyesi · forge derinlik payı).
+ * Ekonomi ayarlandıkça sayı da kayar. Onun yerine ORTANCA aktif oyuncuya
+ * göre kaç KAT olduğu veriliyor — ölçek değişse de anlamı değişmez.
+ *
+ * ⚠️ ORTANCA, ORTALAMA DEĞİL: tek bir sömürücü ortalamayı yukarı çekip
+ * kendini normal gösterirdi.
+ *
+ * ⚠️ BU BİR SUÇLAMA DEĞİL, BİR SIRALAMA. Yeni derinlik açan dürüst bir
+ * oyuncu da kısa süre yüksek çıkar. Panel bunu "bak" diye gösteriyor,
+ * "banla" diye değil — kararı `cappedRuns` ve defter satırlarıyla
+ * birlikte insan verir.
+ */
+export async function anomalies(sinceHours = 24 * 7, limit = 20): Promise<{
+  since: string;
+  /** aktif oyuncuların ortanca kazancı (gold/saat) — kıyas tabanı */
+  ortanca: number;
+  aktifOyuncu: number;
+  satirlar: { wallet: string; kazanc: number; goldSaat: number; kat: number }[];
+}> {
+  const since = new Date(Date.now() - sinceHours * 3600_000);
+  // ⚠️ SADECE POZİTİF: harcama satırları kazancı gizlerdi.
+  const rows = await prisma.ledger.groupBy({
+    by: ['wallet'],
+    where: { at: { gte: since }, gold: { gt: 0 } },
+    _sum: { gold: true },
+  });
+
+  const hepsi = rows
+    .map((r) => ({ wallet: r.wallet, kazanc: r._sum.gold ?? 0 }))
+    .filter((r) => r.kazanc > 0)
+    .map((r) => ({ ...r, goldSaat: r.kazanc / sinceHours }));
+
+  if (!hepsi.length) {
+    return { since: since.toISOString(), ortanca: 0, aktifOyuncu: 0, satirlar: [] };
+  }
+
+  const sirali = [...hepsi].sort((a, b) => a.goldSaat - b.goldSaat);
+  const ortanca = sirali[Math.floor(sirali.length / 2)].goldSaat;
+
+  const satirlar = [...hepsi]
+    .sort((a, b) => b.goldSaat - a.goldSaat)
+    .slice(0, Math.min(Math.max(limit, 1), 100))
+    .map((r) => ({
+      wallet: r.wallet,
+      kazanc: Math.round(r.kazanc),
+      goldSaat: Math.round(r.goldSaat),
+      // ⚠️ Ortanca 0 olabilir (tek oyunculu test ortamı) — sıfıra bölme yok.
+      kat: ortanca > 0 ? Math.round((r.goldSaat / ortanca) * 10) / 10 : 0,
+    }));
+
+  return {
+    since: since.toISOString(),
+    ortanca: Math.round(ortanca),
+    aktifOyuncu: hepsi.length,
+    satirlar,
+  };
+}
