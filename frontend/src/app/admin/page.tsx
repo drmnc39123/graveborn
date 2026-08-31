@@ -96,6 +96,9 @@ export default function AdminPage() {
   const [onlyCapped, setOnlyCapped] = useState(true);
   const [eco, setEco] = useState<Economy | null>(null);
   const [anom, setAnom] = useState<Anomali | null>(null);
+  /** Canli operasyon bayraklari — bakim kapisi ve duyuru seridi */
+  const [bayrak, setBayrak] = useState<{ maintenance: boolean; notice: string | null } | null>(null);
+  const [duyuru, setDuyuru] = useState('');
   const [detail, setDetail] = useState<Detail | null>(null);
   const [q, setQ] = useState('');
   /** ⭐ Verme formu — kullanıcının açıkça istediği "item grant" yeteneği */
@@ -128,14 +131,16 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     setErr(null);
     try {
-      const [o, p, r, e, a] = await Promise.all([
+      const [o, p, r, e, a, f] = await Promise.all([
         call<Overview>('/admin/overview'),
         call<{ players: PlayerRow[] }>(`/admin/players?sort=${sort}&limit=50`),
         call<{ runs: RunRow[] }>(`/admin/runs?limit=50${onlyCapped ? '&capped=1' : ''}`),
         call<Economy>('/admin/economy?hours=168'),
         call<Anomali>('/admin/anomalies?hours=168&limit=12'),
+        call<{ maintenance: boolean; notice: string | null }>('/admin/flags'),
       ]);
       setOv(o); setPlayers(p.players); setRuns(r.runs); setEco(e); setAnom(a);
+      setBayrak(f); setDuyuru(f.notice ?? '');
       call<{ tickets: TicketRow[] }>(`/admin/tickets?status=${ticketFilter}`)
         .then((t) => setTickets(t.tickets))
         .catch(() => { /* talepler süs; panelin geri kalanını bozmasın */ });
@@ -160,6 +165,25 @@ export default function AdminPage() {
     try { setDetail(await call<Detail>(`/admin/player/${wallet}`)); }
     catch { setErr('Oyuncu dosyası alınamadı.'); }
   }, [call]);
+
+  /**
+   * ⭐ BAYRAK YAZ — bakım kapısı / duyuru şeridi.
+   *
+   * ⚠️ Sunucunun DÖNDÜRDÜĞÜ değer yazılıyor, gönderilen değil: sunucu
+   * duyuruyu kırpıyor (300 karakter) ve boş dizeyi `null`a çeviriyor.
+   * Yerelde tahmin etmek, ekranın sunucudan farklı bir gerçeklik
+   * göstermesi demekti.
+   */
+  const bayrakYaz = async (next: { maintenance?: boolean; notice?: string }) => {
+    if (next.maintenance === true
+      && !confirm('BAKIM AÇILACAK.\n\nYeni koşu açılamayacak; süren koşular bitebilir ve ödenecek.\n\nDevam?')) return;
+    try {
+      const f = await call<{ maintenance: boolean; notice: string | null }>(
+        '/admin/flags', { method: 'POST', body: JSON.stringify(next) });
+      setBayrak(f);
+      setDuyuru(f.notice ?? '');
+    } catch { setErr('Bayrak yazılamadı.'); }
+  };
 
   /**
    * ⭐ VERME — sunucuya gönder, sonra dosyayı TAZELE.
@@ -252,6 +276,59 @@ export default function AdminPage() {
           <Stat label="Açık koşu" value={ov.runsOpen} />
           <Stat label="Dolaşımdaki gold" value={ov.goldInCirculation.toLocaleString('en-US')} />
         </div>
+      )}
+
+      {/* ⭐ CANLI OPERASYON — deploy etmeden kapıyı kapat, duyuru yaz.
+          ⚠️ NİYE EN ÜSTTE: bir sorun görüldüğünde ilk aranan düğme bu.
+          Ekonomi tablolarının altına gömmek, panik anında aramaya zorlardı.
+          ⚠️ BAKIM YENİ KOŞUYU ENGELLER, SÜRENİ DEĞİL — oynanan koşuyu
+          ödemeden kesmek oyuncunun kazandığını çalmak olurdu.
+          ⚠️ Denge sabiti buradan AYARLANMAZ: motor sayıları simülasyona
+          dahil ve sunucu ödülü onlarla doğruluyor; DB'den okunan bir denge
+          sabiti oynanan koşu ile doğrulanan koşuyu ayırırdı. */}
+      {bayrak && (
+        <section style={{ marginTop: 18, ...glass(10), padding: '12px 14px',
+          border: `1px solid ${bayrak.maintenance ? 'rgba(160,18,38,0.55)' : C.border}` }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0, fontSize: 15, color: C.bone }}>Canlı operasyon</h2>
+            <span style={{ fontSize: 12, fontWeight: 900,
+              color: bayrak.maintenance ? C.badText : C.ok }}>
+              {bayrak.maintenance ? 'BAKIM AÇIK — yeni koşu açılamıyor' : 'oyun açık'}
+            </span>
+            <button
+              onClick={() => { void bayrakYaz({ maintenance: !bayrak.maintenance }); }}
+              style={{ ...btn, ...(bayrak.maintenance ? {} : btnOn), marginLeft: 'auto' }}>
+              {bayrak.maintenance ? 'BAKIMI KAPAT' : 'BAKIMA AL'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <input value={duyuru} onChange={(e) => setDuyuru(e.target.value)}
+              placeholder="duyuru şeridi (boş bırakıp kaydet = kaldır)"
+              style={{ flex: 1, minWidth: 'min(240px, 100%)', padding: '5px 9px',
+                background: 'rgba(0,0,0,0.35)', border: `1px solid ${C.border}`,
+                borderRadius: 6, color: C.bone, fontSize: 12, fontFamily: 'inherit' }} />
+            <button onClick={() => { void bayrakYaz({ notice: duyuru }); }} style={btn}>
+              duyuruyu kaydet
+            </button>
+            {/* ⚠️ SIRALAMAYI YENİDEN KUR — fonksiyon zaten vardı ama hiçbir
+                route çağırmıyordu, yani ölüydü. Rekor "sadece artar" olduğu
+                için yanlış yazılmış bir satır kendiliğinden DÜZELMİYOR. */}
+            <button
+              onClick={() => {
+                if (!confirm('Sıralama Run tablosundan SIFIRDAN kurulacak.\n\nKaydı olmayan oyuncuların rekoru sıfırlanır. Devam?')) return;
+                void (async () => {
+                  try {
+                    const r = await call<{ players: number; cleared: number }>(
+                      '/admin/leaderboard/recompute', { method: 'POST' });
+                    alert(`Bitti — ${r.players} oyuncu yazıldı, ${r.cleared} kirli satır temizlendi.`);
+                  } catch { setErr('Sıralama yeniden kurulamadı.'); }
+                })();
+              }}
+              style={btn}>
+              sıralamayı yeniden kur
+            </button>
+          </div>
+        </section>
       )}
 
       {/* ── EKONOMİ: MUSLUK / SİNK ── */}

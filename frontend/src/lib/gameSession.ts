@@ -381,6 +381,17 @@ export async function fetchWorldBoss(): Promise<BossState> {
   return api<BossState>('/worldboss');
 }
 
+/**
+ * ⭐ CANLI DURUM — bakım açık mı, duyuru var mı.
+ *
+ * ⚠️ Kimlik gerektirmiyor: şeridi görmek için giriş gerekseydi, tam da
+ * giremeyen oyuncu sebebini göremezdi.
+ */
+export async function fetchFlags(): Promise<{ maintenance: boolean; notice: string | null }> {
+  if (isTestMode()) return { maintenance: false, notice: null };
+  return api<{ maintenance: boolean; notice: string | null }>('/flags');
+}
+
 export async function startBossRun(): Promise<{ runId: string; seed: number; hero: string }> {
   return api<{ runId: string; seed: number; hero: string }>('/boss/start', {
     method: 'POST', body: {},

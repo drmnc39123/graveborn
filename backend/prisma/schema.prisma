@@ -628,3 +628,21 @@ model GearItem {
   @@index([wallet])
   @@index([wallet, equipped])
 }
+
+// CANLI OPERASYON BAYRAKLARI — deploy etmeden değiştirilebilen tek satır.
+//
+// ⚠️ TEK SATIR (`@id @default(1)`) — `CryptVault` ile aynı desen. Birden
+// çok satır olsaydı "hangisi geçerli" sorusu doğardı.
+//
+// ⚠️ MOTOR SABİTİ BURAYA GİRMEZ. Denge sayıları (hasar, düşman canı, ödül
+// eğrisi) simülasyonun parçası ve sunucu ödülü onlarla doğruluyor; DB'den
+// okunan bir denge sabiti, oynanan koşu ile doğrulanan koşuyu ayırırdı.
+// Buraya yalnız OPERASYON girer: kapıyı kapat, duyuru yaz.
+model ServerFlag {
+  id          Int      @id @default(1)
+  /// true iken YENİ koşu açılamaz — süren koşular bitebilir
+  maintenance Boolean  @default(false)
+  /// oyuncuya gösterilen duyuru şeridi (boşsa şerit yok)
+  notice      String?
+  updatedAt   DateTime @updatedAt
+}

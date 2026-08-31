@@ -15,7 +15,7 @@ import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifyS
 import { eventMul, eventWindow } from '@game/events';
 import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun, maxKills, applyKills } from './reward.js';
 import { PetError, bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from './pets.js';
-import { rankOf, recordDescent, top as lbTop } from './leaderboard.js';
+import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, deedList, vaultState } from './crypt.js';
 import {
@@ -52,6 +52,7 @@ import {
   openTicketCount, reply as ticketReply,
 } from './ticket.js';
 import { anomalies, economy, ledgerOf, ledgerWrite, withLedger } from './ledger.js';
+import { flags, setFlags } from './flags.js';
 import { Prisma } from '@prisma/client';
 
 /** Nullable Json'u boşaltmanın tek doğru yolu — `undefined` "dokunma" demek */
@@ -210,6 +211,17 @@ const wrap = (fn: (req: express.Request, res: express.Response) => Promise<void>
   };
 
 app.get('/health', (_req, res) => { res.json({ ok: true }); });
+
+/**
+ * ⭐ CANLI DURUM — bakım açık mı, duyuru var mı.
+ *
+ * ⚠️ KİMLİK GEREKTİRMİYOR ve bu doğru: şeridi görmek için giriş yapmak
+ * gerekseydi, tam da giremeyen oyuncu sebebini göremezdi.
+ * ⚠️ Kişisel veri yok — yalnız iki alan.
+ */
+app.get('/flags', wrap(async (_req, res) => {
+  res.json(await flags());
+}));
 
 /** Ana sayfa göstergesi — kimlik gerektirmez, kişisel veri döndürmez */
 app.get('/stats', wrap(async (_req, res) => {
@@ -642,6 +654,16 @@ const startSchema = z.object({
 app.post('/run/start', wrap(async (req, res) => {
   const wallet = auth(req);
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+
+  // ⚠️ BAKIM YALNIZ YENİ KOŞUYU ENGELLER, süreni DEĞİL. `/run/finish`
+  // açık kalıyor: oyuncunun oynadığı koşuyu ödemeden kesmek, onun
+  // hatasıyla değil bizim kararımızla kazandığını çalmak olurdu.
+  const bayrak = await flags();
+  if (bayrak.maintenance) {
+    res.status(503).json({ error: 'bakim', notice: bayrak.notice });
+    return;
+  }
+
   const body = startSchema.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: 'gecersiz_istek' }); return; }
 
@@ -1667,6 +1689,52 @@ app.post('/admin/ban', adminOnly, wrap(async (req, res) => {
 /** Canlı boss odası — o an kaç kişi bağlı (admin/izleme) */
 app.get('/admin/presence', adminOnly, wrap(async (_req, res) => {
   res.json(presenceCount());
+}));
+
+/**
+ * ⭐ CANLI OPERASYON — bakım kapısı ve duyuru şeridi.
+ *
+ * ⚠️ NİYE VAR: bir sorun görüldüğünde tek seçenek yeni bir deploy
+ * beklemekti. Para basma açığı görülen dakikalar pahalıdır.
+ * ⚠️ Bakım YENİ koşuyu engeller, süreni değil — gerekçe `/run/start`'ta.
+ * ⚠️ Denge sabiti buradan AYARLANMAZ: motor sayıları simülasyona dahil ve
+ * sunucu ödülü onlarla doğruluyor (bkz. `flags.ts` başlığı).
+ */
+app.get('/admin/flags', adminOnly, wrap(async (_req, res) => {
+  res.json(await flags());
+}));
+
+app.post('/admin/flags', adminOnly, wrap(async (req, res) => {
+  const { maintenance, notice } = req.body ?? {};
+  if (maintenance !== undefined && typeof maintenance !== 'boolean') {
+    res.status(400).json({ error: 'gecersiz_bakim' }); return;
+  }
+  if (notice !== undefined && notice !== null && typeof notice !== 'string') {
+    res.status(400).json({ error: 'gecersiz_duyuru' }); return;
+  }
+  const next = await setFlags({
+    ...(maintenance !== undefined ? { maintenance } : {}),
+    // ⚠️ Boş dize = duyuruyu KALDIR. `null` ile `''` arasındaki farkı
+    // operatöre yıkmak yerine burada çözülüyor.
+    ...(notice !== undefined ? { notice: notice ? String(notice).slice(0, 300) : null } : {}),
+  });
+  console.warn('[admin] BAYRAK', JSON.stringify(next));
+  res.json(next);
+}));
+
+/**
+ * ⭐ SIRALAMAYI SIFIRDAN KUR — kaçış valfi.
+ *
+ * ⚠️ FONKSİYON ZATEN VARDI ama hiçbir route çağırmıyordu, yani ölüydü:
+ * rekor "sadece artar" olduğu için yanlış yazılmış bir satır kendiliğinden
+ * DÜZELMİYOR ve elde onu temizleyecek hiçbir araç yoktu.
+ * ⚠️ Kaynak `Run` tablosu: yalnız kırpılmamış descent koşuları ve
+ * sunucunun KABUL ETTİĞİ derinlik — istemcinin iddiası değil.
+ */
+app.post('/admin/leaderboard/recompute', adminOnly, wrap(async (_req, res) => {
+  const out = await recomputeAll();
+  console.warn('[admin] SIRALAMA YENİDEN KURULDU', JSON.stringify(out));
+  res.json(out);
 }));
 
 /**

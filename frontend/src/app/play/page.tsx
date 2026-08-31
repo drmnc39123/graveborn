@@ -26,6 +26,7 @@ import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
 import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
+import { NoticeBanner } from '@/components/NoticeBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { ProfileCard } from '@/components/ProfileCard';
 import { ReadyCard } from '@/components/ReadyCard';
@@ -579,7 +580,10 @@ export default function PlayPage() {
         // ⚠️ ŞERİT RIHTIMIN İÇİNDE, sayfada ayrı bir katmanda DEĞİL — gerekçe
         // BuildingDock'un render sonundaki notta. Panel açıkken gizleniyor:
         // oyuncu zaten bir şeye bakıyor demektir.
-        footer={!panel ? <EventBanner /> : null} />
+        // ⚠️ DUYURU ŞERİDİ ETKİNLİĞİN ÜSTÜNDE: bakım oyunun oynanıp
+        // oynanamayacağını söylüyor, etkinlik ise ne kazanılacağını.
+        // Sıra önem sırası — ve ikisi de yoksa hiçbiri çizilmiyor.
+        footer={!panel ? <><NoticeBanner /><EventBanner /></> : null} />
 
       {/* ── İLK KOŞU ÇAĞRISI ──
           ⚠️ ÖLÇÜLDÜ: yeni oyuncu köye düşüyor ve karşısında 4 grup, 14 panel,
