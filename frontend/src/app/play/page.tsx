@@ -897,11 +897,48 @@ export default function PlayPage() {
           style={{ position: 'absolute', inset: 0, background: 'rgba(10,8,6,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '78px 20px 20px' }}>
           <div onClick={(e) => e.stopPropagation()} style={{ ...glass(16), padding: 24, width: '100%', maxWidth: 420, textAlign: 'center' }}>
             <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 2.5, color: C.blood, marginBottom: 6 }}>THE VILLAGE SETTLES UP</div>
-            <Reveal>
-              <div style={{ fontSize: 38, fontWeight: 900, color: C.candle, marginBottom: 14 }}>
-                +{odemeToplam.toLocaleString('en-US')} <span style={{ fontSize: 16 }}>GOLD</span>
-              </div>
-            </Reveal>
+
+            {/* ── ÖDÜL ANI ──
+                ⚠️ IŞIMA YALNIZCA GERÇEKTEN KAZANILDIYSA. Bu ekran üç ayrı
+                sıfır durumunu ayrı cümlelerle anlatıyor ("hiç inemedin" ·
+                "buraya zaten inmiştin" · "ödülü daha önce aldın"); sıfırın
+                arkasına altın bir ışıma koymak, o cümlelerin tam tersini
+                söyleyen bir kutlama olurdu. Kazanç yoksa an da yok.
+                ⚠️ Sayı ZATEN `useCountUpInt` ile sayıyor (bkz. odemeToplam);
+                buradaki iş o sayıyı kartın kahramanı yapmak. */}
+            <div style={{ position: 'relative', marginBottom: 14 }}>
+              {odemeToplam > 0 && (
+                <div aria-hidden style={{
+                  position: 'absolute', inset: '-26px -18px', pointerEvents: 'none',
+                  background: 'radial-gradient(ellipse at 50% 52%,'
+                    + ' rgba(239,167,46,0.22), rgba(239,167,46,0.06) 46%, rgba(239,167,46,0) 72%)',
+                }} />
+              )}
+              <Reveal>
+                <div style={{
+                  position: 'relative',
+                  fontFamily: FONT.title,
+                  fontSize: 44, fontWeight: 900, lineHeight: 1.05,
+                  color: odemeToplam > 0 ? C.candle : C.boneDim,
+                  // ⚠️ Gölge SADECE kazançta: sıfırda parlayan bir sayı yalan söyler.
+                  textShadow: odemeToplam > 0 ? '0 0 18px rgba(239,167,46,0.45)' : undefined,
+                }}>
+                  +{odemeToplam.toLocaleString('en-US')}
+                  <span style={{ fontSize: 16, marginLeft: 6, letterSpacing: 1.6 }}>GOLD</span>
+                </div>
+              </Reveal>
+              {/* Altın çizgi — sayıyı dökümden ayıran tek jest */}
+              <div aria-hidden style={{
+                height: 1, marginTop: 12,
+                background: odemeToplam > 0
+                  ? `linear-gradient(90deg, rgba(239,167,46,0), ${C.candle}, rgba(239,167,46,0))`
+                  : `linear-gradient(90deg, rgba(0,0,0,0), ${C.border}, rgba(0,0,0,0))`,
+              }} />
+            </div>
+            {/* ⚠️ KADEMELİ: döküm sayıdan SONRA beliriyor. Hepsi aynı anda
+                gelseydi göz nereye bakacağını bilemezdi — önce ne kazandın,
+                sonra nereden geldi. */}
+            <Reveal delay={140}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, fontSize: 12.5, textAlign: 'left' }}>
               <Row
                 label={payout.paidRange
@@ -942,6 +979,7 @@ export default function PlayPage() {
                 </div>
               )}
             </div>
+            </Reveal>
 
             {/* ── AÇILAN SİLAH ──
                 ⚠️ EN ÜSTTE ve GOLD SATIRLARINDAN AYRI. Bir silah kazanmak
