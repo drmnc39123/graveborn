@@ -41,6 +41,9 @@ import {
   checkpointFor, depthGold, maxAscensionFor, stageById, startLevelFor,
 } from '@/game/config';
 import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
+import {
+  DescentCurtain, PERDE_ASGARI_MS, PERDE_KALKIS_MS, type PerdeDurumu,
+} from '@/components/DescentCurtain';
 import { GEAR, SLOT_NAME, affixText, rarityOf } from '@/game/gear';
 import { loadProgress, resolveRunPets, paidDepth, type Progress, type RunResult } from '@/game/progress';
 import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
@@ -200,6 +203,8 @@ const PANEL_GENISLIK: Record<string, number> = {
 export default function PlayPage() {
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: 'hub' });
+  /** İniş perdesi — koşu açılırken ağ beklemesini örter (bkz. perdeliBaslat) */
+  const [perde, setPerde] = useState<PerdeDurumu | null>(null);
   const [panel, setPanelRaw] = useState<BuildingId | null>(null);
   /**
    * ⚠️ AÇILIŞ/KAPANIŞ SESİ BURADA — tek kaynak.
@@ -395,13 +400,69 @@ export default function PlayPage() {
       .catch(() => setNote('Run not saved — no reward was granted.'));
   }, [screen, progress]);
 
+
+  /**
+   * PERDELİ BAŞLATMA — koşuya girişin tek kapısı.
+   *
+   * ⚠️ PERDE OYUNA BEKLEME EKLEMİYOR. Üç başlatıcının (`beginStage`,
+   * `beginDuel`, `beginBoss`) üçü de zaten SUNUCUYA GİDİYOR ve bilet
+   * dönene kadar oyuncu donmuş bir köye bakıyordu — biçimlendirilmemiş
+   * ölü zaman. Perde tam o aralığı örtüyor. Bu dosyanın kendi kuralı
+   * ("geçiş bir gösteri değil, bir dikiş") bu yüzden korunuyor.
+   *
+   * ⚠️ ASGARİ SÜRE VAR ama ağın ÜSTÜNE binmiyor: bekleme `max(ağ, asgari)`.
+   * Asgari olmasaydı hızlı ağda perde bir kare çakıp kaybolurdu — bilgi
+   * değil gürültü.
+   *
+   * ⚠️ HATA DURUMUNDA PERDE MUTLAKA KALKAR. `catch` içinde kaldırılmasaydı
+   * koşu başlatılamadığında oyuncu sonsuza kadar kapalı bir perdenin
+   * ardında kalırdı — sessiz bir kilitlenme.
+   */
+  const perdeliBaslat = useCallback(<T,>(
+    durum: PerdeDurumu,
+    is: () => Promise<T>,
+    tamam: (v: T) => void,
+    hata: (e: unknown) => void,
+  ) => {
+    setPanel(null);
+    setPerde(durum);
+    const bas = Date.now();
+    is()
+      .then((v) => {
+        const gecen = Date.now() - bas;
+        const kalan = Math.max(0, PERDE_ASGARI_MS - gecen);
+        window.setTimeout(() => {
+          tamam(v);
+          // Ekran değişti; perde ARDINDAN kalkıyor — koşu bir kare boyunca
+          // çıplak görünmesin.
+          setPerde({ ...durum, kalkiyor: true });
+          window.setTimeout(() => setPerde(null), PERDE_KALKIS_MS);
+        }, kalan);
+      })
+      .catch((e) => { setPerde(null); hata(e); });
+  }, []);
+
   /** Bölüm başlat: cüzdan modunda seed'i, koşu kimliğini ve checkpoint'i SUNUCU verir */
   const beginStage = useCallback((stageId: number, mode: RunKind, wantStartDepth = 1, wantAscension = 0) => {
-    setPanel(null);
-    startRun(mode, stageId, wantStartDepth, wantAscension)
-      .then((ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }))
-      .catch(() => setNote('The run could not be started.'));
-  }, []);
+    const def = stageById(stageId);
+    // ⚠️ Kicker MODA göre değişiyor: oyuncu inişe mi, kampanyaya mı,
+    // Wilderness'a mı girdiğini tek bakışta ayırt etmeli — üçünün sonucu
+    // ve riski bambaşka.
+    const kicker = mode === 'descent' ? 'DESCENDING'
+      : mode === 'wilderness' ? 'ENTERING THE WILDERNESS'
+        : 'ENTERING';
+    perdeliBaslat(
+      {
+        kicker,
+        hedef: def?.name ?? 'The Dark',
+        alt: mode === 'descent' && wantStartDepth > 1
+          ? `from depth ${wantStartDepth}` : undefined,
+      },
+      () => startRun(mode, stageId, wantStartDepth, wantAscension),
+      (ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }),
+      () => setNote('The run could not be started.'),
+    );
+  }, [perdeliBaslat]);
 
   /**
    * Düelloya gir — rakibin koşusunu oynamak.
@@ -411,21 +472,22 @@ export default function PlayPage() {
    * düellonun tek adalet dayanağı yok olurdu.
    */
   const beginDuel = useCallback((recordId: string) => {
-    setPanel(null);
-    // ⚠️ Uçuştaki kahraman kaydını BEKLE — bkz. heroSaveRef
-    heroSaveRef.current
-      .then(() => startDuel(recordId))
-      .then((t) => setScreen({ kind: 'stage', stageId: t.duel.stageId, mode: 'duel', ticket: t }))
+    perdeliBaslat(
+      { kicker: 'ANSWERING', hedef: 'A Challenge', alt: 'their run, their seed' },
+      // ⚠️ Uçuştaki kahraman kaydını BEKLE — bkz. heroSaveRef
+      () => heroSaveRef.current.then(() => startDuel(recordId)),
+      (t) => setScreen({ kind: 'stage', stageId: t.duel.stageId, mode: 'duel', ticket: t }),
       // ⚠️ `ApiError.code` gösteriliyor, `message` DEĞİL: `message` "400 ..."
       // diye başlıyor ve sunucunun yazdığı cümlenin önüne bir durum kodu
       // yapıştırıyordu. Motor sürümü uyuşmazlığında oyuncunun okuyacağı şey
       // tam olarak sebep olmalı (bkz. @game/duel STALE_RECORD).
-      .catch((e) => setNote(
+      (e) => setNote(
         e instanceof ApiError ? e.code
           : e instanceof Error ? e.message
             : 'The challenge could not be opened.',
-      ));
-  }, []);
+      ),
+    );
+  }, [perdeliBaslat]);
 
   /**
    * Boss odasına gir. ⚠️ Ayrı uçlar (`/boss/start`) — ödül hesabına
@@ -433,11 +495,13 @@ export default function PlayPage() {
    * bir mod eklemek sadece risk olurdu.
    */
   const beginBoss = useCallback(() => {
-    setPanel(null);
-    startBossRun()
-      .then((t) => setScreen({ kind: 'boss', runId: t.runId, seed: t.seed }))
-      .catch(() => setNote('The Barrow needs a connected wallet.'));
-  }, []);
+    perdeliBaslat(
+      { kicker: 'THE BARROW', hedef: bossOfWeek(bossWeek(new Date())).name, alt: 'everyone strikes the same thing' },
+      () => startBossRun(),
+      (t) => setScreen({ kind: 'boss', runId: t.runId, seed: t.seed }),
+      () => setNote('The Barrow needs a connected wallet.'),
+    );
+  }, [perdeliBaslat]);
 
   /** Boss koşusu bitti: hasarı sunucuya bildir, tavana kırpılmışsa söyle */
   const finishBoss = useCallback((run: RunResult) => {
@@ -494,6 +558,9 @@ export default function PlayPage() {
     return (
       <div style={EKRAN_KOK}>
       <MotionStyles />
+      {/* ⚠️ Perde koşu dalında da duruyor: ekran değiştikten SONRA
+          kalkıyor, yoksa koşu bir kare çıplak görünürdü. */}
+      <DescentCurtain durum={perde} />
         {/* ⚠️ Tılsım YOK ve bu kasıtlı: tılsımlar koşu açılırken yanıyor ve
             boss odası ayrı bir uçtan başlıyor. Oyuncunun tılsımını burada
             harcatmak, descent için sakladığı şeyi sessizce yakmak olurdu. */}
@@ -521,6 +588,9 @@ export default function PlayPage() {
     return (
       <div style={EKRAN_KOK}>
       <MotionStyles />
+      {/* ⚠️ Perde koşu dalında da duruyor: ekran değiştikten SONRA
+          kalkıyor, yoksa koşu bir kare çıplak görünürdü. */}
+      <DescentCurtain durum={perde} />
         {/* ⚠️ Tılsımlar `progress.charms`'tan DEĞİL BİLETTEN okunur: koşu
             açılırken tüketildiler, kayıtta artık yoklar. Kayıttan okumak bu
             koşuyu tılsımsız başlatırdı. */}
@@ -558,6 +628,8 @@ export default function PlayPage() {
 
   return (
     <div style={EKRAN_KOK}>
+      {/* Köyde: ağ beklemesini örtüyor (bkz. perdeliBaslat) */}
+      <DescentCurtain durum={perde} />
       <MotionStyles />
       <HubCanvas
         hero={(progress ?? loadProgress()).hero}
