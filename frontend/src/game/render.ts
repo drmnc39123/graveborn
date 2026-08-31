@@ -5,7 +5,10 @@
 import { C, FONT } from '@/lib/theme';
 import { BOSS, BOSS_ARCH, PLAYER, RUN, WEAPON } from './config';
 import type { Enemy, Game, Hero } from './engine';
-import { BULLET, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey, FX, PET_ART, playerArt } from './sprites';
+import {
+  BULLET, DEATH_FX, deathFxKey, drawActor, drawCell, ENEMY_ART, FALLEN_ART, fallenKey,
+  FX, PET_ART, playerArt, type DeathFxKey,
+} from './sprites';
 import { drawAtmosphere, drawStageDecor, drawStageGround, resetStageGround } from './stageGround';
 import { drawCorpses, drawFxScreen, drawFxWorld, pumpFx, resetFx } from './fx';
 import { weaponArt } from './combatArt';
@@ -14,7 +17,9 @@ import { cosmeticById } from './cosmetics';
 // ── Kozmetik efektler ──
 // Render katmanında yaşar, simülasyona GİRMEZ (determinizm bozulmasın).
 // Engine ölüm konumlarını kuyruğa atar, burada boşaltılır.
-interface Fx { x: number; y: number; t: number }
+// ⚠️ `k` = ölüm efekti ailesi (bkz. sprites `deathFxKey`). Kuyruktaki
+// `art` anahtarından TÜRETİLİYOR; motora yeni alan eklenmedi.
+interface Fx { x: number; y: number; t: number; k: DeathFxKey }
 const deathFx: Fx[] = [];
 const MAX_FX = 90; // ekranda aynı anda en fazla; sürü ölümünde çizim patlamasın
 
@@ -31,14 +36,19 @@ function pumpEffects(g: Game, dt: number) {
   for (let i = 0; i < g.deaths.length; i++) {
     if (deathFx.length >= MAX_FX) break;
     const d = g.deaths[i];
-    deathFx.push({ x: d.x, y: d.y, t: 0 });
+    // ⚠️ `art` isteğe bağlı (motor tipinde `string | undefined`) — boş
+    // gelirse `flesh` tabanına düşer, efekt KAYBOLMAZ.
+    deathFx.push({ x: d.x, y: d.y, t: 0, k: deathFxKey(d.art ?? '', d.boss) });
   }
   g.deaths.length = 0; // kuyruğu boşalt
 
-  const life = FX.death.frames / FX.death.fps;
   for (let i = deathFx.length - 1; i >= 0; i--) {
     deathFx[i].t += dt;
-    if (deathFx[i].t >= life) {
+    // ⚠️ ÖMÜR ARTIK EFEKT BAŞINA. Tek bir `FX.death` ömrü kullanılsaydı
+    // boss patlaması (18 fps, 12 kare = 0,67 sn) erken silinir, sıçan
+    // sıçraması (26 fps) gereksiz uzun yaşardı.
+    const a = DEATH_FX[deathFx[i].k];
+    if (deathFx[i].t >= a.frames / a.fps) {
       deathFx[i] = deathFx[deathFx.length - 1];
       deathFx.pop();
     }
@@ -51,7 +61,8 @@ function drawEffects(ctx: CanvasRenderingContext2D) {
   ctx.globalCompositeOperation = 'lighter'; // patlama parlasın
   for (let i = 0; i < deathFx.length; i++) {
     const f = deathFx[i];
-    drawCell(ctx, FX.death, Math.floor(f.t * FX.death.fps), f.x, f.y);
+    const a = DEATH_FX[f.k];
+    drawCell(ctx, a, Math.floor(f.t * a.fps), f.x, f.y);
   }
   ctx.restore();
 }

@@ -442,6 +442,51 @@ export const FX = {
   death: { src: '/art/fx/rpg/1010.png', cell: 64, row: 7, frames: 12, fps: 22, size: 58 },
 } as const;
 
+/**
+ * ÖLÜM EFEKTİ — DÜŞMAN AİLESİNE GÖRE.
+ *
+ * 🔴 NİYE VAR: 19 düşman sanatının HEPSİ tek bir efektle ölüyordu
+ * (`FX.death`). İskelet de, sıçan da, boss da aynı patlama. Oyuncunun
+ * en sık gördüğü geri bildirim — koşu başına yüzlerce ölüm — tek bir
+ * görüntüydü. Depoda 252 efekt atlası var ve 11'i kullanılıyordu (%4,4).
+ *
+ * ⚠️ ATLASIN YAPISI ÖLÇÜLDÜ, tahmin edilmedi: her atlas 12×9 hücre ve
+ * **her SATIR aynı efektin farklı RENGİ**, atlas numarası ise ŞEKLİ.
+ * Yani satır seçmek renk seçmektir. Ortalama piksel hue'ları ölçüldü:
+ *     r0 turuncu(h~3-24) · r1 MOR(h268-283) · r2 buz(h~200) · r3 yeşil
+ *     r4 kehribar/kemik(h~17-27) · r5 gri-beyaz(h0) · r6-r7 kan (atlasa
+ *     göre bazen mor sınırında) · r8 MOR/çivit(h246-269)
+ * ⚠️ r1 ve r8 HER atlasta mor — paletin tek mutlak yasağı. Buradan satır
+ * seçerken önce hue ölçülür (`fx.test` mühürlüyor).
+ *
+ * ⚠️ MOTORA DOKUNULMADI. `deaths` kuyruğu zaten `art` taşıyor; aile o
+ * anahtardan TÜRETİLİYOR, motora yeni alan eklenmedi.
+ */
+export const DEATH_FX = {
+  /** iskelet/kemik — gri-beyaz kıymık patlaması (925 = sivri elmas şekli) */
+  bone: { src: '/art/fx/rpg/925.png', cell: 64, row: 5, frames: 12, fps: 24, size: 54 },
+  /** haşere — küçük kan sıçraması */
+  vermin: { src: '/art/fx/rpg/925.png', cell: 64, row: 7, frames: 12, fps: 26, size: 38 },
+  /** et/canavar — taban patlama (mevcut görünüm korunuyor) */
+  flesh: FX.death,
+  /** boss — büyük, sıcak, ayrı şekil (1655 = yaprak/yıldız patlaması) */
+  boss: { src: '/art/fx/rpg/1655.png', cell: 64, row: 0, frames: 12, fps: 18, size: 132 },
+} as const;
+
+export type DeathFxKey = keyof typeof DEATH_FX;
+
+/**
+ * Düşman sanat anahtarından ölüm ailesi.
+ * ⚠️ Bilinmeyen anahtar `flesh`e düşer — yeni bir düşman eklendiğinde
+ * efekt KAYBOLMAZ, sadece taban efektini alır.
+ */
+export function deathFxKey(art: string, boss: boolean): DeathFxKey {
+  if (boss) return 'boss';
+  if (art.startsWith('skel_') || art === 'skeleton' || art === 'bone_archer') return 'bone';
+  if (art.startsWith('rat_')) return 'vermin';
+  return 'flesh';
+}
+
 export interface CellAnim {
   src: string; cell: number; row: number; frames: number; fps: number; size: number;
   /**

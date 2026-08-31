@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PASSIVE_ART, WEAPON_ART, weaponArt, type CellAnim } from './combatArt.js';
+import { DEATH_FX } from './sprites.js';
 import { HEROES } from './heroes.js';
 import { EVOLVED, PASSIVES, WEAPONS,
   weaponCooldownAt, weaponCountAt, weaponDamageAt } from './config.js';
@@ -102,6 +103,22 @@ console.log('\n[4] MOR YOK — paletin tek yasağı');
   }
   check('hiçbir silah MOR satır kullanmıyor', morKullanan.length === 0,
     morKullanan.join(', ') || 'satır 1/6/8 kullanılmıyor');
+
+  // ⚠️ ÖLÜM EFEKTLERİ DE AYNI KURALA TABİ. `DEATH_FX` düşman ailesine göre
+  // ayrı atlas/satır seçiyor ve satır seçmek RENK seçmektir (atlaslar
+  // 12×9 ve her satır aynı efektin farklı rengi — ölçüldü). Silahlar için
+  // yazılmış bu kural ölüm efektlerini kapsamıyordu; sızıntı buradan olurdu.
+  const morOlum = Object.entries(DEATH_FX)
+    .filter(([, a]) => a.src.includes('/fx/rpg/') && YASAK_SATIR.has(a.row))
+    .map(([k, a]) => `${k}: satır ${a.row}`);
+  check('hiçbir ÖLÜM efekti MOR satır kullanmıyor', morOlum.length === 0,
+    morOlum.join(', ') || `${Object.keys(DEATH_FX).length} aile temiz`);
+
+  // ⚠️ Aileler birbirinden AYIRT EDİLEBİLİR olmalı — hepsi aynı (atlas,satır)
+  // olsaydı özellik "eklenmiş" sayılır ama ekranda hiçbir şey değişmezdi.
+  const cift = new Set(Object.values(DEATH_FX).map((a) => `${a.src}|${a.row}`));
+  check('ölüm efektleri birbirinden farklı', cift.size === Object.keys(DEATH_FX).length,
+    `${cift.size}/${Object.keys(DEATH_FX).length} benzersiz (atlas,satır)`);
 
   // Tint renkleri de mor olmamalı
   const morTint = Object.entries(WEAPON_ART)
