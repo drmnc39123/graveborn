@@ -303,6 +303,20 @@ for (const [arch, f] of Object.entries(FALLEN) as [BossArchetype, typeof FALLEN[
  * görsel kurulumu BURADA yapılır — motor hiçbir zaman görsel bilmez.
  * Sonuç önbelleklenir: her frame yeni nesne üretmek GC baskısı yaratır.
  */
+/**
+ * Saldırı penceresi (sn) — motorun `atkT` yazdığı değerle AYNI olmalı.
+ * ⚠️ İki yerde yaşıyor ve bu bilinçli: motor sunum sayacını kendi yazıyor
+ * (`engine.ts` `h.atkT = 0.30`), render onu okuyor. Sabiti motordan ithal
+ * etmek çizim katmanını motora bağlardı; buradaki kopya YORUMLA işaretli.
+ */
+const ATK_PENCERE = 0.30;
+
+/** Klibin TAMAMI saldırı penceresine sığacak fps ile bir kez oynar. */
+const atkAnim = (dir: string, dosya: string, frames: number): AnimDef => ({
+  ...SEQ(`/art/heroes/${dir}/${dosya}`, frames, Math.max(12, (frames - 1) / ATK_PENCERE)),
+  loop: false,
+});
+
 const heroArtCache = new Map<string, ActorArt>();
 
 export function playerArt(heroId?: string): ActorArt {
@@ -319,7 +333,18 @@ export function playerArt(heroId?: string): ActorArt {
         run: SEQ(`/art/heroes/${h.dir}/${h.run}`, h.runFrames, 12),
         // ⚠️ `loop: false` — bunlar bir kez oynar. Döngüye girerlerse
         // karakter sonsuza kadar saldırır / ölür gibi görünür.
-        atk: { ...SEQ(`/art/heroes/${h.dir}/${h.atk}`, h.atkFrames, 20), loop: false },
+        // ⚠️ SALDIRI FPS'İ PENCEREYE GÖRE HESAPLANIYOR, sabit değil.
+        // Motor her atışta `atkT = 0.30` yazıyor ve render animasyonu o
+        // pencerede oynatıyor. Sabit 20 fps'te 11 karelik klip 0,55 sn
+        // sürüyordu — yani pencereye YALNIZ İLK YARISI sığıyor ve karakterin
+        // vuruşu HİÇ görünmüyordu; sadece kurulum. Klasik "kod çalışıyor,
+        // son adımda ölüyor" hatası.
+        // ⚠️ Bedeli açık: 28 karelik klip ~1 sn için çizilmişti, artık 0,30 sn'de
+        // oynuyor. Takas bilinçli — yarım bir savurma, hızlı ama tam bir
+        // savurmadan daha kötü okunuyor.
+        atk: atkAnim(h.dir, h.atk, h.atkFrames),
+        atk2: atkAnim(h.dir, h.atk2, h.atk2Frames),
+        atk3: atkAnim(h.dir, h.atk3, h.atk3Frames),
         hurt: { ...SEQ(`/art/heroes/${h.dir}/${h.hurt}`, h.hurtFrames, 16), loop: false },
         death: { ...SEQ(`/art/heroes/${h.dir}/${h.death}`, h.deathFrames, 12), loop: false },
       },

@@ -1135,6 +1135,37 @@ function drawPetFx(ctx: CanvasRenderingContext2D) {
   ctx.globalAlpha = 1;
 }
 
+/**
+ * SALDIRI KADEMESİ — karakterin sallayışı build güçlendikçe büyür.
+ *
+ * 🔴 NİYE VAR: dört kahramanın dördünde de `2_atk` ve `3_atk` şeritleri
+ * diskte duruyordu ve hiçbiri bildirilmiyordu (toplam 148 kare). Oyuncunun
+ * build'i bir koşuda 20 kat güçlenirken karakterin sallayışı ilk saniyedeki
+ * ile aynı kalıyordu — güçlenmenin karakterde HİÇ karşılığı yoktu.
+ *
+ * ⚠️ ÖLÇÜT SİLAH SEVİYESİ, OYUNCU SEVİYESİ DEĞİL. Oyuncu seviyesi pasif de
+ * alarak yükseliyor; "sallayışım büyüdü" sinyali SİLAHIN büyümesine
+ * bağlanmalı, yoksa hareket yalan söyler.
+ *
+ * ⚠️ EVRİM DOĞRUDAN EN ÜST KADEME. Evrim bu oyunda nadir (ölçüldü:
+ * makul oyuncuda ~0,1 koşu başına) ve en büyük yükseliş anı; olduğunda
+ * karakter bunu göstermeli.
+ *
+ * ⚠️ TAMAMEN OKUMA. Motorun `weapons` dizisine bakıyor, hiçbir şey yazmıyor;
+ * eşikler dengeye DEĞMİYOR, yalnız hangi klibin oynayacağını seçiyor.
+ * `sim.test` [1C] tek yönlü bağı mühürlüyor.
+ */
+function saldiriKademesi(h: Hero): 'atk' | 'atk2' | 'atk3' {
+  let enYuksek = 0;
+  for (const w of h.weapons) {
+    if (w.def.evolved) return 'atk3';
+    if (w.level > enYuksek) enYuksek = w.level;
+  }
+  if (enYuksek >= 5) return 'atk3';
+  if (enYuksek >= 3) return 'atk2';
+  return 'atk';
+}
+
 function drawPlayer(ctx: CanvasRenderingContext2D, g: Game, h: Hero) {
   // dokunulmazlık penceresinde yanıp söner
   const blink = h.iframe > 0 && Math.floor(h.iframe * 14) % 2 === 0;
@@ -1163,9 +1194,15 @@ function drawPlayer(ctx: CanvasRenderingContext2D, g: Game, h: Hero) {
   } else if (h.hurtT > 0 && art.anims.hurt) {
     anim = 'hurt';
     animT = 0.32 - h.hurtT;
-  } else if (h.atkT > 0 && art.anims.atk) {
-    anim = 'atk';
-    animT = 0.30 - h.atkT;
+  } else if (h.atkT > 0) {
+    // ⚠️ SEÇİLEN KLİP YOKSA TABANA DÜŞ. `atk2`/`atk3` yeni bildirildi; bir
+    // kahramanda eksik kalırsa karakter saldırırken DURMAMALI.
+    const kademe = saldiriKademesi(h);
+    const secilen = art.anims[kademe] ? kademe : 'atk';
+    if (art.anims[secilen]) {
+      anim = secilen;
+      animT = 0.30 - h.atkT;
+    }
   }
 
   // sprite varsa onu çiz; dokunulmazlık penceresinde yarı saydam yanıp söner

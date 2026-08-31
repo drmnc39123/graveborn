@@ -239,11 +239,17 @@ console.log('\n[9] Kahraman animasyonları — dosyalar GERÇEKTEN var mı');
     kontrol('idle', h.idle, h.idleFrames);
     kontrol('run', h.run, h.runFrames);
     kontrol('atk', h.atk, h.atkFrames);
+    // ⚠️ İkinci/üçüncü saldırı build güçlendikçe oynanıyor (render
+    // `saldiriKademesi`) — yani BAZI oyuncularda hiç görünmüyor ve yanlış
+    // kare sayısı sessizce boş kare çizer. Tam da manifest kontrolünün
+    // var olma sebebi.
+    kontrol('atk2', h.atk2, h.atk2Frames);
+    kontrol('atk3', h.atk3, h.atk3Frames);
     kontrol('hurt', h.hurt, h.hurtFrames);
     kontrol('death', h.death, h.deathFrames);
   }
-  check('her kahramanın 5 animasyonu da MEVCUT', eksik.length === 0,
-    eksik.slice(0, 4).join(' | ') || `${HEROES.length} kahraman × 5 animasyon`);
+  check('her kahramanın 7 animasyonu da MEVCUT', eksik.length === 0,
+    eksik.slice(0, 4).join(' | ') || `${HEROES.length} kahraman × 7 animasyon`);
 
   // Kare sayısı ölçülenden FAZLA girilirse son kareler 404 olur — bir sonraki
   // kareyi de sorup sınırın doğru olduğunu doğrula
@@ -254,6 +260,8 @@ console.log('\n[9] Kahraman animasyonları — dosyalar GERÇEKTEN var mı');
       if (bySrc.has(src)) fazla.push(`${h.id}.${ad}: ${frames + 1}. kare de var`);
     };
     test('atk', h.atk, h.atkFrames);
+    test('atk2', h.atk2, h.atk2Frames);
+    test('atk3', h.atk3, h.atk3Frames);
     test('death', h.death, h.deathFrames);
   }
   check('kare sayıları eksik bildirilmemiş', fazla.length === 0,

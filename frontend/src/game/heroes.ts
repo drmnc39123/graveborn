@@ -48,6 +48,20 @@ export interface HeroDef {
    * bildirilmiyorlardı. Hepsi `loop: false` oynar.
    */
   atk: string; atkFrames: number;
+  /**
+   * İKİNCİ VE ÜÇÜNCÜ SALDIRI — build güçlendikçe oynanır (bkz. render
+   * `saldiriKademesi`).
+   *
+   * 🔴 NİYE EKLENDİ: dört kahramanın DÖRDÜNDE de `2_atk` ve `3_atk` şeritleri
+   * diskte hazır duruyordu ve HİÇBİRİ bildirilmiyordu — kahraman başına
+   * 26-48 kare, toplam 148 kare hiç oynatılmadı. Oyuncunun build'i 20 kat
+   * güçlenirken karakterin sallayışı ilk saniyedeki ile aynı kalıyordu.
+   *
+   * ⚠️ KARE SAYILARI KAHRAMAN BAŞINA ÇOK FARKLI (6-28) ve diskten SAYILDI,
+   * tahmin edilmedi. Yanlış sayı sessizce boş kare çizer.
+   */
+  atk2: string; atk2Frames: number;
+  atk3: string; atk3Frames: number;
   hurt: string; hurtFrames: number;
   death: string; deathFrames: number;
   /** oyun içi çizim ölçüleri (ölçülmüş) */
@@ -69,6 +83,8 @@ export const HEROES: readonly HeroDef[] = [
     dir: 'fire-knight', idle: 'idle_{i}.png', run: 'run_{i}.png',
     idleFrames: 8, runFrames: 8,
     atk: '1_atk_{i}.png', atkFrames: 11,
+    atk2: '2_atk_{i}.png', atk2Frames: 19,
+    atk3: '3_atk_{i}.png', atk3Frames: 28,
     hurt: 'take_hit_{i}.png', hurtFrames: 6,
     death: 'death_{i}.png', deathFrames: 13,
     contentRatio: 0.344, anchorY: 0.992, drawHeight: 44,
@@ -89,6 +105,8 @@ export const HEROES: readonly HeroDef[] = [
     dir: 'leaf-ranger', idle: 'idle_{i}.png', run: 'run_{i}.png',
     idleFrames: 12, runFrames: 10,
     atk: '1_atk_{i}.png', atkFrames: 10,
+    atk2: '2_atk_{i}.png', atk2Frames: 15,
+    atk3: '3_atk_{i}.png', atk3Frames: 12,
     hurt: 'take_hit_{i}.png', hurtFrames: 6,
     death: 'death_{i}.png', deathFrames: 19,
     contentRatio: 0.344, anchorY: 0.992, drawHeight: 44,
@@ -110,6 +128,8 @@ export const HEROES: readonly HeroDef[] = [
     dir: 'water-priestess', idle: 'idle_{i}.png', run: 'walk_{i}.png',
     idleFrames: 8, runFrames: 10,
     atk: '1_atk_{i}.png', atkFrames: 7,
+    atk2: '2_atk_{i}.png', atk2Frames: 21,
+    atk3: '3_atk_{i}.png', atk3Frames: 27,
     hurt: 'take_hit_{i}.png', hurtFrames: 7,
     death: 'death_{i}.png', deathFrames: 16,
     contentRatio: 0.289, anchorY: 0.992, drawHeight: 40,
@@ -125,6 +145,8 @@ export const HEROES: readonly HeroDef[] = [
     dir: 'metal-bladekeeper', idle: '01_idle_{i}.png', run: '02_run_{i}.png',
     idleFrames: 8, runFrames: 8,
     atk: '07_1_atk_{i}.png', atkFrames: 6,
+    atk2: '08_2_atk_{i}.png', atk2Frames: 8,
+    atk3: '09_3_atk_{i}.png', atk3Frames: 18,
     hurt: '12_take_hit_{i}.png', hurtFrames: 6,
     death: '13_death_{i}.png', deathFrames: 12,
     contentRatio: 0.328, anchorY: 0.992, drawHeight: 42,
