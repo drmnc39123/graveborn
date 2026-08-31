@@ -580,10 +580,12 @@ export default function PlayPage() {
         // ⚠️ ŞERİT RIHTIMIN İÇİNDE, sayfada ayrı bir katmanda DEĞİL — gerekçe
         // BuildingDock'un render sonundaki notta. Panel açıkken gizleniyor:
         // oyuncu zaten bir şeye bakıyor demektir.
-        // ⚠️ DUYURU ŞERİDİ ETKİNLİĞİN ÜSTÜNDE: bakım oyunun oynanıp
-        // oynanamayacağını söylüyor, etkinlik ise ne kazanılacağını.
-        // Sıra önem sırası — ve ikisi de yoksa hiçbiri çizilmiyor.
-        footer={!panel ? <><NoticeBanner /><EventBanner /></> : null} />
+        // ⚠️ BURADA YALNIZ DUYURU ŞERİDİ KALDI. Etkinlik kartı sağ kolona
+        // taşındı (kullanıcı kararı): şerit üst-orta bandı kesiyordu ve
+        // köyün en çok bakılan yeri tek satırlık bir bilgiye gidiyordu.
+        // Bakım şeridi burada KALIYOR çünkü o "oyun oynanabilir mi"
+        // sorusunu cevaplıyor — kenara alınacak bir haber değil.
+        footer={!panel ? <NoticeBanner /> : null} />
 
       {/* ── İLK KOŞU ÇAĞRISI ──
           ⚠️ ÖLÇÜLDÜ: yeni oyuncu köye düşüyor ve karşısında 4 grup, 14 panel,
@@ -653,8 +655,18 @@ export default function PlayPage() {
           dikeyde. Bu bir tesadüf değil, ölçüyle seçildi.
           ⚠️ Minimap boyutu değişirse (`MINI_W`/`MINI_H`) bu iki sayı da
           değişmeli. */}
+      {/* ⚠️ SÜTUN İKİ KART TAŞIYOR ve sıra bilinçli:
+            1. ETKİNLİK — süreli bir haber, kaçırılabilir. Üstte.
+            2. HAZIR OLAN — kuşandığın şeyler, sen değiştirene kadar durur.
+          Etkinlik minimap'in hemen altında çünkü kullanıcının istediği yer
+          orası; ikisi de içeriği yoksa hiç çizilmiyor, yani sütun boşken
+          köyü kapatmıyor. */}
       {!panel && progress && (
-        <div style={{ position: 'absolute', top: 146, right: 10, zIndex: 6, width: 180 }}>
+        <div style={{
+          position: 'absolute', top: 146, right: 10, zIndex: 6, width: 180,
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          <EventBanner />
           <ReadyCard progress={progress} />
         </div>
       )}
