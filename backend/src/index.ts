@@ -32,7 +32,7 @@ import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
-import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned } from './admin.js';
+import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned, betaSifirla } from './admin.js';
 import {
   MAX_ACTIVE_LISTINGS, MIN_GOLD, MarketError, cancelListing, createListing,
   escrowedGold, listActive, listMine, tokenEnabled,
@@ -1812,6 +1812,53 @@ app.post('/admin/grant', adminOnly, wrap(async (req, res) => {
   console.warn('[admin] GRANT', wallet, `gold ${g >= 0 ? '+' : ''}${g}`,
     `dust ${d >= 0 ? '+' : ''}${d}`, '·', reason.trim().slice(0, 80));
   res.json({ ok: true, gold: saved.gold, dust: saved.dust });
+}));
+
+/**
+ * ⭐ BETA SIFIRLAMA — beta kapanışında TÜM oyuncu verisini siler.
+ *
+ * 🔴 `admin.ts` başlığındaki "yıkıcı işlem yok" kuralının TEK istisnası.
+ * Gerekçe orada yazılı: açık beta ilan edildi, oyunculara ilerlemenin
+ * token gününde silineceği önceden duyuruldu. Silme burada kaza değil,
+ * ürün kararı. Ama kuralın ardındaki sebep (kazayla geri dönüşsüz silme)
+ * geçerli olduğu için ÜÇ KAPI var:
+ *
+ *   1. BAKIM MODU AÇIK OLMALI. Sıfırlamanın doğru sırası
+ *      "duyur → bakım → sil" ve bu kapı o sırayı ZORUNLU kılıyor.
+ *      Oyuncular koşarken silmek, süren koşuların sunucuda karşılığı
+ *      olmayan sonuçlar döndürmesi demekti.
+ *   2. VARSAYILAN `dryRun`. Onay dizesi yoksa hiçbir şey silinmez,
+ *      yalnız ne gideceği SAYILIR. Operatör önce sayıları görür.
+ *   3. BİREBİR ONAY DİZESİ. `confirm: "WIPE"` — yanlışlıkla gönderilen
+ *      bir POST'un veritabanını boşaltmasının önündeki son engel.
+ *
+ * ⚠️ DEFTERİ ÖNCE DIŞARI AL. `Ledger` beta ekonomisinin tek denetim izi;
+ * silindikten sonra "bu gold nereden geldi" sorusunun cevabı kalmaz.
+ * Kuru çalıştırma cevabında `ledger` sayısı bilerek en üstte raporlanıyor.
+ */
+app.post('/admin/reset', adminOnly, wrap(async (req, res) => {
+  const { confirm } = req.body ?? {};
+
+  // 1. kapı — bakım modu
+  const f = await flags();
+  if (!f.maintenance) {
+    res.status(409).json({
+      error: 'bakim_kapali',
+      detail: 'Önce bakım modunu aç: POST /admin/flags {"maintenance":true}',
+    });
+    return;
+  }
+
+  // 2. kapı — onay yoksa KURU ÇALIŞTIRMA
+  const gercek = confirm === 'WIPE';
+  if (confirm !== undefined && !gercek) {
+    res.status(400).json({ error: 'onay_hatali', detail: 'confirm tam olarak "WIPE" olmalı' });
+    return;
+  }
+
+  const sayim = await betaSifirla(gercek);
+  if (gercek) console.warn('[admin] BETA SIFIRLANDI', JSON.stringify(sayim));
+  res.json({ dryRun: !gercek, sayim });
 }));
 
 const port = Number(process.env.PORT ?? 4100);

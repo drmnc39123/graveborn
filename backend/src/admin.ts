@@ -9,8 +9,20 @@
 //   2. Sunucu kimin iddiasını KIRPMAK zorunda kaldı? (yalan söylemenin izi)
 //   3. Kim insan hızının üstünde koşu üretiyor?
 //
-// ⚠️ YIKICI İŞLEM YOK. Ban geri alınabilir; silme/sıfırlama uçları bilerek
-// yazılmadı — yanlış bir tıklama oyuncunun emeğini geri dönüşsüz siler.
+// ⚠️ YIKICI İŞLEM KURALI — bir istisna var, gerekçesi aşağıda.
+// Ban geri alınabilir. Oyuncu bazlı silme/sıfırlama uçları HÂLÂ YOK ve
+// olmayacak: yanlış bir tıklama tek bir oyuncunun emeğini geri dönüşsüz
+// siler ve bunun meşru bir kullanımı yok.
+//
+// TEK İSTİSNA: `betaSifirla()` — BETA KAPANIŞI. Bu kural yazıldığında
+// öngörülmeyen bir durum: açık beta ilan edilip oynatılacak ve token
+// gününde TÜM ilerleme silinecek (oyunculara önceden duyurularak). Yani
+// silme burada kaza değil, ilan edilmiş bir ürün kararı.
+//
+// Kuralın ARDINDAKİ SEBEP (kazayla geri dönüşsüz silme) yine de geçerli,
+// o yüzden üç kapı var: bakım modu açık olmalı · varsayılan `dryRun`
+// (sayar, silmez) · gerçek silme için birebir onay dizesi.
+// ⚠️ Oyuncu bazlı bir sıfırlama ucu bu istisnanın arkasına SAKLANMAZ.
 
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
@@ -198,4 +210,83 @@ export async function setBanned(wallet: string, banned: boolean) {
     data: { banned },
     select: { wallet: true, banned: true },
   });
+}
+
+// ── BETA SIFIRLAMA ────────────────────────────────────────────────────
+
+/** Silinecek/korunacak tabloların sayımı — hem dryRun hem sonuç raporu */
+export interface SifirlamaSayim {
+  [tablo: string]: number;
+}
+
+/**
+ * BETA KAPANIŞI — tüm oyuncu verisini siler.
+ *
+ * 🔴 CASCADE'E GÜVENMEK YETMEZ, ÖLÇÜLDÜ. Şemada 20 model var; `Player`
+ * silindiğinde cascade ile giden yalnız 8'i (Run · DuelRecord · Listing ·
+ * Follow · Ticket→TicketMessage · PvpAward · SeasonAward · GearItem).
+ * Geriye kalan **9 tablo Player'a cascade ile bağlı DEĞİL** ve naif bir
+ * `player.deleteMany()` sonrası hayatta kalırdı:
+ *   Ledger (ekonomi defteri) · BossDamage · AuthNonce · Duel ·
+ *   WorldBoss · SeasonClose · PvpClose · Guild · CryptVault
+ * Yani "cascade halleder" demek, beta ekonomisinin defterini ve dağılmış
+ * loncaları yeni sezona taşımak olurdu.
+ *
+ * ⚠️ `ServerFlag` KORUNUR. Bakım bayrağı ve duyuru metni yapılandırmadır,
+ * oyuncu verisi değil — silinseydi sıfırlamanın kendisi bakım modunu
+ * kapatır ve oyun yarı silinmiş hâlde açılırdı.
+ *
+ * ⚠️ `CryptVault` SİLİNMEZ, SIFIRLANIR. Tekil satır (`@id @default(1)`);
+ * silmek onu yeniden yaratmayı çağırana bırakırdı. Bakiye ve ömür boyu
+ * sayaçlar 0'a çekiliyor.
+ *
+ * ⚠️ SIRA FK'YE GÖRE. Önce Player'a bağlı olmayan yapraklar, sonra
+ * `Player` (cascade çalışsın), en sonda `Guild` — `Player.guildId`
+ * `onDelete: SetNull` taşıyor, loncayı önce silmek her oyuncuya
+ * gereksiz bir yazma yapardı.
+ */
+export async function betaSifirla(gercek: boolean): Promise<SifirlamaSayim> {
+  const sayim: SifirlamaSayim = {};
+
+  // ── ÖNCE SAY ── dryRun'da da gerçek silmede de aynı sayılar raporlanır
+  const [
+    players, runs, duelRecords, listings, follows, tickets, ticketMessages,
+    pvpAwards, seasonAwards, gearItems,
+    ledger, bossDamage, authNonce, duels, worldBoss, seasonClose, pvpClose, guilds,
+  ] = await Promise.all([
+    prisma.player.count(), prisma.run.count(), prisma.duelRecord.count(),
+    prisma.listing.count(), prisma.follow.count(), prisma.ticket.count(),
+    prisma.ticketMessage.count(), prisma.pvpAward.count(),
+    prisma.seasonAward.count(), prisma.gearItem.count(),
+    prisma.ledger.count(), prisma.bossDamage.count(), prisma.authNonce.count(),
+    prisma.duel.count(), prisma.worldBoss.count(), prisma.seasonClose.count(),
+    prisma.pvpClose.count(), prisma.guild.count(),
+  ]);
+  Object.assign(sayim, {
+    players, runs, duelRecords, listings, follows, tickets, ticketMessages,
+    pvpAwards, seasonAwards, gearItems,
+    ledger, bossDamage, authNonce, duels, worldBoss, seasonClose, pvpClose, guilds,
+  });
+
+  if (!gercek) return sayim;
+
+  // ── SONRA SİL ── tek transaction: yarım silinmiş bir dünya kalmasın
+  await prisma.$transaction([
+    // 1) Player'a cascade ile BAĞLI OLMAYANLAR
+    prisma.ledger.deleteMany({}),
+    prisma.bossDamage.deleteMany({}),
+    prisma.authNonce.deleteMany({}),
+    prisma.duel.deleteMany({}),
+    prisma.worldBoss.deleteMany({}),
+    prisma.seasonClose.deleteMany({}),
+    prisma.pvpClose.deleteMany({}),
+    // 2) Player — 8 tablo cascade ile gider
+    prisma.player.deleteMany({}),
+    // 3) Lonca (oyuncular gittikten SONRA)
+    prisma.guild.deleteMany({}),
+    // 4) Kasa: silinmez, sıfırlanır
+    prisma.cryptVault.updateMany({ data: { balance: 0, filled: 0, paid: 0 } }),
+  ]);
+
+  return sayim;
 }
