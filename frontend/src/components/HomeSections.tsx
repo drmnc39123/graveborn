@@ -106,7 +106,16 @@ const FAQ: { q: string; a: string }[] = [
   {
     q: 'Has $GRAVE launched?',
     // ⚠️ Bu cevap DEĞİŞTİRİLMEDEN kalmalı — token çıkana kadar tek dürüst cevap
-    a: 'No. There is no contract address, and anything claiming to be one is not ours. The marketplace already takes gold listings; the token side opens when the game is finished.',
+    a: 'No. There is no contract address, and anything claiming to be one is not ours. The marketplace already takes gold listings; the token side opens when the token launches.',
+  },
+  {
+    // ⚠️ OYUNCUNUN SORACAĞI İLK SORU BU ve cevabı bulunabilir bir yerde
+    // olmalı. Belirsiz bırakmak, beta sonunda "bana kimse söylemedi"
+    // demenin zeminini hazırlamaktır.
+    // ⚠️ HİÇBİR ÖDÜL VAAT EDİLMİYOR. Verilecekse ayrıca duyurulur; burada
+    // söz vermek, verilmediğinde açılış gününün en gürültülü şikâyeti olur.
+    q: 'Does my beta progress carry over?',
+    a: 'No. This is an open beta and it ends with a full reset: gold, Forge upgrades, gear, stages and the leaderboard all go back to zero when $GRAVE launches. Play it for the game, not to bank progress. The reset date is announced in-game before it happens.',
   },
   {
     q: 'Is this pay-to-win?',

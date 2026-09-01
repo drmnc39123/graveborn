@@ -348,6 +348,11 @@ export function MarketPanel({
           list gold and it will wait in escrow, but <b style={{ color: C.bone }}>nobody
           can buy it until the token exists</b>. Cancel any listing at any time to
           take your gold back.
+          {/* ⚠️ Escrow'daki gold da siliniyor — ilan açan oyuncu bunu
+              bilmeli, yoksa "param escrow'da kaldı" şikâyeti gelir. */}
+          <br />
+          <b style={{ color: C.bone }}>Open beta:</b> listings and escrowed gold are
+          wiped with everything else when the token launches.
         </div>
       )}
 

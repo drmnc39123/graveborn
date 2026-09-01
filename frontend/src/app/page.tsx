@@ -149,7 +149,14 @@ export default function Home() {
             olmayan bağlantı koymak ziyaretçiyi boşa tıklatmak olurdu.
             $GRAVE de henüz çıkmadı — sahte bir kontrat adresi ASLA gösterilmez. */}
         <div style={{ marginTop: 10, textAlign: 'center', fontFamily: FONT.ui }}>
-          <div style={{ ...glass(9), padding: '7px 14px', display: 'inline-block', fontSize: 11, color: C.boneDim }}>
+          {/* ⚠️ AÇIK BETA — sıfırlama BURADA, oynamaya başlamadan önce yazılı.
+              Sonradan söylenirse 15 gün grind eden oyuncu haklı olarak
+              kandırıldığını düşünür. Hiçbir ödül VAAT EDİLMİYOR; verilecekse
+              ayrıca duyurulur (bkz. duyuru şeridi, ServerFlag.notice). */}
+          <div style={{ ...glass(9), padding: '8px 14px', display: 'inline-block', fontSize: 11, color: C.boneDim, lineHeight: 1.55 }}>
+            <b style={{ color: C.candle }}>OPEN BETA</b> — everything you earn now is
+            <b style={{ color: C.bone }}> wiped when ${BRAND.ticker} launches</b>.
+            <br />
             <b style={{ color: C.candle }}>${BRAND.ticker}</b> has not launched yet — there is no contract address.
           </div>
           {/* ⚠️ SANAT KREDİ SATIRLARI KULLANICI KARARIYLA KALDIRILDI.
