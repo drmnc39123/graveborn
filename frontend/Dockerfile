@@ -22,6 +22,13 @@ COPY . .
 # Değer değişirse env'i güncellemek YETMEZ, YENİDEN DERLEMEK şart.
 # ⚠️ Hiç verilmezse kod `http://localhost:4100`e düşer ve canlı site
 # sessizce oyuncunun KENDİ bilgisayarına istek atar; her panel boş kalır.
+# ⚠️ BU DEĞERİ SONRADAN EKLEMEK İÇİN "Redeploy" YETMEZ — ÖLÇÜLDÜ.
+# Railway'in Redeploy'u VAR OLAN İMAJI yeniden kullanıyor; derleme tekrar
+# koşmuyor. Değişken çalışma anında okunmadığı için de hiçbir etkisi olmaz.
+# Belirti sinsi: panelde değişken görünür, deploy "successful" der, ama
+# paket eski değeri taşır. Kanıt tek yerde — paketin içinde aramak:
+#   curl -s https://<site>/_next/static/chunks/<parca>.js | grep <deger>
+# Yeni bir NEXT_PUBLIC_* değeri devreye girecekse YENİ COMMIT gerekir.
 ARG NEXT_PUBLIC_API_URL
 ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
