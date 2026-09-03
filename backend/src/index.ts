@@ -1839,21 +1839,32 @@ app.post('/admin/grant', adminOnly, wrap(async (req, res) => {
 app.post('/admin/reset', adminOnly, wrap(async (req, res) => {
   const { confirm } = req.body ?? {};
 
-  // 1. kapı — bakım modu
-  const f = await flags();
-  if (!f.maintenance) {
-    res.status(409).json({
-      error: 'bakim_kapali',
-      detail: 'Önce bakım modunu aç: POST /admin/flags {"maintenance":true}',
-    });
-    return;
-  }
-
-  // 2. kapı — onay yoksa KURU ÇALIŞTIRMA
+  // 1. kapı — onay yoksa KURU ÇALIŞTIRMA (yalnız sayar, hiçbir şey silmez)
   const gercek = confirm === 'WIPE';
   if (confirm !== undefined && !gercek) {
     res.status(400).json({ error: 'onay_hatali', detail: 'confirm tam olarak "WIPE" olmalı' });
     return;
+  }
+
+  /**
+   * 2. kapı — bakım modu, YALNIZ GERÇEK SİLME İÇİN.
+   *
+   * ⚠️ ÖNCE KURU ÇALIŞTIRMAYI DA ENGELLİYORDU ve bu bir TASARIM HATASIYDI:
+   * kuru çalıştırma satır sayar, hiçbir şeye dokunmaz. Bakım şartı ona da
+   * uygulandığında provayı ancak SİTEYİ KAPATARAK yapabiliyordun — yani
+   * güvenlik kapısı, güvenli olan işlemi de kilitliyordu. Sonucu şu olur:
+   * kapanış günü ilk kez çalıştırılan, hiç denenmemiş bir silme yolu.
+   * Prova edilebilir olması, kapının kendisinden daha değerli.
+   */
+  if (gercek) {
+    const f = await flags();
+    if (!f.maintenance) {
+      res.status(409).json({
+        error: 'bakim_kapali',
+        detail: 'Gerçek silme için önce bakım modunu aç: POST /admin/flags {"maintenance":true}',
+      });
+      return;
+    }
   }
 
   const sayim = await betaSifirla(gercek);
