@@ -169,6 +169,29 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   const [runId, setRunId] = useState(0); // artırınca yeni run başlar
   const [muted, setMuted] = useState(false);
   /** çıkış onayı açık mı — açıkken simülasyon DURUR (bkz. döngüdeki pausedRef) */
+  /**
+   * DAR EKRAN MI? — koşu HUD'u telefonda ÜST ÜSTE BİNİYORDU.
+   *
+   * 🔴 375x812'de ölçüldü: sağ blok (süre + kill + ses + EXIT) ≈199 px,
+   * orta blok 128 px, sol 40 px, yatay dolgu 24 px → 391 px > 375 px.
+   * Yan blokların `minWidth: 0` olması taşmayı engellemiyor, yalnız
+   * küçülmelerine izin veriyor: içerik kutunun dışına taşıp komşusunun
+   * üstüne biniyordu. Ölçülen çakışmalar:
+   *   "THE HOLLOW WOOD" x 124..251  ∩  "0 kill" x 233..253
+   *   "0:00"           x 197..225  ∩  "left"   x 197..216
+   * EXIT ise 76 px `minWidth`e rağmen 12 px'e sıkışıp "E.." görünüyordu.
+   *
+   * ⚠️ Sinyal GENİŞLİK: dar bir masaüstü penceresinde de aynı şey oluyor.
+   * ⚠️ Başlangıç `false`, ölçüm efektte — `innerWidth` sunucuda yok.
+   */
+  const [darHud, setDarHud] = useState(false);
+  useEffect(() => {
+    const olc = () => setDarHud(window.innerWidth < 560);
+    olc();
+    window.addEventListener('resize', olc);
+    return () => window.removeEventListener('resize', olc);
+  }, []);
+
   const [confirmExit, setConfirmExit] = useState(false);
   const pausedRef = useRef(false);
   pausedRef.current = confirmExit;
@@ -569,7 +592,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 6 haneli kill) orta blok yerinden oynamıyor.
                 ⚠️ `minWidth: 0` ŞART: onsuz yan bloklar içeriklerinden
                 küçülemez ve dar ekranda satır taşar. */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', fontSize: 13, fontWeight: 800 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: darHud ? 5 : 8, padding: darHud ? '6px 7px' : '8px 12px', fontSize: darHud ? 11.5 : 13, fontWeight: 800 }}>
               <span style={{ flex: 1, minWidth: 0, color: C.candle }}>LV {hud.level}</span>
               {/* Bölüm ilerlemesi — bitirilebilir oyunda oyuncunun en çok istediği bilgi.
                   Descent'te bunun yerini DERİNLİK alır: tek anlamlı skor odur. */}
@@ -592,12 +615,19 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 </span>
               </span>
               <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center',
-                justifyContent: 'flex-end', gap: 8 }}>
+                justifyContent: 'flex-end', gap: darHud ? 5 : 8 }}>
                 {/* ⚠️ Süre HUD'da HİÇ görünmüyordu — `fmtTime` tanımlıydı ama
                     sadece ölüm ekranında kullanılıyordu. Survivors türünde
                     "kaç dakikadayım" en temel bilgi. */}
                 <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(hud.time)}</span>
-                <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
+                {/* ⚠️ Dar ekranda kill sayacı DÜŞÜYOR. Üç sayıdan en az
+                    gerekli olan bu: kalan düşman ortada zaten duruyor ve
+                    öldürme sayısı koşu sonunda tam olarak gösteriliyor.
+                    Süre kalıyor — survivors türünde "kaç dakikadayım"
+                    anlık karar verdiren bilgi. */}
+                {!darHud && (
+                  <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
+                )}
                 <button
                   onClick={() => { const next = !isSoundEnabled(); setSoundEnabled(next); setMuted(!next); unlockAudio(); }}
                   aria-label={muted ? 'Unmute' : 'Mute'}
@@ -609,7 +639,18 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 {/* Koşudan çıkış — oyuncu bir run'a kilitlenmemeli */}
                 {hud.phase === 'running' && (
                   <PixelButton variant={BTN.strong} scale={2} onClick={() => setConfirmExit(true)}
-                    style={{ pointerEvents: 'auto', minWidth: 76, fontSize: 10.5, fontWeight: 900, letterSpacing: 1 }}>
+                    style={{ pointerEvents: 'auto', minWidth: 76, flexShrink: 0,
+                      fontSize: 10.5, fontWeight: 900, letterSpacing: 1 }}
+                    /* ⚠️ `flexShrink: 0` ŞART — telefonda "EXIT" yerine "E.."
+                       yazıyordu. ÖLÇÜLDÜ: buton 76 px'e sıkışıyor, ama
+                       dokuz-dilim kenarlığı ölçek×32 = 64 px yiyor ve metne
+                       12 px kalıyor; iç kutunun `text-overflow: ellipsis`i
+                       de onu "E.."ye çeviriyor. Masaüstünde görünmüyordu
+                       çünkü orada satırda yer var ve buton içeriğine göre
+                       büyüyor — yani hata YALNIZ dar ekranda çıkıyordu.
+                       ⚠️ Sihirli bir `minWidth` sayısı seçmedim: yazı tipi
+                       ya da etiket değişince yine kırpardı. Sıkışmayı
+                       kapatmak sorunu kaynağında bitiriyor. */>
                     EXIT
                   </PixelButton>
                 )}
