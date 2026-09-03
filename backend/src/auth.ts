@@ -62,7 +62,24 @@ export async function verifyTurnstile(token: unknown, ip?: string): Promise<bool
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body,
     });
-    const out = (await res.json()) as { success?: boolean };
+    const out = (await res.json()) as { success?: boolean; 'error-codes'?: string[] };
+    /**
+     * ⚠️ HATA KODLARI LOGLANIYOR — çünkü kod olmadan iki TAMAMEN FARKLI
+     * durum ayırt edilemiyor:
+     *   `invalid-input-response` → sır DOĞRU, jeton kötü (normal, beklenen)
+     *   `invalid-input-secret`   → SIR YANLIŞ, herkesin girişi kırık
+     * İkisi de aynı 403'ü üretiyordu. Sır döndürüldüğünde yanlış değer
+     * girilirse belirti sessiz: girişler çalışmayı bırakır, log susar,
+     * sebep panelden de görünmez. Bir satır log bunu ölçülebilir yapıyor.
+     */
+    if (out.success !== true) {
+      const kod = out['error-codes']?.join(',') ?? 'kodsuz';
+      if (kod.includes('invalid-input-secret')) {
+        console.error('[GÜVENLİK] TURNSTILE_SECRET GEÇERSİZ — Cloudflare sırrı tanımıyor, TÜM girişler reddediliyor');
+      } else {
+        console.warn(`[turnstile] doğrulama başarısız: ${kod}`);
+      }
+    }
     return out.success === true;
   } catch {
     // Cloudflare'a ulaşılamıyorsa KAPIYI KAPAT. Açık bırakmak, servis
