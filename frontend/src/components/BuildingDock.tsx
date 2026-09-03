@@ -202,34 +202,47 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
    *
    * Ekranda görülen sonucu: panel açıkken hiçbir grup vurgulu değildi.
    */
+  /**
+   * DAR EKRAN MI? — navbar'ın telefonda katlanmasını buna göre yönetiyoruz.
+   *
+   * 🔴 NİYE VAR, ÖLÇÜLDÜ (375x812, canlı site): beş grup düğmesi + ⚙ + gold
+   * şeridi tek satıra sığmayıp SARIYOR ve navbar 117 px oluyor. Minimap ise
+   * canvas'ın içinde sabit yerde çiziliyor (`hubRender.drawMinimap`,
+   * x = w-130, y = 14 → 14..94). Yani minimap TAMAMEN navbar bandının
+   * içinde kalıyor: çiziliyor ama hiç görünmüyor. Etkinlik şeridiyle
+   * birlikte üst HUD ekranın %23'ünü yiyor.
+   *
+   * ⚠️ SİNYAL GENİŞLİK, işaretçi tipi DEĞİL. Sorun yatay yer: dar bir
+   * masaüstü penceresi de aynı şekilde sarıyor, dokunmatik bir tablet ise
+   * sarmayabiliyor. `(pointer: coarse)` bu soruyu cevaplamıyor.
+   *
+   * ⚠️ BAŞLANGIÇ `false`, ÖLÇÜM EFEKTTE. `innerWidth` sunucuda yok; ilk
+   * render'da okumak hydration uyuşmazlığı üretir — bu depoda tam olarak o
+   * hata bir kez yaşandı (bkz. `useMotionOff`).
+   */
+  const [dar, setDar] = useState(false);
+  useEffect(() => {
+    const olc = () => setDar(window.innerWidth < 640);
+    olc();
+    window.addEventListener('resize', olc);
+    return () => window.removeEventListener('resize', olc);
+  }, []);
+
+  /** Dar ekranda grup satırı açık mı. Geniş ekranda anlamsız. */
+  const [menuAcik, setMenuAcik] = useState(false);
+
   const acikGrup =
     (grup !== 'none' ? GROUPS.find((g) => g.id === grup) ?? null : null)
     ?? (open !== null ? GROUPS.find((g) => g.members.includes(open)) ?? null : null);
 
-  return (
-    <div style={{
-      // zIndex panel katmanının (5) ÜSTÜNDE: navbar her zaman tıklanabilir
-      // kalmalı, panel açıkken de doğrudan başka binaya geçilebilsin.
-      position: 'absolute', top: 10, left: 0, right: 0, zIndex: 6,
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      pointerEvents: 'none', ...style,
-    }}>
-      {/* ⚠️ ÖLÇÜLEN KUTU İKİ SATIRI DA SARIYOR. Yalnızca üst satırı ölçmek,
-          ikinci satır açıldığında panelin üstünü örtmesine yol açardı —
-          daha önce tam olarak bu hata yaşandı (bkz. fonksiyon başlığı). */}
-      <div ref={boxRef} style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-        maxWidth: 'calc(100vw - 24px)', pointerEvents: 'auto',
-      }}>
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-        justifyContent: 'center', padding: '7px 11px', maxWidth: '100%',
-        ...thinGlass(12),
-      }}>
-        {/* ⚠️ DÜĞMELER `PixelButton` — köyün geri kalanıyla AYNI dil.
-            Bir ara düz CSS düğmeye çevrilmişti ve navbar oyunun içinden
-            değil, üstüne yapıştırılmış bir web arayüzü gibi duruyordu.
-            Gruplama kalıyor, düğmenin görünümü değişmiyor. */}
+  /**
+   * Grup düğmeleri + ayar. ⚠️ İKİ YERDE KULLANILIYOR: geniş ekranda
+   * navbar'ın ilk satırında, dar ekranda ☰ ile açılan satırda. JSX'i
+   * kopyalamak yerine tek yerde tutuluyor — kopya olsaydı biri
+   * güncellenip diğeri unutulurdu.
+   */
+  const grupDugmeleri = (
+    <>
         {GROUPS.map((g) => (
           <PixelButton
             key={g.id}
@@ -260,6 +273,56 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
         >
           ⚙
         </PixelButton>
+    </>
+  );
+
+  return (
+    <div style={{
+      // zIndex panel katmanının (5) ÜSTÜNDE: navbar her zaman tıklanabilir
+      // kalmalı, panel açıkken de doğrudan başka binaya geçilebilsin.
+      position: 'absolute', top: 10, left: 0, right: 0, zIndex: 6,
+      display: 'flex', flexDirection: 'column',
+      // ⚠️ DAR EKRANDA SOLA HİZALI, ortalı DEĞİL. Minimap canvas'ın sağ üst
+      // köşesinde sabit (x = w-130, y = 14..94); ortalanmış bir çubuk
+      // telefonda tam onun üstünden geçiyordu. Sola yaslanınca sağ üst
+      // köşe minimap'e kalıyor. Geniş ekranda ortalı kalıyor.
+      alignItems: dar ? 'flex-start' : 'center',
+      paddingLeft: dar ? 10 : 0,
+      pointerEvents: 'none', ...style,
+    }}>
+      {/* ⚠️ ÖLÇÜLEN KUTU İKİ SATIRI DA SARIYOR. Yalnızca üst satırı ölçmek,
+          ikinci satır açıldığında panelin üstünü örtmesine yol açardı —
+          daha önce tam olarak bu hata yaşandı (bkz. fonksiyon başlığı). */}
+      <div ref={boxRef} style={{
+        display: 'flex', flexDirection: 'column',
+        alignItems: dar ? 'flex-start' : 'center', gap: 6,
+        maxWidth: 'calc(100vw - 24px)', pointerEvents: 'auto',
+      }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        justifyContent: 'center', padding: '7px 11px', maxWidth: '100%',
+        ...thinGlass(12),
+      }}>
+        {/* ⚠️ DÜĞMELER `PixelButton` — köyün geri kalanıyla AYNI dil.
+            Bir ara düz CSS düğmeye çevrilmişti ve navbar oyunun içinden
+            değil, üstüne yapıştırılmış bir web arayüzü gibi duruyordu.
+            Gruplama kalıyor, düğmenin görünümü değişmiyor. */}
+        {/* ⚠️ DAR EKRANDA ☰ — beş düğme + gold tek satıra sığmıyordu ve
+            navbar 117 px'e çıkıp minimap'i tamamen örtüyordu (ölçüldü).
+            Geniş ekranda hiçbir şey değişmiyor: düğmeler açıkta kalıyor,
+            fazladan tık YOK. */}
+        {dar ? (
+          <PixelButton
+            variant={BTN.action}
+            scale={2}
+            active={menuAcik}
+            onClick={() => setMenuAcik((v) => !v)}
+            title="Menu"
+            style={{ fontSize: 13, fontWeight: 900, letterSpacing: 0 }}
+          >
+            ☰
+          </PixelButton>
+        ) : grupDugmeleri}
 
         {/* Cüzdan navbar'ın sağ ucunda — ayrı çerçeve tutarsız duruyordu */}
         <span style={{
@@ -278,12 +341,20 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
                 görmüyordu. Hareket kapalıyken (`prefers-reduced-motion` ya da
                 `lowGraphics`) anında son değeri gösterir, bilgi kaybolmaz. */}
             {sayanGold.toLocaleString('en-US')}
-            <span style={{ fontSize: 9, color: C.candleSoft }}>GOLD</span>
+            {/* ⚠️ Dar ekranda "GOLD" kelimesi düşüyor — ikon zaten ne
+                olduğunu söylüyor ve çubuğun her pikseli minimap ile
+                yarışıyor (ölçüldü: 375 px'de çubuk 302 px'ti). */}
+            {!dar && <span style={{ fontSize: 9, color: C.candleSoft }}>GOLD</span>}
           </span>
-          <span style={{ fontSize: 12, fontWeight: 900, color: C.boneFaint, whiteSpace: 'nowrap' }}>
-            {grave.toLocaleString('en-US')}
-            <span style={{ fontSize: 9, marginLeft: 3 }}>$GRAVE</span>
-          </span>
+          {/* ⚠️ $GRAVE dar ekranda GİZLİ. Token henüz çıkmadı, değer herkeste
+              0 — telefonda yer kaplayan tek şey bu sıfır oluyordu. Token
+              çıkınca bu koşul kaldırılmalı (o gün sayı anlam kazanacak). */}
+          {!dar && (
+            <span style={{ fontSize: 12, fontWeight: 900, color: C.boneFaint, whiteSpace: 'nowrap' }}>
+              {grave.toLocaleString('en-US')}
+              <span style={{ fontSize: 9, marginLeft: 3 }}>$GRAVE</span>
+            </span>
+          )}
           {/* Hangi kayda oynadığın HER ZAMAN görünsün. Demo ilerlemesi bu
               cihazda kalır; oyuncunun bunu sonradan öğrenmesi kötü olurdu. */}
           <span style={{
@@ -296,6 +367,20 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
           </span>
         </span>
       </div>
+
+      {/* ── DAR EKRAN: ☰ ile açılan grup satırı ──
+          ⚠️ Grupları birinci satıra geri koymuyorum: orada sarıp yine
+          117 px'lik bir bant üretirlerdi. Ayrı satır olunca kapalıyken
+          navbar tek satır (≈44 px) kalıyor ve minimap açıkta. */}
+      {dar && menuAcik && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          justifyContent: 'flex-start', padding: '6px 10px', maxWidth: '100%',
+          ...thinGlass(10),
+        }}>
+          {grupDugmeleri}
+        </div>
+      )}
 
       {/* ── İKİNCİ SATIR: seçili grubun üyeleri ──
           ⚠️ Gizlenmiyor, AÇILIYOR. Açılır menü yapmadım: menü, üzerine

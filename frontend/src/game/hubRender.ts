@@ -689,21 +689,33 @@ function drawMinimap(ctx: CanvasRenderingContext2D, s: HubState, w: number) {
   const world = s.world;
   if (miniFor !== world) { miniBase = buildMiniBase(world); miniFor = world; }
   if (!miniBase) return;
-  const x = w - MINI_W - 14, y = 14;
+  /**
+   * ⚠️ DAR EKRANDA KÜÇÜLÜYOR — telefonda navbar ile aynı bandı paylaşıyor.
+   * ⚠️ ORAN ÖLÇÜMLE SEÇİLDİ, TAHMİNLE DEĞİL (375 px):
+   *   1,0 → minimap x 189..361, çubuk 10..312 → 123 px çakışma
+   *   0,8 → minimap x 223..361, çubuk 10..232 →   9 px çakışma
+   *   0,7 → minimap x 241..361, çubuk 10..232 →   9 px BOŞLUK ✅
+   * Çubuk kısaltıldıktan (GOLD kelimesi ve $GRAVE düştükten) SONRA bile
+   * 0,8 yetmiyordu; sayı burada duruyor ki bir daha tahminle oynanmasın.
+   */
+  const dar = w < 640;
+  const mw = dar ? Math.round(MINI_W * 0.7) : MINI_W;
+  const mh = dar ? Math.round(MINI_H * 0.7) : MINI_H;
+  const x = w - mw - 14, y = 14;
 
   ctx.save();
   ctx.fillStyle = 'rgba(10,8,6,0.82)';
-  ctx.fillRect(x - 4, y - 4, MINI_W + 8, MINI_H + 8);
+  ctx.fillRect(x - 4, y - 4, mw + 8, mh + 8);
   ctx.strokeStyle = 'rgba(227,216,192,0.28)';
   ctx.lineWidth = 2;
-  ctx.strokeRect(x - 4, y - 4, MINI_W + 8, MINI_H + 8);
+  ctx.strokeRect(x - 4, y - 4, mw + 8, mh + 8);
 
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha = 0.92;
-  ctx.drawImage(miniBase, x, y, MINI_W, MINI_H);
+  ctx.drawImage(miniBase, x, y, mw, mh);
   ctx.globalAlpha = 1;
 
-  const sx = MINI_W / world.w, sy = MINI_H / world.h;
+  const sx = mw / world.w, sy = mh / world.h;
 
   ctx.fillStyle = C.candle;
   for (const d of world.doors) ctx.fillRect(x + d.x * sx - 1.5, y + d.y * sy - 1.5, 3, 3);
