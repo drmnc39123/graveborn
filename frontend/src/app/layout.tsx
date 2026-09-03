@@ -1,9 +1,44 @@
 import type { Metadata, Viewport } from 'next';
 import { BRAND, C } from '@/lib/theme';
 
+/** Kart metni — OpenGraph ve X kartında AYNI cümle dursun diye tek yerde. */
+const PAYLASIM_METNI = 'A pixel survivor roguelike on Solana. Endless runs, a cursed Forge, no permanent death. Open beta — progress wipes when $GRAVE launches.';
+
 export const metadata: Metadata = {
+  /**
+   * ⚠️ `metadataBase` OLMADAN `og:image` GÖRECELİ kalıyor ve X, Telegram,
+   * Discord kartı HİÇ çizilmiyor — link çıplak görünür. Lansmanın hunisi
+   * tamamen o kanallardan geçtiği için bu doğrudan tıklama kaybıydı.
+   *
+   * ⚠️ Üretim alan adı SABİT yazılı, env'den okunmuyor. Vercel önizleme
+   * dağıtımları her seferinde ayrı bir alan adı üretiyor; env'den okusaydı
+   * her önizlemenin kartı başka bir yere işaret ederdi. Kart her zaman
+   * üretim görselini göstersin.
+   */
+  metadataBase: new URL('https://playgraveborn.com'),
   title: `${BRAND.name} — ${BRAND.tagline}`,
   description: 'Survive the endless horde. Die. Rise again stronger. On Solana.',
+  applicationName: BRAND.name,
+  openGraph: {
+    type: 'website',
+    siteName: BRAND.name,
+    url: '/',
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    /**
+     * ⚠️ Beta uyarısı KARTTA DA duruyor. Paylaşılan link, oyuncunun oyunu
+     * ilk gördüğü yer; sıfırlamayı sitede söyleyip kartta söylememek
+     * "bana kimse söylemedi"nin zeminini hazırlar.
+     */
+    description: PAYLASIM_METNI,
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: `${BRAND.name} — ${BRAND.tagline}` }],
+  },
+  twitter: {
+    // ⚠️ 'summary' olursa X küçük kare kart çizer ve 1200x630 görsel kırpılır
+    card: 'summary_large_image',
+    title: `${BRAND.name} — ${BRAND.tagline}`,
+    description: PAYLASIM_METNI,
+    images: ['/og.png'],
+  },
 };
 
 export const viewport: Viewport = {
