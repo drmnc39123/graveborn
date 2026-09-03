@@ -112,9 +112,16 @@ export default function Home() {
             {busy === 'wallet' ? 'CONNECTING…' : 'CONNECT WALLET'}
           </PixelButton>
 
+          {/* ⚠️ DEMO CAPTCHA'YA BAĞLI DEĞİL — bilerek.
+              Demo sunucuya HİÇ dokunmuyor (ilerleme localStorage'da, tek bir
+              uç bile çağrılmıyor). Bot kontrolünün koruduğu şey HESAP AÇMA,
+              yani cüzdan girişi. Demoyu da kilitlemek, hiçbir şeyi
+              korumadan huninin EN TEPESİNE sürtünme koymaktı: oyuncu daha
+              oyunu görmeden bir doğrulama ekranıyla karşılaşıyordu.
+              Demo bir vitrindir; vitrinin kapısına kilit takılmaz. */}
           <PixelButton
             variant="01A" scale={3}
-            disabled={busy !== null || needCaptcha}
+            disabled={busy !== null}
             onClick={onDemo}
             style={{ width: '100%', fontSize: 13, fontWeight: 900, letterSpacing: 1.4 }}
           >
@@ -123,7 +130,7 @@ export default function Home() {
 
           <div style={{ fontFamily: FONT.ui, fontSize: 10.5, color: C.boneFaint, textAlign: 'center', lineHeight: 1.6 }}>
             {needCaptcha
-              ? 'Complete the check above to enter'
+              ? 'The check above is only for wallet sign-in'
               : 'Demo keeps your progress on this device only'}
           </div>
         </div>
