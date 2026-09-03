@@ -512,5 +512,54 @@ console.log('\n[G] YÜZEY DİLİ — canvas üstünde `glass` kullanılamaz');
     eksikDosya.length ? `bulunamadı: ${eksikDosya.join(', ')}` : 'liste güncel');
 }
 
+// ── [D] BAĞIMLILIK DİZİSİ OLMAYAN EFFECT + setState = SONSUZ DÖNGÜ ────
+//
+// 🔴 BU HATA ÜRETİMDE OYUNU OYNANAMAZ YAPTI (React #185). `PixelText`te
+// bağımlılık dizisi olmayan bir `useLayoutEffect` her render'da ölçüp
+// `setState` çağırıyordu. Kapsayıcı SABİTKEN zararsız görünüyor —
+// animasyon altında (iniş perdesi) hiç yakınsamıyor ve React commit
+// zincirini kırıyor. Belirti: köy açılır, STAGE ve BARROW açılmaz.
+//
+// ⚠️ Kural: `useEffect`/`useLayoutEffect` bağımlılık dizisi OLMADAN
+// yazılacaksa içinde `setX(` OLMAYACAK. Ölçüm sinyali gerekiyorsa
+// `ResizeObserver` + `resize` kullanılır — geri çağrıları ayrı görevde
+// koşar, React'in commit zincirine iç içe girmez.
+console.log('\n[D] render döngüsü riski');
+{
+  const kokC = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'components');
+  const dosyalar: string[] = [];
+  const tara = (d: string) => {
+    for (const ad of fs.readdirSync(d)) {
+      const tam = path.join(d, ad);
+      if (fs.statSync(tam).isDirectory()) tara(tam);
+      else if (ad.endsWith('.tsx') || ad.endsWith('.ts')) dosyalar.push(tam);
+    }
+  };
+  tara(kokC);
+
+  const ihlal: string[] = [];
+  for (const f of dosyalar) {
+    const metin = fs.readFileSync(f, 'utf8');
+    const re = /use(?:Layout)?Effect\(\(\)\s*=>\s*\{/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(metin))) {
+      let i2 = m.index + m[0].length;
+      let derinlik = 1;
+      while (i2 < metin.length && derinlik > 0) {
+        const c = metin[i2];
+        if (c === '{') derinlik++;
+        else if (c === '}') derinlik--;
+        i2++;
+      }
+      const govde = metin.slice(m.index + m[0].length, i2 - 1);
+      const bagimlilikVar = /^\s*,\s*\[/.test(metin.slice(i2, i2 + 8));
+      const setStateVar = /\bset[A-Z]\w*\s*\(/.test(govde);
+      if (!bagimlilikVar && setStateVar) ihlal.push(path.basename(f));
+    }
+  }
+  check('bağımlılıksız effect içinde setState YOK', ihlal.length === 0,
+    ihlal.length ? `İHLAL: ${[...new Set(ihlal)].join(', ')}` : `${dosyalar.length} dosya tarandı`);
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ EFEKT KATMANI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
