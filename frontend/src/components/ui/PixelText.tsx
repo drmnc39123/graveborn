@@ -82,36 +82,44 @@ export function PixelText({
     return () => { iptal = true; window.clearInterval(t); };
   }, [family, color]);
 
-  // ── KAPSAYICIYI ÖLÇ — ÜÇ SİNYAL, HİÇBİRİNE TEK BAŞINA GÜVENİLMİYOR ──
+  // ── KAPSAYICIYI ÖLÇ ────────────────────────────────────────────────
   //
-  // 🔴 `ResizeObserver` TEK SİNYAL OLARAK KULLANILAMAZ. Doğrulama sırasında
-  // ölçüldü: bu projenin önizleme tarayıcısında RO **hiç tetiklenmiyor** —
-  // elle kurulan bağımsız bir gözlemci bile, spec gereği `observe()` anında
-  // gelmesi gereken ilk çağrıyı almadı. Gerçek tarayıcılarda RO çalışır ama
-  // bir ölçüm aletinin sessizce ölmesi bu depoda defalarca yaşandı; tek
-  // bacaklı bir ölçüm, sessizce yanlış ölçeğe kilitlenmek demekti.
+  // 🔴 BURADA BİR KEZ SONSUZ DÖNGÜ ÜRETİLDİ — ÜRETİMDE ÇÖKME (React #185,
+  // "Maximum update depth exceeded"). Eski hâlde BAĞIMLILIK DİZİSİ OLMAYAN
+  // bir `useLayoutEffect` her render'da ölçüp `setAlan` çağırıyordu ve
+  // yanına şu gerekçe yazılmıştı:
+  //     "değer değişmediğinde setAlan React tarafından yutuluyor,
+  //      yani sonsuz döngü yok"
+  // ⚠️ BU GEREKÇE YANLIŞTI. Yalnız genişlik SABİTKEN doğru. İniş perdesi
+  // (DescentCurtain) kapsayıcıyı her karede büyütüyor: ölç → setState →
+  // render → ölç → ... 0,5 px eşiği hiç sağlanmıyor, React 50. iç içe
+  // güncellemede durup fırlatıyor. Belirti: köy açılıyor ama stage'e ve
+  // Barrow'a GİRİLEMİYOR — ikisi de perdeden geçiyor.
   //
-  // 1) HER RENDER'DA layout ölçümü — asıl bacak. Tek `getBoundingClientRect`
-  //    çağrısı; değer değişmediğinde `setAlan` React tarafından yutuluyor,
-  //    yani sonsuz döngü yok. Canvas'ın kendi boyu sarmalayıcıyı
-  //    etkilemiyor (`width:100%`), o yüzden geri besleme de yok.
-  // 2) Pencere yeniden boyutlanması — telefon döndürme, masaüstü sürükleme.
-  // 3) `ResizeObserver` — yalnız KAPSAYICI değişiyorsa (panel açılış
-  //    animasyonu); varsa ek fayda, yoksa 1 ve 2 işi görüyor.
+  // ⚠️ O bacağı eklememin sebebi de kayda değer: bu projenin ÖNİZLEME
+  // tarayıcısında `ResizeObserver` tetiklenmiyordu. Yani gerçek tarayıcıda
+  // olmayan bir kusura karşı sertleştirip ÜRETİMİ KIRDIM. Ölçüm aracının
+  // sınırı, ürünün gereksinimi değildir.
+  //
+  // Şimdi tek bir bağlama effect'i, üç iş yapıyor ve HİÇBİRİ render'a bağlı
+  // değil:
+  //   1) Bağlanınca BİR KEZ ölç — ilk ölçüm RO'ya muhtaç değil (asıl
+  //      ihtiyacım buydu, çözümü render döngüsü değilmiş).
+  //   2) `resize` — telefon döndürme, pencere sürükleme.
+  //   3) `ResizeObserver` — kapsayıcı animasyonla değişirse. RO geri
+  //      çağrıları AYRI bir görevde koşuyor, React'in commit zincirine
+  //      İÇ İÇE girmiyor; bu yüzden #185 üretemez.
   useLayoutEffect(() => {
     const el = sarmalRef.current;
     if (!el) return;
-    const w = el.getBoundingClientRect().width;
-    if (w > 0 && Math.abs(w - alan) > 0.5) setAlan(w);
-  });
 
-  useEffect(() => {
-    const el = sarmalRef.current;
-    if (!el) return;
     const olc = () => {
       const w = el.getBoundingClientRect().width;
       if (w > 0) setAlan((o) => (Math.abs(w - o) > 0.5 ? w : o));
     };
+
+    olc();
+
     window.addEventListener('resize', olc);
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== 'undefined') {
