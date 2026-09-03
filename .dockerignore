@@ -1,0 +1,13 @@
+# ⚠️ node_modules DIŞARIDA KALMALI. `COPY . .` yerel (Windows) node_modules'ü
+# imaja taşısaydı, `npm ci` ile kurulan Linux ikililerinin üstüne yazardı ve
+# prisma/tsx çalışma anında "invalid ELF header" ile ölürdü.
+node_modules
+**/node_modules
+.next
+**/.next
+.git
+.tmp
+# ⚠️ .env asla imaja girmez — sırlar barındırıcının Variables ekranından gelir
+.env
+**/.env
+*.log
