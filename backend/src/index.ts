@@ -33,6 +33,7 @@ import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned, betaSifirla, buyume, defterAkisi } from './admin.js';
+import { esikAcikMi, esikKontrol, esikMetni } from './hold.js';
 import {
   MAX_ACTIVE_LISTINGS, MIN_GOLD, MarketError, cancelListing, createListing,
   escrowedGold, listActive, listMine, tokenEnabled,
@@ -1581,6 +1582,9 @@ app.get('/market/listings', wrap(async (req, res) => {
   res.json({
     listings: await listActive(Number.isFinite(limit) ? limit : 50, Number.isFinite(offset) ? offset : 0),
     tokenEnabled: tokenEnabled(),
+    // ⚠️ Arayüz eşiği ÖNCEDEN göstersin: oyuncu ilanı yazıp gönderdikten
+    // sonra 403 yemek yerine kapıyı baştan görsün.
+    holdMin: esikAcikMi() ? esikMetni() : null,
     // ⚠️ KURALLAR SUNUCUDAN. `MIN_GOLD` ve `MAX_ACTIVE_LISTINGS` panelde ELLE
     // KOPYALANMIŞTI (MarketPanel.tsx). İki kopya demek, biri değişince
     // diğerinin sessizce yalan söylemesi demek: oyuncuya "min 50" yazıp
@@ -1601,6 +1605,17 @@ app.post('/market/list', wrap(async (req, res) => {
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
   const body = listSchema.safeParse(req.body);
   if (!body.success) { res.status(400).json({ error: 'gecersiz_istek' }); return; }
+  /**
+   * ⭐ HOLD-TO-PLAY — token ekonomisine giriş eşiği (bkz. `hold.ts`).
+   * ⚠️ Eşik `TOKEN_MINT` + `HOLD_MIN` tanımlı DEĞİLSE hiçbir şey yapmaz,
+   * yani beta boyunca bu satır görünmez. Oyuna girişi kapatmıyor: ilan
+   * açmak token ekonomisinin kapısı, oyunun değil.
+   */
+  const esik = await esikKontrol(wallet);
+  if (!esik.ok) {
+    res.status(403).json({ error: 'esik_yetersiz', need: esikMetni() });
+    return;
+  }
   try {
     const listing = await createListing(wallet, body.data.goldAmount, BigInt(body.data.priceGrave));
     const player = await prisma.player.findUniqueOrThrow({ where: { wallet } });
@@ -1632,6 +1647,11 @@ app.post('/market/cancel', wrap(async (req, res) => {
 
 // Satın alma token çıkana kadar KAPALI — sahte bir "satın al" düğmesi
 // göstermek, oyuncuyu olmayan bir işleme sokmak olurdu.
+//
+// ⚠️ EŞİK KONTROLÜ 503'ÜN ÖNÜNE KONULMADI ve bu bilinçli: token yokken
+// eşik zaten kapalı, kontrol her zaman geçerdi. Satın alma yazıldığı gün
+// `/market/list`teki üç satır buraya da kopyalanmalı — `TOKEN.md` §7
+// kontrol listesinde yazılı.
 app.post('/market/buy', wrap(async (_req, res) => {
   res.status(503).json({ error: 'token_yok' });
 }));

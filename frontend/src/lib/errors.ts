@@ -48,6 +48,38 @@ const METIN: Record<string, string> = {
   cekilis_yok: 'No pull is available.',
   bahis_kurulamadi: 'That wager could not be placed.',
   bakiye_negatife_duserdi: 'That would take the balance below zero.',
+  // ⚠️ Hold-to-play eşiği. Sunucu ayrıca `need` alanında gereken adedi
+  // döndürüyor; panel onu gösterebilir, buradaki cümle yedek.
+  esik_yetersiz: 'You need to hold $GRAVE in your wallet to trade on the market.',
+
+  // ── 🔴 SINIFLA FIRLATILAN KODLAR — bu 13'ü TABLOYA HİÇ GİRMEMİŞTİ.
+  // Ölçüldü (`errors.test`): kodlar oyuncuya üç yoldan gidiyor ve tablo
+  // yalnız birincisini (`res.json({ error: '...' })`) kapsıyordu. Sınıfla
+  // fırlatılanlar (`throw new QuestError('tavan')`) ve `reason` dönenler
+  // ekranda HAM TÜRKÇE KİMLİK olarak görünüyordu — tam da bu dosyanın
+  // önlemek için yazıldığı şey.
+  bonus_hazir_degil: 'That bonus is not ready yet.',
+  bugunun_gorevi_degil: 'That is not one of today’s quests.',
+  gecersiz_gorev: 'That quest does not exist.',
+  tamamlanmadi: 'That quest is not finished yet.',
+  deed_yok: 'You do not own a Crypt Deed.',
+  bu_hafta_alindi: 'You already claimed this week.',
+  gecersiz_kayit: 'That duel record does not exist.',
+  kendini_takip: 'You cannot follow yourself.',
+  talep_yok: 'That ticket does not exist.',
+  senin_talebin_degil: 'That ticket is not yours.',
+  takilamadi: 'That could not be equipped.',
+  tavan: 'That is already at its maximum level.',
+  // ⚠️ İki istek aynı satırı aynı anda değiştirdi. Tekrar denemek çözer —
+  // "bir şeyler ters gitti" demek oyuncuya ne yapacağını söylemezdi.
+  yaris: 'Something changed while you were doing that — try again.',
+
+  // ── yalnız ADMIN panelinde görünür ──
+  // ⚠️ Oyuncuya asla gitmez ama yine de eşlendi: mühür (`errors.test`)
+  // istisna listesi tutmuyor. İstisna listesi tutan mühürler, listeye bir
+  // kod eklenerek sessizce etkisizleştirilebilir.
+  bakim_kapali: 'Turn maintenance on before running this.',
+  onay_hatali: 'The confirmation text does not match.',
 
   // ── geçersiz girdi ──
   gecersiz_istek: 'Something in that request was wrong.',

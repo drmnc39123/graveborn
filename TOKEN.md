@@ -141,7 +141,14 @@ Sıra: **deploy → oyuncu → token**. Tersi değil.
 - [ ] Başarısız işlem (`meta.err != null`) reddediliyor mu — **test şart**
 - [ ] Escrow yarışı testi: iki alıcı aynı ilan → biri geçer
 - [ ] Exchange açıldı
-- [ ] Hold-to-play eşiği env'de, dolar hedefine göre ayarlandı
+- [x] Hold-to-play eşiği **yazıldı ve mühürlendi** (`hold.ts` + `rpc.ts`,
+      `hold.test.mts` 14 kontrol). Açmak için: `TOKEN_MINT` + `HOLD_MIN`
+      (insan okunur adet) — ikisi birden olmadan kapı tamamen açık.
+- [ ] `RPC_URLS` özel sağlayıcıyla dolduruldu (**eşiği açmadan önce**;
+      genel uç hız sınırlı)
+- [ ] `HOLD_MIN` dolar hedefine göre ayarlandı (adet DEĞİL, dolar hedefi)
+- [ ] `/market/buy` yazılırken `/market/list`teki üç satırlık eşik kontrolü
+      **oraya da kopyalandı** (kod içinde uyarı olarak duruyor)
 - [ ] Ana sayfadaki "token çıkmadı, kontrat adresi yok" metni güncellendi
 
 ---

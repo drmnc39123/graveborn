@@ -6,6 +6,8 @@
 // doğrulama ve veritabanı gerçekten birlikte çalışıyor mu.
 
 import nacl from 'tweetnacl';
+import { stageById } from '@game/config';
+import { TIME_SAFETY } from './reward.js';
 import bs58 from 'bs58';
 import { prisma } from './db.js';
 
@@ -85,11 +87,48 @@ check('koşu açılıyor', start.status === 200 && !!start.json?.runId, `${start
 check('SEED SUNUCUDAN geliyor', typeof start.json?.seed === 'number', `${start.json?.seed}`);
 const runId = start.json.runId as string;
 
-const fin = await api('/run/finish', {
+/**
+ * 🔴 BU TEST BİR SÜRE KIRMIZIYDI VE SEBEBİ OYUN DEĞİL, TESTİN KENDİSİYDİ.
+ *
+ * Eskiden koşu açılıp AYNI SANİYE `cleared:true` ile kapatılıyor ve
+ * +300 gold bekleniyordu. O davranış artık bilerek YOK: `acceptCleared`
+ * (reward.ts) kampanyaya bir süre tabanı koydu, çünkü "start → finish,
+ * iki istek, sıfır saniye" ile ~20 istekte TÜM kampanya bitiriliyordu.
+ * Yani test, kapatılan sömürünün ta kendisini yapıyordu ve düşmesi
+ * DOĞRUYDU. Beklentiyi gevşetmek (300 → 0 yazmak) mühürü sessizce
+ * söndürürdü; doğrusu iki yönü de ölçmek.
+ */
+const st1 = stageById(1)!;
+const TABAN_SN = (st1.enemyCount / st1.spawnRate) * TIME_SAFETY;
+
+// ── 4a) ANINDA temizlik iddiası REDDEDİLMELİ ──
+const hizli = await api('/run/finish', {
   method: 'POST', token,
   body: { runId, deepestCleared: 0, rareGold: 25, cleared: true },
 });
-check('koşu kapanıyor', fin.status === 200, `${fin.status}`);
+check('koşu kapanıyor', hizli.status === 200, `${hizli.status}`);
+check('SIFIR saniyede temizlik iddiası ödenmiyor', hizli.json?.progressGold === 0,
+  `+${hizli.json?.progressGold}`);
+check('SIFIR saniyede bölüm AÇILMIYOR', hizli.json?.progress?.unlockedStage === 1,
+  `${hizli.json?.progress?.unlockedStage}`);
+// ⚠️ Ödül vermemek yetmez, koşu KIRPILMIŞ olarak da işaretlenmeli —
+// yoksa admin panelinde sömürü denemesi TEMİZ görünür.
+check('nadir düşüş yine de ödendi (ceza değil, tavan)', hizli.json?.dropGold === 25,
+  `+${hizli.json?.dropGold}`);
+
+// ── 4b) TABANI BEKLEYEN meşru temizlik ÖDENMELİ ──
+// ⚠️ Bu bekleme testi yavaşlatıyor ve bilerek göze alınıyor: tabanı
+// atlamanın tek yolu ya sunucuya sahte süre göndermek (yok, süre
+// `startedAt`ten türüyor) ya da tabanı düşürmek olurdu — ikincisi
+// mühürü ölçmek için mühürü kırmak demek.
+const bekle = Math.ceil(TABAN_SN) + 3;
+console.log(`  · meşru temizlik için ${bekle} sn bekleniyor (taban ${TABAN_SN.toFixed(1)} sn)`);
+const yavas = await api('/run/start', { method: 'POST', token, body: { mode: 'campaign', stageId: 1 } });
+await new Promise((r) => setTimeout(r, bekle * 1000));
+const fin = await api('/run/finish', {
+  method: 'POST', token,
+  body: { runId: yavas.json.runId, deepestCleared: 0, rareGold: 25, cleared: true },
+});
 check('ilk geçiş ödülü ödendi', fin.json?.progressGold === 300, `+${fin.json?.progressGold}`);
 check('nadir düşüş de ödendi', fin.json?.dropGold === 25, `+${fin.json?.dropGold}`);
 check('2. bölüm açıldı', fin.json?.progress?.unlockedStage === 2, `${fin.json?.progress?.unlockedStage}`);

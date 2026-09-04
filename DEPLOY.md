@@ -112,6 +112,22 @@ migration üretir; üretim onu `migrate deploy` ile uygular.
 | `PORT` | — | Barındırıcı verir |
 | `TURNSTILE_SECRET` | — | Yoksa bot kontrolü atlanır |
 | `TOKEN_MINT` | — | $GRAVE henüz yok; boşken marketplace token bacağı 503 döner |
+| `RPC_URLS` | — | Solana RPC uçları, **virgülle çoklu ve SIRALI** (ilki birincil, sonrakiler yedek). Boşsa genel `api.mainnet-beta.solana.com` kullanılır — hız sınırlı, üretim için **yetersiz**. |
+| `HOLD_MIN` | — | Hold-to-play eşiği, **insan okunur adet** (örn. `1000`). Boş/0 = eşik kapalı. `TOKEN_MINT` de gerekli. |
+| `TOKEN_DECIMALS` | — | Varsayılan 9. `HOLD_MIN` bununla ham birime çevrilir. |
+| `HOLD_FAIL_CLOSED` | — | `1` ise RPC kesintisinde eşik kapısı KAPANIR. Varsayılan açık — gerekçe `hold.ts`te. |
+
+### ⚠️ HOLD-TO-PLAY VARSAYILAN OLARAK KAPALI
+
+`TOKEN_MINT` **ve** `HOLD_MIN` birlikte tanımlanmadıkça eşik hiçbir şey
+yapmaz; beta boyunca davranış değişmez. Eşik yalnız `/market/list` ve
+(yazıldığında) `/market/buy` uçlarını kapatır — koşu, Forge, lonca, kasa
+ve PvP eşiksiz kalır. Sert hold-to-play huniyi öldürüyor; karar
+`TOKEN.md` §4'te.
+
+⚠️ Eşiği açmadan ÖNCE `RPC_URLS` doldurulmalı. Genel uç saniyede birkaç
+istekte sınırlanıyor ve eşik her ilan denemesinde (önbellekle 2 dakikada
+bir) zincire soruyor.
 
 ### frontend
 | Değişken | Zorunlu | Not |

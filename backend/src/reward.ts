@@ -358,7 +358,13 @@ export function minDescentSeconds(stageId: number, depth: number, startDepth = 1
  * %15 pay yalancıya hiçbir şey kazandırmıyor (o saniyeler değil derinlikler
  * uyduruyor), dürüst oyuncuya nefes alanı veriyor.
  */
-const TIME_SAFETY = 0.85;
+/**
+ * ⚠️ DIŞA AÇILDI — testler bu payı YENİDEN YAZMASIN diye. e2e testi meşru
+ * bir bölüm temizliğini doğrulamak için tabanı beklemek zorunda; sabiti
+ * kopyalasaydı, taban değiştiği gün test eski sayıyla bekler ve "kod
+ * bozuldu" derdi. Tek kaynak burada.
+ */
+export const TIME_SAFETY = 0.85;
 
 /**
  * Geçen sürede en fazla hangi derinliğe inilebilirdi.

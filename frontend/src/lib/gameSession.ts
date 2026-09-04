@@ -254,9 +254,12 @@ export const marketAvailable = () => isWallet();
  */
 export async function fetchListings(): Promise<{
   listings: Listing[]; tokenEnabled: boolean; minGold?: number; maxListings?: number;
+  /** hold-to-play eşiği (insan okunur adet) — eşik kapalıysa null */
+  holdMin?: string | null;
 }> {
   // Emir defteri herkese açık — demo oyuncusu da bakabilir, sadece satamaz.
-  return api<{ listings: Listing[]; tokenEnabled: boolean; minGold?: number; maxListings?: number }>('/market/listings');
+  return api<{ listings: Listing[]; tokenEnabled: boolean; minGold?: number; maxListings?: number;
+    holdMin?: string | null }>('/market/listings');
 }
 
 export async function fetchMyListings(): Promise<{ listings: Listing[]; escrowedGold: number }> {

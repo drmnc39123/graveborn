@@ -184,6 +184,8 @@ export function MarketPanel({
   const [mine, setMine] = useState<Listing[]>([]);
   const [escrow, setEscrow] = useState(0);
   const [tokenLive, setTokenLive] = useState(false);
+  /** hold-to-play eşiği — sunucu açtıysa dolu gelir, betada null */
+  const [holdMin, setHoldMin] = useState<string | null>(null);
   const [minGold, setMinGold] = useState(VARSAYILAN_MIN_GOLD);
   const [maxIlan, setMaxIlan] = useState(VARSAYILAN_MAX_ILAN);
   const [loading, setLoading] = useState(true);
@@ -230,6 +232,7 @@ export function MarketPanel({
       const [b, m] = await Promise.all([fetchListings(), fetchMyListings()]);
       setBook(b.listings);
       setTokenLive(b.tokenEnabled);
+      setHoldMin(b.holdMin ?? null);
       if (b.minGold) setMinGold(b.minGold);
       if (b.maxListings) setMaxIlan(b.maxListings);
       setMine(m.listings.filter((l) => l.status === 'active'));
@@ -338,6 +341,22 @@ export function MarketPanel({
           Exchange zaten bu sebeple dürüstçe kilitli; market de aynı cümleyi
           kurmalı. Gold kilitli KALMIYOR (iptal her an mümkün) ama oyuncu
           bunu bilerek karar vermeli. */}
+      {/* ⭐ HOLD-TO-PLAY EŞİĞİ — sunucu açtıysa BURADA, ilan formunun
+          ÜSTÜNDE söyleniyor. ⚠️ Sunucu zaten 403 döndürüyor ama oyuncuya
+          eşiği ilanı yazıp gönderdikten SONRA öğretmek, emeği çöpe atmak
+          olurdu. Eşik kapalıyken (beta) bu blok hiç çizilmez. */}
+      {holdMin && (
+        <div style={{
+          marginBottom: 10, padding: '9px 11px', borderRadius: 8,
+          border: `1px solid ${C.blood}66`, background: 'rgba(160,18,38,0.10)',
+          fontSize: 11.5, color: C.boneDim, lineHeight: 1.5,
+        }}>
+          <b style={{ color: C.bone }}>Hold {holdMin} $GRAVE</b> in your wallet to
+          list or buy on the market. Everything else — running, the Forge, your
+          guild, the Crypt — stays open with no threshold.
+        </div>
+      )}
+
       {!tokenLive && (
         <div style={{
           marginBottom: 10, padding: '9px 11px', borderRadius: 8,
