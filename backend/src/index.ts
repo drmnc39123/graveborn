@@ -41,6 +41,7 @@ import {
 import { seedFromString } from '@game/rng';
 import { GUNLUK_TABLO, gunBaslangici, gunDamgasi, gunlukBolum, gunlukTohum, gunlukTozu } from '@game/daily';
 import { ustalikBonusuOf, ustalikHaritasi } from './mastery.js';
+import { hataOzeti, hataSifirla, hataYaz, hatalar, surecHatalariniYakala } from './errorlog.js';
 import { USTALIK_ESIK, USTALIK_MAX, ustalikKademesi } from '@game/mastery';
 import { wagerPayout } from '@game/wager';
 import { PULL_COST } from '@game/cosmetics';
@@ -209,7 +210,15 @@ const wrap = (fn: (req: express.Request, res: express.Response) => Promise<void>
         res.status(409).json({ error: 'es_zamanli_degisim' });
         return;
       }
-      console.error('[hata]', req.method, req.path, e);
+      const hata = e instanceof Error ? e : new Error(String(e));
+      console.error('[hata]', req.method, req.path, hata);
+      // ⭐ DEFTERE DE YAZ: Railway'in log akışı geçici ve kimse ona
+      // bakmıyor. Panelde görünmeyen bir hata, olmayan bir hatadır.
+      hataYaz({
+        kaynak: 'sunucu', mesaj: hata.message,
+        yol: `${req.method} ${req.path}`, yigin: hata.stack,
+        kim: auth(req)?.slice(0, 8) ?? '',
+      });
       res.status(500).json({ error: 'internal' });
     });
   };
@@ -1859,9 +1868,61 @@ app.get('/heroes/mastery', wrap(async (req, res) => {
   res.json({ mastery: out, thresholds: USTALIK_ESIK, max: USTALIK_MAX });
 }));
 
+/**
+ * ⭐ İSTEMCİ HATASI — tarayıcıda patlayan şeyi sunucuya taşı.
+ *
+ * 🔴 NİYE GEREKLİ: bugüne kadar oyuncunun tarayıcısında patlayan bir
+ * React hatası HİÇBİR YERE yazılmıyordu. "Application error: a
+ * client-side exception has occurred" ekranını ancak oyuncu ekran
+ * görüntüsü atarsa öğreniyorduk — nitekim bu oturumda tam öyle oldu.
+ *
+ * ⚠️ KİMLİK GEREKTİRMİYOR ve gerektirmemeli: en değerli hata, oyuncunun
+ * GİREMEDİĞİ anda oluşan hatadır. Jeton şartı tam da onu kaybettirirdi.
+ *
+ * ⚠️ Kimliksiz olduğu için SERT SINIRLI: dakikada 10 istek, alanlar
+ * kırpılıyor ve `errorlog` aynı mesajı biriktiriyor. Yoksa bu uç, hata
+ * izlemeyi bozmanın en kolay yolu olurdu.
+ */
+const istemciHataLimiti = rateLimit({
+  windowMs: 60_000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `cerr_${ipKeyGenerator(req.ip ?? '')}`,
+});
+app.post('/client-error', istemciHataLimiti, (req, res) => {
+  const b = req.body ?? {};
+  hataYaz({
+    kaynak: 'istemci',
+    mesaj: b.message,
+    yol: b.path,
+    yigin: b.stack,
+    kim: auth(req)?.slice(0, 8) ?? '',
+  });
+  // ⚠️ 204: istemci cevabı okumuyor ve okumamalı. Hata bildirimi
+  // oyuncunun akışını hiçbir şekilde bekletmemeli.
+  res.status(204).end();
+});
+
 // ── ADMIN ──
 // Bot politikasının ikinci yarısı: tavan kodda, denetim burada.
 // ADMIN_SECRET tanımlı değilse tüm bu uçlar 403 döner (bkz. adminOnly).
+/**
+ * ⭐ HATA DEFTERİ — "şu an ne kırık" ekranı.
+ *
+ * ⚠️ Aynı hata satır olarak DEĞİL, sayaç olarak birikiyor (bkz.
+ * `errorlog.hataYaz`): bozuk bir döngü tamponu doldurup diğer her şeyi
+ * gizlerdi.
+ */
+app.get('/admin/errors', adminOnly, wrap(async (_req, res) => {
+  res.json({ ozet: hataOzeti(), hatalar: hatalar() });
+}));
+
+app.post('/admin/errors/clear', adminOnly, wrap(async (_req, res) => {
+  hataSifirla();
+  res.json({ ok: true });
+}));
+
 app.get('/admin/overview', adminOnly, wrap(async (_req, res) => {
   res.json(await overview());
 }));
@@ -2139,6 +2200,9 @@ app.post('/admin/reset', adminOnly, wrap(async (req, res) => {
   if (gercek) console.warn('[admin] BETA SIFIRLANDI', JSON.stringify(sayim));
   res.json({ dryRun: !gercek, sayim });
 }));
+
+// ⚠️ Süreç düzeyindeki hatalar da deftere girsin (bkz. errorlog.ts)
+surecHatalariniYakala();
 
 const port = Number(process.env.PORT ?? 4100);
 // ⚠️ `app.listen`'in DÖNDÜRDÜĞÜ sunucu WebSocket'e veriliyor. Ayrı bir port

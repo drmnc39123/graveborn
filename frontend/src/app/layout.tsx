@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { ErrorReporter } from '@/components/ErrorReporter';
 import { BRAND, C } from '@/lib/theme';
 
 /** Kart metni — OpenGraph ve X kartında AYNI cümle dursun diye tek yerde. */
@@ -184,6 +185,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           WebkitFontSmoothing: 'antialiased',
         }}
       >
+        {/* ⚠️ EN ÜSTTE: hata yakalayıcıları çocuklardan ÖNCE kurulmalı,
+            yoksa ilk render sırasında patlayan bir hata hiç bildirilmez. */}
+        <ErrorReporter />
         {children}
       </body>
     </html>

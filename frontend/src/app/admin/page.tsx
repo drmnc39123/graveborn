@@ -93,6 +93,16 @@ interface Buyume { gunler: BuyumeGun[]; toplam: number }
 /** Beta sıfırlamanın kuru çalıştırma / sonuç sayımı: tablo adı → satır */
 type SifirSayim = Record<string, number>;
 
+/** Hata defteri satırı — aynı hata satır değil SAYAÇ olarak birikiyor */
+interface HataSatir {
+  ilk: string; son: string; kaynak: 'sunucu' | 'istemci';
+  mesaj: string; yol: string; yigin: string; kim: string; sayi: number;
+}
+interface HataDefteri {
+  ozet: { ayri: number; toplam: number; sonDakika: number };
+  hatalar: HataSatir[];
+}
+
 interface TicketRow {
   id: string; subject: string; status: string; bumpedAt: string;
   messages: { fromAdmin: boolean; body: string; at: string }[];
@@ -129,6 +139,9 @@ export default function AdminPage() {
   const [sifirMesgul, setSifirMesgul] = useState(false);
   const [sifirNot, setSifirNot] = useState<string | null>(null);
   const [defterMesgul, setDefterMesgul] = useState(false);
+  /** ⭐ Hata defteri — "şu an ne kırık" ekranı */
+  const [hata, setHata] = useState<HataDefteri | null>(null);
+  const [acikYigin, setAcikYigin] = useState<string | null>(null);
 
   useEffect(() => {
     const s = sessionStorage.getItem(K_SECRET);
@@ -153,7 +166,7 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     setErr(null);
     try {
-      const [o, p, r, e, a, f, pr, bu] = await Promise.all([
+      const [o, p, r, e, a, f, pr, bu, hd] = await Promise.all([
         call<Overview>('/admin/overview'),
         call<{ players: PlayerRow[] }>(`/admin/players?sort=${sort}&limit=50`),
         call<{ runs: RunRow[] }>(`/admin/runs?limit=50${onlyCapped ? '&capped=1' : ''}`),
@@ -162,9 +175,10 @@ export default function AdminPage() {
         call<{ maintenance: boolean; notice: string | null }>('/admin/flags'),
         call<Presence>('/admin/presence'),
         call<Buyume>('/admin/growth?days=14'),
+        call<HataDefteri>('/admin/errors'),
       ]);
       setOv(o); setPlayers(p.players); setRuns(r.runs); setEco(e); setAnom(a);
-      setBayrak(f); setDuyuru(f.notice ?? ''); setPresence(pr); setBuyume(bu);
+      setBayrak(f); setDuyuru(f.notice ?? ''); setPresence(pr); setBuyume(bu); setHata(hd);
       call<{ tickets: TicketRow[] }>(`/admin/tickets?status=${ticketFilter}`)
         .then((t) => setTickets(t.tickets))
         .catch(() => { /* talepler süs; panelin geri kalanını bozmasın */ });
@@ -427,6 +441,86 @@ export default function AdminPage() {
               {defterMesgul ? 'indiriliyor…' : 'defteri indir (.ndjson)'}
             </button>
           </div>
+        </section>
+      )}
+
+      {/* ⭐ HATA DEFTERİ — "şu an ne kırık".
+          ⚠️ EKRANIN ÜSTÜNDE, ekonominin altında DEĞİL: bir şey kırıkken
+          bakılacak ilk yer burası olmalı. Bugüne kadar canlıdaki bir
+          hatayı öğrenmenin tek yolu oyuncunun şikâyet etmesiydi.
+          ⚠️ Aynı hata SAYAÇ olarak birikiyor (sunucuda), satır olarak
+          değil — bozuk bir döngü tabloyu doldurup her şeyi gizlerdi. */}
+      {hata && (
+        <section style={{ marginTop: 18, ...glass(10), padding: '12px 14px',
+          border: `1px solid ${hata.ozet.sonDakika > 0 ? 'rgba(160,18,38,0.55)' : C.border}` }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0, fontSize: 15, color: C.bone }}>Hatalar</h2>
+            <span style={{ fontSize: 12, fontWeight: 900,
+              color: hata.ozet.sonDakika > 0 ? C.bad : hata.ozet.ayri > 0 ? C.warn : C.ok }}>
+              {hata.ozet.ayri === 0
+                ? 'temiz'
+                : `${hata.ozet.ayri} ayrı · ${hata.ozet.toplam} olay`}
+            </span>
+            {hata.ozet.sonDakika > 0 && (
+              <span style={{ fontSize: 11.5, color: C.bad, fontWeight: 800 }}>
+                son 1 dakikada {hata.ozet.sonDakika} olay — ŞU AN sürüyor
+              </span>
+            )}
+            {hata.ozet.ayri > 0 && (
+              <button
+                onClick={() => {
+                  if (!confirm('Hata defteri temizlensin mi?\n\nSüren bir sorunu takip ederken temizlemek, tekrar birikmesini beklemek demek.')) return;
+                  void (async () => {
+                    try { await call('/admin/errors/clear', { method: 'POST' }); void refresh(); }
+                    catch { setErr('Defter temizlenemedi.'); }
+                  })();
+                }}
+                style={{ ...btn, marginLeft: 'auto' }}>temizle</button>
+            )}
+          </div>
+
+          {hata.hatalar.length === 0 ? (
+            <div style={{ fontSize: 11.5, color: C.boneFaint, marginTop: 8 }}>
+              Sunucu açıldığından beri hiçbir hata kaydedilmedi.
+              {/* ⚠️ Tampon BELLEKTE: yeniden başlatma sıfırlıyor. Bunu
+                  yazmazsak "temiz" yanıltıcı olurdu. */}
+              {' '}Defter bellekte tutuluyor — her yeniden başlatmada sıfırlanır.
+            </div>
+          ) : (
+            <div style={{ marginTop: 10 }}>
+              <Table head={['Kaynak', 'Kez', 'Mesaj', 'Yer', 'Son']}>
+                {hata.hatalar.slice(0, 40).map((h, i) => (
+                  <tr key={i}
+                    onClick={() => setAcikYigin(acikYigin === h.mesaj + h.yol ? null : h.mesaj + h.yol)}
+                    style={{ cursor: h.yigin ? 'pointer' : 'default' }}>
+                    <Td tone={h.kaynak === 'istemci' ? 'warn' : 'bad'}>{h.kaynak}</Td>
+                    <Td tone={h.sayi > 20 ? 'bad' : undefined}>{h.sayi}</Td>
+                    <Td title={h.mesaj}>
+                      <span style={{ display: 'inline-block', maxWidth: 380, overflow: 'hidden',
+                        textOverflow: 'ellipsis', verticalAlign: 'bottom' }}>{h.mesaj}</span>
+                    </Td>
+                    <Td mono title={h.yol}>
+                      <span style={{ display: 'inline-block', maxWidth: 200, overflow: 'hidden',
+                        textOverflow: 'ellipsis', verticalAlign: 'bottom' }}>{h.yol || '—'}</span>
+                    </Td>
+                    <Td>{new Date(h.son).toLocaleTimeString('tr-TR')}</Td>
+                  </tr>
+                ))}
+              </Table>
+              {/* ⚠️ Yığın SATIRA TIKLAYINCA açılıyor: 40 satırlık bir
+                  tabloda her yığını açık göstermek tabloyu okunamaz yapar,
+                  hiç göstermemek de teşhisi imkânsız kılar. */}
+              {acikYigin && (
+                <pre style={{
+                  marginTop: 9, padding: '9px 11px', borderRadius: 7, overflowX: 'auto',
+                  background: 'rgba(0,0,0,0.4)', border: `1px solid ${C.border}`,
+                  fontSize: 10.5, color: C.boneDim, whiteSpace: 'pre-wrap', maxHeight: 240,
+                }}>
+                  {hata.hatalar.find((h) => h.mesaj + h.yol === acikYigin)?.yigin || 'yığın kaydı yok'}
+                </pre>
+              )}
+            </div>
+          )}
         </section>
       )}
 
