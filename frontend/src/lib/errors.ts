@@ -85,6 +85,8 @@ const METIN: Record<string, string> = {
   gecersiz_istek: 'Something in that request was wrong.',
   gecersiz_id: 'That item does not exist.',
   gecersiz_karakter: 'That character does not exist.',
+  // ⚠️ Sunucu ayrıca `need` alanında şartı döndürüyor; kart onu gösterir.
+  kahraman_kilitli: 'That character is still locked.',
   gecersiz_tilsim: 'That charm does not exist.',
   bilinmeyen_tilsim: 'That charm does not exist.',
   gecersiz_yukseltme: 'That upgrade does not exist.',

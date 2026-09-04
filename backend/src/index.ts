@@ -277,6 +277,22 @@ app.post('/progress/hero', wrap(async (req, res) => {
   if (!hero.success) { res.status(400).json({ error: 'gecersiz_karakter' }); return; }
   const player = await getOrCreatePlayer(wallet);
   const p = toProgress(player);
+  /**
+   * ⭐ KİLİTLİ KAHRAMAN SUNUCUDA REDDEDİLİR.
+   *
+   * ⚠️ YALNIZ ARAYÜZDE GİZLEMEK KİLİT DEĞİLDİR. Bu uç açık kaldığı sürece
+   * iki satır `fetch` ile kilitli kahraman seçilebilirdi ve kilidin
+   * tamamı dekora dönerdi. Kontrol, istemcinin kullandığı FONKSİYONUN
+   * AYNISI (`@game/heroUnlock`) — iki ayrı kural yazmak, er ya da geç iki
+   * ayrı kural demek.
+   * ⚠️ Koşullar `Progress`ten okunuyor ve `Progress` sunucu-otoriteli;
+   * istemcinin bildirdiği hiçbir sayı bu kararı etkilemiyor.
+   */
+  const { kahramanAcikMi, kahramanKilitMetni } = await import('@game/heroUnlock');
+  if (!kahramanAcikMi(hero.data, p)) {
+    res.status(403).json({ error: 'kahraman_kilitli', need: kahramanKilitMetni(hero.data, p) });
+    return;
+  }
   p.hero = hero.data;                       // heroById içeride varsayılana düşürür
   const saved = await prisma.player.update({
     where: { wallet }, data: fromProgress(p),

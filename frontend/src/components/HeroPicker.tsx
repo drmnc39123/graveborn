@@ -5,6 +5,8 @@
 // koşuya başlamadan önce iki ekran arasında gezdirir. Aynı akışta olması doğru.
 
 import { HEROES, heroById, type HeroDef } from '@/game/heroes';
+import { kahramanAcikMi, kahramanKilitMetni } from '@/game/heroUnlock';
+import type { Progress } from '@/game/progress';
 import { weaponById } from '@/game/config';
 import { Card, CardSection, DeltaBar, PATTERN_TEXT, Tag } from '@/components/ui/cards';
 import { STAT_ICON } from '@/lib/icons';
@@ -49,9 +51,11 @@ export function Portrait({ hero, size = 56, flip = false, frame = true }: {
   );
 }
 
-export function HeroPicker({ selected, onSelect }: {
+export function HeroPicker({ selected, onSelect, progress }: {
   selected: string;
   onSelect: (id: string) => void;
+  /** ⚠️ Kilit koşulları BURADAN okunuyor — sunucu-otoriteli ilerleme */
+  progress: Progress;
 }) {
   const cur = heroById(selected);
   return (
@@ -63,18 +67,66 @@ export function HeroPicker({ selected, onSelect }: {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 9 }}>
         {HEROES.map((h) => {
           const on = h.id === cur.id;
+          /**
+           * ⚠️ ŞU AN OYNANAN KAHRAMAN HER ZAMAN AÇIK SAYILIR.
+           * Kilitler beta ortasında eklendi; koşulu henüz sağlamadan
+           * `ranger` seçmiş bir oyuncunun karakteri elinden alınsaydı,
+           * kendi hesabında kendi kahramanına dönemezdi. Sunucu da aynı
+           * duruşta: yalnız DEĞİŞTİRMEYİ engelliyor, kayıtlı seçimi değil.
+           */
+          const acik = h.id === cur.id || kahramanAcikMi(h.id, progress);
+          const sart = kahramanKilitMetni(h.id, progress);
           return (
-            <button key={h.id} onClick={() => onSelect(h.id)} title={h.name}
+            /**
+             * ⚠️ KİLİTLİ KAHRAMAN GİZLENMİYOR, KARARTILIYOR. Gizlemek
+             * oyuncuya kazanabileceği bir şey olduğunu HİÇ söylemezdi —
+             * kilidin bütün değeri görünür olmasında. Şartı da portrenin
+             * üstünde duruyor, ayrı bir yere bakmak gerekmiyor.
+             */
+            <button key={h.id} onClick={() => { if (acik) onSelect(h.id); }}
+              disabled={!acik}
+              title={acik ? h.name : `${h.name} — ${sart}`}
               style={{
-                all: 'unset', cursor: 'pointer', padding: 3, borderRadius: 8,
+                all: 'unset', cursor: acik ? 'pointer' : 'not-allowed', padding: 3, borderRadius: 8,
                 border: `2px solid ${on ? C.candle : 'transparent'}`,
                 background: on ? 'rgba(239,167,46,0.12)' : 'transparent',
+                position: 'relative',
               }}>
-              <Portrait hero={h} size={54} />
+              <div style={{ filter: acik ? undefined : 'grayscale(1) brightness(0.45)' }}>
+                <Portrait hero={h} size={54} />
+              </div>
+              {!acik && (
+                <div style={{
+                  position: 'absolute', inset: 3, display: 'grid', placeItems: 'center',
+                  borderRadius: 6, background: 'rgba(0,0,0,0.35)',
+                  fontSize: 17, lineHeight: 1, color: C.boneDim, pointerEvents: 'none',
+                }}>🔒</div>
+              )}
             </button>
           );
         })}
       </div>
+
+      {/* ⚠️ ŞART CÜMLESİ SEÇİLİ KARTIN ÜSTÜNDE DE VAR: kilitli portreye
+          tıklayamayan oyuncu, tıklayarak şartı öğrenemez. Kilitli olanın
+          şartını okumanın tek yolu bu satır. */}
+      {(() => {
+        const kilitli = HEROES.filter((h) => h.id !== cur.id && !kahramanAcikMi(h.id, progress));
+        if (!kilitli.length) return null;
+        return (
+          <div style={{
+            marginBottom: 9, padding: '7px 10px', borderRadius: 7,
+            border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.28)',
+            fontSize: 11, color: C.boneDim, lineHeight: 1.6,
+          }}>
+            {kilitli.map((h) => (
+              <div key={h.id}>
+                🔒 <b style={{ color: C.bone }}>{h.name}</b> — {kahramanKilitMetni(h.id, progress)}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       <HeroCard hero={cur} />
     </div>

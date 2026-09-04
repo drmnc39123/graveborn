@@ -1308,7 +1308,7 @@ function StageSelect({ progress, onPick, onHero, wilderness }: {
           ladder where every new depth pays, and no depth pays twice.</>}
       />
 
-      <HeroPicker selected={p.hero} onSelect={onHero} />
+      <HeroPicker selected={p.hero} onSelect={onHero} progress={p} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         {STAGES.map((s) => {

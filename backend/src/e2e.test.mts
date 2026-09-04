@@ -183,6 +183,28 @@ check('gold sunucuda tam olarak düşüldü',
 check('yükseltme seviyesi arttı', (buyOk.json?.progress?.upgrades?.might ?? 0) >= 1,
   `might ${buyOk.json?.progress?.upgrades?.might}`);
 
+console.log('\n[7b] Karakter kilidi SUNUCUDA tutuluyor');
+{
+  /**
+   * 🔴 ARAYÜZDE GİZLEMEK KİLİT DEĞİLDİR. Kilitli kahramanı yalnız
+   * `HeroPicker` karartsaydı, iki satır `fetch` ile seçilebilirdi ve
+   * kilidin tamamı dekora dönerdi. Bu hesap yalnız 1 bölüm temizledi;
+   * `ranger` 3 bölüm istiyor.
+   */
+  const kilitli = await api('/progress/hero', { method: 'POST', token, body: { hero: 'ranger' } });
+  check('kilitli karakter SUNUCUDA reddediliyor', kilitli.status === 403,
+    `${kilitli.status} ${kilitli.json?.error ?? ''}`);
+  // ⚠️ Şart METNİ de dönmeli: "reddedildi" demek oyuncuya ne yapacağını
+  // söylemiyor; kartın gösterdiği cümlenin kaynağı bu alan.
+  check('red yanıtı ŞARTI söylüyor', typeof kilitli.json?.need === 'string' && kilitli.json.need.length > 5,
+    String(kilitli.json?.need));
+  // ⚠️ ÇİFT TARAFLI: açık karakter GEÇMELİ, yoksa "her şeyi reddeden" bir
+  // uç da bu testi geçerdi.
+  const acik = await api('/progress/hero', { method: 'POST', token, body: { hero: 'knight' } });
+  check('açık karakter kabul ediliyor', acik.status === 200 && acik.json?.progress?.hero === 'knight',
+    `${acik.status} ${acik.json?.progress?.hero}`);
+}
+
 console.log('\n[8] Marketplace — HTTP katmanı');
 {
   check('jetonsuz kendi ilanlarım okunamıyor', (await api('/market/mine')).status === 401);
