@@ -168,9 +168,27 @@ export async function verifySignature(wallet: string, signatureB58: string): Pro
       ok = false;
     }
     if (ok) {
-      // ⚠️ YALNIZ EŞLEŞENİ YAK. Başarılı girişin nonce'u tükenmeli
-      // (tekrar saldırısı), ama diğerlerine dokunulmamalı.
-      await prisma.authNonce.delete({ where: { nonce: row.nonce } }).catch(() => {});
+      /**
+       * ⚠️ YALNIZ EŞLEŞENİ YAK. Başarılı girişin nonce'u tükenmeli
+       * (tekrar saldırısı), ama diğerlerine dokunulmamalı.
+       *
+       * 🔴 SİLME SONUCU OKUNUYOR ve bu bir DÜZELTME. Eskiden
+       * `delete(...).catch(() => {})` idi: silme başarısız olursa hata
+       * SESSİZCE yutuluyor, nonce canlı kalıyor ve AYNI İMZA İKİNCİ KEZ
+       * geçiyordu — yani tekrar koruması, bir veritabanı takılmasında
+       * hiçbir iz bırakmadan devre dışı kalıyordu. (Bu oturumda e2e'nin
+       * "aynı imza ikinci kez çalışmıyor" kontrolü bir kez düştü ve tek
+       * makul açıklama buydu.)
+       *
+       * `deleteMany` idempotent ve SAYI döndürüyor. `count === 0` demek
+       * "bu nonce'u benden önce biri tüketti" demek — sıralı bir tekrar
+       * ya da eşzamanlı iki isteğin yarışı. İkisinde de doğru cevap RED.
+       */
+      const yakildi = await prisma.authNonce.deleteMany({ where: { nonce: row.nonce } });
+      if (yakildi.count === 0) {
+        console.warn('[GÜVENLİK] nonce zaten tüketilmiş — tekrar denemesi reddedildi', wallet);
+        return false;
+      }
       return true;
     }
   }

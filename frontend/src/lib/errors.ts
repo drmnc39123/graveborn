@@ -87,6 +87,8 @@ const METIN: Record<string, string> = {
   gecersiz_karakter: 'That character does not exist.',
   // ⚠️ Sunucu ayrıca `need` alanında şartı döndürüyor; kart onu gösterir.
   kahraman_kilitli: 'That character is still locked.',
+  // ⚠️ Hak BAŞLATINCA yanıyor, bitirince değil — mesaj bunu ima etmeli.
+  gunluk_bitti: 'You have already used today’s daily descent. Come back after 00:00 UTC.',
   gecersiz_tilsim: 'That charm does not exist.',
   bilinmeyen_tilsim: 'That charm does not exist.',
   gecersiz_yukseltme: 'That upgrade does not exist.',

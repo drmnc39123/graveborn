@@ -60,6 +60,12 @@ export interface Settled {
     defender: string; capped: boolean;
   } | null;
   /**
+   * Günlük iniş sonucu. ⚠️ `awarded` HER ZAMAN 0 — günlük gold ÖDEMİYOR
+   * (eşitlenmiş bir modda kazanılan gold, eşitlenmemiş ekonomiye akardı).
+   * Ödül toz; kırpılan koşu toz da almaz.
+   */
+  daily?: { depth: number; dust: number; capped: boolean } | null;
+  /**
    * The Wilderness koşusuysa sonucu. ⚠️ `awarded` HER ZAMAN 0 olur — bu mod
    * gold ödemiyor (bkz. backend/gear.ts başlığı).
    */
@@ -101,6 +107,22 @@ export interface RunTicket {
    * puan sunucunun doğruladığı derinlikten türüyor.
    */
   skills: Partial<Record<StatKey, number>>;
+  /**
+   * Sunucunun seçtiği bölüm — YALNIZ günlük inişte dolu.
+   * ⚠️ Günlükte bölümü istemci SEÇMİYOR; hangi haritayı kuracağını
+   * başka türlü bilemez.
+   */
+  stageId?: number;
+  /**
+   * ⭐ EŞİTLENMİŞ KOŞU (günlük iniş): Forge yükseltmeleri motora
+   * VERİLMEZ. Sunucu Forge'u okumuyor — o istemcide `permanent`
+   * kanalından giriyor — bu yüzden eşitliğin bu yarısı sunucuda
+   * zorlanamıyor, söylenmesi gerekiyor.
+   * ⚠️ Kötüye kullanım tavanı yapısal olarak kapalı: `acceptDepth`
+   * derinliği SÜREYLE kırpıyor, yani bayrağı yok sayan bir istemci bile
+   * fizik tavanının üstüne çıkamaz.
+   */
+  equalize?: boolean;
   /**
    * Düello koşusuysa rakip ve HEDEF derinlik.
    *
@@ -500,9 +522,11 @@ export async function cancelWager(current: Progress): Promise<Progress> {
  * motoru DESCENT olarak çalıştırıyor; farkı sunucunun ne ödediğinde ve
  * arayüzde. Bu ayrımı tek yerde tutuyoruz: `engineModeOf`.
  */
-export type RunKind = 'campaign' | 'descent' | 'wilderness' | 'duel';
+export type RunKind = 'campaign' | 'descent' | 'wilderness' | 'duel' | 'daily';
 
 export function engineModeOf(kind: RunKind): 'campaign' | 'descent' {
+  // ⚠️ 'daily' de motorda DESCENT: wilderness'la aynı duruş — fark
+  // tamamen sunucunun ne ödediğinde ve neyi eşitlediğinde.
   return kind === 'campaign' ? 'campaign' : 'descent';
 }
 
@@ -560,6 +584,8 @@ export async function startRun(
     skills?: Partial<Record<string, number>>;
     /** ⭐ Bahis hedefi — sunucu koşu açılırken stake'i YAKTI, hedefi de bildiriyor */
     wagerTarget?: number; wagerStake?: number;
+    /** ⭐ Günlük iniş: bölümü sunucu seçiyor ve Forge devre dışı */
+    stageId?: number; equalize?: boolean;
   }>(
     '/run/start',
     {
@@ -597,6 +623,8 @@ export async function startRun(
     gear: (out.gear ?? {}) as RunTicket['gear'],
     // ⚠️ Beceri bonusu da SUNUCUDAN — üçüncü kez aynı kural.
     skills: (out.skills ?? {}) as RunTicket['skills'],
+    stageId: typeof out.stageId === 'number' ? out.stageId : undefined,
+    equalize: out.equalize === true,
     // ⭐ SADECE GÖSTERİM: kazanç kararı sunucuda kalıyor (`bahisKazandi`,
     // `run.wagerTarget` ile hesaplanıyor). Buradaki değer koşu ekranındaki
     // hedef yazısını besliyor, ÖDEMEYİ DEĞİL — istemci hedefi değiştirse
@@ -640,6 +668,7 @@ export async function finishRun(
   const out = await api<{
     progress: Progress; awarded: number; progressGold: number; dropGold: number;
     eventGold?: number; wager: Settled['wager']; wilderness?: Settled['wilderness']; duel?: Settled['duel'];
+    daily?: Settled['daily'];
   }>('/run/finish', {
     method: 'POST',
     body: {
@@ -658,6 +687,7 @@ export async function finishRun(
     eventGold: out.eventGold ?? 0,
     wilderness: out.wilderness ?? null,
     duel: out.duel ?? null,
+    daily: out.daily ?? null,
     paidRange: after > before ? { from: before, to: after } : null,
   };
 }
@@ -1098,4 +1128,34 @@ export async function buyPetSlot(): Promise<Progress> {
     method: 'POST', body: {},
   });
   return progress;
+}
+
+// ── GÜNLÜK İNİŞ ───────────────────────────────────────────────────────
+
+export interface DailySatir { rank: number; wallet: string; depth: number; hero: string }
+export interface DailyDurum {
+  day: string;
+  stageId: number;
+  stageName: string;
+  board: DailySatir[];
+  mine: { done: boolean; finished: boolean; depth: number; capped: boolean };
+}
+
+/**
+ * Günün durumu + tablo.
+ *
+ * ⚠️ TOHUM DÖNMÜYOR ve dönmemeli — sunucu da göndermiyor. Tohumu bilen
+ * bir oyuncu motoru offline koşturup en iyi yolu bulabilirdi; motor
+ * DOM'suz ve bu depoda istemci seed'i tam bu yüzden kaldırılmıştı.
+ *
+ * ⚠️ Cüzdan yoksa çağrılmaz: günlük iniş sunucu tablosuna yazıyor,
+ * demo ise sunucuya HİÇ dokunmuyor (izolasyon bilinçli).
+ */
+export async function fetchDaily(): Promise<DailyDurum | null> {
+  if (!isWallet()) return null;
+  try {
+    return await api<DailyDurum>('/daily');
+  } catch {
+    return null;      // sunucu kapalıysa panel açılmaya devam etsin
+  }
 }

@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { eventMul, eventWindow } from '@game/events';
-import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun, maxKills, applyKills } from './reward.js';
+import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun, maxKills, applyKills, STAGES } from './reward.js';
 import { PetError, bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from './pets.js';
 import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
@@ -39,6 +39,7 @@ import {
   escrowedGold, listActive, listMine, tokenEnabled,
 } from './market.js';
 import { seedFromString } from '@game/rng';
+import { GUNLUK_TABLO, gunBaslangici, gunDamgasi, gunlukBolum, gunlukTohum, gunlukTozu } from '@game/daily';
 import { wagerPayout } from '@game/wager';
 import { PULL_COST } from '@game/cosmetics';
 import { profileOf } from './profile.js';
@@ -641,7 +642,9 @@ app.post('/wager/clear', wrap(async (req, res) => {
 const startSchema = z.object({
   // ⚠️ 'wilderness' motorda BİR MOD DEĞİL — motor onu descent olarak
   // çalıştırıyor (bkz. gear.ts başlığı). Fark tamamen sunucunun ne ödediğinde.
-  mode: z.enum(['campaign', 'descent', 'wilderness', 'duel']),
+  // ⚠️ 'daily' motorda descent olarak çalışıyor (wilderness gibi); farkı
+  // tamamen sunucunun ne verdiğinde ve neyi EŞİTLEDİĞİNDE.
+  mode: z.enum(['campaign', 'descent', 'wilderness', 'duel', 'daily']),
   stageId: z.number().int().min(1).max(99),
   /**
    * İstemcinin başlamak İSTEDİĞİ derinlik. Bir istek, bir izin değil —
@@ -688,14 +691,47 @@ app.post('/run/start', wrap(async (req, res) => {
   if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
 
   const p = toProgress(player);
-  const why = canStart(p, body.data.mode, body.data.stageId);
-  if (why) { res.status(400).json({ error: 'baslatilamaz', detay: why }); return; }
+
+  /**
+   * ⭐ GÜNLÜK İNİŞ — herkesin AYNI tohumu, tek deneme, EŞİTLENMİŞ güç.
+   *
+   * ⚠️ `canStart` ATLANIYOR ve bu bilerek: bölüm kilidi burada geçerli
+   * değil, çünkü günlüğün tek anlamı HERKESİN AYNI haritayı oynaması.
+   * "Senin açtıklarından biri" demek tabloyu yine kıyaslanamaz yapardı.
+   * Bölümü sunucu seçiyor; istemcinin gönderdiği `stageId` yok sayılıyor.
+   *
+   * ⚠️ TEK DENEME "BAŞLATILDIĞINDA" YANAR, bitirildiğinde değil. Aksi
+   * hâlde oyuncu haritayı görüp beğenmezse çıkıp yeniden başlar — yani
+   * tohumu keşfeder, sonra gerçek denemesini yapar. O yol açık kalsaydı
+   * tablo beceriyi değil sabrı ölçerdi.
+   */
+  const gunluk = body.data.mode === 'daily';
+  const gun = gunDamgasi();
+  let stageId = body.data.stageId;
+  if (gunluk) {
+    stageId = gunlukBolum(gun, STAGES.length);
+    const bugunOynadi = await prisma.run.findFirst({
+      where: { wallet, mode: 'daily', startedAt: { gte: gunBaslangici() } },
+      select: { id: true },
+    });
+    if (bugunOynadi) { res.status(409).json({ error: 'gunluk_bitti' }); return; }
+  } else {
+    const why = canStart(p, body.data.mode, body.data.stageId);
+    if (why) { res.status(400).json({ error: 'baslatilamaz', detay: why }); return; }
+  }
 
   // ⚠️ SEED SUNUCUDAN. Frontend'de istemci saatinden türüyordu; motor DOM'suz
   // olduğu için biri headless simülasyonla en kârlı seed'i arayıp saatini
   // ona kurabilirdi. Artık seed'i oyuncu SEÇEMEZ, sadece alır.
   const runId = crypto.randomUUID();
-  const seed = seedFromString(`${runId}:${crypto.randomBytes(8).toString('hex')}`);
+  /**
+   * ⚠️ GÜNLÜĞÜN TOHUMU TARİHTEN, rastgeleden DEĞİL — herkeste aynı olmalı.
+   * ⚠️ Yine de oyuncu SEÇEMİYOR: normal bir inişte tohum hâlâ rastgele,
+   * yani günün tohumunu prova etmenin bir yolu yok.
+   */
+  const seed = gunluk
+    ? gunlukTohum(gun)
+    : seedFromString(`${runId}:${crypto.randomBytes(8).toString('hex')}`);
 
   // ⚠️ TILSIMLAR KOŞU AÇILIRKEN YANAR, kapanırken değil. Kapanışta tüketseydik
   // oyuncu koşuyu başlatıp hemen çıkarak tılsımı sonsuza kadar saklardı —
@@ -711,7 +747,13 @@ app.post('/run/start', wrap(async (req, res) => {
     && bahis.stageId === body.data.stageId
     && p.gold >= bahis.stake;
 
-  if (charms.length || bahis) {
+  /**
+   * ⚠️ GÜNLÜKTE TILSIM DE BAHİS DE YANMIYOR ve koşuya TAŞINMIYOR.
+   * Tılsım satın alınan bir güç; günlüğe girseydi "eşit güç" vaadi ilk
+   * gün çökerdi. Yakmamak da şart — oyuncu girmediği bir koşu için
+   * ödediği tılsımı kaybetmemeli.
+   */
+  if (!gunluk && (charms.length || bahis)) {
     const temizle = prisma.player.update({
       where: { wallet },
       data: {
@@ -730,22 +772,32 @@ app.post('/run/start', wrap(async (req, res) => {
   }
 
   // Checkpoint SUNUCUDA çözülür — istemcinin isteği burada kırpılır
-  const startDepth = resolveStartDepth(p, body.data.mode, body.data.stageId, body.data.startDepth);
+  const startDepth = gunluk
+    ? 1     // ⚠️ checkpoint YOK: herkes aynı yerden başlamazsa tablo anlamsız
+    : resolveStartDepth(p, body.data.mode, body.data.stageId, body.data.startDepth);
   // Ascension da öyle: kilidi oyuncunun ULAŞTIĞI derinlik açıyor
-  const ascension = resolveAscension(p, body.data.mode, body.data.stageId, body.data.ascension);
+  const ascension = gunluk
+    ? 0
+    : resolveAscension(p, body.data.mode, body.data.stageId, body.data.ascension);
 
   // ⚠️ LONCA PERKİ SUNUCUDAN GELİR, istemciden gelmez. İstemci "loncam 5.
   // seviye" diyebilseydi perk beyan edilen bir şey olurdu; burada okunuyor.
   // (Ödül güvenliği buna dayanmıyor — o yapısal tavanlarda — ama bir bonusun
   // kaynağı hiçbir zaman istemci olmamalı, kural sızıntı bırakmasın diye.)
-  const guildGrowth = await growthOf(wallet);
+  /**
+   * ⚠️ GÜNLÜKTE HİÇBİR KALICI BONUS GEÇMİYOR — lonca, ekipman, beceri ve
+   * (istemci tarafında) Forge. Geçseydi tablo bir BECERİ sıralaması değil
+   * SERVET sıralaması olurdu; öyle bir tablomuz zaten var. Eşitlenmiş
+   * olması ayrıca yeni oyuncuya ilk gününde birinci olma ihtimali veriyor.
+   */
+  const guildGrowth = gunluk ? 0 : await growthOf(wallet);
   // ⚠️ EKİPMAN BONUSU DA SUNUCUDAN. Aynı gerekçe: bir bonusun kaynağı
   // hiçbir zaman istemci olmamalı. İstemci takılı parçalarını zaten biliyor
   // ama BEYAN etmemeli — beyan ettiği an "5 Graveborn takılıyım" diyebilir.
-  const gear = await equippedBonus(wallet);
+  const gear = gunluk ? {} : await equippedBonus(wallet);
   // ⚠️ Beceri bonusu da SUNUCUDAN — üçüncü kez aynı kural: bir bonusun
   // kaynağı hiçbir zaman istemci olmamalı.
-  const skills = await skillsBonusOf(wallet);
+  const skills = gunluk ? {} : await skillsBonusOf(wallet);
 
   await acikKosulariIptalEt(wallet);   // ⚠️ bkz. fonksiyon başlığı — para basma koruması
 
@@ -758,7 +810,8 @@ app.post('/run/start', wrap(async (req, res) => {
       // yazılır ve ondan doğan düello kaydı SESSİZCE yalan söylerdi. Beyan
       // uymadığında kayıt hiç yayınlanmıyor (bkz. publishRecord).
       simVersion: body.data.simVersion ?? 0,
-      mode: body.data.mode, stageId: body.data.stageId,
+      // ⚠️ `stageId` sunucunun seçtiği — günlükte istemcinin gönderdiği YOK SAYILIR
+      mode: body.data.mode, stageId,
       startDepth: Math.max(1, startDepth),
       ascension,
       wagerStake: bahisGecerli ? bahis!.stake : 0,
@@ -783,9 +836,25 @@ app.post('/run/start', wrap(async (req, res) => {
   // (`bahisKazandi`, `run.wagerTarget` ile), istemciye giden yalnız
   // oyuncunun kendi ödediği hedefin GÖSTERİMİ.
   res.json({
-    runId, seed, hero: p.hero, charms, startDepth, ascension, guildGrowth, gear, skills,
+    runId, seed, hero: p.hero,
+    // ⚠️ Günlükte tılsım LİSTESİ DE BOŞ dönüyor: istemci koşuyu bu listeyle
+    // kuruyor, dolu dönseydi eşitlik ilk satırda kırılırdı.
+    charms: gunluk ? [] : charms,
+    startDepth, ascension, guildGrowth, gear, skills,
     wagerTarget: bahisGecerli ? bahis!.target : 0,
     wagerStake: bahisGecerli ? bahis!.stake : 0,
+    // ⚠️ `stageId` DÖNÜYOR — günlükte bölümü sunucu seçiyor ve istemci
+    // hangi haritayı kuracağını başka türlü bilemez.
+    stageId,
+    /**
+     * ⚠️ `equalize` İSTEMCİYE BİR EMİR: Forge yükseltmelerini motora
+     * VERME. Sunucu Forge'u okumuyor (o istemcide `permanent` kanalından
+     * giriyor), o yüzden eşitliğin bu yarısı burada zorlanamıyor —
+     * söylenmesi gerekiyor. Kötüye kullanım tavanı yapısal olarak zaten
+     * kapalı: `acceptDepth` derinliği SÜREYLE kırpıyor, yani Forge'unu
+     * gizlice açan oyuncu bile fizik tavanının üstüne çıkamıyor.
+     */
+    equalize: gunluk,
   });
 }));
 
@@ -877,6 +946,45 @@ app.post('/run/finish', wrap(async (req, res) => {
       progress: toProgress(await getOrCreatePlayer(wallet)),
       awarded: 0, progressGold: 0, dropGold: 0, record: false, wager: null,
       duel: { ...sonuc, defender: run.duelDefender, capped: kabul.capped },
+    });
+    return;
+  }
+
+  // ── GÜNLÜK İNİŞ ──
+  // ⚠️ AYRI YOL, `settleRun`'a HİÇ UĞRAMIYOR. Sebep tek cümle: günlük
+  // GOLD ÖDEMİYOR. Ödeseydi eşitlenmiş bir modda kazanılan gold, eşitlenmiş
+  // OLMAYAN ekonomiye akardı ve "günlüğü farm et" diye bir strateji doğardı.
+  // ⚠️ `depthPaid` de ilerlemiyor: günlük ayrı bir tablo, kampanya
+  // ilerlemesi değil. İlerletseydi checkpoint'ler günlükten kazanılırdı.
+  if (run.mode === 'daily') {
+    // ⚠️ Fizik tavanı DESCENT'in aynısı — günlük motorda descent olarak
+    // çalışıyor, doğrulaması da öyle olmalı.
+    const kabul = acceptDepth('descent', run.stageId, body.data.deepestCleared,
+      elapsedSec, run.startDepth);
+    // ⚠️ KIRPILAN KOŞU TOZ ALMAZ — leaderboard ve bahisteki kuralın aynısı.
+    const toz = kabul.capped ? 0 : gunlukTozu(kabul.depth);
+
+    const islemler: Prisma.PrismaPromise<unknown>[] = [
+      prisma.run.update({
+        where: { id: run.id },
+        data: {
+          claimedAt: new Date(), claimedDepth: body.data.deepestCleared,
+          claimedGold: 0, awarded: 0, awardedDepth: kabul.depth, capped: kabul.capped,
+        },
+      }),
+    ];
+    if (toz > 0) {
+      islemler.push(prisma.player.update({
+        where: { wallet }, data: { dust: { increment: toz } },
+      }));
+    }
+    await prisma.$transaction(islemler);
+    if (kabul.capped) console.warn('[kirpildi:daily]', wallet, run.id, kabul.reason.join(' | '));
+
+    res.json({
+      progress: toProgress(await getOrCreatePlayer(wallet)),
+      awarded: 0, progressGold: 0, dropGold: 0, record: false, wager: null,
+      daily: { depth: kabul.depth, dust: toz, capped: kabul.capped },
     });
     return;
   }
@@ -1670,6 +1778,54 @@ app.post('/market/cancel', wrap(async (req, res) => {
 // kontrol listesinde yazılı.
 app.post('/market/buy', wrap(async (_req, res) => {
   res.status(503).json({ error: 'token_yok' });
+}));
+
+/**
+ * ⭐ GÜNLÜK İNİŞ DURUMU + TABLO.
+ *
+ * ⚠️ TOHUM DÖNMÜYOR. Dönseydi oyuncu koşuya girmeden haritayı offline
+ * simüle edip en iyi yolu bulabilirdi (motor DOM'suz — bu depoda daha
+ * önce tam bu yüzden istemci seed'i kaldırıldı). Bölüm adı yeterli.
+ *
+ * ⚠️ KIRPILAN KOŞULAR TABLOYA GİRMİYOR: şüpheli bir iddiayı sıralamanın
+ * tepesine koymak, tablonun tamamını değersizleştirir.
+ */
+app.get('/daily', wrap(async (req, res) => {
+  const wallet = auth(req);
+  const gun = gunDamgasi();
+  const bas = gunBaslangici();
+  const stageId = gunlukBolum(gun, STAGES.length);
+  const stage = STAGES.find((s) => s.id === stageId);
+
+  const [tablo, benim] = await Promise.all([
+    prisma.run.findMany({
+      where: { mode: 'daily', startedAt: { gte: bas }, claimedAt: { not: null }, capped: false },
+      // ⚠️ Beraberlikte ÖNCE BİTİREN üstte: aynı derinliğe önce ulaşan
+      // daha iyi oynamıştır ve sıralama kararlı olmalı.
+      orderBy: [{ awardedDepth: 'desc' }, { claimedAt: 'asc' }],
+      take: GUNLUK_TABLO,
+      select: { wallet: true, awardedDepth: true, hero: true },
+    }),
+    wallet
+      ? prisma.run.findFirst({
+          where: { wallet, mode: 'daily', startedAt: { gte: bas } },
+          select: { awardedDepth: true, claimedAt: true, capped: true },
+        })
+      : Promise.resolve(null),
+  ]);
+
+  res.json({
+    day: gun,
+    stageId,
+    stageName: stage?.name ?? `Stage ${stageId}`,
+    board: tablo.map((r, i) => ({
+      rank: i + 1, wallet: r.wallet, depth: r.awardedDepth ?? 0, hero: r.hero,
+    })),
+    // `mine.done` = bugünkü hak kullanıldı mı (başlatmak yakar)
+    mine: benim
+      ? { done: true, finished: !!benim.claimedAt, depth: benim.awardedDepth ?? 0, capped: benim.capped }
+      : { done: false, finished: false, depth: 0, capped: false },
+  });
 }));
 
 // ── ADMIN ──

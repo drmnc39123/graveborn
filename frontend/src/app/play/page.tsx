@@ -24,6 +24,7 @@ import { FollowPanel } from '@/components/FollowPanel';
 import { FirstRun, isNewcomer } from '@/components/FirstRun';
 import { SettingsPanel, applyStoredSettings } from '@/components/SettingsPanel';
 import { HeroPicker } from '@/components/HeroPicker';
+import { DailyCard } from '@/components/DailyCard';
 import { BuildingDock } from '@/components/BuildingDock';
 import { EventBanner } from '@/components/EventBanner';
 import { NoticeBanner } from '@/components/NoticeBanner';
@@ -91,6 +92,8 @@ type Payout = {
   wilderness: Settled['wilderness'];
   /** düello koşusuysa: kazandı mı, puan nasıl değişti */
   duel: Settled['duel'];
+  /** günlük iniş koşusuysa: kabul edilen derinlik ve toz */
+  daily: Settled['daily'];
   /** bu koşuda AÇILAN silahlar (bkz. game/unlocks.ts) */
   unlocked: string[];
   /**
@@ -275,6 +278,9 @@ export default function PlayPage() {
    */
   const [progress, setProgress] = useState<Progress | null>(null);
   const [payout, setPayout] = useState<Payout | null>(null);
+  /** ⚠️ Günlük kart koşu sonrası KENDİLİĞİNDEN tazelenmeli: oyuncu köye
+      döndüğünde tabloda kendi satırını görmezse "yazılmadı mı" der. */
+  const [gunlukTazele, setGunlukTazele] = useState(0);
   const [note, setNoteRaw] = useState<string | null>(null);
   /**
    * Rıhtım içeriğinin sol kenarı — kimlik kartının kullanabileceği genişlik.
@@ -416,6 +422,7 @@ export default function PlayPage() {
     settleRun(ticket, run, base)
       .then((r) => {
         setProgress(r.progress);
+        if (r.daily) setGunlukTazele((n) => n + 1);
         setPayout({
           // ⚠️ Çeşit BİLETTEN okunur, `run.mode`'dan DEĞİL: motor Wilderness'ı
           // descent olarak çalıştırıyor, yani `run.mode` her zaman 'descent'
@@ -424,6 +431,7 @@ export default function PlayPage() {
           progressGold: r.progressGold, dropGold: r.dropGold,
           eventGold: r.eventGold, paidRange: r.paidRange,
           wager: r.wager, wilderness: r.wilderness ?? null, duel: r.duel ?? null,
+          daily: r.daily ?? null,
           // ⚠️ ÖNCE/SONRA farkından TÜRETİLİYOR — "yeni açıldı" diye bir
           // bayrak saklanmıyor. Kazanılan şey kazanıldığı AN söylenmezse
           // oyuncu kartı bir sonraki koşuda görür ve "bu ne zaman geldi" der.
@@ -483,7 +491,8 @@ export default function PlayPage() {
     // ve riski bambaşka.
     const kicker = mode === 'descent' ? 'DESCENDING'
       : mode === 'wilderness' ? 'ENTERING THE WILDERNESS'
-        : 'ENTERING';
+        : mode === 'daily' ? 'THE SAME GRAVE'
+          : 'ENTERING';
     perdeliBaslat(
       {
         kicker,
@@ -492,7 +501,10 @@ export default function PlayPage() {
           ? `from depth ${wantStartDepth}` : undefined,
       },
       () => startRun(mode, stageId, wantStartDepth, wantAscension),
-      (ticket) => setScreen({ kind: 'stage', stageId, mode, ticket }),
+      // ⚠️ BÖLÜM BİLETTEN OKUNUYOR. Günlükte bölümü sunucu seçiyor;
+      // çağıranın gönderdiği `stageId` bir yer tutucudan ibaret ve onu
+      // kullanmak YANLIŞ haritayı kurardı.
+      (ticket) => setScreen({ kind: 'stage', stageId: ticket.stageId ?? stageId, mode, ticket }),
       () => setNote('The run could not be started.'),
     );
   }, [perdeliBaslat]);
@@ -1130,6 +1142,7 @@ export default function PlayPage() {
                 onHero={pickHero}
                 onPick={beginStage}
                 wilderness={!!wallet}
+                dailyKey={gunlukTazele}
               />
             ) : acik === 'upgrade' ? (
               <ForgePanel
@@ -1238,6 +1251,15 @@ export default function PlayPage() {
  * BAŞLADIĞI andaki bonus olmalı — ve o anı sunucu mühürledi.
  */
 function runBonus(upgrades: Record<string, number>, ticket: RunTicket) {
+  /**
+   * ⭐ EŞİTLENMİŞ KOŞU (günlük iniş): HİÇBİR kalıcı bonus girmiyor.
+   *
+   * ⚠️ Forge'u dışarıda bırakmak SADECE burada mümkün — sunucu Forge'u
+   * hiç görmüyor, motor onu bu kanaldan alıyor. Eşitlik vaadinin yarısı
+   * bu satır; diğer yarısını (lonca/ekipman/beceri/tılsım) sunucu zaten
+   * boş gönderiyor.
+   */
+  if (ticket.equalize) return {};
   let b = mergeBonus(permanentBonus(upgrades), charmBonus(ticket.charms));
   // ⚠️ Ekipman da AYNI kanaldan giriyor — motor ekipmanı bilmiyor bile.
   // Motorda tek satır değişmediği için determinizm mührü de bozulmuyor.
@@ -1261,10 +1283,13 @@ function Row({ label, value, hint }: { label: string; value: number; hint?: stri
   );
 }
 
-function StageSelect({ progress, onPick, onHero, wilderness }: {
+function StageSelect({ progress, onPick, onHero, wilderness, dailyKey }: {
   progress: Progress | null;
   onPick: (id: number, mode: RunKind, startDepth?: number, ascension?: number) => void;
   onHero: (id: string) => void;
+  /** ⚠️ Koşu sonrası günlük kartı tazelemek için sayaç — değeri artınca
+   *  kart tabloyu yeniden çekiyor, yoksa oyuncu kendi satırını göremezdi. */
+  dailyKey: number;
   /**
    * ⚠️ The Wilderness DEMO'DA KAPALI ve bu bir süsleme kararı değil:
    * ekipman SUNUCUDA üretiliyor, demoda hiç üretilmiyor. Kapı açık kalsaydı
@@ -1307,6 +1332,12 @@ function StageSelect({ progress, onPick, onHero, wilderness }: {
         sub={<>Clear a stage once for its reward. Then the Descent opens beneath it — an endless
           ladder where every new depth pays, and no depth pays twice.</>}
       />
+
+      {/* ⚠️ GÜNLÜK KART KAHRAMAN SEÇİMİNİN ÜSTÜNDE: hak günde bir kez ve
+          00:00 UTC'de yanıyor; aşağıda kalsaydı çoğu gün hiç görülmezdi.
+          Bölüm id'si YER TUTUCU — sunucu günün bölümünü kendisi seçiyor
+          ve bileti onunla dönüyor. */}
+      <DailyCard benim={dailyKey} onEnter={() => onPick(1, 'daily')} />
 
       <HeroPicker selected={p.hero} onSelect={onHero} progress={p} />
 
