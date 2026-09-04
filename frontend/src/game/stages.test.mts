@@ -326,6 +326,35 @@ console.log('\n[4e] BÖLÜM DEKORU VE SAVAŞ EFEKTLERİ DİSKTE Mİ');
   check('görsel tanımı olmayan bölüm YOK', artsiz.length === 0, artsiz.join(','));
 }
 
+console.log('\n[4f] ZORLUK EĞRİSİ SÜREKLİ Mİ');
+{
+  /**
+   * ⭐ YAZIM HATASI TUZAĞI. `hpMul: 6.58` yerine `65.8` yazmak tek bir
+   * karakterlik hata ve TypeScript bunu göremez: sayı geçerli, bölüm
+   * derlenir, oyuncu o bölümde duvara toslar ve sebebi hiçbir yerde
+   * görünmez. Ölçülen 25 bölümde en büyük adım ×1,42 — yani ×1,6 tavanı
+   * gerçek eğriye bol bol yer bırakıyor ama bir basamak kaymasını
+   * (×10) anında yakalar.
+   *
+   * ⚠️ `maxAlive` ve `spawnRate` BU KONTROLE GİRMİYOR ve bu bilinçli:
+   * ikisi de bölüm 11'de KASITLI olarak düşüyor (kampanyanın ikinci
+   * yarısı yeni bir merdivenle başlıyor, `config.ts`te yazılı). Onları
+   * monoton saymak, doğru bir tasarım kararını hata gibi gösterirdi.
+   */
+  const ADIM_TAVANI = 1.6;
+  const sirali = [...STAGES].sort((a2, b2) => a2.id - b2.id);
+  for (let i = 1; i < sirali.length; i++) {
+    const o = sirali[i - 1], y = sirali[i];
+    check(`bölüm ${y.id} can çarpanı gerilemiyor`, y.hpMul >= o.hpMul, `${o.hpMul} → ${y.hpMul}`);
+    check(`bölüm ${y.id} hız çarpanı gerilemiyor`, y.speedMul >= o.speedMul, `${o.speedMul} → ${y.speedMul}`);
+    check(`bölüm ${y.id} düşman sayısı gerilemiyor`, y.enemyCount >= o.enemyCount, `${o.enemyCount} → ${y.enemyCount}`);
+    check(`bölüm ${y.id} can çarpanında UÇURUM yok`, y.hpMul <= o.hpMul * ADIM_TAVANI,
+      `${o.hpMul} → ${y.hpMul} (×${(y.hpMul / o.hpMul).toFixed(2)})`);
+  }
+  const enBuyuk = sirali.slice(1).reduce((m, y, i) => Math.max(m, y.hpMul / sirali[i].hpMul), 0);
+  gecti('zorluk eğrisi sürekli', `en büyük can adımı ×${enBuyuk.toFixed(2)} (tavan ×${ADIM_TAVANI})`);
+}
+
 console.log('\n[5] BÖLÜM SAYILARI MAKUL MU');
 {
   // ⚠️ Bunlar denge değil BÜTÜNLÜK kontrolleri: sıfır düşmanlı ya da
