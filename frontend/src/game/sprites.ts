@@ -39,6 +39,23 @@ export interface ActorArt {
   anchorY: number;
   /** Sprite sağa bakıyorsa hareket yönüne göre çevir */
   flipByVelocity: boolean;
+  /**
+   * 🔴 ŞERİDİN KENDİSİ SOLA BAKIYOR MU.
+   *
+   * `drawActor` şu varsayımla yazıldı: "sheet SAĞA bakar, sola giderken
+   * aynala". Varsayım paketlerin ÇOĞU için doğru ama HEPSİ için değil —
+   * ve yanlış olduğunda belirti sessiz: düşman doğru yönde HAREKET eder,
+   * ters yöne BAKAR. Oyuncu bunu "ters koşuyor" diye görür.
+   *
+   * ÖLÇÜLDÜ (4 Eyl 2026, şeritler PNG olarak açılıp bakıldı):
+   *   vermin (spr_rat_1/2) → SOLA bakıyor  ← bu bayrak onun için var
+   *   undead (Basic/Armored Skeleton, Bone Archer) → sağa
+   *   LuizMelo skeleton (Walk.png) → sağa
+   *   topdown mon_* → ÖNE bakıyor (yan görünüm değil), yön kavramı yok
+   *
+   * ⚠️ Tahminle doldurma: yeni bir paket eklerken kareyi AÇIP BAK.
+   */
+  solaBakar?: boolean;
   anims: Record<string, AnimDef>;
 }
 
@@ -81,12 +98,13 @@ const monster = (file: string, contentRatio: number, anchorY: number, drawHeight
 const strip = (
   base: string, n: number,
   contentRatio: number, anchorY: number, drawHeight: number,
-  opts: { hit?: boolean; death?: boolean; deathFrames?: number } = {},
+  opts: { hit?: boolean; death?: boolean; deathFrames?: number; solaBakar?: boolean } = {},
 ): ActorArt => ({
   drawHeight,
   contentRatio,
   anchorY,
   flipByVelocity: true,
+  solaBakar: opts.solaBakar,
   anims: {
     walk: SHEET(`/art/enemies/${base}_walk_strip${n}.png`, n, 10),
     ...(opts.hit ? { hit: SHEET(`/art/enemies/${base}_hit_strip${n}.png`, n, 16) } : {}),
@@ -124,8 +142,12 @@ export const ENEMY_ART: Record<string, ActorArt> = {
   skel_armored: strip('undead/spr_Armored_Skeleton', 9, 0.938, 0.969, 34, { hit: true, death: true }),
   skel_basic: strip('undead/spr_Basic_Skeleton', 9, 0.875, 0.938, 30, { hit: true, death: true }),
   bone_archer: strip('undead/spr_Bone_Archer', 7, 0.875, 0.938, 32, { hit: true, death: true }),
-  rat_small: strip('vermin/spr_rat_1', 13, 0.344, 0.688, 20, { death: true }),   // hit şeridi yok
-  rat_large: strip('vermin/spr_rat_2', 13, 0.344, 0.688, 24, { death: true }),   // hit şeridi yok
+  // 🔴 VERMIN PAKETİ SOLA BAKIYOR — oyuncu bunu bölüm 7'de "fareler ters
+  // koşuyor" diye bildirdi, ölçüm doğruladı (şerit açılıp bakıldı: kafa
+  // solda, kuyruk sağda). Fare 6 bölümde kullanılıyor: 6 · 7 · 11 · 15 ·
+  // 18 · 21. Aynı pakette başka bir sprite eklenirse o da işaretlenmeli.
+  rat_small: strip('vermin/spr_rat_1', 13, 0.344, 0.688, 20, { death: true, solaBakar: true }),   // hit şeridi yok
+  rat_large: strip('vermin/spr_rat_2', 13, 0.344, 0.688, 24, { death: true, solaBakar: true }),   // hit şeridi yok
 
   // LuizMelo (CC0) yandan görünüm — çeşitlilik için karışımda kalıyor
   skeleton: {
@@ -670,6 +692,24 @@ export function preloadAll(heroId?: string) {
  * t: saniye cinsinden animasyon zamanı (her varlık kendi ofsetini verir ki
  *    sürü senkronize yürümesin — aynı frame'de 400 iskelet robot gibi durur).
  */
+/**
+ * ⭐ AYNALANACAK MI — SAF KARAR, çizimden ayrı.
+ *
+ * ⚠️ İKİ BAYRAKLI ve bu bir DÜZELTME. Eskiden koşul yalnız
+ * `!facingRight`ti; yani "her şerit SAĞA bakar" varsayımı koda gömülüydü.
+ * Varsayım vermin paketi için YANLIŞTI ve belirtisi sessizdi: fare doğru
+ * yönde hareket ediyor, ters yöne bakıyordu. Oyuncu bunu bölüm 7'de
+ * "fareler ters koşuyor" diye bildirdi.
+ *
+ * ⚠️ ÇİZİMDEN AYRILDI ki test edilebilsin: `drawActor` bir canvas
+ * istiyor, bu fonksiyon istemiyor. (Aynı ders bugün `ustalikMetni` ile
+ * de yaşandı — JSX/canvas içindeki karar ölçülemiyor.)
+ */
+export function aynalaMi(art: ActorArt, facingRight: boolean): boolean {
+  if (!art.flipByVelocity) return false;
+  return art.solaBakar ? facingRight : !facingRight;
+}
+
 export function drawActor(
   ctx: CanvasRenderingContext2D,
   art: ActorArt,
@@ -721,7 +761,7 @@ export function drawActor(
   const dx = x - dw / 2;                  // yatayda frame ortalanır
   const dy = y - dh * art.anchorY;        // dikeyde ayak hizası world y'ye oturur
 
-  if (art.flipByVelocity && !facingRight) {
+  if (aynalaMi(art, facingRight)) {
     ctx.save();
     ctx.translate(x, 0);
     ctx.scale(-1, 1);
