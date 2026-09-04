@@ -15,6 +15,7 @@ import { TicketSection } from '@/components/TicketSection';
 import { applyFxSettings } from '@/game/fx';
 import { loadSettings, saveSettings, type Settings } from '@/game/settings';
 import { setVolume } from '@/game/sfx';
+import { muzikAcik } from '@/game/music';
 import { resetHints } from '@/game/tutorial';
 import { Card, CardSection, PanelHead } from '@/components/ui/cards';
 import { PixelButton, BTN } from '@/components/ui/kit';
@@ -24,6 +25,7 @@ import { C } from '@/lib/theme';
 export function applyStoredSettings(): Settings {
   const s = loadSettings();
   setVolume(s.volume);
+  muzikAcik(s.music);
   applyFxSettings(s);
   return s;
 }
@@ -113,6 +115,17 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
 
       {/* ── GÖRÜNTÜ + ERİŞİLEBİLİRLİK ── */}
       <div style={{ marginTop: 9, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* ⚠️ MÜZİK AYRI ANAHTAR. Tek bir ses ayarı, "efektleri istiyorum
+            ama müziği istemiyorum" diyen oyuncuyu sesi TAMAMEN kapatmaya
+            zorlardı — ve o oyuncu boss telegrafını da duymaz olurdu. */}
+        <Card>
+          <Toggle
+            label="Music"
+            hint="A slow layer that thickens as the horde does. Like every sound here, it is generated live — there is no music file."
+            on={s.music}
+            onChange={(v) => { patch({ music: v }); muzikAcik(v); }}
+          />
+        </Card>
         <Card>
           <Toggle
             label="Damage numbers"

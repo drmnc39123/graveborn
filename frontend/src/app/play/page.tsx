@@ -52,7 +52,9 @@ import type { CSSProperties } from 'react';
 import type { RunMode } from '@/game/engine';
 import type { BuildingId } from '@/game/hub';
 import { C, FONT, glass } from '@/lib/theme';
+import { loadSettings } from '@/game/settings';
 import { installAudioUnlock, installUiClickSound, play } from '@/game/sfx';
+import { muzikAcik, muzikBaslat, muzikDurdur, muzikSahne } from '@/game/music';
 import { ApiError, getMode, getWallet } from '@/lib/session';
 import {
   buyUpgrade, engineModeOf, finishBossRun, finishRun as settleRun, loadSessionProgress,
@@ -310,6 +312,29 @@ export default function PlayPage() {
    * duyulmaz, sebebi de görünmezdi.
    */
   useEffect(() => installAudioUnlock(), []);
+  /**
+   * ⭐ MÜZİK — köyde başlar, sekme kapanana kadar yaşar.
+   *
+   * ⚠️ HER SAHNEDE YENİDEN BAŞLATILMIYOR. Koşuya girip çıkmak müziği
+   * durdurup başlatsaydı, oyuncu günde onlarca kez aynı giriş rampasını
+   * dinlerdi; akış sürüyor, yalnız SAHNESİ değişiyor.
+   * ⚠️ AYAR BURADA DA OKUNUYOR ve bu kopya DEĞİL: `SettingsPanel` ayarı
+   * yalnız AÇILDIĞINDA uyguluyor. Müziği kapatmış bir oyuncu ayarlara hiç
+   * girmezse, kapattığı müzik her açılışta yeniden çalardı.
+   */
+  useEffect(() => {
+    const ayar = loadSettings();
+    muzikAcik(ayar.music);
+    muzikBaslat('village');
+    return () => muzikDurdur();
+  }, []);
+  /**
+   * Sahne = ekran. Koşu/boss/arena hepsi 'combat'; boss ODASI ayrımını
+   * `GameCanvas` yapıyor (canlı boss'u yalnız o görüyor).
+   */
+  useEffect(() => {
+    muzikSahne(screen.kind === 'hub' ? 'village' : 'combat');
+  }, [screen.kind]);
   // ⚠️ Tıklama sesi TEK NOKTADAN — bkz. sfx.installUiClickSound başlığı.
   useEffect(() => installUiClickSound(), []);
   /**

@@ -20,6 +20,7 @@ import { descentBant } from '@/game/stageArt';
 
 import { preloadAll } from '@/game/sprites';
 import { installAudioUnlock, isSoundEnabled, play, setSoundEnabled, unlockAudio } from '@/game/sfx';
+import { muzikDurakla, muzikSahne, muzikYogunluk } from '@/game/music';
 import type { RunPet } from '@/game/pets';
 import { C, FONT, thinGlass } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon, preloadKit } from '@/components/ui/kit';
@@ -523,6 +524,27 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           setHint(h.text);
         }
       }
+      /**
+       * ⭐ MÜZİK — sahnenin baskısını ölç, katmanları o açsın.
+       *
+       * ⚠️ ÖLÇÜT ÜÇ AYAKLI ve tek başına hiçbiri yetmiyordu:
+       *   · CANLI DÜŞMAN oranı — asıl kalabalık ölçüsü, ama boss teke tek
+       *     dövüşünde 1 düşman var ve müzik ölürdü.
+       *   · BOSS — varlığı tek başına yüksek baskı.
+       *   · DÜŞÜK CAN — kalabalık olmasa da gergin an; oyuncu 2 canla
+       *     kaçarken müziğin sakinleşmesi sahneyle çelişirdi.
+       * ⚠️ HUD örneklemesine bağlı (saniyede 12), her kareye DEĞİL: müzik
+       *    kazancını 60 Hz'de rampalamak ses motorunu boşuna çalıştırır.
+       */
+      const bossVar = game.enemies.some((e) => !!e.boss);
+      const kalabalik = Math.min(1, game.enemies.length / 90);
+      const canBaskisi = 1 - Math.min(1, game.hp / Math.max(1, game.stats.maxHp));
+      muzikSahne(bossVar ? 'boss' : 'combat');
+      muzikYogunluk(Math.max(bossVar ? 0.8 : 0, kalabalik, canBaskisi * 0.7));
+      // ⚠️ Seviye atlama kartı da duraklama sayılıyor: kart açıkken oyun
+      // duruyor, müziğin koşuyormuş gibi sürmesi yanlış bilgi verirdi.
+      muzikDurakla(pausedRef.current || game.phase === 'levelup');
+
       setHud({
         time: game.time, hp: game.hp, maxHp: game.stats.maxHp, level: game.level,
         xp: game.xp, xpNext: game.xpNext, kills: game.kills, rareGold: game.rareGold,
@@ -548,6 +570,9 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     return () => {
       cancelAnimationFrame(raf);
       sesKilidiniKaldir();
+      // ⚠️ Koşudan çıkarken duraklama bayrağı MUTLAKA kalkmalı; kalsaydı
+      // köy müziği sessiz açılır ve sebebi hiçbir yerde görünmezdi.
+      muzikDurakla(false);
       window.removeEventListener('resize', resize);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);

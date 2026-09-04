@@ -126,7 +126,34 @@ export function installUiClickSound(): () => void {
   return () => window.removeEventListener('pointerdown', bas, true);
 }
 
-export function setSoundEnabled(on: boolean) { enabled = on; }
+/**
+ * SES BAĞLAMINI PAYLAŞ — müzik katmanı kendi `AudioContext`ini AÇMAMALI.
+ *
+ * ⚠️ İKİNCİ BİR BAĞLAM SESSİZ KALIR. Tarayıcı otomatik oynatma kilidini
+ * bağlam başına çözüyor ve `installAudioUnlock` yalnız BU bağlamı
+ * `resume()` ediyor; ayrı bir bağlam açan müzik modülü `suspended`
+ * durumda takılı kalır ve hiç duyulmaz — üstelik hata da vermez.
+ * Ayrıca Safari'de eşzamanlı bağlam sayısı sınırlı.
+ */
+export function sesBaglami(): AudioContext | null { return ensure(); }
+
+/**
+ * Ayar değişikliği dinleyicileri.
+ *
+ * ⚠️ BAĞIMLILIK TEK YÖNLÜ KALSIN diye var. Müzik modülü `sfx`ten okuyor;
+ * `sfx`in müziği doğrudan çağırması dairesel bir import olurdu. Ses açılıp
+ * kapandığında ya da seviye değiştiğinde müziğin haberi olmalı, yoksa
+ * oyuncu sesi kısar ve müzik eski seviyede çalmaya devam eder.
+ */
+type AyarDinleyici = () => void;
+const ayarDinleyiciler = new Set<AyarDinleyici>();
+export function sesAyariDinle(f: AyarDinleyici): () => void {
+  ayarDinleyiciler.add(f);
+  return () => { ayarDinleyiciler.delete(f); };
+}
+function ayarDegisti() { for (const f of ayarDinleyiciler) { try { f(); } catch { /* dinleyici bizi düşürmesin */ } } }
+
+export function setSoundEnabled(on: boolean) { enabled = on; ayarDegisti(); }
 export function isSoundEnabled() { return enabled; }
 
 /**
@@ -143,6 +170,7 @@ let volume = 1;
 export function setVolume(v: number) {
   volume = Math.min(1, Math.max(0, Number(v) || 0));
   if (master) master.gain.value = BASE_GAIN * volume;
+  ayarDegisti();
 }
 export function getVolume() { return volume; }
 

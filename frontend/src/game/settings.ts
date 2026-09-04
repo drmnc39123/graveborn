@@ -29,6 +29,16 @@ export interface Settings {
    */
   damageNumbers: boolean;
   /**
+   * Müzik katmanı.
+   *
+   * ⚠️ AYRI ANAHTAR, `volume`a BAĞLI DEĞİL. Oyuncuların önemli bir kısmı
+   * efektleri duymak isteyip müziği istemiyor (kendi müziğini dinliyor);
+   * tek bir ses anahtarı onları "ya hepsi ya hiçbiri"ne zorlardı ve
+   * pratikte sesi TAMAMEN kapattırırdı — yani boss telegrafını da
+   * kaybettirirdi.
+   */
+  music: boolean;
+  /**
    * Düşük grafik: leş, kıvılcım ve atmosfer katmanı azalır.
    * Zayıf cihazda kare hızı için — denge etkisi YOK.
    */
@@ -36,7 +46,7 @@ export interface Settings {
 }
 
 export function defaultSettings(): Settings {
-  return { volume: 0.7, damageNumbers: true, lowGraphics: false };
+  return { volume: 0.7, damageNumbers: true, music: true, lowGraphics: false };
 }
 
 function clamp01(v: unknown, fallback: number): number {
@@ -52,6 +62,7 @@ export function normalizeSettings(raw: Partial<Settings> | null | undefined): Se
   return {
     volume: clamp01(raw.volume, d.volume),
     damageNumbers: typeof raw.damageNumbers === 'boolean' ? raw.damageNumbers : d.damageNumbers,
+    music: typeof raw.music === 'boolean' ? raw.music : d.music,
     lowGraphics: typeof raw.lowGraphics === 'boolean' ? raw.lowGraphics : d.lowGraphics,
   };
 }
