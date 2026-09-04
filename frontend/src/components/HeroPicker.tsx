@@ -4,8 +4,11 @@
 // Ayrı bir panel yapılmadı: karakteri bölümden ayrı bir yerde seçmek, oyuncuyu
 // koşuya başlamadan önce iki ekran arasında gezdirir. Aynı akışta olması doğru.
 
+import { useEffect, useState } from 'react';
 import { HEROES, heroById, type HeroDef } from '@/game/heroes';
 import { kahramanAcikMi, kahramanKilitMetni } from '@/game/heroUnlock';
+import { USTALIK_MAX, USTALIK_STAT, sonrakiEsik } from '@/game/mastery';
+import { fetchMastery, type UstalikDurum } from '@/lib/gameSession';
 import type { Progress } from '@/game/progress';
 import { weaponById } from '@/game/config';
 import { Card, CardSection, DeltaBar, PATTERN_TEXT, Tag } from '@/components/ui/cards';
@@ -58,6 +61,15 @@ export function HeroPicker({ selected, onSelect, progress }: {
   progress: Progress;
 }) {
   const cur = heroById(selected);
+  /**
+   * ⚠️ USTALIK AYRI UÇTAN geliyor, `progress` içinde DEĞİL: kademe `Run`
+   * geçmişinden türetiliyor ve o sorguyu `/progress`e koymak, hiç kimse
+   * bakmıyorken bile her istekte bir toplama sorgusu demekti.
+   */
+  const [ustalik, setUstalik] = useState<UstalikDurum | null>(null);
+  useEffect(() => { fetchMastery().then(setUstalik); }, []);
+  const kademeOf = (id: string) => ustalik?.mastery?.[id]?.tier ?? 0;
+
   return (
     <div style={{ marginBottom: 16 }}>
       <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 1.8, color: C.boneFaint, marginBottom: 7 }}>
@@ -95,6 +107,19 @@ export function HeroPicker({ selected, onSelect, progress }: {
               <div style={{ filter: acik ? undefined : 'grayscale(1) brightness(0.45)' }}>
                 <Portrait hero={h} size={54} />
               </div>
+              {/* ⚠️ KADEME PORTRENİN ÜSTÜNDE: kartı açmadan hangi kahramanı
+                  ne kadar ilerlettiğini görebilmeli, yoksa ustalık ancak
+                  aranarak bulunan bir sayı olurdu. 0'da hiç çizilmiyor —
+                  boş noktalar "ilerleme yok" değil "bozuk" gibi okunur. */}
+              {acik && kademeOf(h.id) > 0 && (
+                <div style={{
+                  position: 'absolute', left: 0, right: 0, bottom: 1,
+                  textAlign: 'center', fontSize: 8, letterSpacing: 0.5,
+                  color: C.candle, textShadow: `0 1px 2px ${C.void}`, pointerEvents: 'none',
+                }}>
+                  {'◆'.repeat(kademeOf(h.id))}
+                </div>
+              )}
               {!acik && (
                 <div style={{
                   position: 'absolute', inset: 3, display: 'grid', placeItems: 'center',
@@ -128,7 +153,7 @@ export function HeroPicker({ selected, onSelect, progress }: {
         );
       })()}
 
-      <HeroCard hero={cur} />
+      <HeroCard hero={cur} ustalik={ustalik} />
     </div>
   );
 }
@@ -141,7 +166,7 @@ export function HeroPicker({ selected, onSelect, progress }: {
  * "bu hero ateş etmiyor" şikâyeti geldi — silahı yörüngeydi, gerçekten
  * hiçbir şey fırlatmıyordu. Artık deseni de, nasıl çalıştığı da yazıyor.
  */
-function HeroCard({ hero }: { hero: HeroDef }) {
+function HeroCard({ hero, ustalik }: { hero: HeroDef; ustalik: UstalikDurum | null }) {
   const w = weaponById(hero.weapon);
   const pat = w ? PATTERN_TEXT[w.pattern] : undefined;
   /**
@@ -196,6 +221,47 @@ function HeroCard({ hero }: { hero: HeroDef }) {
       </div>
 
       <div style={{ padding: '0 12px 12px' }}>
+        {/* ⭐ USTALIK — bu kahramanla ne kadar derine indiğinin karşılığı.
+            ⚠️ ÖLÇÜT "kaç koşu" DEĞİL "en derin": koşu sayısı tekrarla
+            büyür ve ustalık sabrın başka adı olurdu.
+            ⚠️ Cüzdansızken (demo) hiç çizilmez — kademe sunucudaki koşu
+            geçmişinden türüyor, demoda öyle bir geçmiş yok. */}
+        {ustalik && (() => {
+          const bilgi = ustalik.mastery[hero.id];
+          const kademe = bilgi?.tier ?? 0;
+          const derin = bilgi?.depth ?? 0;
+          const stat = USTALIK_STAT[hero.id];
+          const sonraki = sonrakiEsik(kademe);
+          return (
+            <CardSection label="Mastery" tone={C.candle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 900, color: kademe > 0 ? C.candle : C.boneFaint }}>
+                  {kademe} / {USTALIK_MAX}
+                </span>
+                <span style={{ letterSpacing: 2, color: C.candle, fontSize: 11 }}>
+                  {'◆'.repeat(kademe)}<span style={{ color: C.boneFaint }}>{'◇'.repeat(USTALIK_MAX - kademe)}</span>
+                </span>
+                {stat && kademe > 0 && (
+                  <Tag tone="blood">
+                    {stat.perTier < 0 ? '+' : '+'}
+                    {Math.abs(stat.perTier * kademe) < 1
+                      ? `${Math.round(Math.abs(stat.perTier * kademe) * 100)}%`
+                      : (stat.perTier * kademe).toFixed(1)} {stat.etiket}
+                  </Tag>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: C.boneDim, marginTop: 5, lineHeight: 1.5 }}>
+                Deepest with this hero: <b style={{ color: C.bone }}>{derin || '—'}</b>
+                {sonraki !== null
+                  ? <> · next rank at <b style={{ color: C.bone }}>depth {sonraki}</b></>
+                  : <> · <b style={{ color: C.candle }}>mastered</b></>}
+                <br />
+                Only Descent and Wilderness count, and only runs the server accepted.
+              </div>
+            </CardSection>
+          );
+        })()}
+
         {w && (
           <CardSection label="Starting weapon" tone={C.candle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

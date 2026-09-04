@@ -40,6 +40,8 @@ import {
 } from './market.js';
 import { seedFromString } from '@game/rng';
 import { GUNLUK_TABLO, gunBaslangici, gunDamgasi, gunlukBolum, gunlukTohum, gunlukTozu } from '@game/daily';
+import { ustalikBonusuOf, ustalikHaritasi } from './mastery.js';
+import { USTALIK_ESIK, USTALIK_MAX, ustalikKademesi } from '@game/mastery';
 import { wagerPayout } from '@game/wager';
 import { PULL_COST } from '@game/cosmetics';
 import { profileOf } from './profile.js';
@@ -798,6 +800,15 @@ app.post('/run/start', wrap(async (req, res) => {
   // ⚠️ Beceri bonusu da SUNUCUDAN — üçüncü kez aynı kural: bir bonusun
   // kaynağı hiçbir zaman istemci olmamalı.
   const skills = gunluk ? {} : await skillsBonusOf(wallet);
+  /**
+   * ⭐ USTALIK BONUSU — kahraman başına kalıcı ilerleme (bkz. game/mastery.ts).
+   *
+   * ⚠️ SUNUCUDAN, dördüncü kez aynı kural. İstemci "5. kademe
+   * ustayım" diyebilseydi kademe beyan edilen bir şey olurdu.
+   * ⚠️ Günlükte BOŞ — eşitlenmiş modda kalıcı güç, eşitliğin kendisini
+   * çiğnerdi.
+   */
+  const mastery = gunluk ? {} : await ustalikBonusuOf(wallet, p.hero);
 
   await acikKosulariIptalEt(wallet);   // ⚠️ bkz. fonksiyon başlığı — para basma koruması
 
@@ -840,7 +851,7 @@ app.post('/run/start', wrap(async (req, res) => {
     // ⚠️ Günlükte tılsım LİSTESİ DE BOŞ dönüyor: istemci koşuyu bu listeyle
     // kuruyor, dolu dönseydi eşitlik ilk satırda kırılırdı.
     charms: gunluk ? [] : charms,
-    startDepth, ascension, guildGrowth, gear, skills,
+    startDepth, ascension, guildGrowth, gear, skills, mastery,
     wagerTarget: bahisGecerli ? bahis!.target : 0,
     wagerStake: bahisGecerli ? bahis!.stake : 0,
     // ⚠️ `stageId` DÖNÜYOR — günlükte bölümü sunucu seçiyor ve istemci
@@ -1826,6 +1837,26 @@ app.get('/daily', wrap(async (req, res) => {
       ? { done: true, finished: !!benim.claimedAt, depth: benim.awardedDepth ?? 0, capped: benim.capped }
       : { done: false, finished: false, depth: 0, capped: false },
   });
+}));
+
+/**
+ * ⭐ KAHRAMAN USTALIĞI — kahraman kartının okuduğu tablo.
+ *
+ * ⚠️ AYRI UÇ, `/progress`'e EKLENMEDİ: `/progress` her panel açılışında
+ * çağrılıyor ve buradaki `groupBy`ı oraya koymak, hiç kimsenin bakmadığı
+ * anlarda bile her istekte bir toplama sorgusu demekti.
+ */
+app.get('/heroes/mastery', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const harita = await ustalikHaritasi(wallet);
+  const out: Record<string, { depth: number; tier: number }> = {};
+  for (const [hero, depth] of Object.entries(harita)) {
+    out[hero] = { depth, tier: ustalikKademesi(depth) };
+  }
+  // ⚠️ Eşikler de dönüyor: arayüz "bir sonraki kademe için d22" diyebilsin
+  // diye. İki yerde yazılı bir eşik listesi, er ya da geç iki farklı liste.
+  res.json({ mastery: out, thresholds: USTALIK_ESIK, max: USTALIK_MAX });
 }));
 
 // ── ADMIN ──

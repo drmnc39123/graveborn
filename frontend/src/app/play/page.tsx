@@ -1266,6 +1266,9 @@ function runBonus(upgrades: Record<string, number>, ticket: RunTicket) {
   b = mergeBonus(b, ticket.gear);
   // ⚠️ Beceri ağacı da aynı kanaldan — dördüncü kaynak, sıfır motor değişikliği.
   b = mergeBonus(b, ticket.skills);
+  // ⚠️ Kahraman ustalığı BEŞİNCİ kaynak ve yine aynı kanal. Motorda tek
+  // satır değişmediği için determinizm mührü yine bozulmuyor.
+  b = mergeBonus(b, ticket.mastery);
   return ticket.guildGrowth > 0 ? mergeBonus(b, { growth: ticket.guildGrowth }) : b;
 }
 

@@ -108,6 +108,12 @@ export interface RunTicket {
    */
   skills: Partial<Record<StatKey, number>>;
   /**
+   * Kahraman ustalığının verdiği bonus (bkz. game/mastery.ts).
+   * ⚠️ SUNUCUDAN gelir — kademe beyan edilebilir bir şey olmamalı.
+   * ⚠️ Günlük inişte BOŞ: eşitlenmiş modda kalıcı güç, eşitliği çiğnerdi.
+   */
+  mastery: Partial<Record<StatKey, number>>;
+  /**
    * Sunucunun seçtiği bölüm — YALNIZ günlük inişte dolu.
    * ⚠️ Günlükte bölümü istemci SEÇMİYOR; hangi haritayı kuracağını
    * başka türlü bilemez.
@@ -575,6 +581,10 @@ export async function startRun(
       gear: {},
       // Demoda beceri ağacı da yok — puan sunucuda doğrulanan derinlikten türüyor
       skills: {},
+      // ⚠️ Demoda ustalık da YOK: kademe `Run` tablosundaki geçmişten
+      // türüyor ve demo sunucuya tek satır yazmıyor. Yerelde uydurmak,
+      // demoyu gerçek oyundan GÜÇLÜ gösterirdi.
+      mastery: {},
       wager: wagerLive ? w! : null,
     };
   }
@@ -582,6 +592,7 @@ export async function startRun(
     runId: string; seed: number; charms?: string[]; startDepth?: number; ascension?: number;
     guildGrowth?: number; gear?: Partial<Record<string, number>>;
     skills?: Partial<Record<string, number>>;
+    mastery?: Partial<Record<string, number>>;
     /** ⭐ Bahis hedefi — sunucu koşu açılırken stake'i YAKTI, hedefi de bildiriyor */
     wagerTarget?: number; wagerStake?: number;
     /** ⭐ Günlük iniş: bölümü sunucu seçiyor ve Forge devre dışı */
@@ -623,6 +634,7 @@ export async function startRun(
     gear: (out.gear ?? {}) as RunTicket['gear'],
     // ⚠️ Beceri bonusu da SUNUCUDAN — üçüncü kez aynı kural.
     skills: (out.skills ?? {}) as RunTicket['skills'],
+    mastery: (out.mastery ?? {}) as RunTicket['mastery'],
     stageId: typeof out.stageId === 'number' ? out.stageId : undefined,
     equalize: out.equalize === true,
     // ⭐ SADECE GÖSTERİM: kazanç kararı sunucuda kalıyor (`bahisKazandi`,
@@ -1042,6 +1054,11 @@ export async function startDuel(recordId: string): Promise<RunTicket & {
     guildGrowth: Math.max(0, out.guildGrowth ?? 0),
     gear: (out.gear ?? {}) as RunTicket['gear'],
     skills: (out.skills ?? {}) as RunTicket['skills'],
+    // ⚠️ DÜELLODA USTALIK YOK. Düello rakibin tohumunu, rakibin derinliğine
+    // karşı oynamak; kalıcı bir güç farkı katmak onu bir beceri kıyası
+    // olmaktan çıkarırdı. Aynı gerekçeyle düello koşuları ustalığı
+    // BESLEMİYOR da (bkz. mastery.ts USTALIK_MODLARI).
+    mastery: {},
     wager: null,
     duel: out.duel,
   };
@@ -1157,5 +1174,29 @@ export async function fetchDaily(): Promise<DailyDurum | null> {
     return await api<DailyDurum>('/daily');
   } catch {
     return null;      // sunucu kapalıysa panel açılmaya devam etsin
+  }
+}
+
+// ── KAHRAMAN USTALIĞI ─────────────────────────────────────────────────
+
+export interface UstalikDurum {
+  mastery: Record<string, { depth: number; tier: number }>;
+  thresholds: number[];
+  max: number;
+}
+
+/**
+ * Kahraman başına ustalık.
+ *
+ * ⚠️ Cüzdansızken çağrılmaz: kademe `Run` tablosundaki geçmişten türüyor
+ * ve demo sunucuya tek satır yazmıyor. Demoda uydurulmuş bir kademe
+ * göstermek, demoyu gerçek oyundan güçlü gösterirdi.
+ */
+export async function fetchMastery(): Promise<UstalikDurum | null> {
+  if (!isWallet()) return null;
+  try {
+    return await api<UstalikDurum>('/heroes/mastery');
+  } catch {
+    return null;    // sunucu kapalıysa kart yine açılsın
   }
 }
