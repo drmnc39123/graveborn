@@ -150,6 +150,14 @@ export const COSMETICS: readonly CosmeticDef[] = [
   { ...T('t_hollow', 'Hollow-Handed', 'epic', 'Earned by clearing every road the campaign offers.'), source: 'earned' },
   { ...P('p_relic', 'Reliquary Gold', 'legendary', '#ffe9a8', '#efa72e', 'Earned by emptying the reliquary of every relic it holds.'), source: 'earned' },
   { ...A('a_stone', 'Monument Light', 'epic', '#b8ae98', 52, 'Earned by raising the monument twenty stones high.'), source: 'earned' },
+  // ⚠️ YENİ KAZANILANLAR (2026-09-04) — başarım listesi 11'den 29'a
+  // çıkarıldı ve geç oyunun dört kilometre taşı ödülsüz kalmasın diye
+  // eklendi. Hepsi `earned`: çekilişe girerlerse başarımın tek değeri
+  // (satın alınamaz olmak) yok olur.
+  { ...A('a_forge', 'Forgelight', 'epic', '#f0a24a', 52, 'Earned at the hundredth hammerfall. The heat never fully leaves.'), source: 'earned' },
+  { ...T('t_keeper', 'Never Missed a Night', 'legendary', 'Thirty nights in a row. The lamp was always lit.'), source: 'earned' },
+  { ...T('t_binder', 'Binder of Beasts', 'epic', 'Something was bound, and it did not object.'), source: 'earned' },
+  { ...P('p_deep', 'Stairlight', 'legendary', '#a9b6c2', '#efa72e', 'Earned sixty steps below the last name anyone remembers.'), source: 'earned' },
 
   // ── HAFTALIK SEZON ÖDÜLLERİ (bkz. season.ts) ──────────────────────
   // ⚠️ Tekrar kazanılabilirler — her hafta yeni bir ilk üç var. Bir kez

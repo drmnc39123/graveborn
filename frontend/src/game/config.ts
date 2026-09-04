@@ -1232,27 +1232,26 @@ export function weaponById(id: string): WeaponDef | undefined {
   return WEAPONS.find((w) => w.id === id) ?? EVOLVED.find((w) => w.id === id);
 }
 
-// ── BOSS'LAR ve SANDIK ────────────────────────────────────────────────
-// VS'te 25:00'te boss + 10:00 sonrası sandıklar evrim verir. Run'ımız 20 dk,
-// o yüzden ölçekledik: 5/10/15. 10:00'dan SONRAKİ sandıklar evrim verir.
-export interface BossSpawn {
-  atSec: number;
-  hp: number;
-  speed: number;
-  damage: number;
-  radius: number;
-  xp: number;
-  art: string;
-  label: string;
-  /** sandığı evrim verir mi (VS'in 10 dakika kuralı) */
-  evolutionChest: boolean;
-}
-
-export const BOSSES: readonly BossSpawn[] = [
-  { atSec: 5 * 60, hp: 2600, speed: 42, damage: 22, radius: 34, xp: 120, art: 'boss_mini', label: 'The Gorged', evolutionChest: false },
-  { atSec: 10 * 60, hp: 9000, speed: 46, damage: 28, radius: 42, xp: 320, art: 'boss_mega', label: 'Bell Warden', evolutionChest: true },
-  { atSec: 15 * 60, hp: 24000, speed: 52, damage: 36, radius: 50, xp: 800, art: 'boss_nightmare', label: 'The Unburied', evolutionChest: true },
-] as const;
+// ── SANDIK ────────────────────────────────────────────────────────────
+//
+// 🔴 `BOSSES` SİLİNDİ (2026-09-04) — ZAMAN TABANLI boss tablosuydu
+// (5/10/15 dk, VS'in 25:00 kuralından ölçeklenmiş) ve **hiçbir yerden
+// import edilmiyordu**. Ölçüldü: tüm depoda tek geçtiği yer kendi
+// tanımıydı.
+//
+// Boss'lar gerçekte BÖLÜM TANIMINDAN geliyor (`StageDef.boss`) ve zamanla
+// değil İLERLEMEYLE doğuyorlar: havuzdaki tüm normal düşmanlar salınıp
+// ölünce boss bölümün finali olarak geliyor (bkz. `engine.ts`
+// `spawnStageBoss`). İlk boss bölüm 3'te; ikinci yarıda her bölümde var.
+//
+// ⚠️ NİYE SİLİNDİ, NİYE BIRAKILMADI: ölü bir sabit envanterde "var" gibi
+// görünür. Bu tabloya bakan biri boss'ların dakikaya göre geldiğini sanar
+// ve yanlış yerde ayar arar — nitekim bu oturumda tam olarak öyle oldu.
+// Daha iyi bir eşdeğeri OLAN ölü kod silinir (`ctaButton` precedent'i);
+// çalışan ve doğrulanmış bir şey silinmez.
+//
+// ⚠️ `evolutionChest` FİKRİ KAYBOLMADI: evrim sandığını bölüm boss'u
+// düşürüyor (`engine.ts`, boss ölümünde `evolutionChest: true`).
 
 /** Sandık toplama yarıçapı — mücevherden büyük, kaçırmak zor olsun */
 export const CHEST_RADIUS = 22;
