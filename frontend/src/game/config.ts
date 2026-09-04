@@ -1729,4 +1729,25 @@ export const PASSIVES: readonly PassiveDef[] = [
 /** Aynı anda taşınabilecek pasif sayısı (VS: 6, silahlardan ayrı) */
 export const MAX_PASSIVES = 6;
 
+/**
+ * DÜZ (oransal OLMAYAN) istatistikler — yüzde olarak GÖSTERİLEMEZ.
+ *
+ * 🔴 NİYE TEK KAYNAK OLARAK BURADA: bu ayrım iki kez unutuldu ve iki kez
+ * ekranda OLMAYAN bir bonus duyuruldu.
+ *   1. `HeroCard` `recovery: 0.5`i "RECOVERY +50%" diye yazıyordu; motor
+ *      onu saniyede iyileşen CAN olarak okuyor (`engine.ts`:
+ *      `h.hp + h.stats.recovery * dt`), yani gerçek değer "+0,5 HP/sn".
+ *   2. Kahraman ustalığı `armor: 0.4`ü "+%40 armor" diye yazdı — oysa
+ *      zırh puan, oran değil (`engine.ts` hasardan DÜZ düşüyor).
+ * İkisinde de hata "küçük sayı = oran" varsayımından geldi. Varsayım
+ * yerine liste: bir istatistiğin düz mü oransal mı olduğu ÖLÇÜLEBİLİR
+ * bir gerçek ve tek bir yerde yazılı olmalı.
+ */
+export const DUZ_STATLAR: readonly StatKey[] = ['armor', 'recovery'] as const;
+
+/** Bir istatistik yüzdeyle mi gösterilir */
+export function oransalStat(k: StatKey): boolean {
+  return !DUZ_STATLAR.includes(k);
+}
+
 

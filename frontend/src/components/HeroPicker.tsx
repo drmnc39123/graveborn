@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 import { HEROES, heroById, type HeroDef } from '@/game/heroes';
 import { kahramanAcikMi, kahramanKilitMetni } from '@/game/heroUnlock';
-import { USTALIK_MAX, USTALIK_STAT, sonrakiEsik } from '@/game/mastery';
+import { USTALIK_MAX, sonrakiEsik, ustalikMetni } from '@/game/mastery';
 import { fetchMastery, type UstalikDurum } from '@/lib/gameSession';
 import type { Progress } from '@/game/progress';
 import { weaponById } from '@/game/config';
@@ -230,7 +230,7 @@ function HeroCard({ hero, ustalik }: { hero: HeroDef; ustalik: UstalikDurum | nu
           const bilgi = ustalik.mastery[hero.id];
           const kademe = bilgi?.tier ?? 0;
           const derin = bilgi?.depth ?? 0;
-          const stat = USTALIK_STAT[hero.id];
+          const metin = ustalikMetni(hero.id, kademe);
           const sonraki = sonrakiEsik(kademe);
           return (
             <CardSection label="Mastery" tone={C.candle}>
@@ -241,14 +241,11 @@ function HeroCard({ hero, ustalik }: { hero: HeroDef; ustalik: UstalikDurum | nu
                 <span style={{ letterSpacing: 2, color: C.candle, fontSize: 11 }}>
                   {'◆'.repeat(kademe)}<span style={{ color: C.boneFaint }}>{'◇'.repeat(USTALIK_MAX - kademe)}</span>
                 </span>
-                {stat && kademe > 0 && (
-                  <Tag tone="blood">
-                    {stat.perTier < 0 ? '+' : '+'}
-                    {Math.abs(stat.perTier * kademe) < 1
-                      ? `${Math.round(Math.abs(stat.perTier * kademe) * 100)}%`
-                      : (stat.perTier * kademe).toFixed(1)} {stat.etiket}
-                  </Tag>
-                )}
+                {/* ⚠️ BİÇİMLENDİRME BURADA YAPILMIYOR. İlk sürüm "değer
+                    1'den küçükse yüzdedir" diye varsayıyordu ve zırh
+                    bonusu 0,4'ü ekranda "+%40" diye yazdı. Karar artık
+                    `ustalikMetni` içinde ve testli. */}
+                {metin && <Tag tone="blood">{metin}</Tag>}
               </div>
               <div style={{ fontSize: 11, color: C.boneDim, marginTop: 5, lineHeight: 1.5 }}>
                 Deepest with this hero: <b style={{ color: C.bone }}>{derin || '—'}</b>

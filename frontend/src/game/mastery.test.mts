@@ -6,10 +6,11 @@
 // `cooldown` bu depoda TERS çalışıyor (negatif = daha hızlı) — işareti
 // ters yazmak, ödülü sessizce bir CEZAYA çevirirdi.
 
+import { oransalStat } from './config.js';
 import { HEROES } from './heroes.js';
 import {
   USTALIK_ESIK, USTALIK_MAX, USTALIK_MODLARI, USTALIK_STAT,
-  sonrakiEsik, ustalikBonusu, ustalikKademesi, ustalikTanimsizlar,
+  sonrakiEsik, ustalikBonusu, ustalikKademesi, ustalikMetni, ustalikTanimsizlar,
 } from './mastery.js';
 
 const FAIL: string[] = [];
@@ -71,6 +72,32 @@ check('ranger ustalığı SALDIRIYI HIZLANDIRIYOR (negatif cooldown)',
 check('bilinmeyen kahraman BOŞ dönüyor',
   Object.keys(ustalikBonusu('olmayan-kahraman', 5)).length === 0);
 
+console.log('\n[4b] OYUNCUYA GÖSTERİLEN METİN');
+/**
+ * 🔴 BU BÖLÜM GERÇEK BİR HATADAN SONRA YAZILDI. Kart, bonusu JSX içinde
+ * biçimlendiriyor ve "değer 1'den küçükse yüzdedir" diye VARSAYIYORDU;
+ * zırh bonusu 0,4 ekranda **"+%40 armor"** olarak göründü. Zırh puan,
+ * oran değil. Aynı hata daha önce `recovery` ile de yapılmıştı.
+ * Karar artık saf bir fonksiyonda ve ÖLÇÜLEBİLİR.
+ */
+{
+  check("kademe 0'da metin YOK", ustalikMetni('knight', 0) === null);
+  const zirh = ustalikMetni('knight', 2);
+  check('DÜZ stat yüzde ile gösterilmiyor', !!zirh && !zirh.includes('%'), String(zirh));
+  check('zırh metni doğru', zirh === '+0.4 armor', String(zirh));
+  const can = ustalikMetni('priestess', USTALIK_MAX);
+  check('kayan nokta artığı temizleniyor', can === '+0.3 health regen', String(can));
+  const hiz = ustalikMetni('ranger', USTALIK_MAX);
+  // ⚠️ Motorda negatif ama oyuncuya FAYDA olarak yazılmalı: "+%10 saldırı
+  // hızı", "−%10 bekleme" değil.
+  check('ORANSAL stat yüzde ile gösteriliyor', !!hiz && hiz.includes('%'), String(hiz));
+  check('faydalı bonus ARTI işaretli', !!hiz && hiz.startsWith('+'), String(hiz));
+  check('hız metni doğru', hiz === '+10% attack speed', String(hiz));
+  const can2 = ustalikMetni('bladekeeper', USTALIK_MAX);
+  check('oransal can metni doğru', can2 === '+10% max health', String(can2));
+  check('bilinmeyen kahramanda metin YOK', ustalikMetni('yok', 3) === null);
+}
+
 console.log('\n[5] TAVAN — denge kaçağına karşı');
 /**
  * ⚠️ BU KONTROL BİR DEĞER YARGISI VE BİLEREK SERT. Ustalık bir kimlik
@@ -84,7 +111,10 @@ for (const h of HEROES) {
   const t = USTALIK_STAT[h.id];
   if (!t) continue;
   const v = Math.abs((ustalikBonusu(h.id, USTALIK_MAX)[t.key] ?? 0));
-  const oransal = ['cooldown', 'maxHp', 'might', 'area', 'moveSpeed', 'projSpeed', 'duration', 'growth', 'greed'].includes(t.key);
+  // ⚠️ SINIFLANDIRMA TEK KAYNAKTAN (`config.DUZ_STATLAR`). Burada ikinci
+  // bir liste yazılıydı ve tam da bu ikilik, zırhın ekranda "%40" diye
+  // görünmesine yol açan varsayımın kardeşiydi.
+  const oransal = oransalStat(t.key);
   const tavan = oransal ? ORANSAL_TAVAN : DUZ_TAVAN;
   check(`${h.id} toplam bonusu tavanın altında`, v <= tavan + 1e-9,
     `${v} ≤ ${tavan} (${t.key})`);

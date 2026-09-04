@@ -25,7 +25,7 @@
 // gold ve bundan kat kat fazlasını veriyor; ustalık bir hattı ezmemeli,
 // ona bir kimlik eklemeli.
 
-import type { StatKey } from './config';
+import { oransalStat, type StatKey } from './config';
 import { HEROES } from './heroes';
 
 /** Kademe eşikleri — o kahramanla ulaşılmış EN DERİN nokta */
@@ -78,6 +78,34 @@ export function ustalikBonusu(heroId: string, kademe: number): Partial<Record<St
   const k = Math.max(0, Math.min(USTALIK_MAX, Math.floor(kademe)));
   if (!t || k <= 0) return {};
   return { [t.key]: t.perTier * k };
+}
+
+/**
+ * ⭐ OYUNCUYA GÖSTERİLECEK BONUS METNİ — JSX'te DEĞİL, burada.
+ *
+ * 🔴 NİYE BURADA: ilk sürüm biçimlendirmeyi kartın içinde yapıyordu ve
+ * "değer 1'den küçükse yüzdedir" diye VARSAYIYORDU. Sonuç ölçüldü:
+ * zırh bonusu `0.4` ekranda **"+%40 armor"** olarak göründü — oysa zırh
+ * puan, oran değil. Aynı hata bu depoda daha önce `recovery` ile de
+ * yapılmıştı (bkz. `config.ts` `DUZ_STATLAR`). JSX içindeki bir
+ * biçimlendirme test EDİLEMİYOR; saf bir fonksiyon edilebiliyor.
+ *
+ * ⚠️ İŞARET HER ZAMAN "+": ustalığın her kademesi FAYDA. `cooldown`
+ * motorda negatifken daha hızlı demek, ama oyuncuya "−%10 bekleme"
+ * değil "+%10 saldırı hızı" yazmak gerekiyor. (Negatifliğin doğruluğunu
+ * mühür ayrıca ölçüyor.)
+ */
+export function ustalikMetni(heroId: string, kademe: number): string | null {
+  const t = USTALIK_STAT[heroId];
+  const k = Math.max(0, Math.min(USTALIK_MAX, Math.floor(kademe)));
+  if (!t || k <= 0) return null;
+  const v = Math.abs(t.perTier * k);
+  if (!oransalStat(t.key)) {
+    // ⚠️ Kayan nokta artığı temizleniyor: 0.06 × 5 = 0.30000000000000004
+    const sayi = Number(v.toFixed(2));
+    return `+${sayi} ${t.etiket}`;
+  }
+  return `+${Math.round(v * 100)}% ${t.etiket}`;
 }
 
 /**
