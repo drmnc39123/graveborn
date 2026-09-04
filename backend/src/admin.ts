@@ -290,3 +290,101 @@ export async function betaSifirla(gercek: boolean): Promise<SifirlamaSayim> {
 
   return sayim;
 }
+
+// ── BÜYÜME VE DENETİM İZİ ─────────────────────────────────────────────
+
+/**
+ * DEFTER DIŞA AKTARIMI — NDJSON, satır satır akıtılır.
+ *
+ * ⚠️ NİYE VAR: `betaSifirla()`'nın kendi başlığı "defteri önce dışarı al"
+ * diyor ama bunu yapmanın BİR YOLU YOKTU. Talimatı yazıp aracı yazmamak,
+ * kapanış günü ya defteri kaybetmek ya da canlı veritabanına elle SQL
+ * atmak demekti; ikincisi kardeş projede iş kazası çıkarmış bir yol.
+ *
+ * ⚠️ TEK SEFERDE BELLEĞE ALINMAZ. Beta boyunca yüz binlerce satır
+ * birikebilir; `findMany()` ile hepsini diziye almak süreci düşürürdü.
+ * Sayfalama `id` üzerinden (cursor) — `at` benzersiz değil, aynı
+ * milisaniyede iki kayıt varsa `at` ile sayfalama satır atlatır.
+ */
+export async function* defterAkisi(batch = 5000): AsyncGenerator<string> {
+  let cursor: string | undefined;
+  for (;;) {
+    const rows = await prisma.ledger.findMany({
+      take: batch,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      orderBy: { id: 'asc' },
+    });
+    if (!rows.length) return;
+    yield rows.map((r) => JSON.stringify({
+      id: r.id, wallet: r.wallet, at: r.at.toISOString(),
+      kind: r.kind, gold: r.gold, detail: r.detail,
+    })).join('\n') + '\n';
+    cursor = rows[rows.length - 1].id;
+  }
+}
+
+export interface BuyumeGun {
+  /** YYYY-MM-DD (UTC) */
+  gun: string;
+  /** o gün açılan hesap sayısı */
+  yeni: number;
+  /**
+   * o günün hesaplarından, açılıştan ≥24s sonra HÂLÂ yazma yapmış olanlar.
+   * ⚠️ Kohort 24 saatten genç ise `null` — 0 DEĞİL (aşağıdaki uyarı).
+   */
+  kalan1g: number | null;
+  /** aynısı 7 gün için */
+  kalan7g: number | null;
+}
+
+/**
+ * ⭐ BÜYÜME — beta kararının dayanağı (bkz. beta planı FAZ B1).
+ *
+ * ⚠️ BU KLASİK D1/D7 RETENTION DEĞİL, ve öyle etiketlenmemeli. Ölçtüğü
+ * şey: `lastSeen - createdAt >= 24s`. `lastSeen` şemada `@updatedAt`,
+ * yani oyuncu satırına yapılan HER yazmada güncelleniyor — giriş değil,
+ * ilerleme kaydı. "Hesabı açtıktan 24 saat sonra hâlâ oynuyordu" için iyi
+ * bir vekil; "ertesi gün geri döndü" için değil. Gerçek kohort ölçümü
+ * oturum kaydı ister, o da bugün yok.
+ *
+ * 🔴 EN ÖNEMLİ AYRINTI — GENÇ KOHORT `null` DÖNER, 0 DEĞİL.
+ * Bugün açılmış 40 hesabın hiçbiri "24 saattir duruyor" olamaz; bunu 0
+ * olarak raporlamak "%0 tutunma" gibi okunur ve tam ters karar verdirir.
+ * Ölçüm penceresi dolmamış kohort ÖLÇÜLMEMİŞTİR — boş bırakılır.
+ */
+export async function buyume(gun: number): Promise<{ gunler: BuyumeGun[]; toplam: number }> {
+  const gunSayisi = Math.min(Math.max(Math.trunc(gun), 1), 90);
+  const baslangic = new Date(Date.now() - gunSayisi * 24 * HOUR);
+  const rows = await prisma.player.findMany({
+    where: { createdAt: { gte: baslangic } },
+    select: { createdAt: true, lastSeen: true },
+  });
+
+  const simdi = Date.now();
+  const GUN_MS = 24 * HOUR;
+  const kova = new Map<string, { yeni: number; k1: number; k7: number }>();
+  for (const r of rows) {
+    const anahtar = r.createdAt.toISOString().slice(0, 10);
+    const k = kova.get(anahtar) ?? { yeni: 0, k1: 0, k7: 0 };
+    k.yeni++;
+    const omur = r.lastSeen.getTime() - r.createdAt.getTime();
+    if (omur >= GUN_MS) k.k1++;
+    if (omur >= 7 * GUN_MS) k.k7++;
+    kova.set(anahtar, k);
+  }
+
+  const gunler: BuyumeGun[] = [...kova.entries()]
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([g, k]) => {
+      // Kohortun EN GENÇ üyesi bile pencereyi doldurmuş mu? Gün sonundan say.
+      const gunSonu = Date.parse(`${g}T23:59:59.999Z`);
+      return {
+        gun: g,
+        yeni: k.yeni,
+        kalan1g: simdi - gunSonu >= GUN_MS ? k.k1 : null,
+        kalan7g: simdi - gunSonu >= 7 * GUN_MS ? k.k7 : null,
+      };
+    });
+
+  return { gunler, toplam: rows.length };
+}

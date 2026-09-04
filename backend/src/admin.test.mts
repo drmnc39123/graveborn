@@ -41,6 +41,35 @@ async function stop(p: ReturnType<typeof spawn>) {
 const getFrom = (port: number) => (path: string, secret?: string) =>
   fetch(urlFor(port) + path, { headers: secret ? { 'x-admin-secret': secret } : {} });
 
+// ── 0) HER UCUN BİR EKRANI OLMALI ──
+//
+// ⭐ BU MÜHÜR BU DEPODAKİ EN SIK TEKRAR EDEN HATA SINIFINA KARŞI:
+// uç yazılıyor, çalışıyor, doğru veriyi döndürüyor — ve onu çağıran
+// hiçbir yüzey olmadığı için AYLARCA ölü duruyor. Ölçüldü: `/admin/reset`
+// (beta kapanışının tek aracı) ve `/admin/presence` tam olarak böyleydi.
+// Ekransız bir uç, olmayan bir uçtan daha kötüdür: envanterde görünür,
+// "yapılmış" sayılır, ama kapanış günü elle curl yazmak zorunda kalınır.
+//
+// ⚠️ ARAMA `:param` KIRPILARAK yapılıyor — panel `/admin/player/${w}`
+// yazıyor, rotadaki `/admin/player/:wallet` dizesi orada hiç geçmiyor.
+{
+  const fs = await import('node:fs');
+  const rotalar = [...fs.readFileSync('src/index.ts', 'utf8')
+    .matchAll(/app\.(?:get|post)\('(\/admin[^']*)'/g)]
+    .map((m) => m[1]);
+  const panel = fs.readFileSync('../frontend/src/app/admin/page.tsx', 'utf8');
+
+  check('admin rotaları bulundu', rotalar.length > 10, `${rotalar.length} rota`);
+  const ekransiz = [...new Set(rotalar)]
+    .filter((r) => !panel.includes(r.replace(/\/:.*$/, '')));
+  check('EKRANSIZ admin ucu yok', ekransiz.length === 0, ekransiz.join(' '));
+
+  // ⚠️ ÇİFT TARAFLI: tarama gerçekten arıyor mu? Var olmayan bir rota
+  // eklenirse mühür ONU YAKALAMALI — yoksa "hep geçen" bir testtir.
+  const sahte = '/admin/bu-uc-panelde-yok';
+  check('mühür sahte ucu yakalıyor (kontrol grubu)', !panel.includes(sahte));
+}
+
 // ── 1) SIR TANIMSIZKEN kapı KAPALI olmalı ──
 // Varsayılan bir sır koysaydık, unutulduğunda panel herkese açık kalırdı.
 console.log('\n[1] ADMIN_SECRET tanımsız');

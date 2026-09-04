@@ -32,7 +32,7 @@ import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
-import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned, betaSifirla } from './admin.js';
+import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned, betaSifirla, buyume, defterAkisi } from './admin.js';
 import {
   MAX_ACTIVE_LISTINGS, MIN_GOLD, MarketError, cancelListing, createListing,
   escrowedGold, listActive, listMine, tokenEnabled,
@@ -1689,6 +1689,51 @@ app.post('/admin/ban', adminOnly, wrap(async (req, res) => {
 /** Canlı boss odası — o an kaç kişi bağlı (admin/izleme) */
 app.get('/admin/presence', adminOnly, wrap(async (_req, res) => {
   res.json(presenceCount());
+}));
+
+/**
+ * ⭐ BÜYÜME — günlük yeni hesap ve tutunma vekili.
+ *
+ * ⚠️ Ölçtüğü şey klasik D1/D7 DEĞİL ve panelde de öyle yazmıyor; gerekçe
+ * `admin.buyume()` başlığında. Penceresi dolmamış kohort `null` döner —
+ * 0 döndürmek "%0 tutunma" diye okunup ters karar verdirirdi.
+ */
+app.get('/admin/growth', adminOnly, wrap(async (req, res) => {
+  const gun = Number(req.query.days ?? 14);
+  res.json(await buyume(Number.isFinite(gun) ? gun : 14));
+}));
+
+/**
+ * ⭐ DEFTER DIŞA AKTARIMI — beta silinmeden ÖNCE alınacak tek denetim izi.
+ *
+ * ⚠️ AKITILARAK yazılıyor (NDJSON), tek parçada JSON değil: yüz binlerce
+ * satırı belleğe alıp `res.json()` demek süreci düşürürdü. Ayrıca akış
+ * ortasında hata olursa bağlantı yarıda kesiliyor — yarım bir dosyanın
+ * TAM sanılmaması için sonuna `#EOF` mühür satırı konuyor.
+ */
+app.get('/admin/ledger/export', adminOnly, wrap(async (_req, res) => {
+  const damga = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '');
+  res.setHeader('content-type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('content-disposition', `attachment; filename="graveborn-ledger-${damga}.ndjson"`);
+  /**
+   * ⚠️ SADECE `drain` BEKLEMEK ASILI KALIR. İstemci indirmeyi yarıda
+   * keserse 'drain' HİÇ gelmez; bekleyen promise çözülmez ve döngü bir
+   * veritabanı sayfasını tutarak süresiz asılı kalır. Bağlantının
+   * kapanışı da yarıştırılıyor; kapandıysa döngü kırılıyor.
+   */
+  let kopuk = false;
+  res.on('close', () => { kopuk = true; });
+  for await (const parca of defterAkisi()) {
+    if (kopuk) return;
+    if (!res.write(parca)) {
+      await new Promise<void>((r) => {
+        const bitir = () => { res.off('drain', bitir); res.off('close', bitir); r(); };
+        res.once('drain', bitir);
+        res.once('close', bitir);
+      });
+    }
+  }
+  if (!kopuk) res.end('#EOF\n');
 }));
 
 /**

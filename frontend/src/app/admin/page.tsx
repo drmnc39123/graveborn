@@ -80,6 +80,19 @@ const KIND_TR: Record<string, string> = {
   admin_grant: 'YÖNETİCİ VERDİ',
 };
 
+/** Canlı bağlantılar — bellekteki oda listesi, DB'de karşılığı yok */
+interface Presence { total: number; village: number; byWeek: Record<number, number> }
+
+/**
+ * ⚠️ `kalan1g` / `kalan7g` `null` OLABİLİR ve bu 0 ile aynı şey DEĞİL:
+ * ölçüm penceresi dolmamış kohort ölçülmemiştir (bkz. backend `buyume`).
+ */
+interface BuyumeGun { gun: string; yeni: number; kalan1g: number | null; kalan7g: number | null }
+interface Buyume { gunler: BuyumeGun[]; toplam: number }
+
+/** Beta sıfırlamanın kuru çalıştırma / sonuç sayımı: tablo adı → satır */
+type SifirSayim = Record<string, number>;
+
 interface TicketRow {
   id: string; subject: string; status: string; bumpedAt: string;
   messages: { fromAdmin: boolean; body: string; at: string }[];
@@ -107,6 +120,15 @@ export default function AdminPage() {
   const [grantSebep, setGrantSebep] = useState('');
   const [grantMesaj, setGrantMesaj] = useState<string | null>(null);
   const [grantMesgul, setGrantMesgul] = useState(false);
+  /** Canlı bağlantı + büyüme — ikisi de uçları vardı, ekranı yoktu */
+  const [presence, setPresence] = useState<Presence | null>(null);
+  const [buyume, setBuyume] = useState<Buyume | null>(null);
+  /** ⭐ Beta sıfırlama — kuru çalıştırma sayımı ve birebir onay dizesi */
+  const [sifirSayim, setSifirSayim] = useState<SifirSayim | null>(null);
+  const [sifirOnay, setSifirOnay] = useState('');
+  const [sifirMesgul, setSifirMesgul] = useState(false);
+  const [sifirNot, setSifirNot] = useState<string | null>(null);
+  const [defterMesgul, setDefterMesgul] = useState(false);
 
   useEffect(() => {
     const s = sessionStorage.getItem(K_SECRET);
@@ -131,16 +153,18 @@ export default function AdminPage() {
   const refresh = useCallback(async () => {
     setErr(null);
     try {
-      const [o, p, r, e, a, f] = await Promise.all([
+      const [o, p, r, e, a, f, pr, bu] = await Promise.all([
         call<Overview>('/admin/overview'),
         call<{ players: PlayerRow[] }>(`/admin/players?sort=${sort}&limit=50`),
         call<{ runs: RunRow[] }>(`/admin/runs?limit=50${onlyCapped ? '&capped=1' : ''}`),
         call<Economy>('/admin/economy?hours=168'),
         call<Anomali>('/admin/anomalies?hours=168&limit=12'),
         call<{ maintenance: boolean; notice: string | null }>('/admin/flags'),
+        call<Presence>('/admin/presence'),
+        call<Buyume>('/admin/growth?days=14'),
       ]);
       setOv(o); setPlayers(p.players); setRuns(r.runs); setEco(e); setAnom(a);
-      setBayrak(f); setDuyuru(f.notice ?? '');
+      setBayrak(f); setDuyuru(f.notice ?? ''); setPresence(pr); setBuyume(bu);
       call<{ tickets: TicketRow[] }>(`/admin/tickets?status=${ticketFilter}`)
         .then((t) => setTickets(t.tickets))
         .catch(() => { /* talepler süs; panelin geri kalanını bozmasın */ });
@@ -220,6 +244,70 @@ export default function AdminPage() {
     }
   };
 
+  /**
+   * ⭐ DEFTERİ İNDİR.
+   *
+   * ⚠️ DÜZ BİR <a download> ÇALIŞMAZ: uç `x-admin-secret` başlığı istiyor
+   * ve tarayıcı gezinmesi başlık taşıyamaz. O yüzden fetch → blob → geçici
+   * bağlantı. Sırrı URL'ye koymak (`?secret=`) daha kısa olurdu ama sır
+   * tarayıcı geçmişine ve sunucu erişim kaydına yazılırdı.
+   */
+  const defterIndir = async () => {
+    setDefterMesgul(true);
+    try {
+      const res = await fetch(API + '/admin/ledger/export', { headers: { 'x-admin-secret': secret } });
+      if (!res.ok) throw new Error(String(res.status));
+      const metin = await res.text();
+      // ⚠️ MÜHÜR KONTROLÜ: akış ortasında koparsa dosya YARIM gelir ve
+      // yarım bir denetim izi, izin hiç olmamasından daha tehlikelidir
+      // ("hepsi bu kadarmış" diye okunur). Sunucu sona `#EOF` yazıyor.
+      if (!metin.endsWith('#EOF\n')) {
+        setErr('Defter YARIM indi (mühür yok) — tekrar dene, bu dosyayı kullanma.');
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([metin], { type: 'application/x-ndjson' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `graveborn-ledger-${new Date().toISOString().slice(0, 10)}.ndjson`;
+      a.click();
+      URL.revokeObjectURL(url);
+      const satir = metin.split('\n').filter((l) => l && l !== '#EOF').length;
+      setSifirNot(`Defter indirildi — ${satir.toLocaleString('tr-TR')} satır.`);
+    } catch { setErr('Defter indirilemedi.'); }
+    finally { setDefterMesgul(false); }
+  };
+
+  /**
+   * ⭐ BETA SIFIRLAMA — `admin.ts`teki "yıkıcı işlem yok" kuralının tek
+   * istisnası, ve bu ekran o istisnanın üç kapısını GÖRÜNÜR kılıyor.
+   *
+   * ⚠️ NİYE EKRAN GEREKİYOR: uç aylardır vardı ama çağıran hiçbir yüzey
+   * yoktu. Yani kapanış günü tek yol, canlı üretime elle bir curl yazıp
+   * admin sırrını komut satırına dökmekti — hem prova edilmemiş hem de
+   * sırrı kabuk geçmişine yazan bir yol.
+   */
+  const sifirla = async (gercek: boolean) => {
+    if (gercek) {
+      if (sifirOnay !== 'WIPE') { setSifirNot('Onay kutusuna tam olarak WIPE yaz.'); return; }
+      if (!confirm('TÜM OYUNCU VERİSİ SİLİNECEK.\n\nDefteri indirdin mi? Bu işlem geri alınamaz.\n\nDevam?')) return;
+    }
+    setSifirMesgul(true); setSifirNot(null);
+    try {
+      const r = await call<{ dryRun: boolean; sayim: SifirSayim }>('/admin/reset', {
+        method: 'POST',
+        body: JSON.stringify(gercek ? { confirm: 'WIPE' } : {}),
+      });
+      setSifirSayim(r.sayim);
+      setSifirNot(r.dryRun ? 'Kuru çalıştırma — hiçbir şey silinmedi.' : '✓ SİLİNDİ.');
+      if (!r.dryRun) { setSifirOnay(''); void refresh(); }
+    } catch (e) {
+      const kod = e instanceof Error ? e.message : '';
+      setSifirNot(kod === '409'
+        ? 'Sunucu reddetti: gerçek silme için önce BAKIMA AL.'
+        : 'Sıfırlama başarısız.');
+    } finally { setSifirMesgul(false); }
+  };
+
   const toggleBan = async (wallet: string, banned: boolean) => {
     if (!confirm(`${wallet}\n\n${banned ? 'BANLA' : 'banı kaldır'}?`)) return;
     try {
@@ -275,6 +363,11 @@ export default function AdminPage() {
           <Stat label="KIRPILAN koşu" value={ov.runsCapped} tone={ov.runsCapped > 0 ? 'bad' : undefined} />
           <Stat label="Açık koşu" value={ov.runsOpen} />
           <Stat label="Dolaşımdaki gold" value={ov.goldInCirculation.toLocaleString('en-US')} />
+          {/* ⚠️ ŞU AN BAĞLI — DB'den değil, sunucu belleğindeki oda
+              listesinden. `/admin/presence` aylardır vardı ve hiçbir ekran
+              çağırmıyordu; "kaç kişi içeride" sorusunun tek cevabı buydu. */}
+          {presence && <Stat label="Şu an bağlı" value={presence.total} />}
+          {presence && <Stat label="Köy meydanında" value={presence.village} />}
         </div>
       )}
 
@@ -327,7 +420,52 @@ export default function AdminPage() {
               style={btn}>
               sıralamayı yeniden kur
             </button>
+            {/* ⚠️ BURADA, sıfırlama bölümünde DEĞİL — defter kapanış günü
+                değil, düzenli olarak alınmalı. Sıfırlamanın yanına koymak
+                "silmeden hemen önce bir kez" alışkanlığı doğururdu. */}
+            <button onClick={() => { void defterIndir(); }} disabled={defterMesgul} style={btn}>
+              {defterMesgul ? 'indiriliyor…' : 'defteri indir (.ndjson)'}
+            </button>
           </div>
+        </section>
+      )}
+
+      {/* ⭐ BÜYÜME — beta kararının dayanağı.
+          ⚠️ BAŞLIK "tutunma vekili" diyor, "D1/D7 retention" DEMİYOR:
+          ölçülen şey `lastSeen - createdAt`, yani hesap açıldıktan sonra
+          hâlâ yazma yapılmış olması. Girişi değil ilerlemeyi görüyor.
+          🔴 Penceresi dolmamış gün "—" gösterir, 0 DEĞİL: bugün açılan 40
+          hesabın hiçbiri "24 saattir duruyor" olamaz ve bunu 0 yazmak
+          "%0 tutunma" diye okunup tam ters karar verdirirdi. */}
+      {buyume && buyume.gunler.length > 0 && (
+        <section style={{ marginTop: 22 }}>
+          <h2 style={{ margin: '0 0 4px', fontSize: 15, color: C.bone }}>
+            Büyüme · son 14 gün
+          </h2>
+          <div style={{ fontSize: 10.5, color: C.boneFaint }}>
+            {buyume.toplam.toLocaleString('tr-TR')} yeni hesap · “kalan” = açılıştan bu yana
+            hâlâ ilerleme kaydeden hesaplar (giriş sayısı değil)
+          </div>
+          <Table head={['Gün', 'Yeni hesap', '≥24 saat kalan', '≥7 gün kalan']}>
+            {buyume.gunler.map((g) => (
+              <tr key={g.gun}>
+                <Td mono>{g.gun}</Td>
+                <Td>{g.yeni}</Td>
+                <Td title={g.kalan1g === null ? 'Ölçüm penceresi dolmadı' : undefined}>
+                  {g.kalan1g === null ? '—'
+                    : `${g.kalan1g} · %${Math.round((g.kalan1g / g.yeni) * 100)}`}
+                </Td>
+                <Td title={g.kalan7g === null ? 'Ölçüm penceresi dolmadı' : undefined}>
+                  {g.kalan7g === null ? '—'
+                    : `${g.kalan7g} · %${Math.round((g.kalan7g / g.yeni) * 100)}`}
+                </Td>
+              </tr>
+            ))}
+          </Table>
+          {/* ⚠️ DEMO→CÜZDAN DÖNÜŞÜMÜ BURADA YOK ve olamaz: demo sunucuya
+              TEK bir istek bile atmıyor (izolasyon bilinçli, para basma
+              açığını kapatan şey o). Ölçmek istersek demo tarafına bir
+              işaret isteği eklemek gerekir — yani izolasyonu delmek. */}
         </section>
       )}
 
@@ -743,6 +881,82 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* ⭐ BETA SIFIRLAMA — panelin EN ALTINDA, bilerek.
+          ⚠️ Yukarıdaki her şey günlük iş; bu yılda bir kez basılacak ve
+          geri alınamaz. Canlı operasyon kutusunun yanına koymak, bakım
+          düğmesini ararken yanlış düğmeye yaklaşmak demekti.
+          🔴 Uç `admin.ts`teki "yıkıcı işlem yok" kuralının TEK istisnası;
+          üç kapısı da burada görünür: bakım · kuru çalıştırma · WIPE. */}
+      <section style={{ marginTop: 34, marginBottom: 20, padding: '12px 14px',
+        border: '1px solid rgba(160,18,38,0.5)', borderRadius: 10,
+        background: 'rgba(160,18,38,0.07)' }}>
+        <h2 style={{ margin: 0, fontSize: 15, color: C.bad }}>Beta sıfırlama</h2>
+        <div style={{ fontSize: 11, color: C.boneDim, marginTop: 6, lineHeight: 1.65 }}>
+          Token gününde çalıştırılır: <b>tüm oyuncu verisi silinir</b>, yapılandırma
+          (bakım bayrağı, duyuru) korunur. Sıra: <b>duyur → defteri indir → bakıma al → kuru
+          çalıştır → WIPE</b>.
+        </div>
+
+        {/* ⚠️ KAPILARIN DURUMU YAZILI. "Neden çalışmıyor" sorusunu sunucudan
+            409 alarak öğrenmek, kapanış gününde kaybedilecek en kötü
+            dakikaydı — durum burada, basmadan önce okunuyor. */}
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 10, fontSize: 11 }}>
+          <span style={{ color: bayrak?.maintenance ? C.ok : C.warn }}>
+            {bayrak?.maintenance ? '✓ bakım açık' : '• bakım KAPALI — gerçek silme reddedilir'}
+          </span>
+          <span style={{ color: sifirSayim ? C.ok : C.boneFaint }}>
+            {sifirSayim ? '✓ kuru çalıştırma yapıldı' : '• kuru çalıştırma yapılmadı'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={() => { void sifirla(false); }} disabled={sifirMesgul} style={btn}>
+            {sifirMesgul ? 'çalışıyor…' : 'kuru çalıştır (hiçbir şey silinmez)'}
+          </button>
+          <input value={sifirOnay} onChange={(e) => setSifirOnay(e.target.value)}
+            placeholder="onay için WIPE yaz"
+            style={{ padding: '5px 9px', width: 150, background: 'rgba(0,0,0,0.35)',
+              border: `1px solid ${C.border}`, borderRadius: 6, color: C.bone,
+              fontSize: 12, fontFamily: 'inherit' }} />
+          {/* ⚠️ Düğme ÜÇ şart birden sağlanmadan açılmıyor: kuru çalıştırma
+              yapılmış · bakım açık · dize birebir WIPE. Sunucu da aynı
+              kapıları tutuyor; buradaki kilit onun yerine geçmiyor,
+              operatöre şartı BASMADAN ÖNCE gösteriyor. */}
+          <button
+            onClick={() => { void sifirla(true); }}
+            disabled={sifirMesgul || sifirOnay !== 'WIPE' || !bayrak?.maintenance || !sifirSayim}
+            style={{ ...btn,
+              color: sifirOnay === 'WIPE' && bayrak?.maintenance && sifirSayim ? C.bad : C.boneFaint,
+              borderColor: sifirOnay === 'WIPE' && bayrak?.maintenance && sifirSayim
+                ? 'rgba(160,18,38,0.7)' : C.border,
+              cursor: sifirOnay === 'WIPE' && bayrak?.maintenance && sifirSayim ? 'pointer' : 'not-allowed' }}>
+            TÜMÜNÜ SİL
+          </button>
+        </div>
+
+        {sifirNot && (
+          <div style={{ marginTop: 10, fontSize: 11.5,
+            color: sifirNot.startsWith('✓') ? C.ok : C.warn }}>{sifirNot}</div>
+        )}
+
+        {sifirSayim && (
+          <div style={{ marginTop: 10 }}>
+            <Table head={['Tablo', 'Satır']}>
+              {Object.entries(sifirSayim)
+                .sort((a, b) => b[1] - a[1])
+                .map(([t, n]) => (
+                  <tr key={t}>
+                    {/* ⚠️ `ledger` vurgulu: silinmeden önce dışarı alınması
+                        gereken TEK denetim izi o. */}
+                    <Td tone={t === 'ledger' ? 'warn' : undefined}>{t}</Td>
+                    <Td>{n.toLocaleString('tr-TR')}</Td>
+                  </tr>
+                ))}
+            </Table>
+          </div>
+        )}
+      </section>
     </main>
   );
 }
