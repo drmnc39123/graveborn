@@ -22,9 +22,12 @@
 // başlığında yazılı (fareler bölüm 7'de ters koşuyordu).
 
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import path from 'node:path';
 import { ENEMIES, STAGES } from './config.js';
 import { ENEMY_ART, aynalaMi } from './sprites.js';
+import { STAGE_ART } from './stageArt.js';
+import { PASSIVE_ART, WEAPON_ART } from './combatArt.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -45,6 +48,66 @@ function pngBoyut(dosya: string): { w: number; h: number } | null {
     if (b.toString('ascii', 12, 16) !== 'IHDR') return null;
     return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
   } catch { return null; }
+}
+
+/** PNG'yi elle çöz — bağımlılık yok (zlib + PNG filtre tipleri 0-4) */
+function pngCoz(yol2: string): { w: number; h: number; d: Buffer } | null {
+  const b = fs.readFileSync(yol2);
+  let p = 8, w = 0, h = 0, bit = 0, renk = 0;
+  const parcalar: Buffer[] = [];
+  while (p < b.length) {
+    const len = b.readUInt32BE(p); const tip = b.toString('ascii', p + 4, p + 8);
+    const veri = b.subarray(p + 8, p + 8 + len);
+    if (tip === 'IHDR') { w = veri.readUInt32BE(0); h = veri.readUInt32BE(4); bit = veri[8]; renk = veri[9]; }
+    else if (tip === 'IDAT') parcalar.push(veri);
+    else if (tip === 'IEND') break;
+    p += 12 + len;
+  }
+  // ⚠️ Yalnız 8-bit RGBA çözülüyor; başka biçim gelirse ÖLÇMEYİ ATLA,
+  // uydurma bir sonuç döndürme.
+  if (bit !== 8 || renk !== 6) return null;
+  const ham = zlib.inflateSync(Buffer.concat(parcalar));
+  const kanal = 4, satir = w * kanal;
+  const out = Buffer.alloc(w * h * kanal);
+  let o = 0;
+  for (let y = 0; y < h; y++) {
+    const f = ham[o++]; const sIn = ham.subarray(o, o + satir); o += satir;
+    const hedef = out.subarray(y * satir, (y + 1) * satir);
+    const onceki = y > 0 ? out.subarray((y - 1) * satir, y * satir) : Buffer.alloc(satir);
+    for (let x = 0; x < satir; x++) {
+      const a2 = x >= kanal ? hedef[x - kanal] : 0; const bb = onceki[x];
+      const c = x >= kanal ? onceki[x - kanal] : 0; let v = sIn[x];
+      if (f === 1) v += a2; else if (f === 2) v += bb; else if (f === 3) v += (a2 + bb) >> 1;
+      else if (f === 4) {
+        const pp = a2 + bb - c, pa = Math.abs(pp - a2), pb = Math.abs(pp - bb), pc = Math.abs(pp - c);
+        v += (pa <= pb && pa <= pc) ? a2 : (pb <= pc ? bb : c);
+      }
+      hedef[x] = v & 255;
+    }
+  }
+  return { w, h, d: out };
+}
+
+/**
+ * Tüm karelerin BİRLEŞİK alfa sınır kutusu. PNG elle çözülüyor (bağımlılık
+ * yok). ⚠️ Tek kare yanıltır: yürüyüşte bacak uzar, kol kalkar.
+ */
+function alfaKutusu(dosya: string, anim: { kind?: string; frames: number; frameW?: number; frameH?: number; row?: number }) {
+  let im: { w: number; h: number; d: Buffer } | null = null;
+  try { im = pngCoz(dosya); } catch { return null; }
+  if (!im) return null;
+  const fw = anim.kind === 'grid' ? (anim.frameW ?? im.w) : Math.floor(im.w / anim.frames);
+  const fh = anim.kind === 'grid' ? (anim.frameH ?? im.h) : im.h;
+  const oy = anim.kind === 'grid' ? (anim.row ?? 0) * fh : 0;
+  let y0 = Number.MAX_SAFE_INTEGER, y1 = -1;
+  for (let f = 0; f < anim.frames; f++) {
+    const sx = f * fw;
+    if (sx + fw > im.w || oy + fh > im.h) break;
+    for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+      if (im.d[((oy + y) * im.w + (sx + x)) * 4 + 3] > 24) { if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+  }
+  return y1 < 0 ? null : { y0, y1, fh };
 }
 
 console.log(`\n═══ ${STAGES.length} BÖLÜM · VARLIK DENETİMİ ═══`);
@@ -163,6 +226,104 @@ console.log('\n[4b] SPRITE YÖNÜ');
   const fareli = STAGES.filter((st) => (st.enemies ?? []).some((e) => /rat/.test(e))).map((s) => s.id);
   check('fare en az bir bölümde kullanılıyor', fareli.length > 0, fareli.join(','));
   gecti('fareli bölümler', fareli.join(' · '));
+}
+
+console.log('\n[4c] AYAK HİZASI (anchorY) GERÇEK PİKSELLE UYUŞUYOR MU');
+{
+  /**
+   * ⭐ `anchorY` = içeriğin ALT kenarının kare yüksekliğine oranı. Motor
+   * düşmanı bununla zemine oturtuyor. Yanlışsa düşman havada yürür ya da
+   * yere gömülür — ve bu hiçbir hata üretmez, sadece "bir tuhaflık var"
+   * hissi verir.
+   *
+   * ÖLÇÜM: PNG elle çözülüp TÜM yürüyüş karelerinin birleşik alfa sınır
+   * kutusu alınıyor. Tek kare yanıltır (yürürken bacak uzar).
+   *
+   * ⚠️ `contentRatio` BİLEREK ÖLÇÜLMÜYOR. Ölçtüm: koddaki değerler
+   * gerçeğin %3-8 ALTINDA, ama bu bir hata değil TANIM FARKI — koddaki
+   * sayılar tek karenin (idle) kutusundan, benimki tüm animasyonun
+   * zarfından geliyor. Sonuç düşmanların nominalden ~%5 büyük çizilmesi;
+   * tekdüze, kasıtlı görünüyor ve "düzeltmek" bütün sürüyü küçültürdü.
+   * Çalışan bir sayıyı, ölçüm tanımım farklı diye değiştirmem.
+   */
+  const sapan: string[] = [];
+  for (const [ad, art] of Object.entries(ENEMY_ART)) {
+    const anim = ((art.anims as Record<string, unknown>).walk
+      ?? Object.values(art.anims)[0]) as { kind?: string; src: string; frames: number; frameW?: number; frameH?: number; row?: number };
+    const p2 = yol(anim.src.replace('{i}', '1'));
+    const kutu = alfaKutusu(p2, anim);
+    if (!kutu) continue;
+    const olculen = (kutu.y1 + 1) / kutu.fh;
+    if (Math.abs(olculen - art.anchorY) > 0.04) {
+      sapan.push(`${ad}: kod ${art.anchorY.toFixed(3)} · ölçülen ${olculen.toFixed(3)}`);
+    }
+  }
+  check('ayak hizası pikselle uyuşuyor', sapan.length === 0, sapan.join(' · '));
+  gecti(`${Object.keys(ENEMY_ART).length} sprite'ın alfa sınır kutusu ölçüldü`);
+}
+
+console.log('\n[4d] DAVRANIŞLAR MOTORDA KARŞILIK BULUYOR MU');
+{
+  /**
+   * ⚠️ TypeScript yazım hatasını zaten yakalıyor (`behavior?: Behavior`
+   * bir birleşim tipi). Yakalayamadığı şey: tipte TANIMLI ama motorda
+   * HİÇ İŞLENMEYEN bir davranış. O derlenir, atanır ve sessizce
+   * varsayılan 'chase'e düşer — düşman tasarlandığı gibi davranmaz ve
+   * kimse fark etmez.
+   */
+  const motor = fs.readFileSync('src/game/engine.ts', 'utf8');
+  const kullanilan = new Set(ENEMIES.map((e) => e.behavior).filter(Boolean) as string[]);
+  for (const b of kullanilan) {
+    check(`'${b}' davranışı motorda işleniyor`, motor.includes(`'${b}'`));
+  }
+  gecti(`${kullanilan.size} davranış motorda karşılık buluyor`, [...kullanilan].sort().join(' '));
+}
+
+console.log('\n[4e] BÖLÜM DEKORU VE SAVAŞ EFEKTLERİ DİSKTE Mİ');
+{
+  /**
+   * ⭐ SPRITE'LARDAN SONRAKİ İKİNCİ VARLIK KATMANI: her bölümün zemini,
+   * dekoru (ağaç, kafatası, mum, meşale…) ve her silahın efekt atlası.
+   *
+   * ⚠️ Eksik bir dekor dosyası hata ÜRETMİYOR: tarayıcı görüntüyü
+   * yükleyemez, `drawImage` sessizce hiçbir şey çizmez ve bölüm çıplak
+   * görünür. Eksik bir silah atlası daha kötü — silah ÇALIŞIR, hasar
+   * verir, ama görünmez; oyuncu "vurmuyor" sanır.
+   *
+   * ⚠️ Her iki tablo da id'lerle DEĞİL yol dizeleriyle çalışıyor, yani
+   * TypeScript hiçbirini kontrol etmiyor. Tek koruma bu.
+   */
+  const yollar = new Set<string>();
+  for (const sa of Object.values(STAGE_ART)) {
+    for (const d of sa.decor ?? []) yollar.add(d.src);
+  }
+  const dekorSayisi = yollar.size;
+  /**
+   * ⚠️ İLK SÜRÜMÜM HİÇBİR ŞEY ÖLÇMÜYORDU. `WEAPON_ART` girdilerinde düz
+   * bir `src` alanı arıyordum; oysa yollar `icon` · `bullet.src` ·
+   * `impact.src` altında duruyor. Sonuç "0 efekt atlası kontrol edildi"
+   * satırıydı — yeşil görünen, hiçbir şey ölçmeyen bir kontrol. Ölçmeyen
+   * bir mühür, olmayan mühürden KÖTÜDÜR: güven verir, korumaz.
+   */
+  let silahYolu = 0;
+  for (const w of Object.values(WEAPON_ART)) {
+    for (const src of [w.icon, w.bullet?.src, w.impact?.src]) {
+      if (src) { yollar.add(src); silahYolu++; }
+    }
+  }
+  for (const p2 of Object.values(PASSIVE_ART)) yollar.add(p2.icon);
+
+  const eksik = [...yollar].filter((src) => !fs.existsSync(yol(src)));
+  check('eksik dekor/ikon/efekt dosyası YOK', eksik.length === 0, eksik.join(' · '));
+  // ⚠️ SAYININ KENDİSİ DE KONTROL EDİLİYOR: sıfıra düşerse tablo şekli
+  // değişmiş demektir ve kontrol yine sessizce hiçbir şey ölçmez.
+  check('silah görselleri gerçekten tarandı', silahYolu > 20, `${silahYolu} yol`);
+  gecti(`${dekorSayisi} dekor + ${yollar.size - dekorSayisi} silah/pasif görseli kontrol edildi`);
+
+  // ⚠️ Her bölümün bir görsel tanımı OLMALI: eksikse bölüm varsayılana
+  // düşer ve 25 bölümün ikisi birbirinin aynı görünür.
+  const artsiz = STAGES.filter((st) => !STAGE_ART[st.id]).map((st) => st.id);
+  check('görsel tanımı olmayan bölüm YOK', artsiz.length === 0, artsiz.join(','));
 }
 
 console.log('\n[5] BÖLÜM SAYILARI MAKUL MU');
