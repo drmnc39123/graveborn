@@ -14,6 +14,7 @@
 import type { Progress } from '@/game/progress';
 import { isTestMode, TEST_WALLET } from '@/lib/testMode';
 import { kodMetni } from '@/lib/errors';
+import type { Cuzdan } from '@/lib/wallets';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100';
 const K_TOKEN = 'graveborn:token';
@@ -94,40 +95,30 @@ export async function api<T>(path: string, opts: { method?: string; body?: unkno
   return (await res.json()) as T;
 }
 
-// ── Phantom ──
-interface PhantomProvider {
-  isPhantom?: boolean;
-  connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: { toString(): string } }>;
-  signMessage(msg: Uint8Array, encoding?: string): Promise<{ signature: Uint8Array }>;
-}
-
-export function getPhantom(): PhantomProvider | null {
-  if (typeof window === 'undefined') return null;
-  const w = window as unknown as { phantom?: { solana?: PhantomProvider }; solana?: PhantomProvider };
-  const p = w.phantom?.solana ?? w.solana;
-  return p?.isPhantom ? p : null;
-}
-
-export const PHANTOM_URL = 'https://phantom.app/';
+// ── CÜZDANLA GİRİŞ ──
 
 /**
  * Cüzdanla giriş: bağlan → nonce al → imzala → jeton al.
  *
  * ⚠️ İMZA bs58 İLE KODLANIR, base64 ile DEĞİL. Sunucu bs58 çözüyor;
  * base64 gönderilirse doğrulama sessizce başarısız olur ve sebebi görünmez.
+ *
+ * ⭐ ARTIK CÜZDAN DIŞARIDAN GELİYOR. Eskiden burada `getPhantom()` çağrılıyor
+ * ve Phantom yoksa giriş reddediliyordu — oysa sunucu düz ed25519
+ * doğrulaması yapıyor, imzayı hangi cüzdanın ürettiği önemsiz. Keşif ve
+ * seçim `lib/wallets.ts`te; burası yalnız protokolü bilir.
  */
-export async function signInWithWallet(turnstileToken?: string): Promise<{ wallet: string; progress: Progress }> {
-  const phantom = getPhantom();
-  if (!phantom) throw new Error('phantom_yok');
-
-  const { publicKey } = await phantom.connect();
-  const wallet = publicKey.toString();
+export async function signInWithWallet(
+  cuzdan: Cuzdan,
+  turnstileToken?: string,
+): Promise<{ wallet: string; progress: Progress }> {
+  const wallet = await cuzdan.baglan();
 
   const { message } = await api<{ nonce: string; message: string }>('/auth/nonce', {
     method: 'POST', body: { wallet },
   });
 
-  const { signature } = await phantom.signMessage(new TextEncoder().encode(message), 'utf8');
+  const signature = await cuzdan.imzala(new TextEncoder().encode(message));
   const bs58 = (await import('bs58')).default;
 
   const out = await api<{ token: string; progress: Progress }>('/auth/verify', {

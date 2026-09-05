@@ -15,7 +15,10 @@ import { HomeSections } from '@/components/HomeSections';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { Turnstile, turnstileEnabled } from '@/components/Turnstile';
 import { BRAND, C, FONT, glass } from '@/lib/theme';
-import { PHANTOM_URL, fetchStats, getPhantom, setMode, signInWithWallet } from '@/lib/session';
+import { fetchStats, setMode, signInWithWallet } from '@/lib/session';
+import {
+  type Cuzdan, KURULUM, MOBIL_CUZDANLAR, bulunanCuzdanlar, cuzdanlariIzle, mobilMi,
+} from '@/lib/wallets';
 
 export default function Home() {
   const router = useRouter();
@@ -23,8 +26,26 @@ export default function Home() {
   const [busy, setBusy] = useState<'wallet' | 'demo' | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [captcha, setCaptcha] = useState<string | null>(null);
+  const [cuzdanlar, setCuzdanlar] = useState<Cuzdan[]>([]);
+  const [secici, setSecici] = useState(false);
+  const [mobil, setMobil] = useState(false);
 
   useEffect(() => { fetchStats().then(setStats); }, []);
+
+  /**
+   * ⚠️ CÜZDAN LİSTESİ TEK SEFERLİK OKUNAMAZ. Eklentiler sayfayla aynı anda
+   * yüklenmiyor; ilk karede liste boş olup 200 ms sonra dolabiliyor. Tek
+   * bir okuma yapsaydık oyuncu kurulu cüzdanını görmez, "cüzdan yok"
+   * ekranıyla karşılaşırdı. Wallet Standard geç kaydolanları haber veriyor.
+   */
+  useEffect(() => {
+    setMobil(mobilMi());
+    const tazele = () => setCuzdanlar(bulunanCuzdanlar());
+    tazele();
+    const birak = cuzdanlariIzle(tazele);
+    const t = setTimeout(tazele, 600);
+    return () => { birak(); clearTimeout(t); };
+  }, []);
 
   const needCaptcha = turnstileEnabled() && !captcha;
 
@@ -34,15 +55,12 @@ export default function Home() {
     router.push('/play');
   };
 
-  const onWallet = async () => {
+  const baglan = async (c: Cuzdan) => {
     setErr(null);
-    if (!getPhantom()) {
-      setErr('phantom');
-      return;
-    }
+    setSecici(false);
     setBusy('wallet');
     try {
-      await signInWithWallet(captcha ?? undefined);
+      await signInWithWallet(c, captcha ?? undefined);
       router.push('/play');
     } catch (e) {
       const code = e instanceof Error ? e.message : 'hata';
@@ -50,6 +68,17 @@ export default function Home() {
       setErr(/reject|denied|4001/i.test(code) ? null : 'baglanti');
       setBusy(null);
     }
+  };
+
+  /**
+   * ⚠️ TEK CÜZDAN VARSA SEÇİM EKRANI GÖSTERİLMİYOR. Tek seçenekli bir liste
+   * kullanıcıya karar verdirmez, sadece fazladan bir tık koyar — eski tek
+   * düğmeli akış o durumda aynen korunuyor.
+   */
+  const onWallet = () => {
+    setErr(null);
+    if (cuzdanlar.length === 1) { void baglan(cuzdanlar[0]); return; }
+    setSecici((v) => !v);
   };
 
   return (
@@ -135,14 +164,76 @@ export default function Home() {
           </div>
         </div>
 
-        {err === 'phantom' && (
-          <div style={{ ...glass(10), padding: '10px 14px', maxWidth: 340, textAlign: 'center', fontFamily: FONT.ui }}>
-            <div style={{ fontSize: 12, color: C.bone }}>No Phantom wallet found.</div>
-            <a href={PHANTOM_URL} target="_blank" rel="noreferrer noopener"
-              style={{ fontSize: 11.5, color: C.candle, textDecoration: 'underline' }}>
-              Install Phantom
-            </a>
-            <div style={{ fontSize: 11, color: C.boneFaint, marginTop: 4 }}>…or play the demo, no wallet needed.</div>
+        {/* ── CÜZDAN SEÇİCİ ──
+            ⚠️ Bu blok yalnız tıklamadan SONRA çiziliyor (`secici`), yani
+            sunucu render'ında hiç yok. `mobilMi()` gibi tarayıcıya bakan
+            kontrolleri doğrudan render içinde okumak hidrasyon uyuşmazlığı
+            çıkarırdı; o yüzden mobil bayrağı state'te tutuluyor. */}
+        {secici && (
+          <div style={{ ...glass(10), padding: 12, width: 'min(92vw, 330px)', fontFamily: FONT.ui }}>
+            {cuzdanlar.length > 0 ? (
+              <>
+                <div style={{ fontSize: 10.5, letterSpacing: 1.2, color: C.boneFaint, marginBottom: 8, textAlign: 'center' }}>
+                  CHOOSE YOUR WALLET
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {cuzdanlar.map((c) => (
+                    <PixelButton
+                      key={c.id} variant="01A" scale={2} disabled={busy !== null}
+                      onClick={() => void baglan(c)}
+                      style={{ width: '100%', fontSize: 12, fontWeight: 900, letterSpacing: 0.8 }}
+                    >
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                        {c.ikon && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.ikon} alt="" width={16} height={16} style={{ borderRadius: 3 }} />
+                        )}
+                        {c.ad.toUpperCase()}
+                      </span>
+                    </PixelButton>
+                  ))}
+                </div>
+              </>
+            ) : mobil ? (
+              /* ⚠️ MOBİLDE EKLENTİ YOKTUR — "cüzdan bulunamadı" burada bir
+                 hata değil, beklenen durum. Cevap "kur" değil, siteyi
+                 cüzdanın kendi tarayıcısında AÇMAK. */
+              <>
+                <div style={{ fontSize: 11.5, color: C.bone, textAlign: 'center', lineHeight: 1.6 }}>
+                  On mobile, open this page <b style={{ color: C.candle }}>inside your wallet&apos;s browser</b>.
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 9 }}>
+                  {MOBIL_CUZDANLAR.map((m) => (
+                    <a key={m.id} href={m.baglanti(window.location.href)}
+                      style={{ textDecoration: 'none' }}>
+                      <PixelButton variant="01A" scale={2}
+                        style={{ width: '100%', fontSize: 12, fontWeight: 900, letterSpacing: 0.8 }}>
+                        {`OPEN IN ${m.ad.toUpperCase()}`}
+                      </PixelButton>
+                    </a>
+                  ))}
+                </div>
+                <div style={{ fontSize: 10.5, color: C.boneFaint, textAlign: 'center', marginTop: 8, lineHeight: 1.55 }}>
+                  Using another wallet? Open its in-app browser and go to this address.
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 11.5, color: C.bone, textAlign: 'center' }}>No Solana wallet detected.</div>
+                <div style={{ fontSize: 11, color: C.boneDim, textAlign: 'center', marginTop: 7, lineHeight: 1.7 }}>
+                  {KURULUM.map((k, i) => (
+                    <span key={k.ad}>
+                      {i > 0 && <span style={{ color: C.boneFaint }}> · </span>}
+                      <a href={k.url} target="_blank" rel="noreferrer noopener"
+                        style={{ color: C.candle, textDecoration: 'underline' }}>{k.ad}</a>
+                    </span>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: C.boneFaint, marginTop: 8, textAlign: 'center' }}>
+                  …or play the demo, no wallet needed.
+                </div>
+              </>
+            )}
           </div>
         )}
         {err === 'baglanti' && (
