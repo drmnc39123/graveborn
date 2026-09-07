@@ -15,6 +15,7 @@ import { useState } from 'react';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { PATTERN_TEXT, Tag } from '@/components/ui/cards';
 import { Slot } from '@/components/ui/kit';
+import { WeaponPreview } from '@/components/WeaponPreview';
 import { C, FONT } from '@/lib/theme';
 
 export interface OfferView {
@@ -236,6 +237,22 @@ export function LevelUpCard({ offer, index, onPick, weapons, passives }: {
         <div style={{
           fontSize: 11.5, color: C.boneDim, lineHeight: 1.5, textAlign: 'center',
         }}>{yeni && pat ? pat.how : offer.desc}</div>
+
+        {/**
+          * ⭐ HAREKET ÖNİZLEMESİ — kullanıcı isteği (2026-09-07):
+          * "oyuncu sadece metni okuyarak seçiyor; nasıl işlediğine dair
+          * oyun içi bir animasyon gösterebilir miyiz?"
+          *
+          * Şema GERÇEK `WeaponDef` alanlarından çiziliyor (yörünge yarıçapı,
+          * nova mermi sayısı, zincir sıçraması, bumerang dönüş anı...), yani
+          * silah dengelenince önizleme de kendiliğinden doğru kalıyor. Elle
+          * çizilmiş bir gif zamanla YALAN söylerdi.
+          *
+          * ⚠️ Yalnız SİLAH kartında var. Pasifler bir hareket üretmiyor
+          * (istatistik değiştiriyorlar); onlara şema koymak, olmayan bir
+          * davranışı varmış gibi göstermek olurdu.
+          */}
+        {def && <WeaponPreview def={def} />}
 
         {/* ⚠️ ARTIŞLAR ARTIK ETİKET DEĞİL, SATIR. "Lv 3 → 4 ne kazandırır"
             sorusunun cevabı taranabilir olmalı; yan yana rozetler sarılıp

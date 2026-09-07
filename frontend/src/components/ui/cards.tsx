@@ -209,6 +209,14 @@ export const PATTERN_TEXT: Record<string, { label: string; how: string }> = {
   ground: { label: 'GROUND', how: 'Leaves a burning patch where it lands. It does not follow you.' },
   boomerang: { label: 'RETURNING', how: 'Thrown ahead, then comes back — it hurts on both trips.' },
   chain: { label: 'CHAIN', how: 'Leaps from one enemy to the next. Never the same one twice.' },
+  /**
+   * ⚠️ BU İKİSİ EKSİKTİ ve dört silah kartında "nasıl çalışır" satırı BOŞ
+   * çıkıyordu (Wandering Soul, Choir of the Lost, Cairn Charge, Barrowfall).
+   * Oyuncu zaten yalnız metni okuyarak seçiyor; metnin olmadığı kartta
+   * seçim tamamen körlemesine oluyordu.
+   */
+  homing: { label: 'HOMING', how: 'Turns after what it chases — but a sharp corner still loses it.' },
+  mine: { label: 'TRAP', how: 'Dropped on the ground. It arms, then bursts when something steps close.' },
 };
 
 /** `bone_archer` → `Bone Archer` — düşman id'lerinin okunabilir hâli */
