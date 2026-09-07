@@ -6,7 +6,7 @@
 // Bu iki uç olmadan gold, dolayısıyla token, istemciden basılabilir.
 
 import crypto from 'node:crypto';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
@@ -18,6 +18,9 @@ import { PetError, bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from '.
 import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
+import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
+import { rpcCagir } from './rpc.js';
+import { goldToLamports, solCost } from '@game/solPrice';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
   upgradeGuild,
@@ -28,7 +31,7 @@ import {
 } from './gear.js';
 import { SkillError, listSkills, setSkills, skillsBonusOf } from './skills.js';
 import { DuelError, board as duelBoard, findMatch, ladder as duelLadder, publishRecord, resolveChallenge, settleDuel } from './duel.js';
-import { GUILD_COST, GUILD_LEVELS } from '@game/guild';
+import { GUILD_COST, GUILD_LEVELS, nextGuildLevel } from '@game/guild';
 import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
@@ -122,6 +125,11 @@ for (const yol of [
   '/pets/bind', '/pets/upgrade', '/pets/fuse', '/pets/equip', '/pets/slot',
   '/skills/set', '/duel/start', '/duel/find',
   '/arena/queue', '/quests/claim', '/follow', '/tickets', '/tickets/reply',
+  // ⚠️ SOL uçları da BURADA olmak zorunda: her deneme bir zincir okuması
+  // (RPC) tetikliyor ve sınırsız bırakılırsa özel sağlayıcı kotasını
+  // yakmanın en ucuz yolu olurdu.
+  '/sol/quote', '/sol/blockhash', '/reliquary/pull-sol', '/ossuary/raise-sol',
+  '/guild/create-sol', '/guild/upgrade-sol',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -512,6 +520,262 @@ app.get('/events', wrap(async (_req, res) => {
       effect: w.event.effect, mul: w.event.mul, tone: w.event.tone,
     },
   });
+}));
+
+// ══════════════════════════════════════════════════════════════════════
+// SOL ÖDEME RAYI
+//
+// ⚠️ AKIŞTA İMZA MESAJI YOK. Cüzdan tek bir şey soruyor: düz bir SOL
+// transferi. Araya "ödemeyi onayla" diye bir metin imzalatmak cüzdanların
+// şüpheli site uyarısını tetikliyor ve oyuncu tam ödeme anında çıkıyor.
+// Ek bir imza zaten hiçbir şey kanıtlamazdı: kim olduğumuz oturum
+// jetonuyla belli, ödemenin sahibi ise ZİNCİRDEN okunuyor
+// (`solPay.odemeDogrula` fee payer'ın oturum cüzdanı olmasını şart koşar).
+//
+// ⚠️ BU RAY GÜÇ SATMAZ. Forge · Stall · Gear · Paths · Binding SOL rayına
+// KAPALI ve öyle kalmalı — ölçüldü (`balance.probe`): Forge ağacı derinliği
+// 8,2→16,6, koşu gold'unu 268→915 yapıyor. Açılsaydı THE PIT pay-to-win
+// olurdu (arena `permanent` = Forge+ekipman+beceri) ve SOL→gold→$GRAVE
+// zinciri kurulurdu.
+// ══════════════════════════════════════════════════════════════════════
+
+app.get('/sol/config', wrap(async (_req, res) => {
+  // ⚠️ Kur SABİTLERİ gönderilmiyor: `@game/solPrice` iki tarafta da ortak,
+  // ağdan taşımak ikinci bir gerçek yaratırdı.
+  res.json({ open: solRayiAcik(), treasury: hazineAdresi() });
+}));
+
+/**
+ * Taze blockhash — işlemi istemci kuruyor ama zincire SUNUCUNUN ucundan
+ * bakıyor.
+ *
+ * ⚠️ NİYE PROXY: tarayıcıdan doğrudan RPC çağırmak özel sağlayıcı
+ * anahtarını herkese açardı ve genel uç hız sınırlı — tam ödeme anında
+ * düşen bir çağrı, oyuncunun parasını göndermeden önce akışı kırar.
+ */
+app.get('/sol/blockhash', wrap(async (_req, res) => {
+  if (!solRayiAcik()) { res.status(503).json({ error: 'sol_kapali' }); return; }
+  const out = await rpcCagir<{ value: { blockhash: string } }>('getLatestBlockhash', [
+    { commitment: 'confirmed' },
+  ]);
+  const bh = out?.value?.blockhash;
+  if (!bh) { res.status(502).json({ error: 'blockhash_yok' }); return; }
+  res.json({ blockhash: bh });
+}));
+
+/**
+ * ⭐ TEK GEÇİT — her SOL ürünü buradan geçer.
+ *
+ * ⚠️ SIRA ÖNEMLİ ve değiştirilmemeli:
+ *   1. imza ZİNCİRDE doğrulanır (başarısız işlem, eksik tutar, yabancı
+ *      ödeyen burada düşer)
+ *   2. imza `Payment` tablosuna TEK KULLANIMLIK olarak yazılır — bu adım
+ *      ürünü vermeden ÖNCE ve veritabanı benzersiz indeksiyle
+ *   3. ürün verilir
+ *
+ * 2. adım 3'ten önce olmak zorunda: tersi olsaydı aynı imzayla iki eşzamanlı
+ * istek ikisi de ürünü alır, sonra biri yazarken düşerdi. Bedeli oyuncunun
+ * lehine bir hata (ödedi, ürün gelmedi) yerine hazinenin aleyhine bir açık
+ * olurdu.
+ *
+ * ⚠️ Ürün verme aşaması patlarsa imza YANMIŞ olur (kayıt duruyor) ve
+ * oyuncu ödediğini alamaz. Kabul edilen takas bu: çift ürün, kayıp üründen
+ * beterdir ve kayıp admin panelinden telafi edilebilir — `Payment` satırı
+ * tam olarak o telafinin kanıtı.
+ */
+async function solAlim<T>(
+  req: Request, res: Response, urun: string, beklenen: number | null,
+  detay: string | null, ver: (wallet: string) => Promise<T>,
+): Promise<void> {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  if (!solRayiAcik()) { res.status(503).json({ error: 'sol_kapali' }); return; }
+  if (beklenen === null) { res.status(400).json({ error: 'sol_rayinda_degil' }); return; }
+
+  const sig = (req.body as { sig?: unknown } | null)?.sig;
+  let odendi: number;
+  try {
+    odendi = (await odemeDogrula(sig, wallet, beklenen)).lamports;
+  } catch (e) {
+    if (e instanceof OdemeHatasi) { res.status(e.status).json({ error: e.code }); return; }
+    // ⚠️ RPC düştüyse 502 — oyuncunun parası gitmiş olabilir ve bunu
+    // "geçersiz ödeme" diye göstermek yanlış suçlama olurdu.
+    res.status(502).json({ error: 'zincir_okunamadi' });
+    return;
+  }
+
+  try {
+    await prisma.payment.create({
+      data: {
+        id: crypto.randomUUID(), sig: String(sig), wallet,
+        lamports: odendi, product: urun, detail: detay,
+      },
+    });
+  } catch {
+    // Benzersiz kısıt = bu imza zaten kullanılmış
+    res.status(409).json({ error: 'imza_kullanilmis' });
+    return;
+  }
+
+  /**
+   * 🔴 ÜRÜN VERİLEMEZSE PARA YANMAZ — kayıt DURUR ve iz bırakır.
+   *
+   * Buraya gelindiğinde ödeme zincirde gerçekleşti ve `Payment` satırı
+   * yazıldı. Ürün adımı yine de patlayabilir (ör. lonca etiketini araya
+   * giren biri aldı). O durumda:
+   *   · satır SİLİNMEZ — oyuncunun ödediğinin tek kanıtı o
+   *   · hata AÇIKÇA loglanır ve imza yanıta konur, oyuncu destek
+   *     kaydında onu verebilsin
+   * Sessizce 500 dönmek, "param gitti hiçbir şey olmadı" demenin en kötü
+   * hâli olurdu.
+   *
+   * ⚠️ ÖNLEM ASIL YERDE: `/sol/quote` ödeme YAPILMADAN önce aynı
+   * koşulları yokluyor. Buradaki dal, o yoklamadan sonra araya giren
+   * yarış için var — nadir ama mümkün.
+   */
+  try {
+    const out = await ver(wallet);
+    res.json({ ...out, paid: odendi });
+  } catch (e) {
+    console.error('[sol-urun-verilemedi]', urun, wallet, String(sig), String(e));
+    res.status(500).json({ error: 'urun_verilemedi', sig: String(sig) });
+  }
+}
+
+/**
+ * ÖDEME ÖNCESİ YOKLAMA — fiyat + "şu an alınabilir mi".
+ *
+ * ⚠️ NİYE VAR: oyuncu SOL'u gönderdikten SONRA "lonca etiketi kullanımda"
+ * demek, parayı almış ürünü vermemektir. Bu uç, ödemeden ÖNCE aynı
+ * koşulları yokluyor ve fiyatı SUNUCUDAN veriyor — istemci tutarı kendi
+ * hesaplamıyor.
+ */
+app.post('/sol/quote', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  if (!solRayiAcik()) { res.status(503).json({ error: 'sol_kapali' }); return; }
+
+  const urun = String((req.body as { product?: unknown } | null)?.product ?? '');
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+
+  if (urun === 'reliquary10') {
+    res.json({ product: urun, lamports: solCost(PULL_COST * SOL_PULL_BUNDLE), gold: PULL_COST * SOL_PULL_BUNDLE });
+    return;
+  }
+  if (urun === 'ossuary') {
+    const { ossuaryCost } = await import('@game/ossuary');
+    const g = ossuaryCost(toProgress(player).ossuary);
+    res.json({ product: urun, lamports: solCost(g), gold: g });
+    return;
+  }
+  if (urun === 'guild') {
+    // ⚠️ "Zaten loncada" ödemeden ÖNCE söylenmeli
+    if (player.guildId) { res.status(400).json({ error: 'zaten_loncada' }); return; }
+    res.json({ product: urun, lamports: solCost(GUILD_COST), gold: GUILD_COST });
+    return;
+  }
+  if (urun === 'guild_up') {
+    const benim = await myGuild(wallet);
+    const sonraki = benim ? nextGuildLevel(benim.level) : undefined;
+    if (!benim || !sonraki) { res.status(400).json({ error: 'yukseltilemez' }); return; }
+    if (benim.owner !== wallet) { res.status(403).json({ error: 'sadece_kurucu' }); return; }
+    res.json({ product: urun, lamports: solCost(sonraki.cost), gold: sonraki.cost });
+    return;
+  }
+  res.status(400).json({ error: 'bilinmeyen_urun' });
+}));
+
+/** Demet çekiliş — tek çekiliş SOL eşiğinin altında kalıyor (bkz. solPrice) */
+export const SOL_PULL_BUNDLE = 10;
+
+/**
+ * 10'lu RELIQUARY çekilişi — SOL ile.
+ *
+ * ⚠️ TEK ÇEKİLİŞ SATILMIYOR: 450 gold ≈ 0,002 SOL eder ve ağ ücreti yanında
+ * anlamsız kalır. `solPrice.solSellable` bu kuralı ölçüyor.
+ * ⚠️ Zarı yine SUNUCU atıyor — ödeme yolu gacha'nın adaletini değiştirmiyor.
+ */
+app.post('/reliquary/pull-sol', wrap(async (req, res) => {
+  await solAlim(req, res, 'reliquary10', solCost(PULL_COST * SOL_PULL_BUNDLE),
+    `${SOL_PULL_BUNDLE} pulls`, async (wallet) => {
+      const player = await getOrCreatePlayer(wallet);
+      if (player.banned) throw new Error('yasakli');
+      const { pullReliquary } = await import('@game/progress');
+      const roll = () => crypto.randomInt(0, 1 << 30) / (1 << 30);
+
+      let p = toProgress(player);
+      const ids: { id: string; duplicate: boolean }[] = [];
+      for (let i = 0; i < SOL_PULL_BUNDLE; i++) {
+        // ⚠️ `ucretsiz = true`: SOL ödendi, gold DÜŞÜLMÜYOR. Bayrağı yalnız
+        // burada, ödeme zincirde doğrulandıktan SONRA geçiyoruz.
+        const out = pullReliquary(p, roll(), roll(), true);
+        if (out.error || !out.result) break;
+        p = out.progress;
+        ids.push({ id: out.result.cosmetic.id, duplicate: out.result.duplicate });
+      }
+      /**
+       * ⚠️ DEFTERE `gold: 0` YAZILIYOR ve bu kasıtlı: SOL alımı gold
+       * ekonomisine hiç dokunmuyor. Gold yazsaydık `/admin/economy`nin
+       * musluk/sink dengesi yalan söylerdi. Gerçek para `Payment`
+       * tablosunda — iki defter bilerek ayrı.
+       */
+      const saved = await withLedger(wallet, fromProgress(p), {
+        kind: 'reliquary', gold: 0, detail: `SOL x${ids.length}`,
+      }, player.rev);
+      return { progress: toProgress(saved), pulls: ids };
+    });
+}));
+
+/**
+ * OSSUARY seviyesi — SOL ile.
+ *
+ * ⚠️ FİYAT SUNUCUDA HESAPLANIYOR ve oyuncunun MEVCUT seviyesine bağlı.
+ * İstemciden tutar alınsaydı, L60'taki oyuncu L1 fiyatını gönderirdi.
+ */
+app.post('/ossuary/raise-sol', wrap(async (req, res) => {
+  const wallet0 = auth(req);
+  if (!wallet0) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const oyuncu = await getOrCreatePlayer(wallet0);
+  const { ossuaryCost } = await import('@game/ossuary');
+  const seviye = toProgress(oyuncu).ossuary;
+
+  await solAlim(req, res, 'ossuary', solCost(ossuaryCost(seviye)), `L${seviye + 1}`,
+    async (wallet) => {
+      const player = await getOrCreatePlayer(wallet);
+      const { raiseOssuary } = await import('@game/progress');
+      // ⚠️ `ucretsiz = true` — SOL ödendi
+      const out = raiseOssuary(toProgress(player), true);
+      if (out.error) throw new Error('yukseltilemedi');
+      const saved = await withLedger(wallet, fromProgress(out.progress), {
+        kind: 'ossuary', gold: 0, detail: `SOL L${out.progress.ossuary}`,
+      }, player.rev);
+      return { progress: toProgress(saved) };
+    });
+}));
+
+/** LONCA KURMA — SOL ile. Gold yolu (`/guild/create`) her zaman açık. */
+app.post('/guild/create-sol', wrap(async (req, res) => {
+  await solAlim(req, res, 'guild', solCost(GUILD_COST), null, async (wallet) => {
+    const player = await getOrCreatePlayer(wallet);
+    // ⚠️ `ucretsizGold = true`: gold düşülmüyor, ama ad/etiket doğrulaması
+    // ve tekillik kontrolleri AYNEN çalışıyor — ödeme yolu kuralları
+    // gevşetmiyor, yalnız bedeli değiştiriyor.
+    const guild = await createGuild(wallet, player.rev, req.body?.name, req.body?.tag, true);
+    return { guild, progress: toProgress(await getOrCreatePlayer(wallet)) };
+  });
+}));
+
+/** LONCA SEVİYESİ — SOL ile. Bedel loncanın MEVCUT seviyesinden türetilir. */
+app.post('/guild/upgrade-sol', wrap(async (req, res) => {
+  const wallet0 = auth(req);
+  if (!wallet0) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const benim = await myGuild(wallet0);
+  const sonraki = benim ? nextGuildLevel(benim.level) : undefined;
+  if (!benim || !sonraki) { res.status(400).json({ error: 'yukseltilemez' }); return; }
+
+  await solAlim(req, res, 'guild_up', solCost(sonraki.cost), `L${sonraki.level}`,
+    async (wallet) => ({ guild: await upgradeGuild(wallet, true) }));
 }));
 
 app.get('/worldboss', wrap(async (req, res) => {

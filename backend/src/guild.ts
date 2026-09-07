@@ -84,6 +84,15 @@ export async function listGuilds(limit = 40) {
  */
 export async function createGuild(
   wallet: string, rev: number, adRaw: unknown, etiketRaw: unknown,
+  /**
+   * SOL ile ödendiyse gold DÜŞÜLMEZ.
+   *
+   * ⚠️ SADECE BEDEL DEĞİŞİYOR. Ad/etiket doğrulaması, "zaten loncada"
+   * kontrolü ve etiket tekilliği AYNEN çalışıyor — ödeme yolu kuralları
+   * gevşetmez. Bayrağı yalnız sunucu, ödeme ZİNCİRDE doğrulandıktan sonra
+   * geçirir.
+   */
+  ucretsiz = false,
 ): Promise<GuildView> {
   const ad = validateName(adRaw);
   if (!ad.ok) throw new GuildError(ad.reason);
@@ -95,7 +104,7 @@ export async function createGuild(
   });
   if (!p || p.banned) throw new GuildError('yasakli', 403);
   if (p.guildId) throw new GuildError('zaten_loncada');
-  if (p.gold < GUILD_COST) throw new GuildError('yetersiz_gold');
+  if (!ucretsiz && p.gold < GUILD_COST) throw new GuildError('yetersiz_gold');
 
   const id = crypto.randomUUID();
   try {
@@ -111,8 +120,18 @@ export async function createGuild(
     // ⚠️ Gold KOŞULLU düşüyor (`withLedger`in rev kilidi). Kurucu aynı anda
     // başka bir alım yaptıysa bu işlem düşer ve lonca ortada kalmaz —
     // aşağıdaki catch onu siliyor.
-    await withLedger(wallet, { gold: { decrement: GUILD_COST }, guildId: id },
-      { kind: 'guild', gold: -GUILD_COST, detail: `[${etiket.value}] ${ad.value}` }, rev);
+    /**
+     * ⚠️ SOL YOLUNDA DEFTERE `gold: 0` YAZILIYOR: gerçek para gold
+     * ekonomisine hiç dokunmuyor ve `/admin/economy`nin musluk/sink
+     * dengesi bozulmamalı. Gerçek para `Payment` tablosunda; iki defter
+     * bilerek ayrı tutuluyor.
+     */
+    await withLedger(wallet,
+      ucretsiz ? { guildId: id } : { gold: { decrement: GUILD_COST }, guildId: id },
+      {
+        kind: 'guild', gold: ucretsiz ? 0 : -GUILD_COST,
+        detail: `${ucretsiz ? 'SOL ' : ''}[${etiket.value}] ${ad.value}`,
+      }, rev);
   } catch (e) {
     await prisma.guild.delete({ where: { id } }).catch(() => {});
     throw e;
@@ -230,7 +249,11 @@ export async function donate(wallet: string, rev: number, miktar: unknown): Prom
  * ⚠️ Hazine kontrolü KOŞULLU yazmada (`treasury: { gte: cost }`), okuyup
  * yazmakta değil — iki eşzamanlı yükseltme hazineyi negatife düşürürdü.
  */
-export async function upgradeGuild(wallet: string): Promise<GuildView> {
+export async function upgradeGuild(
+  wallet: string,
+  /** SOL ile ödendiyse lonca hazinesinden düşülmez — bkz. `createGuild` */
+  ucretsiz = false,
+): Promise<GuildView> {
   const p = await prisma.player.findUnique({ where: { wallet }, select: { guildId: true } });
   if (!p?.guildId) throw new GuildError('loncada_degil');
   const g = await prisma.guild.findUnique({
@@ -242,9 +265,18 @@ export async function upgradeGuild(wallet: string): Promise<GuildView> {
   const next = nextGuildLevel(g.level);
   if (!next) throw new GuildError('zaten_max');
 
+  /**
+   * ⚠️ `level: g.level` ŞARTI HER İKİ YOLDA DA DURUYOR: iki eşzamanlı
+   * yükseltme (biri gold, biri SOL) aynı seviyeyi iki kez atlatamaz.
+   * Yalnız hazine şartı SOL yolunda düşüyor.
+   */
   const hit = await prisma.guild.updateMany({
-    where: { id: p.guildId, level: g.level, treasury: { gte: next.cost } },
-    data: { treasury: { decrement: next.cost }, level: next.level },
+    where: ucretsiz
+      ? { id: p.guildId, level: g.level }
+      : { id: p.guildId, level: g.level, treasury: { gte: next.cost } },
+    data: ucretsiz
+      ? { level: next.level }
+      : { treasury: { decrement: next.cost }, level: next.level },
   });
   if (hit.count === 0) throw new GuildError('hazine_yetersiz');
 

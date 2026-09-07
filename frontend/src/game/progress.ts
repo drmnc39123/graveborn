@@ -377,20 +377,36 @@ export function depthRewardBetween(p: Progress, stageId: number, from: number, t
  * ⚠️ Gold kontrolü BURADA. Çağıran tarafa bırakmak, iki çağıran (istemci ve
  * sunucu) arasında er ya da geç ayrışma demekti.
  */
-export function pullReliquary(p: Progress, rarityRoll: number, pickRoll: number): {
+export function pullReliquary(
+  p: Progress, rarityRoll: number, pickRoll: number,
+  /**
+   * SOL ile ödendiyse gold DÜŞÜLMEZ.
+   *
+   * ⚠️ NİYE PARAMETRE, AYRI FONKSİYON DEĞİL: çekilişin kendisi (zar, tekrar
+   * çözümü, toz) tek bir yerde kalmalı. İkinci bir kopya yazmak, ileride
+   * yalnız birinde düzeltilen bir kural bırakırdı — bu depoda tam olarak
+   * böyle dört sessiz hata çıktı.
+   *
+   * ⚠️ Bu bayrağı SADECE sunucu, ödeme ZİNCİRDE doğrulandıktan sonra
+   * geçirir. İstemci `pullReliquary` çağırırken hiçbir zaman geçirmez.
+   */
+  ucretsiz = false,
+): {
   progress: Progress;
   result: PullResult | null;
   /** başarısızsa sebebi — arayüz bunu gösterir */
   error: string | null;
 } {
-  if (p.gold < PULL_COST) return { progress: p, result: null, error: 'not enough gold' };
+  if (!ucretsiz && p.gold < PULL_COST) {
+    return { progress: p, result: null, error: 'not enough gold' };
+  }
 
   const def = rollCosmetic(rarityRoll, pickRoll);
   const result = resolvePull(p.cosmetics, def);
 
   const next: Progress = {
     ...p,
-    gold: p.gold - PULL_COST,
+    gold: p.gold - (ucretsiz ? 0 : PULL_COST),
     cosmetics: result.duplicate ? [...p.cosmetics] : [...p.cosmetics, def.id],
     dust: p.dust + result.dust,
     equipped: { ...p.equipped },
@@ -426,11 +442,18 @@ export function buyWithDust(p: Progress, id: string): {
  * Forge'da olduğu gibi: fiyatı istemcinin göndermesi, istemcinin fiyat
  * belirlemesi demektir.
  */
-export function raiseOssuary(p: Progress): { progress: Progress; error: string | null } {
+export function raiseOssuary(
+  p: Progress,
+  /** SOL ile ödendiyse gold DÜŞÜLMEZ — bkz. `pullReliquary` gerekçesi */
+  ucretsiz = false,
+): { progress: Progress; error: string | null } {
   const cost = ossuaryCost(p.ossuary);
-  if (p.gold < cost) return { progress: p, error: 'not enough gold' };
+  if (!ucretsiz && p.gold < cost) return { progress: p, error: 'not enough gold' };
   return {
-    progress: { ...p, gold: p.gold - cost, ossuary: p.ossuary + 1, equipped: { ...p.equipped } },
+    progress: {
+      ...p, gold: p.gold - (ucretsiz ? 0 : cost),
+      ossuary: p.ossuary + 1, equipped: { ...p.equipped },
+    },
     error: null,
   };
 }

@@ -24,6 +24,8 @@
 // keşif boş dönerse mobilde "derin bağlantı" düğmeleri gösteriliyor.
 
 /** Arayüzün gördüğü tek cüzdan biçimi — eski/yeni ayrımı buradan sonra yok */
+import bs58 from 'bs58';
+
 export interface Cuzdan {
   id: string;
   ad: string;
@@ -32,6 +34,20 @@ export interface Cuzdan {
   kaynak: 'standart' | 'enjekte';
   baglan(): Promise<string>;
   imzala(mesaj: Uint8Array): Promise<Uint8Array>;
+  /**
+   * Hazir bir islemi IMZALA VE GONDER — zincir imzasini (base58) doner.
+   *
+   * ⚠️ ISTEGE BAGLI. Her cuzdan bu yetenegi sunmuyor; giris icin sart olan
+   * `signMessage`, odeme icin gereken ise `signAndSendTransaction`. Bir
+   * cuzdani sirf odeme yapamiyor diye GIRISTEN de engellemek, oyunun
+   * tamamini kapatmak olurdu — SOL rayi bir kolaylik, gold rayi her zaman
+   * acik.
+   *
+   * ⚠️ `signAndSendTransaction` tercih ediliyor, `signTransaction` DEGIL:
+   * ikincisinde imzali islemi zincire biz yollariz ve "cuzdan imzaladi ama
+   * yayin dustu" durumu oyuncunun parasini belirsiz birakir.
+   */
+  odemeGonder?(islem: Uint8Array): Promise<string>;
 }
 
 // ── ortak yardımcılar ──
@@ -62,6 +78,22 @@ function baytlar(x: unknown): Uint8Array | null {
  * bazıları doğrudan `Uint8Array`, bazıları sayı dizisi. Tek biçime burada
  * çevriliyor; yoksa her yeni cüzdan çağrı yerinde ayrı bir `if` isterdi.
  */
+/**
+ * Zincir imzasini METIN olarak cikar.
+ *
+ * ⚠️ CUZDANLAR YINE FARKLI DONUYOR: bazilari base58 string, bazilari ham
+ * bayt (`Uint8Array`), Wallet Standard ise `{ signature: Uint8Array }`.
+ * Sunucu base58 metin bekliyor, cevrim TEK YERDE yapiliyor.
+ */
+function imzaMetni(sonuc: unknown): string {
+  if (typeof sonuc === 'string' && sonuc.length > 0) return sonuc;
+  const s = (sonuc as { signature?: unknown } | null)?.signature;
+  if (typeof s === 'string' && s.length > 0) return s;
+  const b = baytlar(sonuc) ?? baytlar(s);
+  if (b) return bs58.encode(b);
+  throw new Error('imza_okunamadi');
+}
+
 function imzaBaytlari(sonuc: unknown): Uint8Array {
   const dogrudan = baytlar(sonuc);
   if (dogrudan) return dogrudan;
@@ -89,6 +121,8 @@ interface KayitApi { register(...cuzdanlar: StandartCuzdan[]): () => void }
 
 const CONNECT = 'standard:connect';
 const SIGN = 'solana:signMessage';
+/** Odeme yetenegi — giris icin SART DEGIL, yalniz SOL rayi icin */
+const SEND = 'solana:signAndSendTransaction';
 
 /** Solana zinciri + gereken iki yetenek yoksa bu cüzdanla giriş yapılamaz */
 export function standartUygun(w: StandartCuzdan): boolean {
@@ -153,6 +187,27 @@ function standartSar(w: StandartCuzdan): Cuzdan {
       const [ilk] = await f.signMessage({ account: hesap, message: mesaj });
       return imzaBaytlari(ilk);
     },
+    // ⚠️ Yetenek yoksa alan HIC TANIMLANMIYOR (undefined) — cagiran taraf
+    // `!!cuzdan.odemeGonder` ile sorup dugmeyi hic gostermeyebilsin.
+    ...(w.features?.[SEND] ? {
+      async odemeGonder(islem: Uint8Array) {
+        if (!hesap) throw new Error('once_baglan');
+        const f = w.features[SEND] as {
+          signAndSendTransaction(input: {
+            account: StandartHesap; transaction: Uint8Array; chain: string;
+          }): Promise<readonly { signature: unknown }[]>;
+        };
+        // ⚠️ ZINCIR ADI ACIKCA VERILIYOR. Bos birakilirsa bazi cuzdanlar
+        // devnet'e dusuyor ve odeme "basarili" gorunup hazineye hic
+        // ulasmiyordu — sunucu dogrulamasi reddeder ama oyuncunun parasi
+        // yanlis agda kalir.
+        const zincir = (w.chains ?? []).find((c) => c === 'solana:mainnet') ?? 'solana:mainnet';
+        const [ilk] = await f.signAndSendTransaction({
+          account: hesap, transaction: islem, chain: zincir,
+        });
+        return imzaMetni(ilk?.signature);
+      },
+    } : {}),
   };
 }
 
@@ -163,6 +218,8 @@ interface EskiSaglayici {
   publicKey?: { toString(): string } | null;
   connect(opts?: { onlyIfTrusted?: boolean }): Promise<{ publicKey?: { toString(): string } } | void>;
   signMessage(msg: Uint8Array, encoding?: string): Promise<unknown>;
+  /** ⚠️ ISTEGE BAGLI — her enjekte saglayici sunmuyor */
+  signAndSendTransaction?(islem: unknown): Promise<unknown>;
 }
 
 /**
@@ -216,6 +273,24 @@ function eskiSar(ad: string, p: EskiSaglayici): Cuzdan {
     async imzala(mesaj) {
       return imzaBaytlari(await p.signMessage(mesaj, 'utf8'));
     },
+    // ⚠️ Yetenek yoksa alan HIC TANIMLANMIYOR — cagiran `!!odemeGonder`
+    // ile sorup dugmeyi hic gostermeyebilsin.
+    ...(typeof p.signAndSendTransaction === 'function' ? {
+      async odemeGonder(islem: Uint8Array) {
+        /**
+         * ⚠️ ENJEKTE SAGLAYICILAR HAM BAYT DEGIL, `Transaction` NESNESI
+         * bekliyor (Wallet Standard baytla calisiyor). Arayuzu tek tutmak
+         * icin cevrim BURADA yapiliyor; cagiran taraf iki dunyayi bilmiyor.
+         *
+         * ⚠️ DINAMIK IMPORT: `@solana/web3.js` 3 MB ve bu modul her sayfa
+         * yuklenisinde calisiyor. Odeme yolu nadiren kullaniliyor; acilis
+         * paketine koymak herkesin yuklemesini agirlastirirdi.
+         */
+        const { Transaction } = await import('@solana/web3.js');
+        const tx = Transaction.from(islem);
+        return imzaMetni(await p.signAndSendTransaction!(tx));
+      },
+    } : {}),
   };
 }
 
