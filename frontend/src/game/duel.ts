@@ -1,11 +1,19 @@
 // DÜELLO — asenkron PvP.
 //
-// ⚠️ GERÇEK ZAMANLI PvP YAPILMADI ve bu bilinçli bir karar. Bu oyunun tüm
-// güvenliği "aynı seed → aynı koşu" determinizmine dayanıyor (`SIM_SEAL`);
-// gerçek zamanlı bir düello, tahmin/uzlaştırma (prediction/reconciliation)
-// gerektirir ve o katman determinizmi de sunucu-otoriteli ödülü de bozar.
-// Ayrıca survivor türü zaten tek kişilik bir hayatta kalma oyunu — iki
-// oyuncuyu aynı arenaya koymak oyunu değiştirirdi, PvP eklemezdi.
+// ⚠️ BU BAŞLIK BAYATLAMIŞTI (2026-09-07 düzeltildi). Eskiden "gerçek zamanlı
+// PvP YAPILMADI ve bu bilinçli bir karar" yazıyordu — o cümle artık YANLIŞ:
+// THE PIT (`arena.ts`) gerçek zamanlı 1v1 olarak canlıda. Dosyayı okuyan
+// biri "öyle bir şey yok" sonucuna varırdı; bu depoda bayat yorumların
+// yanlış teşhise yol açtığı ölçülmüş örnekler var.
+//
+// ⚠️ ASIL GEREKÇE HÂLÂ GEÇERLİ ve düello bu yüzden KALDIRILMADI: naif bir
+// gerçek zamanlı düello (tahmin/uzlaştırma) determinizmi ve sunucu-otoriteli
+// ödülü bozardı. PIT o sorunu başka yoldan çözdü — LOCKSTEP: telden yalnız
+// hareket vektörü geçiyor, sunucu saati tutuyor ve simülasyonu KENDİ
+// koşturuyor. Yani ikisi rakip değil, tamamlayıcı:
+//   • Düello  → asenkron, rakip çevrimiçi olmak zorunda değil, kayda oynanır
+//   • THE PIT → eşzamanlı, iki oyuncu aynı anda aynı sürüde hayatta kalır
+// ⚠️ İKİSİ AYNI `duelRating` SÜTUNUNU paylaşıyor — tek merdiven, iki kapı.
 //
 // ⚠️ ONUN YERİNE: AYNI SEED'İ OYNARSIN. Rakibinin koşusu bir KAYIT olarak
 // duruyor (seed + sunucunun kabul ettiği derinlik). Meydan okuduğunda tam
