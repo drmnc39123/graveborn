@@ -92,6 +92,14 @@ export function isBridge(src: string): boolean {
  */
 export function isGround(src: string): boolean {
   const n = src.split('/').pop() ?? src;
+  /**
+   * ⚠️ DUVAR ASLA ZEMİN DEĞİLDİR — öncelik AÇIKÇA yazılı.
+   * `cobble_wall` gibi bir ad iki kalıba da uyuyor (`cobble` → zemin,
+   * `_wall` → duvar). Öncelik yazılmasaydı duvar `GROUND_Z` alır, karakterin
+   * ALTINA çizilir ve oyuncu duvarın içinden geçiyormuş gibi görünürdü —
+   * tam da bu fonksiyonun önlemek için yazıldığı hatanın aynası.
+   */
+  if (isWall(n)) return false;
   return /floor|ground|_path|path_|pattern_stone|cobble|tile(?!set)|pavement|carpet|rug|road|grass|dirt|mud|sand|gravel/i.test(n);
 }
 

@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { C, glass } from '@/lib/theme';
 import { importCodeWorld } from '@/game/importWorld';
-import { autoFps, autoSolid, isBridge } from '@/game/autoProps';
+import { GROUND_Z, autoFps, autoSolid, autoSolidW, isBridge, isGround } from '@/game/autoProps';
 import {
   MAP_TILE, emptyMap, loadMapLocal, paletteIndex, saveMapLocal,
   type MapDoc, type MapMarker, type MapObject, type MarkerKind,
@@ -497,6 +497,24 @@ export default function EditorPage() {
       frames: slice.cols, rows: slice.rows, row: slice.cy, col: slice.cx,
       fps: autoFps(sel.src),
       solid: autoSolid(sel.src, ph),
+      /**
+       * 🔴 BU İKİ SATIR KAYBOLMUŞTU (2026-09-07 geri kondu).
+       *
+       * `autoSolidW` ve `isGround`/`GROUND_Z` `autoProps.ts`te YAZILIYDI ama
+       * hiçbir yerden çağrılmıyordu — yani iki düzeltme kodda duruyor,
+       * ürüne hiç ulaşmıyordu:
+       *   • `mapWorld.ts:51` `o.solidW ?? 0.8` okuyor; editör bu alanı hiç
+       *     yazmadığı için ÇİT ile KULE aynı çarpışma genişliğindeydi.
+       *   • Çizim sırası `footY = y + h + (z ?? 0)`; zemin görseli nesne
+       *     olarak konduğunda z'si olmadığı için karakterin ÜSTÜNE
+       *     çizilebiliyordu — `isGround`un yorumundaki "karakter zeminin
+       *     arkasına saklanıyor" şikayeti tam olarak buydu.
+       *
+       * ⚠️ Yalnız YENİ yerleştirmeleri etkiler; kayıtlı haritadaki nesneler
+       * kendi verisini korur, yani canlı köy değişmez.
+       */
+      solidW: autoSolidW(sel.src),
+      ...(isGround(sel.src) ? { z: GROUND_Z } : {}),
       ...(isBridge(sel.src) ? { bridge: true } : {}),
     };
     setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
@@ -569,7 +587,12 @@ export default function EditorPage() {
         id: nextId.current++, src: sel.src,
         x: snapped(p.x - pw / 2), y: snapped(p.y - ph / 2), w: pw, h: ph,
         frames: slice.cols, rows: slice.rows, row: slice.cy, col: slice.cx,
+        // ⚠️ İKİNCİ YERLEŞTİRME NOKTASI — yukarıdakiyle AYNI alanları
+        // yazmak zorunda; ayrışırsa nesnenin nasıl konduğuna göre davranış
+        // değişir ve sebebi görünmez olur.
         fps: autoFps(sel.src), solid: autoSolid(sel.src, ph),
+        solidW: autoSolidW(sel.src),
+        ...(isGround(sel.src) ? { z: GROUND_Z } : {}),
         ...(isBridge(sel.src) ? { bridge: true } : {}),
       };
       setDoc((d) => ({ ...d, objects: [...d.objects, o] }));
