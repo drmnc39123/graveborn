@@ -14,6 +14,9 @@ import {
   type GuildState,
 } from '@/lib/gameSession';
 import { getMode } from '@/lib/session';
+import { SolPayButton, SolRateNote } from '@/components/SolPayButton';
+import { solCost } from '@/game/solPrice';
+import { buyGuildUpgradeSol, createGuildSol } from '@/lib/gameSession';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { PixelButton } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
@@ -117,6 +120,20 @@ export function GuildPanel({ progress, onChange, onError }: {
                 </PixelButton>
               </span>
             </div>
+            {/* ⚠️ SOL YOLU LONCA HAZİNESİNE DOKUNMUYOR: kurucu kendi
+                cebinden ödüyor, hazine olduğu gibi kalıyor. Bağış yoluyla
+                biriken gold yine yok ediliyor — sink bozulmuyor. */}
+            {kurucu && (
+              <div style={{ marginTop: 7, display: 'flex', justifyContent: 'flex-end' }}>
+                <SolPayButton
+                  urun="guild_up"
+                  lamports={solCost(next.cost)}
+                  disabled={busy}
+                  onError={onError}
+                  onDone={async (sig) => { await buyGuildUpgradeSol(sig); await yukle(); }}
+                />
+              </div>
+            )}
             {!kurucu && (
               <div style={{ marginTop: 6, fontSize: 11, color: C.boneFaint }}>
                 Only the founder can spend the treasury.
@@ -191,6 +208,28 @@ export function GuildPanel({ progress, onChange, onError }: {
             {(GUILD_COST - progress.gold).toLocaleString('en-US')} more gold needed
           </div>
         )}
+        {/* ⚠️ AD VE ETİKET SOL YOLUNDA DA DOĞRULANIYOR — sunucu aynı
+            kontrolleri çalıştırıyor. Ödeme yolu kuralları gevşetmiyor,
+            yalnız bedeli değiştiriyor. Düğme, ad/etiket geçerli olmadan
+            KAPALI: parayı alıp "isim reddedildi" demek en pahalı hata. */}
+        <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <SolPayButton
+            urun="guild"
+            lamports={solCost(GUILD_COST)}
+            disabled={busy || ad.trim().length < 3 || etiket.length < 2}
+            ek={{ name: ad, tag: etiket }}
+            onError={onError}
+            onDone={async (sig) => {
+              const r = await createGuildSol(sig, ad, etiket);
+              onChange(r.progress);
+              await yukle();
+            }}
+          />
+          {(ad.trim().length < 3 || etiket.length < 2) && (
+            <span style={{ fontSize: 10, color: C.boneFaint }}>name and tag first</span>
+          )}
+        </div>
+        <SolRateNote />
       </CardSection>
 
       <CardSection label="Or join one" tone={C.ice}>

@@ -20,6 +20,16 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100';
 const K_TOKEN = 'graveborn:token';
 const K_MODE = 'graveborn:mode';
 const K_WALLET = 'graveborn:wallet';
+/**
+ * Hangi cuzdanla girildi.
+ *
+ * ⚠️ NIYE SAKLANIYOR: SOL odemesi icin cuzdan NESNESI yeniden gerekiyor
+ * (`odemeGonder`), ama nesne sayfa yenilenince kayboluyor. Kimligi
+ * saklayip odeme aninda `bulunanCuzdanlar()` icinden yeniden bulmak,
+ * nesneyi global bir degiskende tutmaktan daha saglam: eklenti yeniden
+ * yuklendiginde eski nesne olu kalirdi.
+ */
+const K_WALLET_ID = 'graveborn:walletId';
 
 export type SessionMode = 'demo' | 'wallet';
 
@@ -34,6 +44,8 @@ export function getMode(): SessionMode | null {
 export function setMode(m: SessionMode) { ls()?.setItem(K_MODE, m); }
 export function getToken(): string | null { return ls()?.getItem(K_TOKEN) ?? null; }
 export function getWallet(): string | null { return ls()?.getItem(K_WALLET) ?? null; }
+/** Giriste kullanilan cuzdanin kimligi — odeme aninda yeniden bulmak icin */
+export function getWalletId(): string | null { return ls()?.getItem(K_WALLET_ID) ?? null; }
 
 /**
  * GÖSTERİM için cüzdan — "bu satır benim mi" karşılaştırmalarında kullanılır.
@@ -52,6 +64,9 @@ export function signOut() {
   const s = ls();
   s?.removeItem(K_TOKEN);
   s?.removeItem(K_WALLET);
+  // ⚠️ Cikista cuzdan kimligi de silinmeli: kalsaydi bir sonraki oyuncu
+  // baska bir cuzdanla girdiginde odeme ESKI cuzdani acmaya calisirdi.
+  s?.removeItem(K_WALLET_ID);
   s?.removeItem(K_MODE);
 }
 
@@ -129,6 +144,7 @@ export async function signInWithWallet(
   const s = ls();
   s?.setItem(K_TOKEN, out.token);
   s?.setItem(K_WALLET, wallet);
+  s?.setItem(K_WALLET_ID, cuzdan.id);
   setMode('wallet');
   return { wallet, progress: out.progress };
 }

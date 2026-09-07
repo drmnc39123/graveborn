@@ -9,7 +9,9 @@ import { useCallback, useState } from 'react';
 import { BTN, PixelButton } from '@/components/ui/kit';
 import { OSSUARY, ossuaryCost, ossuarySpent, ossuaryTier, ossuaryTierProgress } from '@/game/ossuary';
 import type { Progress } from '@/game/progress';
-import { raiseOssuary } from '@/lib/gameSession';
+import { raiseOssuary, raiseOssuarySol } from '@/lib/gameSession';
+import { SolPayButton, SolRateNote } from '@/components/SolPayButton';
+import { solCost } from '@/game/solPrice';
 import { Card, CardSection, Tag } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
 
@@ -75,6 +77,21 @@ export function OssuarySection({ progress, onChange, onError }: {
             style={{ width: '100%', marginTop: 13, fontSize: 12, fontWeight: 900, letterSpacing: 1 }}>
             {busy ? 'LAYING STONE…' : `LAY A STONE · ${cost.toLocaleString('en-US')} G`}
           </PixelButton>
+
+          {/* ⚠️ SOL YOLU GOLD'UN ALTINDA VE SÖNÜK: anıt tavansız bir gold
+              sinki ve öyle kalmalı. SOL sadece beklemek istemeyene açık
+              bir kapı; fiyat oyuncunun MEVCUT seviyesinden türüyor ve
+              sunucu aynı hesabı yapıyor. */}
+          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
+            <SolPayButton
+              urun="ossuary"
+              lamports={solCost(cost)}
+              disabled={busy}
+              onError={onError}
+              onDone={async (sig) => { onChange(await raiseOssuarySol(sig)); }}
+            />
+          </div>
+          <div style={{ textAlign: 'center' }}><SolRateNote /></div>
         </div>
 
         <div style={{

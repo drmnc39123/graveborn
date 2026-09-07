@@ -358,6 +358,18 @@ export async function pullReliquary(current: Progress): Promise<PullOutcome> {
   return api<PullOutcome>('/reliquary/pull', { method: 'POST', body: {} });
 }
 
+/**
+ * 10'lu cekilis — SOL ile.
+ *
+ * ⚠️ SADECE CUZDAN MODUNDA. Demo sunucuya hic dokunmuyor ve gercek para
+ * yolu orada olamaz; dugme zaten cizilmiyor (`SolPayButton` panelUnlocked).
+ */
+export async function pullReliquarySol(sig: string): Promise<{
+  progress: Progress; pulls: { id: string; duplicate: boolean }[];
+}> {
+  return api('/reliquary/pull-sol', { method: 'POST', body: { sig } });
+}
+
 export async function buyCosmeticWithDust(id: string, current: Progress): Promise<Progress> {
   if (!isWallet()) {
     const out = localDustBuy(current, id);
@@ -479,6 +491,14 @@ export function streakAvailable(p: Progress): boolean {
 // ── OSSUARY + WAGER ───────────────────────────────────────────────────
 // İkisi de saf fonksiyonu paylaşıyor; cüzdan modunda sunucu, demoda istemci
 // çalıştırıyor. Fiyat ve hedef HER İKİ YOLDA DA saf fonksiyondan geliyor.
+
+/** Anit seviyesi — SOL ile. Fiyat SUNUCUDA, oyuncunun mevcut seviyesinden. */
+export async function raiseOssuarySol(sig: string): Promise<Progress> {
+  const { progress } = await api<{ progress: Progress }>('/ossuary/raise-sol', {
+    method: 'POST', body: { sig },
+  });
+  return progress;
+}
 
 export async function raiseOssuary(current: Progress): Promise<Progress> {
   if (!isWallet()) {
@@ -826,6 +846,21 @@ export async function fetchGuilds(): Promise<GuildState> {
 }
 
 /** ⚠️ `progress` de dönüyor — kurma gold düşürüyor, navbar güncellenmeli */
+/** Lonca kurma — SOL ile. Ad/etiket dogrulamasi sunucuda AYNEN calisiyor. */
+export async function createGuildSol(
+  sig: string, name: string, tag: string,
+): Promise<{ guild: MyGuild; progress: Progress }> {
+  return api('/guild/create-sol', { method: 'POST', body: { sig, name, tag } });
+}
+
+/** Lonca seviyesi — SOL ile. Lonca hazinesinden dusulmez. */
+export async function buyGuildUpgradeSol(sig: string): Promise<MyGuild> {
+  const { guild } = await api<{ guild: MyGuild }>('/guild/upgrade-sol', {
+    method: 'POST', body: { sig },
+  });
+  return guild;
+}
+
 export async function createGuild(name: string, tag: string): Promise<{ guild: MyGuild; progress: Progress }> {
   return api('/guild/create', { method: 'POST', body: { name, tag } });
 }

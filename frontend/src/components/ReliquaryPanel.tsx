@@ -26,6 +26,9 @@ import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { pixel, BTN, PixelButton } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 import { OssuarySection } from '@/components/OssuarySection';
+import { SolPayButton, SolRateNote } from '@/components/SolPayButton';
+import { solCost } from '@/game/solPrice';
+import { pullReliquarySol } from '@/lib/gameSession';
 import { WagerSection } from '@/components/WagerSection';
 
 const SLOTS: { id: CosmeticSlot; label: string; hint: string }[] = [
@@ -270,6 +273,35 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
               OPEN · {PULL_COST.toLocaleString('en-US')} G
             </PixelButton>
           </div>
+
+          {/* ⚠️ SOL YOLU GOLD'UN YANINDA, YERINE DEĞİL. Tek çekiliş SOL
+              eşiğinin altında (≈0,002 SOL, ağ ücreti yanında anlamsız), o
+              yüzden SOL rayında 10'lu DEMET satılıyor — `solPrice` bu
+              kuralı ölçüyor. */}
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center',
+            gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <SolPayButton
+              urun="reliquary10"
+              lamports={solCost(PULL_COST * 10)}
+              disabled={busy}
+              onError={onError}
+              onDone={async (sig) => {
+                const out = await pullReliquarySol(sig);
+                onChange(out.progress);
+                // ⚠️ SON ÇEKİLİŞ GÖSTERİLİYOR: demet açıldıktan sonra
+                // hiçbir şey göstermemek, oyuncuya "ne aldım" sorusunu
+                // envanteri tarayarak cevaplatırdı.
+                const son = out.pulls[out.pulls.length - 1];
+                if (son) {
+                  setReveal({ id: son.id, duplicate: son.duplicate, dust: 0 });
+                  const def = cosmeticById(son.id);
+                  if (def) setTab(def.slot);
+                }
+              }}
+            />
+            <span style={{ fontSize: 10, color: C.boneFaint }}>10 pulls</span>
+          </div>
+          <div style={{ textAlign: 'center' }}><SolRateNote /></div>
 
           {/* Sonuç — açılma bitince belirir */}
           {reveal && revealDef && !opening && (

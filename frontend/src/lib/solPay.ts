@@ -79,3 +79,52 @@ export async function solOde(
   const baytlar = tx.serialize({ requireAllSignatures: false, verifySignatures: false });
   return cuzdan.odemeGonder(new Uint8Array(baytlar));
 }
+
+/**
+ * TAM AKIŞ — bir ürünü SOL ile satın al.
+ *
+ * ⚠️ TEK CÜZDAN ONAYI: sunucudan fiyat ve blockhash alınır, işlem kurulur,
+ * cüzdan imzalayıp gönderir, imza sunucuya verilir. Arada hiçbir yerde
+ * `signMessage` YOK (bkz. dosya başlığı).
+ *
+ * ⚠️ SIRA ÖNEMLİ: `/sol/quote` ÖNCE çağrılıyor. "Zaten loncada",
+ * "yükseltilemez", "yasaklı" gibi red sebepleri oyuncu parayı GÖNDERMEDEN
+ * önce söylenmeli; parayı alıp ürün verememek en pahalı hatadır.
+ */
+export async function solIleAl<T>(
+  urun: 'reliquary10' | 'ossuary' | 'guild' | 'guild_up',
+  redeem: (sig: string) => Promise<T>,
+  ek?: Record<string, unknown>,
+): Promise<T> {
+  const { api } = await import('@/lib/session');
+  const { getWalletId, getWallet } = await import('@/lib/session');
+
+  const teklif = await api<{ lamports: number | null }>('/sol/quote', {
+    method: 'POST', body: { product: urun, ...ek },
+  });
+  if (!teklif.lamports) throw new SolOdemeHatasi('sol_rayinda_degil');
+
+  const cfg = await api<SolConfig>('/sol/config');
+  if (!cfg.open || !cfg.treasury) throw new SolOdemeHatasi('sol_kapali');
+
+  /**
+   * ⚠️ CÜZDAN KİMLİKTEN YENİDEN BULUNUYOR, saklanmış bir nesneden değil:
+   * eklenti yeniden yüklendiğinde eski nesne ölü kalırdı.
+   */
+  const { bulunanCuzdanlar } = await import('@/lib/wallets');
+  const id = getWalletId();
+  const adres = getWallet();
+  const cuzdan = bulunanCuzdanlar().find((c) => c.id === id)
+    // ⚠️ Kimlik tutmuyorsa (eklenti güncellendi, ad değişti) ödeme
+    // yapabilen ilk cüzdana düşülüyor — oyuncuyu çıkışa zorlamaktansa.
+    ?? bulunanCuzdanlar().find((c) => !!c.odemeGonder);
+  if (!cuzdan || !adres) throw new SolOdemeHatasi('cuzdan_bulunamadi');
+  if (!cuzdan.odemeGonder) throw new SolOdemeHatasi('cuzdan_odeme_desteklemiyor');
+
+  // ⚠️ Sessiz yeniden bağlanma: cüzdan zaten güveniyorsa ekran açılmaz.
+  await cuzdan.baglan();
+
+  const { blockhash } = await api<{ blockhash: string }>('/sol/blockhash');
+  const sig = await solOde(cuzdan, adres, teklif.lamports, { treasury: cfg.treasury, blockhash });
+  return redeem(sig);
+}

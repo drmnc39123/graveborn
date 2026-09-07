@@ -123,5 +123,44 @@ console.log('\n[5] ** GUC SATILMIYOR - rayin var olus sarti');
     /not by spending/.test(home));
 }
 
+console.log('\n[6] ** ARAYUZ: SOL yolu gold yolunun YANINDA');
+{
+  /**
+   * SOL bir kolaylik, gold ise oyunun kendisi. Bir panelde gold dugmesi
+   * kaybolur da yerine SOL gecerse, oyun sessizce "odemeden oynanmaz"
+   * hale gelir - ve bunu kimse tek bir commit'te fark etmez.
+   */
+  /**
+   * ⚠️ ALET NOTU: ilk surum gold yolunu METINDEN ("... G") ariyordu ve
+   * bicimlendirme farki yuzunden iki panelde OLMAYAN bir hata buldu.
+   * Dogru olcut metin degil DAVRANIS: panel gold ucunu hala cagiriyor mu.
+   */
+  const paneller: [string, string, RegExp][] = [
+    ['Reliquary', 'src/components/ReliquaryPanel.tsx', /pullReliquary\(/],
+    ['Ossuary', 'src/components/OssuarySection.tsx', /raiseOssuary\(/],
+    ['Guild', 'src/components/GuildPanel.tsx', /createGuild\(|buyGuildUpgrade\(/],
+  ];
+  for (const [ad, yol, goldYolu] of paneller) {
+    const t = oku(yol);
+    check(`${ad}: SOL dugmesi var`, /<SolPayButton/.test(t));
+    check(`${ad}: gold ucu hala cagriliyor`, goldYolu.test(t));
+  }
+
+  const btn = oku('src/components/SolPayButton.tsx');
+  // RAY KAPALIYKEN HIC CIZILMEMELI: yari calisan bir odeme dugmesi,
+  // oyuncuyu olmayan bir isleme sokmaktir.
+  check('ray kapaliyken dugme cizilmiyor', /if \(!acik \|\| lamports === null\) return null/.test(btn));
+  check('demo modunda cizilmiyor', /panelUnlocked\(getMode\(\)\)/.test(btn));
+  // Cuzdanin kendi iptali HATA DEGIL - oyuncu vazgecti, kirmizi uyari
+  // basmak onu suclamak olurdu.
+  check('cuzdan iptali hata olarak gosterilmiyor', /reject\|declin\|cancel/.test(btn));
+  // EN ONEMLI METIN: para gitti urun gelmedi. Oyuncuya NE YAPACAGINI soyle.
+  check('"odedim urun gelmedi" metni oyuncuya yol gosteriyor',
+    /urun_verilemedi[\s\S]{0,200}ticket/i.test(btn));
+  check('kur ekranda yaziyor', /rateLabel\(\)/.test(btn));
+
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/SolPayZZZ/.test(btn));
+}
+
 console.log(`\n${FAIL.length === 0 ? 'SOL FIYAT RAYI SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
