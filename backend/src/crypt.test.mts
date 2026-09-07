@@ -9,7 +9,7 @@
 //
 // Çalıştır:  npx tsx src/crypt.test.mts
 
-import { CRYPT_CUT, cryptTier } from '@game/crypt';
+import { CRYPT_CUT, cryptDraw, cryptTier, cryptWeeklyCap } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { prisma } from './db.js';
 import { NON_SINK_KINDS, SINK_KINDS, claimCrypt, contributeToVault, isCryptSink, vaultState } from './crypt.js';
@@ -99,9 +99,25 @@ console.log('\n[3] Çekim');
     const p0 = await prisma.player.findUniqueOrThrow({ where: { wallet: w(0) } });
     check('gold hesaba yazıldı', p0.gold === r0.amount, `${p0.gold}`);
     check('hafta damgalandı', p0.cryptClaimedWeek === WEEK, `${p0.cryptClaimedWeek}`);
-    // T1 ağırlık 1, T2 ağırlık 2.5 → toplam 3.5, T1 payı = floor(bakiye/3.5)
-    const bekle = Math.floor((st.balance * cryptTier(1)!.weight) / st.totalWeight);
-    check('pay ağırlığa göre bölündü', r0.amount === bekle, `${r0.amount} = ${bekle}`);
+    /**
+     * T1 ağırlık 1, T2 ağırlık 2.5 → toplam 3.5, ham pay = floor(bakiye/3.5).
+     *
+     * ⚠️ AMA ÖDEME HAM PAY DEĞİL: haftalık tavan (`cryptWeeklyCap`) devrede.
+     * Tavansız hâlde ilk tapu sahibi birikmiş kasanın tamamını tek çekişte
+     * alıyordu — ölçülen 238.155 gold/hafta, Forge ağacının tamamı 564.516.
+     * Beklenen değer bu yüzden `cryptDraw`ın çıktısı.
+     */
+    const t1 = cryptTier(1)!;
+    const ham = Math.floor((st.balance * t1.weight) / st.totalWeight);
+    const bekle = cryptDraw(st.balance, t1, st.totalWeight).amount;
+    check('pay ağırlığa göre bölündü ve tavanla kesildi',
+      r0.amount === bekle, `${r0.amount} = ${bekle} (ham pay ${ham})`);
+    // ⚠️ ÇİFT TARAFLI: bu senaryoda tavan GERÇEKTEN devreye girmeli, yoksa
+    // test tavanı ölçmeden yeşil verir (kontrol grubu).
+    check('bu senaryoda tavan gerçekten devrede', ham > bekle,
+      `${ham} → ${bekle}`);
+    check("odenen, tapu bedelinin %10'unu asmiyor",
+      r0.amount <= cryptWeeklyCap(t1), `${r0.amount} ≤ ${cryptWeeklyCap(t1)}`);
   }
 
   check('aynı hafta İKİNCİ çekim reddediliyor', (await claimCrypt(w(0))).ok === false);

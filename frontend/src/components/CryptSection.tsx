@@ -8,7 +8,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { panelUnlocked } from '@/lib/testMode';
-import { CRYPT_CUT, cryptShare, cryptTier, cryptUpgradeCost, nextCryptTier } from '@/game/crypt';
+import {
+  CRYPT_CUT, CRYPT_WEEKLY_CAP, cryptDraw, cryptPaybackWeeks, cryptTier,
+  cryptUpgradeCost, cryptWeeklyCap, nextCryptTier,
+} from '@/game/crypt';
 import type { Progress } from '@/game/progress';
 import { buyCryptDeed, claimCrypt, fetchCrypt, type CryptState } from '@/lib/gameSession';
 import { getMode } from '@/lib/session';
@@ -48,11 +51,30 @@ export function CryptSection({ progress, onChange, onError }: {
   const bedel = cryptUpgradeCost(sahip);
   const alabilir = !!sonraki && progress.gold >= bedel && !busy;
 
-  // Bu hafta çekilebilecek pay — sunucudaki hesabın AYNISI (saf fonksiyon).
-  const payim = suanki
-    ? cryptShare(state.vault.balance, suanki.weight, state.vault.totalWeight)
-    : 0;
+  /**
+   * Bu hafta çekilebilecek pay — sunucudaki hesabın AYNISI (saf fonksiyon,
+   * `@game/crypt`). ⚠️ Tavan dahil: arayüz tavansız bir sayı gösterip sunucu
+   * daha azını ödeseydi oyuncu soyulduğunu düşünürdü.
+   */
+  const cekim = cryptDraw(state.vault.balance, suanki, state.vault.totalWeight);
+  const payim = cekim.amount;
   const cekilebilir = sahip > 0 && (state.me?.claimedWeek ?? 0) < state.week && payim > 0;
+
+  /**
+   * ⚠️ SATIN ALMA ÖNCESİ DÜRÜST TAHMİN. Oyuncu 220.000 gold'u neye verdiğini
+   * ÖNCEDEN bilmeli. Tahmin, sonraki kademe alınmış gibi hesaplanıyor:
+   * ağırlık havuza EKLENİYOR, yani sayı kendi katılımını da hesaba katıyor.
+   * Kendi ağırlığını eklemeyen bir tahmin her zaman fazla söz verirdi.
+   */
+  const sonrakiCekim = sonraki
+    ? cryptDraw(
+        state.vault.balance, sonraki,
+        state.vault.totalWeight - (suanki?.weight ?? 0) + sonraki.weight,
+      )
+    : null;
+  const sonrakiHafta = sonraki && sonrakiCekim
+    ? cryptPaybackWeeks(sonraki, sonrakiCekim.amount)
+    : Infinity;
 
   const satinAl = async () => {
     if (!alabilir) return;
@@ -80,21 +102,39 @@ export function CryptSection({ progress, onChange, onError }: {
 
   return (
     <>
-      {/* ⚠️ BU PARAGRAF KALDIRILAMAZ — bkz. dosya başlığı */}
-      <p style={{ margin: '0 0 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
-        {/* ⚠️ CÜMLE TEK KURALA İNDİ ve artık DOĞRU.
-            Önce "EVERY purchase" yazıyordu ve yanlıştı: `pet` ve `reforge`
-            kasayı beslemiyordu. Sonra kapsamı tek tek saydım — doğruydu ama
-            okunmuyordu. Kullanıcı kararıyla o ikisi de sink oldu
-            (`crypt.ts` SINK_KINDS), böylece kural tek cümlede söylenebiliyor.
-            ⚠️ İSTİSNALARI DA YAZ: iptal edilen ilan geri döndüğü için
-            beslemez, deed'in kendisi ise beslerse oyuncu kendi alımından
-            pay alırdı. İkisi de `crypt.ts`te gerekçesiyle duruyor. */}
-        A deed does <strong style={{ color: C.bone }}>not print gold</strong>. Gold you
-        spend and never get back drops {Math.round(CRYPT_CUT * 100)}% into the crypt vault
-        — everything except a listing you cancel and the deed itself —
-        and deed holders share what is in it. Nothing comes out that did not go in.
-      </p>
+      {/* ⚠️ BU BÖLÜM KALDIRILAMAZ — bkz. dosya başlığı.
+          Oyuncu 220.000 gold'u neye verdiğini ÖNCEDEN, tam olarak bilmeli:
+          nereden doluyor · nasıl bölüşülüyor · haftalık tavan ne · ne kadar
+          sürede kendini öder. Dördü de aşağıda YAZILI. */}
+      <div style={{ ...glass(9), padding: '12px 13px', marginBottom: 12, fontFamily: FONT.ui }}>
+        <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 1.6, color: C.ice, marginBottom: 8 }}>
+          HOW THE CRYPT PAYS
+        </div>
+        {/* ⚠️ İLK CÜMLE NE OLMADIĞINI SÖYLÜYOR: "pasif gelir" gören oyuncu
+            gold basıldığını sanar ve ekonomiye güveni gider. */}
+        <p style={{ margin: '0 0 9px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
+          A deed does <strong style={{ color: C.bone }}>not print gold</strong>. Nothing
+          comes out of the vault that did not go into it.
+        </p>
+        <Kural n={1} baslik="The vault fills from what the village burns">
+          {Math.round(CRYPT_CUT * 100)}% of every gold you spend and never get back drops
+          into the vault — forge, charms, pulls, the monument, wagers, pets, guilds,
+          reforging. A listing you cancel does not count, and neither does buying a deed.
+        </Kural>
+        <Kural n={2} baslik="Holders split it by weight, once a week">
+          A higher tier holds a heavier claim. Your share is your weight over the weight
+          of every deed in the village, so the fewer deeds there are, the larger each one
+          draws.
+        </Kural>
+        <Kural n={3} baslik={`No deed draws more than ${Math.round(CRYPT_WEEKLY_CAP * 100)}% of its price in a week`}>
+          {/* ⚠️ TAVANIN GEREKÇESİ AÇIKÇA YAZILI: oyuncu bir kısıtı ancak
+              sebebini bilirse adil bulur. */}
+          Whatever the vault holds, a draw is capped. This keeps the first holder from
+          emptying weeks of savings in one claim — so a deed is a long hold, never a flip,
+          and it can never pay for itself in under {Math.round(1 / CRYPT_WEEKLY_CAP)} weeks.
+          What is not drawn stays in the vault for the weeks after.
+        </Kural>
+      </div>
 
       {/* Kasanın hâli */}
       <div style={{ ...glass(10), padding: '11px 13px', marginBottom: 12, fontFamily: FONT.ui }}>
@@ -134,6 +174,31 @@ export function CryptSection({ progress, onChange, onError }: {
                 : payim > 0 ? 'Already drawn this week. It fills again as the village spends.'
                   : 'The vault is empty. It fills when anyone buys anything.'}
             </div>
+            {/* ⚠️ TAVAN DEVREDEYSE SESSİZ KALINMAZ. Oyuncu kasada 500.000
+                gördükten sonra 22.000 çekerse ve sebebi yazmıyorsa, sistemin
+                onu kandırdığını düşünür. Kesilen miktar da yazılıyor —
+                "kaybolmadı, kasada duruyor" cümlesiyle birlikte. */}
+            {cekim.capped && cekim.share > 0 && (
+              <div style={{
+                marginTop: 7, padding: '6px 8px', borderRadius: 5,
+                border: `1px solid ${C.ice}33`, background: `${C.ice}0e`,
+                fontSize: 10.5, color: C.boneDim, lineHeight: 1.45,
+              }}>
+                Capped at {cekim.cap.toLocaleString('en-US')} — {Math.round(CRYPT_WEEKLY_CAP * 100)}% of
+                what this deed cost. The other {(cekim.share - cekim.cap).toLocaleString('en-US')} stays
+                in the vault for later weeks.
+              </div>
+            )}
+            {/* Tavan yokken de beklenti dürüst kurulmalı */}
+            {!cekim.capped && payim > 0 && suanki && (
+              <div style={{ marginTop: 6, fontSize: 10.5, color: C.boneFaint }}>
+                At this rate the deed pays for itself in{' '}
+                <strong style={{ color: C.bone }}>
+                  {Math.ceil(cryptPaybackWeeks(suanki, payim))} weeks
+                </strong>
+                {' '}· weekly ceiling {cryptWeeklyCap(suanki).toLocaleString('en-US')}
+              </div>
+            )}
           </div>
         </Card>
       )}
@@ -155,6 +220,35 @@ export function CryptSection({ progress, onChange, onError }: {
             <div style={{ marginTop: 6, fontSize: 11.5, color: C.boneDim, lineHeight: 1.5 }}>
               {sonraki.blurb}
             </div>
+            {/* ⚠️ SATIN ALMADAN ÖNCE NE ALDIĞINI GÖSTER. Rakam bugünkü kasaya
+                ve bugünkü tapu sayısına göre; ikisi de değişir, o yüzden
+                "şu anda" diye yazılıyor — tahmin olduğu söylenmeden verilen
+                bir sayı bir SÖZDÜR ve tutulamaz. */}
+            {sonrakiCekim && (
+              <div style={{
+                marginTop: 8, padding: '7px 9px', borderRadius: 5,
+                border: `1px solid ${C.candle}30`, background: `${C.candle}0e`,
+                fontSize: 11, color: C.boneDim, lineHeight: 1.5,
+              }}>
+                {sonrakiCekim.amount > 0 ? (
+                  <>
+                    At the vault&apos;s present size this deed would draw about{' '}
+                    <strong style={{ color: C.candle }}>
+                      {sonrakiCekim.amount.toLocaleString('en-US')} gold
+                    </strong>{' '}
+                    a week — roughly{' '}
+                    <strong style={{ color: C.bone }}>
+                      {Number.isFinite(sonrakiHafta) ? Math.ceil(sonrakiHafta) : '∞'} weeks
+                    </strong>{' '}
+                    to pay for itself. Both numbers move with how much the village spends
+                    and how many deeds are held.
+                  </>
+                ) : (
+                  <>The vault is empty right now, so a deed would draw nothing this week.
+                    It fills as the village spends.</>
+                )}
+              </div>
+            )}
             {!alabilir && progress.gold < bedel && (
               <div style={{ marginTop: 6, fontSize: 11, color: C.badText }}>
                 {(bedel - progress.gold).toLocaleString('en-US')} more gold needed
@@ -168,6 +262,25 @@ export function CryptSection({ progress, onChange, onError }: {
         )}
       </CardSection>
     </>
+  );
+}
+
+/** Numaralı kural satırı — üç cümlelik anlatımın tek biçimi */
+function Kural({ n, baslik, children }: {
+  n: number; baslik: string; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: 'flex', gap: 9, marginTop: 8 }}>
+      <span style={{
+        flexShrink: 0, width: 17, height: 17, borderRadius: 4, display: 'grid',
+        placeItems: 'center', fontSize: 9.5, fontWeight: 900, color: C.candle,
+        border: `1px solid ${C.candle}55`, background: `${C.candle}12`,
+      }}>{n}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 900, color: C.bone, lineHeight: 1.35 }}>{baslik}</div>
+        <div style={{ fontSize: 11, color: C.boneFaint, lineHeight: 1.5, marginTop: 2 }}>{children}</div>
+      </div>
+    </div>
   );
 }
 

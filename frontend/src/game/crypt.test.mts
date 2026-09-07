@@ -7,11 +7,16 @@
 //
 // Çalıştır:  npx tsx src/game/crypt.test.mts
 
+import fs from 'node:fs';
 import {
-  CRYPT_CUT, CRYPT_TIERS, cryptBreakEven, cryptContribution, cryptShare,
-  cryptTier, cryptUpgradeCost, nextCryptTier,
+  CRYPT_CUT, CRYPT_TIERS, CRYPT_WEEKLY_CAP, cryptBreakEven, cryptContribution,
+  cryptDraw, cryptPaybackWeeks, cryptShare, cryptTier, cryptUpgradeCost,
+  cryptWeeklyCap, nextCryptTier,
 } from './crypt.js';
 import { treeTotalCost } from './forge.js';
+
+/** Zincir taramasi icin — dosya yoksa bos string, tarama patlamasin */
+const oku = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -104,6 +109,59 @@ console.log('\n[4] Amortisman — deed kendini ödüyor mu');
   // Forge ağacının iki katı kadar topluluk harcaması beklemeli.
   check('amortisman kolay değil (ağacın 2 katından fazla harcama)', tekBe > treeTotalCost() * 2,
     `${Math.round(tekBe).toLocaleString('tr')} vs ${(treeTotalCost() * 2).toLocaleString('tr')}`);
+}
+
+console.log('\n[5] * HAFTALIK CEKIM TAVANI');
+{
+  /**
+   * NIYE VAR: tavansiz cekimde ilk tapu sahibi o gune kadar BIRIKMIS kasanin
+   * tamamini tek seferde aliyordu. Olculdu (2026-09-07): 1.000 aktif oyuncu /
+   * 10 tapu sahibi dagiliminda T1 haftada 238.155 gold cekiyordu; Forge
+   * agacinin TAMAMI 564.516. Yani hic oynamadan 2,4 haftada butun agac.
+   * Bu bir temettu degil ikramiyeydi ve tapuyu bir cevirmeye donusturuyordu.
+   */
+  const t1 = CRYPT_TIERS[0];
+  const dev = cryptDraw(50_000_000, t1, t1.weight);   // devasa kasa, tek sahip
+  check('devasa kasada bile tavan uygulaniyor',
+    dev.amount === cryptWeeklyCap(t1) && dev.capped,
+    `${dev.amount.toLocaleString('en-US')} (tavan ${cryptWeeklyCap(t1).toLocaleString('en-US')})`);
+  // CIFT TARAFLI: kucuk kasada tavan DEVREYE GIRMEMELI, yoksa tavan bir
+  // tavan degil sabit odeme olurdu.
+  const kucuk = cryptDraw(5_000, t1, t1.weight);
+  check('kucuk kasada tavan devreye GIRMIYOR', kucuk.amount === 5_000 && !kucuk.capped,
+    `${kucuk.amount}`);
+  check('cekilmeyen pay kasada kaliyor (yakilmiyor)',
+    dev.share - dev.amount === 50_000_000 - cryptWeeklyCap(t1));
+
+  /**
+   * TAVAN KADEME SECIMINI BOZMAMALI. Tavan bedelin orani oldugu icin
+   * amortisman tabani her kademede AYNI olmali; sabit bir gold tavani ucuz
+   * kademeyi kayirir ve T3'u olu dogururdu.
+   */
+  const tabanlar = CRYPT_TIERS.map((t) => cryptPaybackWeeks(t, cryptDraw(9e9, t, t.weight).amount));
+  const beklenen = 1 / CRYPT_WEEKLY_CAP;
+  check('amortisman tabani her kademede ayni',
+    tabanlar.every((h) => Math.abs(h - beklenen) < 0.02),
+    tabanlar.map((h) => h.toFixed(1)).join(' / ') + ' hafta');
+  check(`hicbir tapu ${beklenen} haftadan hizli amorti edemiyor`,
+    tabanlar.every((h) => h >= beklenen - 0.02));
+
+  // Bozuk girdi
+  check('tapusuz cekim 0', cryptDraw(1_000_000, undefined, 10).amount === 0);
+  check('bos kasada cekim 0', cryptDraw(0, t1, 10).amount === 0);
+
+  /**
+   * IKI TARAF AYNI FONKSIYONU CAGIRIYOR. Arayuz 238.155 gosterip sunucu
+   * 22.000 oderse oyuncu soyuldugunu dusunur ve hakli olur.
+   */
+  const srv = oku('../backend/src/crypt.ts');
+  check('sunucu cryptDraw ile odemeyi kesiyor', /cryptDraw\(st\.balance/.test(srv));
+  check('sunucu ham cryptShare ile odemiyor', !/const pay = cryptShare/.test(srv));
+  const panel = oku('src/components/CryptSection.tsx');
+  check('arayuz cryptDraw cagiriyor', /cryptDraw\(/.test(panel));
+  check('arayuz tavan devredeyken SOYLUYOR', /cekim\.capped/.test(panel));
+  check('arayuz satin alma oncesi tahmin gosteriyor', /sonrakiCekim/.test(panel));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/cryptZZZ/.test(srv + panel));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ CRYPT SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

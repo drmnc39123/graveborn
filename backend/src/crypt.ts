@@ -9,7 +9,7 @@
 // BASMIYOR, harcayandan deed sahibine AKTARIYOR.
 
 import crypto from 'node:crypto';
-import { CRYPT_TIERS, cryptContribution, cryptShare, cryptTier } from '@game/crypt';
+import { CRYPT_TIERS, cryptContribution, cryptDraw, cryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import type { Prisma } from '@prisma/client';
 import { prisma } from './db.js';
@@ -145,7 +145,13 @@ export async function claimCrypt(wallet: string, now = new Date()): Promise<Clai
   if (!t) return { ok: false, reason: 'deed_yok' };
 
   const st = await vaultState();
-  const pay = cryptShare(st.balance, t.weight, st.totalWeight);
+  /**
+   * ⚠️ TAVAN BURADA UYGULANIYOR, arayuzde degil. Arayuz ayni fonksiyonu
+   * cagiriyor ama tek gecerli hesap sunucunun hesabi: tavan yalniz ekranda
+   * olsaydi dogrudan uca istek atan biri kasayi yine bosaltabilirdi.
+   */
+  const draw = cryptDraw(st.balance, t, st.totalWeight);
+  const pay = draw.amount;
   if (pay <= 0) return { ok: false, reason: 'kasa_bos' };
 
   try {
