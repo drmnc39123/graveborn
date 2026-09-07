@@ -31,7 +31,6 @@ import { NoticeBanner } from '@/components/NoticeBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { ProfileCard } from '@/components/ProfileCard';
 import { ReadyCard } from '@/components/ReadyCard';
-import { SocialLinks } from '@/components/SocialLinks';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
 import { MotionStyles, Reveal, motionOff, useCountUpInt, useMotionOff } from '@/components/ui/motion';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
@@ -787,11 +786,6 @@ export default function PlayPage() {
           position: 'absolute', top: 146, right: 10, zIndex: 6, width: 180,
           display: 'flex', flexDirection: 'column', gap: 8,
         }}>
-          {/* ⚠️ EN ÜSTTE, minimap'in HEMEN ALTINDA: kullanıcının istediği yer
-              burası ("mini map'in yanına"). Minimap canvas'ın İÇİNDE çiziliyor
-              (172×116), yani onun yanına HTML koymanın tek yolu bu sütunun
-              başı. İki küçük ikon, sütunun genişliğini de değiştirmiyor. */}
-          <SocialLinks />
           <EventBanner />
           <NoticeBanner konum="sagKolon" />
           <ReadyCard progress={progress} />

@@ -12,6 +12,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { PixelButton, Icon, BTN } from '@/components/ui/kit';
 import { useCountUpInt } from '@/components/ui/motion';
+import { SocialLinks } from '@/components/SocialLinks';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
@@ -365,6 +366,20 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
           }}>
             {wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'DEMO'}
           </span>
+          {/**
+            * SOSYAL İKONLAR — minimap'in HEMEN SOLUNDA, navbar hizasında.
+            *
+            * ⚠️ MUTLAK KONUM DEĞİL, çubuğun kendi akışında: minimap
+            * `w - mw - 14`te duruyor ve DAR EKRANDA KÜÇÜLÜYOR (mw ×0,7).
+            * Sabit bir `right` değeri yazsaydım telefonda ya çakışır ya
+            * ortada boşluk kalırdı — çubuğun sonuna eklemek konumu
+            * kendiliğinden doğru tutuyor.
+            *
+            * ⚠️ DAR EKRANDA GİZLİ, `$GRAVE` ve "GOLD" kelimesiyle aynı
+            * gerekçe ve aynı ölçüm: 375 px'de çubuk 302 px'ti ve her piksel
+            * minimap ile yarışıyor. Telefonda ikonlar ANA SAYFADA duruyor.
+            */}
+          {!dar && <SocialLinks boyut={26} />}
         </span>
       </div>
 

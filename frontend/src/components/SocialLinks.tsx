@@ -40,10 +40,14 @@ const BAGLANTILAR = [
  * (bkz. lib/theme.ts), kural `fx.test [G]` ile mühürlü. O yüzden burada
  * `glass()` YOK: ikonlar kendi gölgeleriyle duruyor, arkadaki dünyayı
  * kapatan bir kutu çizilmiyor.
+ *
+ * @param boyut kenar uzunluğu (px). Navbar'da küçük (26), ana sayfada daha
+ *   büyük (32) — navbar'ın her pikseli minimap ile yarışıyor (ölçüldü:
+ *   375 px'de çubuk 302 px).
  */
-export function SocialLinks() {
+export function SocialLinks({ boyut = 32 }: { boyut?: number }) {
   return (
-    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
       {BAGLANTILAR.map((b) => (
         <a
           key={b.ad}
@@ -55,7 +59,7 @@ export function SocialLinks() {
           aria-label={`GRAVEBORN on ${b.ad}`}
           title={`GRAVEBORN on ${b.ad}`}
           style={{
-            width: 34, height: 34, borderRadius: 9,
+            width: boyut, height: boyut, borderRadius: Math.round(boyut * 0.26),
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             /**
              * HACİM: üstten alta gradyan (ışık yukarıdan gelir) + içeriden
@@ -76,7 +80,7 @@ export function SocialLinks() {
             flexShrink: 0,
           }}
         >
-          <svg width={b.olcek - 4} height={b.olcek - 4} viewBox="0 0 24 24" aria-hidden="true">
+          <svg width={Math.round(boyut * 0.58)} height={Math.round(boyut * 0.58)} viewBox="0 0 24 24" aria-hidden="true">
             {/* Glif beyaz + hafif gölge: kabartma hissini ikonun kendisi de taşısın */}
             <path d={b.yol} fill="#ffffff" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.55))' }} />
           </svg>
