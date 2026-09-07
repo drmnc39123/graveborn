@@ -74,12 +74,31 @@ console.log('\n[3] ⭐ Uçtan uca: mesaj diğer oyuncuya ulaşıyor mu');
     new Promise((r) => a.once('open', r)),
     new Promise((r) => b.once('open', r)),
   ]);
-  await bekle(120);
+  /**
+   * ⚠️ SABIT UYKU YERINE KOSULA BEKLE.
+   *
+   * `bekle(120)` yeterliydi ve bir sure yesil verdi — sonra ayni makinede
+   * yerel sunucu da acikken 3/3 KIRMIZI oldu. Sebep urun hatasi degil:
+   * `chat_history` cercevesi `tagOf(wallet)` DB sorgusundan SONRA
+   * gonderiliyor (loncali oyuncu kendi kanal gecmisini gormeli diye), yani
+   * varis suresi veritabaninin o anki yukune bagli.
+   *
+   * Sabit uyku bu yuzden yanlis alet: makine yavaslayinca OLMAYAN bir hata
+   * bulduruyor, hizlaninca da gercek bir gecikmeyi gizleyebilir. Kosula
+   * bekleyen bir yoklama ikisini de yapmaz — ve tavan asilirsa yine kirmizi
+   * verir, yani muhur GEVSEMIYOR.
+   */
+  const bekleKosul = async (f: () => boolean, tavanMs = 3000) => {
+    const t0 = Date.now();
+    while (!f() && Date.now() - t0 < tavanMs) await bekle(25);
+    return f();
+  };
+  const gecmisGeldi = await bekleKosul(
+    () => aGelen.some((m) => (m as { t: string }).t === 'chat_history'));
 
   // ⚠️ Yeni girene geçmiş gönderilmeli — boş pencere gören oyuncu "kimse
   // yok" sanır, oysa iki dakika önce konuşma vardı.
-  check('bağlanınca geçmiş geliyor',
-    aGelen.some((m) => (m as { t: string }).t === 'chat_history'));
+  check('bağlanınca geçmiş geliyor', gecmisGeldi);
 
   a.send(JSON.stringify({ t: 'say', c: 'selam kasaba' }));
   await bekle(150);
