@@ -55,7 +55,7 @@ model Player {
   /// ⚠️ Puan BU ALANDA TUTULMUYOR — `depthPaid`'ten türetiliyor (bkz.
   /// skills.pointsOf). Puanı ayrı bir sütunda tutmak, doğrulanması gereken
   /// ikinci bir sayı ve senkronizasyon dışı kalabilecek bir kaynak olurdu.
-  skills       Json  @default("[]")
+  skills Json @default("[]")
 
   /// Üyesi olduğu lonca (yoksa null). ⚠️ Bir oyuncu TEK loncada olabilir —
   /// alan Player'da tutuluyor, ayrı bir üyelik tablosu YOK. Ayrı tablo
@@ -65,40 +65,40 @@ model Player {
   guild   Guild?  @relation(fields: [guildId], references: [id], onDelete: SetNull)
 
   /// Crypt Deed kademesi (0 = yok). ⚠️ Kasa payı BUNA göre ağırlıklanıyor.
-  cryptTier        Int  @default(0)
+  cryptTier        Int     @default(0)
   /// kasadan en son çekilen hafta — aynı hafta iki kez çekilemez
-  cryptClaimedWeek Int  @default(0)
+  cryptClaimedWeek Int     @default(0)
   // ── THE BINDING (pet sistemi — bkz. game/pets.ts) ──
   /// düşman tipi → bu cüzdanın toplam öldürme sayısı
   /// ⚠️ PET'İN "PARAYLA ALINAMAZ" YANI BURASI: bağlama hem gold hem kill
   /// istiyor. Sayaç koşu ÖZETİNDEN besleniyor, istemci iddiasından değil.
-  kills        Json    @default("{}")
+  kills            Json    @default("{}")
   /// pet id → kaç kez bağlandığı. SAYI (boolean DEĞİL): füzyon 4 kopya
   /// istiyor ve her kopya kill eşiğini yeniden doldurmayı gerektiriyor.
-  pets         Json    @default("{}")
+  pets             Json    @default("{}")
   /// pet id → seviye
-  petLevels    Json    @default("{}")
+  petLevels        Json    @default("{}")
   /// füzyondan geçmiş pet id'leri — MYTHIC olanlar
-  petFused     Json    @default("[]")
+  petFused         Json    @default("[]")
   /// koşuya girecek pet'ler, yuva sırasına göre
-  equippedPets Json    @default("[]")
+  equippedPets     Json    @default("[]")
   /// ikinci yuva açıldı mı — bir kez satın alınır (bkz. pets.ts SLOT2)
-  petSlot2     Boolean @default(false)
+  petSlot2         Boolean @default(false)
 
   /// günlük seri: { days, last }  — `last` SUNUCUNUN UTC günü
-  streak           Json @default("{}")
+  streak Json @default("{}")
   /// Günlük görev ilerlemesi: { day, progress, claimed, bonus }
   /// ⚠️ Görev LİSTESİ burada DEĞİL — `wallet + gün`den türetiliyor
   /// (bkz. game/quests.ts). Listeyi de saklamak her gece herkes için satır
   /// üretmek (cron!) ve o cron çalışmadığında görevsiz oyuncular demekti.
-  quests           Json @default("{}")
+  quests Json @default("{}")
 
   // ── DÜELLO (asenkron PvP — bkz. game/duel.ts) ──
   /// Elo puanı. ⚠️ Taban 100; sıfırlanan oyuncu tablodan düşer ve formül
   /// uçlarda anlamsızlaşır.
-  duelRating Int @default(1000)
-  duelWins   Int @default(0)
-  duelLosses Int @default(0)
+  duelRating   Int    @default(1000)
+  duelWins     Int    @default(0)
+  duelLosses   Int    @default(0)
   /// ⚠️ TOZ MUSLUĞUNUN TAVANI. Düello sınırsız oynanabiliyor; ödüllü maç
   /// sayısı GÜNLÜK sınırlı olmasa oyuncu başına sınırsız toz olurdu.
   duelDay      String @default("")
@@ -154,14 +154,14 @@ model Player {
   seasonDepth  Int   @default(0)
   seasonRating Float @default(0)
 
-  runs     Run[]
-  listings Listing[]
-  awards   SeasonAward[]
+  runs      Run[]
+  listings  Listing[]
+  awards    SeasonAward[]
   pvpAwards PvpAward[]
-  follows   Follow[]  @relation("follower")
+  follows   Follow[]      @relation("follower")
   tickets   Ticket[]
-  gear     GearItem[]
-  records  DuelRecord[]
+  gear      GearItem[]
+  records   DuelRecord[]
 
   @@index([bestRating])
   @@index([guildId])
@@ -265,9 +265,9 @@ model DuelRecord {
   wallet String
   player Player @relation(fields: [wallet], references: [wallet], onDelete: Cascade)
 
-  stageId Int
+  stageId    Int
   /// ⚠️ BigInt — seed uint32 ve INT4 taşıyor (bkz. Run.seed)
-  seed    BigInt
+  seed       BigInt
   /// ⚠️ KAYDIN OYNANDIĞI MOTOR SÜRÜMÜ — seed'in yarısı bu.
   ///
   /// Meydan okuyan bu seed'i KENDİ motorunda oynuyor. Sürümler ayrıldığı an
@@ -277,11 +277,11 @@ model DuelRecord {
   ///
   /// ⚠️ 0 = damga öncesi kayıt → hiçbir sürüme eşit değil → oynanamaz.
   /// Sahibi yeni motorda bir koşu bitirdiğinde kayıt kendiliğinden tazelenir.
-  simVersion Int   @default(0)
+  simVersion Int    @default(0)
   /// SUNUCUNUN KABUL ETTİĞİ derinlik — iddia değil
-  depth   Int
+  depth      Int
   /// challengeRating(stage, depth, ascension) — tabloyu sıralamak için
-  rating  Float
+  rating     Float
 
   createdAt DateTime @default(now())
 
@@ -293,7 +293,7 @@ model DuelRecord {
 // buradan okunuyor. Olmadan bir oyuncu ikinci hesabına sonsuz meydan
 // okuyabilirdi (Elo kazancı sıfıra yaklaşsa da sıfır değil).
 model Duel {
-  id         String @id
+  id         String   @id
   challenger String
   defender   String
   stageId    Int
@@ -513,13 +513,13 @@ model Ticket {
 }
 
 model TicketMessage {
-  id       String   @id
-  ticketId String
-  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  id        String   @id
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   /// ⚠️ Yazarı ROL olarak tutuyoruz, cüzdan olarak değil: admin cüzdanı
   /// veritabanına sızmamalı ve "bunu admin mi yazdı" sorusu tek alanla
   /// cevaplanmalı.
-  fromAdmin Boolean @default(false)
+  fromAdmin Boolean  @default(false)
   body      String
   createdAt DateTime @default(now())
 
@@ -671,4 +671,30 @@ model ServerFlag {
   /// oyuncuya gösterilen duyuru şeridi (boşsa şerit yok)
   notice      String?
   updatedAt   DateTime @updatedAt
+}
+
+/// SOL ÖDEMESİ — hazineye gelen her alım.
+///
+/// ⚠️ `sig @unique` ÇİFT HARCAMA KALKANI ve veritabanı seviyesinde olmak
+/// ZORUNDA: uygulama kodu yarışır, benzersiz indeks yarışmaz. Aynı zincir
+/// ödemesiyle iki ürün alınmasının önündeki tek gerçek engel bu satır.
+///
+/// ⚠️ DEFTER DEĞİL, MAKBUZ. Gold defteri (`Ledger`) oyunun iç ekonomisini
+/// tutuyor; burası gerçek parayı. İkisini karıştırmak "gold basılmış mı"
+/// denetimini bozardı — SOL alımı gold ekonomisine hiç dokunmuyor.
+model Payment {
+  id        String   @id
+  /// zincir imzası — TEK KULLANIMLIK
+  sig       String   @unique
+  wallet    String
+  /// hazineye GERÇEKTEN giren lamport (bakiye farkından, iddiadan değil)
+  lamports  Int
+  /// ne satın alındı — 'reliquary10' · 'ossuary' · 'guild' · 'guild_up'
+  product   String
+  /// ürüne özel ayrıntı (kaç seviye, hangi lonca)
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([wallet, createdAt])
+  @@index([createdAt])
 }
