@@ -512,6 +512,48 @@ console.log('\n[G] YÜZEY DİLİ — canvas üstünde `glass` kullanılamaz');
     eksikDosya.length ? `bulunamadı: ${eksikDosya.join(', ')}` : 'liste güncel');
 }
 
+console.log('\n[G2] KONTRAST — `C.bad` METİN RENGİ OLARAK KULLANILAMAZ');
+{
+  /**
+   * 🔴 NİYE VAR: kural `lib/theme.ts`te ZATEN ÖLÇÜLMÜŞ hâlde yazılıydı —
+   * panel zeminlerinde `bad` (#a01226) kontrastı 2,26 · 1,99 · 2,48, yani
+   * 3:1 eşiğini bile geçmiyor; metin için `badText` (#e4657a) var, 5,57 ✓ AA.
+   * Ama hiçbir şey bunu zorlamıyordu ve ÜÇ yer yanlış taraftaydı — biri
+   * OYUNCUYA giden bir uyarıydı (`DailyCard`: "not counted (capped)"), yani
+   * en çok okunması gereken cümle en okunmaz renkteydi.
+   *
+   * ⚠️ [G] ile aynı ders: zorlanmayan kural, kural değil yorumdur. Bu depoda
+   * aynı ders artık dördüncü kez alınıyor.
+   */
+  const kok = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+  const ihlal: string[] = [];
+  let taranan = 0;
+  const gez = (d: string) => {
+    for (const g of fs.readdirSync(d, { withFileTypes: true })) {
+      const tam = path.join(d, g.name);
+      if (g.isDirectory()) { gez(tam); continue; }
+      if (!g.name.endsWith('.tsx') && !g.name.endsWith('.ts')) continue;
+      if (g.name.includes('.test.')) continue;
+      taranan++;
+      const metin = fs.readFileSync(tam, 'utf8');
+      for (const [i, satir] of metin.split('\n').entries()) {
+        // Yorum satırları sayılmaz — gerekçeler bu renkten bahsediyor.
+        const t = satir.trim();
+        if (t.startsWith('//') || t.startsWith('*')) continue;
+        // ⚠️ `C.badText` YAKALANMAMALI: aletin kendi hatası olurdu.
+        if (/color:\s*C\.bad(?![A-Za-z])/.test(satir)) {
+          ihlal.push(`${g.name}:${i + 1}`);
+        }
+      }
+    }
+  };
+  gez(kok);
+  // ⚠️ SAYIM KONTROLÜ: yol yanlışsa tarama 0 dosya gezip "temiz" derdi —
+  // bu depoda tam olarak öyle bir sahte-yeşil mühür yaşandı.
+  check('tarama gerçekten dosya gördü', taranan > 40, `${taranan} dosya`);
+  check('hiçbir yerde `color: C.bad` yok', ihlal.length === 0, ihlal.join(', ') || 'temiz');
+}
+
 // ── [D] BAĞIMLILIK DİZİSİ OLMAYAN EFFECT + setState = SONSUZ DÖNGÜ ────
 //
 // 🔴 BU HATA ÜRETİMDE OYUNU OYNANAMAZ YAPTI (React #185). `PixelText`te

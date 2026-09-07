@@ -1,6 +1,14 @@
 'use client';
 // ADMIN PANELİ — operatör aracı, oyunun bir parçası değil.
 //
+// ⚠️ YOL: /gbadmin123 (eskiden /admin). Taşınma sebebi otomatik tarayıcılar:
+// /admin bir robotun ilk denediği yoldur. ⚠️ AMA BU KORUMA DEĞİL, sadece
+// gürültü azaltma — asıl koruma `ADMIN_SECRET`. Sır yoksa uçlar 403 döner
+// ve panel yolu ne olursa olsun boş kalır. Yolu gizli sanıp sırrı zayıf
+// tutmak, iki korumayı birden kaybetmek olurdu.
+// ⚠️ Sayfa siteden HİÇBİR YERE bağlı değil; robots.txt ve sitemap'e de
+// yazılmıyor (yazmak İLAN etmek olurdu, bkz. app/robots.ts).
+//
 // Bot politikası: tam replay doğrulaması YOK, sunucu ödül tavanı + denetim.
 // Tavan kodda (backend/reward.ts). Burası denetim tarafı.
 //
@@ -64,6 +72,67 @@ interface Detail {
   player: PlayerRow & { cosmetics?: unknown; ossuary?: number; dust?: number };
   runs: RunRow[];
   ledger: LedgerRow[];
+}
+
+type Sekme = 'durum' | 'oyuncular' | 'kosular' | 'ekonomi' | 'destek' | 'tehlikeli';
+
+/**
+ * Sekme şeridi.
+ *
+ * ⚠️ ROZETLER SAYI TAŞIYOR ve bu şeridin asıl işi o: operatör hangi sekmeye
+ * bakması gerektiğini TIKLAMADAN görmeli. Açık talep ya da biriken hata
+ * varsa sekme kendini işaretliyor; yoksa rozet hiç çizilmiyor (sıfır
+ * göstermek gürültü).
+ */
+function SekmeSeridi({ aktif, secildi, rozet }: {
+  aktif: Sekme;
+  secildi: (s: Sekme) => void;
+  rozet: Partial<Record<Sekme, { sayi: number; kotu?: boolean }>>;
+}) {
+  const sekmeler: { id: Sekme; ad: string }[] = [
+    { id: 'durum', ad: 'Durum' },
+    { id: 'oyuncular', ad: 'Oyuncular' },
+    { id: 'kosular', ad: 'Koşular' },
+    { id: 'ekonomi', ad: 'Ekonomi' },
+    { id: 'destek', ad: 'Destek' },
+    // ⚠️ EN SAĞDA, AYRI RENKTE: geri dönüşü olmayan tek sekme. Kaza eseri
+    // tıklanacak yerde durmamalı.
+    { id: 'tehlikeli', ad: 'Tehlikeli' },
+  ];
+  return (
+    <div style={{
+      display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 16, marginBottom: 4,
+      borderBottom: `1px solid ${C.border}`, paddingBottom: 8,
+    }}>
+      {sekmeler.map((t) => {
+        const secili = aktif === t.id;
+        const tehlike = t.id === 'tehlikeli';
+        const r = rozet[t.id];
+        return (
+          <button key={t.id} onClick={() => secildi(t.id)} style={{
+            padding: '5px 11px', borderRadius: 7, cursor: 'pointer',
+            fontSize: 12, fontWeight: secili ? 900 : 600, fontFamily: 'inherit',
+            // ⚠️ `C.bad` DEĞİL: o bir dolgu/kenar rengi ve panel zemininde
+            // kontrastı 2,26 (3:1 bile değil, theme.ts'te ölçülü). Metin rengi
+            // `badText` — 5,57, WCAG AA.
+            color: secili ? (tehlike ? C.badText : C.bone) : (tehlike ? C.badText : C.boneDim),
+            background: secili ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.25)',
+            border: `1px solid ${secili ? (tehlike ? C.badText : C.border) : 'transparent'}`,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            marginLeft: tehlike ? 'auto' : 0,
+          }}>
+            {t.ad}
+            {r && r.sayi > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 900, lineHeight: 1, padding: '2px 5px', borderRadius: 20,
+                color: '#1a0508', background: r.kotu ? C.bad : C.candle,
+              }}>{r.sayi}</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 type Sort = 'capped' | 'gold' | 'new';
@@ -156,6 +225,37 @@ export default function AdminPage() {
   const [ticketFilter, setTicketFilter] = useState('open');
   const [ticketDraft, setTicketDraft] = useState<Record<string, string>>({});
 
+  /**
+   * ⭐ SEKMELER — panel 1113 satırlık TEK bir dikey kaydırmaydı ve 12 bölüm
+   * üst üste diziliydi. Operatörün aradığı şey her seferinde ekranın
+   * bilinmeyen bir yerindeydi.
+   *
+   * ⚠️ GRUPLAMA İŞE GÖRE, dosyaya göre değil: "şu an ne oluyor" (durum),
+   * "kim" (oyuncular), "hile var mı" (koşular+anomali), "para" (ekonomi+
+   * büyüme), "kim yazdı" (destek), "geri dönüşü yok" (tehlikeli).
+   * Koşular ile anomali AYNI sekmede çünkü ikisi de tek bir soruyu
+   * cevaplıyor: bu koşular dürüst mü.
+   */
+  const [sekme, setSekme] = useState<Sekme>('durum');
+
+  /**
+   * Sekme rozetleri — "hangi sekmeye bakmalıyım" sorusunu TIKLAMADAN cevapla.
+   *
+   * ⚠️ SIFIR GÖSTERİLMİYOR (`SekmeSeridi` içinde eleniyor): her sekmede duran
+   * bir "0" rozeti gürültüdür ve gerçek bir sayı çıktığında gözden kaçar.
+   * ⚠️ Rozetler zaten çekilmiş veriden TÜRÜYOR — ek istek yok. Panel bugün
+   * açılışta 10 uç çağırıyor ve bu sayı hız sınırında bir kez yandı.
+   */
+  const rozetler: Partial<Record<Sekme, { sayi: number; kotu?: boolean }>> = {
+    // Biriken ayrı hata sayısı: "şu an ne kırık"
+    durum: { sayi: hata?.ozet.ayri ?? 0, kotu: (hata?.ozet.sonDakika ?? 0) > 0 },
+    // ⚠️ KIRPILAN koşu = sunucunun iddiayı reddetmek zorunda kaldığı koşu;
+    // panelin en anlamlı hile sinyali bu.
+    kosular: { sayi: ov?.runsCapped ?? 0, kotu: (ov?.runsCapped ?? 0) > 0 },
+    // Yalnız AÇIK talepler; kapalıları saymak rozeti kalıcı olarak dolu tutardı
+    destek: { sayi: tickets.filter((t) => t.status === 'open').length, kotu: true },
+  };
+
   const call = useCallback(async <T,>(path: string, init?: RequestInit): Promise<T> => {
     const res = await fetch(API + path, {
       ...init,
@@ -206,8 +306,18 @@ export default function AdminPage() {
    * frontend onu hiç çağırmıyordu — panelin en ucuz kazancı buydu.
    */
   const openDetail = useCallback(async (wallet: string) => {
+    setErr(null);
     try { setDetail(await call<Detail>(`/admin/player/${wallet}`)); }
-    catch { setErr('Oyuncu dosyası alınamadı.'); }
+    catch (e) {
+      /**
+       * ⚠️ 404 BURADA "OYUNCU YOK" DEMEK, "sunucu eski" DEĞİL. Genel eşleme
+       * (`adminHataMetni`) 404'ü sürüm uyuşmazlığı sayıyor — orada doğru,
+       * burada yanlış olurdu: arama kutusuna yanlış cüzdan yazmak en olağan
+       * durum ve operatörü boşuna dağıtım kontrolüne gönderirdi.
+       */
+      const kod = e instanceof Error ? e.message : '';
+      setErr(kod === '404' ? 'Bu cüzdanla bir oyuncu yok.' : adminHataMetni(kod));
+    }
   }, [call]);
 
   /**
@@ -391,6 +501,9 @@ export default function AdminPage() {
         </div>
       )}
 
+      <SekmeSeridi aktif={sekme} secildi={setSekme} rozet={rozetler} />
+
+      {sekme === 'durum' && (<>
       {/* ⭐ CANLI OPERASYON — deploy etmeden kapıyı kapat, duyuru yaz.
           ⚠️ NİYE EN ÜSTTE: bir sorun görüldüğünde ilk aranan düğme bu.
           Ekonomi tablolarının altına gömmek, panik anında aramaya zorlardı.
@@ -450,6 +563,8 @@ export default function AdminPage() {
         </section>
       )}
 
+      </>)}
+      {sekme === 'durum' && (<>
       {/* ⭐ HATA DEFTERİ — "şu an ne kırık".
           ⚠️ EKRANIN ÜSTÜNDE, ekonominin altında DEĞİL: bir şey kırıkken
           bakılacak ilk yer burası olmalı. Bugüne kadar canlıdaki bir
@@ -468,7 +583,7 @@ export default function AdminPage() {
                 : `${hata.ozet.ayri} ayrı · ${hata.ozet.toplam} olay`}
             </span>
             {hata.ozet.sonDakika > 0 && (
-              <span style={{ fontSize: 11.5, color: C.bad, fontWeight: 800 }}>
+              <span style={{ fontSize: 11.5, color: C.badText, fontWeight: 800 }}>
                 son 1 dakikada {hata.ozet.sonDakika} olay — ŞU AN sürüyor
               </span>
             )}
@@ -530,6 +645,8 @@ export default function AdminPage() {
         </section>
       )}
 
+      </>)}
+      {sekme === 'ekonomi' && (<>
       {/* ⭐ BÜYÜME — beta kararının dayanağı.
           ⚠️ BAŞLIK "tutunma vekili" diyor, "D1/D7 retention" DEMİYOR:
           ölçülen şey `lastSeen - createdAt`, yani hesap açıldıktan sonra
@@ -569,6 +686,8 @@ export default function AdminPage() {
         </section>
       )}
 
+      </>)}
+      {sekme === 'ekonomi' && (<>
       {/* ── EKONOMİ: MUSLUK / SİNK ── */}
       {eco && (
         <section style={{ marginTop: 22 }}>
@@ -622,6 +741,8 @@ export default function AdminPage() {
         </section>
       )}
 
+      </>)}
+      {sekme === 'kosular' && (<>
       {/* ⭐ ANOMALİ — "kim beklenenden çok kazanıyor".
           ⚠️ `goldPerHour` (oyuncu tablosunda) BAKİYE ÷ hesap yaşı, yani
           BİRİKTİRMEYİ ölçüyor. Her şeyini Forge'a yatıran oyuncu orada
@@ -665,6 +786,8 @@ export default function AdminPage() {
         </section>
       )}
 
+      </>)}
+      {sekme === 'oyuncular' && (<>
       {/* ── OYUNCULAR ── */}
       <section style={{ marginTop: 22 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -692,6 +815,20 @@ export default function AdminPage() {
           />
           {q && (
             <button onClick={() => setQ('')} style={btn}>temizle</button>
+          )}
+          {/**
+            * 🔴 ARAMA YALNIZ YÜKLÜ 50 SATIRI SÜZÜYORDU. `/admin/players`
+            * `limit=50` ile çağrılıyor; listede olmayan bir cüzdan
+            * yazıldığında tablo boşalıyor ve o oyuncuya ULAŞMANIN HİÇBİR
+            * YOLU KALMIYORDU — oysa `/admin/player/:wallet` HER cüzdan için
+            * çalışıyor. Destek talebinde cüzdanını yazan bir oyuncunun
+            * dosyası, sırf ilk 50'de değil diye açılamıyordu.
+            * ⚠️ Yeni bir uç GEREKMEDİ; eksik olan tek şey kapıydı.
+            */}
+          {q.trim().length >= 32 && (
+            <button onClick={() => void openDetail(q.trim())} style={{ ...btn, ...btnOn }}>
+              dosyayı doğrudan aç
+            </button>
           )}
         </div>
         <Table head={['Cüzdan', 'Gold', 'Bölüm', 'Karakter', 'Koşu', 'KIRPILAN', 'Gold/sa', 'Koşu/sa', '']}>
@@ -724,6 +861,8 @@ export default function AdminPage() {
         </Table>
       </section>
 
+      </>)}
+      {sekme === 'kosular' && (<>
       {/* ── KOŞULAR ── */}
       <section style={{ marginTop: 22, paddingBottom: 40 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -751,6 +890,8 @@ export default function AdminPage() {
         </Table>
       </section>
 
+      </>)}
+      {sekme === 'destek' && (<>
       {/* ── DESTEK TALEPLERİ ──
           ⚠️ Cevap yazmak tüm paneli yenilemiyor, sadece o talebi
           güncelliyor: 50 satırlık oyuncu/koşu listesini her mesajda
@@ -870,6 +1011,7 @@ export default function AdminPage() {
         )}
       </section>
 
+      </>)}
       {/* ── OYUNCU DOSYASI ── */}
       {detail && (
         <div onClick={() => setDetail(null)}
@@ -982,6 +1124,7 @@ export default function AdminPage() {
         </div>
       )}
 
+      {sekme === 'tehlikeli' && (<>
       {/* ⭐ BETA SIFIRLAMA — panelin EN ALTINDA, bilerek.
           ⚠️ Yukarıdaki her şey günlük iş; bu yılda bir kez basılacak ve
           geri alınamaz. Canlı operasyon kutusunun yanına koymak, bakım
@@ -991,7 +1134,7 @@ export default function AdminPage() {
       <section style={{ marginTop: 34, marginBottom: 20, padding: '12px 14px',
         border: '1px solid rgba(160,18,38,0.5)', borderRadius: 10,
         background: 'rgba(160,18,38,0.07)' }}>
-        <h2 style={{ margin: 0, fontSize: 15, color: C.bad }}>Beta sıfırlama</h2>
+        <h2 style={{ margin: 0, fontSize: 15, color: C.badText }}>Beta sıfırlama</h2>
         <div style={{ fontSize: 11, color: C.boneDim, marginTop: 6, lineHeight: 1.65 }}>
           Token gününde çalıştırılır: <b>tüm oyuncu verisi silinir</b>, yapılandırma
           (bakım bayrağı, duyuru) korunur. Sıra: <b>duyur → defteri indir → bakıma al → kuru
@@ -1057,6 +1200,7 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      </>)}
     </main>
   );
 }

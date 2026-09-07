@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-// ⚠️ Yalnız oyuncuya açık iki yüzey. /admin ve /editor buraya GİRMEZ.
+// ⚠️ Yalnız oyuncuya açık iki yüzey. Admin paneli ve /editor buraya GİRMEZ.
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: 'https://playgraveborn.com/', changeFrequency: 'daily', priority: 1 },

@@ -82,7 +82,9 @@ export function DailyCard({ onEnter, benim }: {
             }}>
               {d.mine.finished
                 ? <>Today’s descent: <b style={{ color: C.candle }}>depth {d.mine.depth}</b>
-                  {d.mine.capped && <span style={{ color: C.bad }}> · not counted (capped)</span>}</>
+                  {/* ⚠️ `badText`, `bad` DEĞİL: bu OYUNCUYA giden bir uyarı ve `bad`in
+                      panel zemininde kontrastı 2,26 — okunmuyor (theme.ts'te ölçülü). */}
+                  {d.mine.capped && <span style={{ color: C.badText }}> · not counted (capped)</span>}</>
                 : 'Today’s attempt is already used.'}
             </div>
           ) : (
