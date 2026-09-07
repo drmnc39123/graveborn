@@ -150,12 +150,26 @@ for (const yol of ['/auth/nonce', '/auth/verify']) app.use(yol, kimlikLimiti);
  * `kimlik` yardımcısı burada IP'ye düşerdi. Açıkça IP yazmak niyeti
  * belirsiz bırakmıyor.
  *
- * ⚠️ 20/dk MEŞRU KULLANIMI ENGELLEMİYOR: panel açılışta 4-5 uç çağırıyor,
- * bir oyuncu dosyası açmak 1 uç. Dakikada 20, insan hızının çok üstünde
- * ama kaba kuvvet için kullanılamaz.
+ * 🔴 SAYAÇ YALNIZ BAŞARISIZ İSTEKLERİ SAYIYOR (`skipSuccessfulRequests`).
+ *
+ * Eskiden TÜM istekler sayılıyordu ve buradaki yorum "panel açılışta 4-5 uç
+ * çağırıyor" diyordu — o cümle BAYATLAMIŞTI. Panel bugün açılışta 10 uç
+ * çağırıyor (`Promise.all` + talepler), yani 20'lik tavan İKİ AÇILIŞTA
+ * doluyordu. Ölçüldü: canlıda `/admin/errors` 429 döndü, panel de 401/403
+ * olmayan her kodu "Sunucuya ulaşılamadı" diye gösterdiği için sunucu
+ * ayaktayken ÇÖKMÜŞ gibi göründü.
+ *
+ * ⚠️ KORUMA ZAYIFLAMADI, AKSİNE: sınırın işi ADMIN_SECRET'i kaba kuvvetle
+ * denemeyi engellemek. Yanlış sır 401 döner ve HÂLÂ sayılır — dakikada 20
+ * deneme tavanı aynen duruyor. Sadece doğru sırla yapılan çağrılar
+ * sayılmıyor; onlar zaten yetkili.
+ *
+ * ⚠️ Tavanı yükseltmek KÖTÜ bir çözümdü: panel yarın 15 uç çağırınca aynı
+ * hata geri gelirdi ve her seferinde kaba kuvvet tavanı da gevşerdi.
  */
 const adminLimiti = rateLimit({
   windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false,
+  skipSuccessfulRequests: true,
   keyGenerator: (req: express.Request) => ipKeyGenerator(req.ip ?? ''),
   message: { error: 'cok_fazla_istek' },
 });

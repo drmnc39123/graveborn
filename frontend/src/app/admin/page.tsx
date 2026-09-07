@@ -15,6 +15,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { C, FONT, glass } from '@/lib/theme';
 
+import { adminHataMetni, oturumDusmeli } from '@/lib/adminErrors';
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4100';
 const K_SECRET = 'graveborn:adminSecret';
 
@@ -185,11 +187,15 @@ export default function AdminPage() {
       sessionStorage.setItem(K_SECRET, secret);
       setAuthed(true);
     } catch (e) {
+      /**
+       * ⚠️ EŞLEME `lib/adminErrors.ts`E TAŞINDI. Burada satır içi dururken
+       * 401/403 DIŞINDAKİ her kod "Sunucuya ulaşılamadı" oluyordu — ölçüldü:
+       * sunucu ayaktayken 429 alan panel "çökmüş" gibi göründü ve teşhis
+       * yanlış tarafa gitti.
+       */
       const code = e instanceof Error ? e.message : '';
-      setErr(code === '401' ? 'Sır yanlış.'
-        : code === '403' ? 'Sunucuda ADMIN_SECRET tanımlı değil — panel kapalı.'
-        : 'Sunucuya ulaşılamadı.');
-      if (code === '401' || code === '403') { setAuthed(false); sessionStorage.removeItem(K_SECRET); }
+      setErr(adminHataMetni(code));
+      if (oturumDusmeli(code)) { setAuthed(false); sessionStorage.removeItem(K_SECRET); }
     }
   }, [call, sort, onlyCapped, secret]);
 
