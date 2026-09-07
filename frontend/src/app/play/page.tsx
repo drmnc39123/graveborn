@@ -39,7 +39,7 @@ import { charmBonus, mergeBonus } from '@/game/charms';
 import {
   ASCENSION, STAGES, ascensionDamageMul, ascensionDropMul, ascensionHpMul, ascensionUnlockDepth,
   challengeRating,
-  checkpointFor, depthGold, maxAscensionFor, stageById, startLevelFor,
+  DESCENT, checkpointFor, depthGold, maxAscensionFor, stageById, startLevelFor,
 } from '@/game/config';
 import { BOSS_RUN_SEC, bossOfWeek, bossRoomStage, bossWeek } from '@/game/worldBoss';
 import {
@@ -1597,8 +1597,18 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, enIyiHat, on
           <div style={{ display: 'flex', gap: 7, padding: '9px 13px 12px', flexWrap: 'wrap' }}>
             <DescentStart
               label={kontrolNoktasi > 0 ? `RESUME · DEPTH ${devamDerinligi}` : 'ENTER · DEPTH 1'}
+              /**
+                * 🔴 SEBEP YAZILI (2026-09-07, oyuncu bildirimi).
+                *
+                * Oyuncu d9'a inip çıktı, dönünce "RESUME · DEPTH 6" gördü ve
+                * ilerlemesini kaybettiğini sandı. Eski ipucu "last checkpoint"
+                * diyordu ama NİYE 6 olduğunu söylemiyordu. Checkpoint'ler boss
+                * basamakları (her 5), yani d9 → d5 checkpoint → d6'dan devam.
+                * ⚠️ Kaybedilen bir şey YOK: d1-d9 ödülleri zaten ödenmiş
+                * (`depthPaid`), tekrar geçmek ikinci kez ödeme yapmıyor.
+                */
               hint={kontrolNoktasi > 0
-                ? `Start at the last checkpoint with level ${baslangicSeviyesi} to draft`
+                ? `Best depth ${bestDepth} · checkpoints are boss depths (every ${DESCENT.bossEvery}) · start with ${baslangicSeviyesi} levels to draft`
                 : 'Clear a boss depth to unlock a checkpoint'}
               primary
               onClick={() => onPick(s.id, 'descent', devamDerinligi, kademe)}

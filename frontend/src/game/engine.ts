@@ -333,6 +333,12 @@ export class Game {
   get xpEarned() { return this.hero.xpEarned; } set xpEarned(v: number) { this.hero.xpEarned = v; }
   get xpNext() { return this.hero.xpNext; } set xpNext(v: number) { this.hero.xpNext = v; }
   get pendingLevels() { return this.hero.pendingLevels; } set pendingLevels(v: number) { this.hero.pendingLevels = v; }
+  /**
+   * Checkpoint yetişme draftının HEDEF seviyesi (1 = draft yok).
+   * ⚠️ KOŞU BAŞINA, dövüşçü başına değil — `Hero`ya değil `Game`e ait.
+   * Sadece gösterim; simülasyona girmiyor.
+   */
+  draftLevel = 1;
   get kills() { return this.hero.kills; } set kills(v: number) { this.hero.kills = v; }
   get revives() { return this.hero.revives; } set revives(v: number) { this.hero.revives = v; }
   get stats() { return this.hero.stats; } set stats(v: Stats) { this.hero.stats = v; }
@@ -586,6 +592,18 @@ export class Game {
     // Checkpoint'e kadarki seviyeler bekleyen level-up olarak kuyruğa girer —
     // oyuncu kartları normal ekrandan kendi seçer (bkz. startLevelFor)
     this.pendingLevels = start > 1 ? Math.max(0, startLevelFor(start) - 1) : 0;
+    /**
+     * 🔴 DRAFT HEDEFİ ARAYÜZE AÇILIYOR (2026-09-07, oyuncu bildirimi üzerine).
+     *
+     * Oyuncu bunu HATA sandı ve haklıydı: "kart seçtim, arka arkaya kartlar
+     * geldi, XP toplamadan seviye 10 oldum". Mekanizma doğru çalışıyordu —
+     * d9'dan başlayan koşuda `startLevelFor(9) = 10`, yani 9 yetişme kartı —
+     * ama ekranda bunu söyleyen TEK KELİME yoktu. Normal seviye atlamayla
+     * birebir aynı görünüyordu.
+     *
+     * ⚠️ Sadece gösterim. Simülasyona girmiyor, `SIM_VERSION` artmıyor.
+     */
+    this.draftLevel = start > 1 ? startLevelFor(start) : 1;
     this.recomputeStats(this.hero);          // kalıcı bonuslar daha ilk kareden geçerli
     this.hp = this.stats.maxHp;     // +max can alındıysa dolu başla
     // Başlangıç silahı KARAKTERDEN gelir (VS'te her karakterin imza silahı var)

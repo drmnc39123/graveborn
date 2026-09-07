@@ -50,6 +50,8 @@ const BANT_METNI = [
 
 interface Hud {
   time: number; hp: number; maxHp: number; level: number;
+  /** checkpoint yetişme draftının hedef seviyesi (1 = draft yok) */
+  draftLevel: number;
   xp: number; xpNext: number; kills: number; rareGold: number;
   enemies: number; phase: string; fps: number;
   mode: RunMode; depth: number; deepestCleared: number;
@@ -409,6 +411,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
         senkronHud();
         return {
           phase: game.phase, time: Math.round(game.time), level: game.level,
+          draftLevel: game.draftLevel,
           hp: Math.round(game.hp), maxHp: Math.round(game.stats.maxHp),
           kills: game.kills, enemies: game.enemies.length,
           depth: game.stage.depth, remaining: game.remaining,
@@ -547,6 +550,9 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
 
       setHud({
         time: game.time, hp: game.hp, maxHp: game.stats.maxHp, level: game.level,
+        // ⚠️ HUD İKİ YERDE KURULUYOR; ikisi de aynı alanları yazmak zorunda.
+        // Bu satır unutulduğunda tsc yakaladı — tip sözleşmesinin işi tam bu.
+        draftLevel: game.draftLevel,
         xp: game.xp, xpNext: game.xpNext, kills: game.kills, rareGold: game.rareGold,
         enemies: game.enemies.length, phase: game.phase, fps,
         mode: game.stage.mode, depth: game.stage.depth, deepestCleared: game.stage.deepestCleared,
@@ -822,14 +828,34 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           padding: 20,
         }}>
           <Banner variant="01C" scale={2} style={{ minWidth: 210 }}>
-            <span style={{ fontSize: 13, color: C.candle }}>LEVEL {hud.level}</span>
+            <span style={{ fontSize: 13, color: C.candle }}>
+              {hud.level <= hud.draftLevel ? `STARTING DRAFT ${hud.level} / ${hud.draftLevel}` : `LEVEL ${hud.level}`}
+            </span>
           </Banner>
-          {/* ⚠️ ALT BAŞLIK: "ne yapıyorum" sorusunun cevabı. Banner yalnız
-              seviyeyi söylüyordu; kararın KENDİSİ isimsizdi. */}
+          {/**
+            * 🔴 DRAFT AÇIKÇA ETİKETLENİYOR (2026-09-07, oyuncu bildirimi).
+            *
+            * Oyuncu bunu hata sandı: "kart seçtim, arka arkaya kartlar geldi,
+            * XP toplamadan seviye 10 oldum". Mekanizma doğruydu — checkpoint'ten
+            * başlayan koşu, merdivende kazanılacak seviyeleri PEŞİNEN draft
+            * ettiriyor — ama ekranda bunu söyleyen tek kelime yoktu; normal
+            * seviye atlamayla birebir aynı görünüyordu. Doğru çalışan ama
+            * anlatılmayan bir sistem, oyuncu için bozuk bir sistemdir.
+            */}
           <div style={{
             marginTop: 7, marginBottom: 16, fontFamily: FONT.ui,
             fontSize: 10.5, letterSpacing: 2.4, color: C.boneFaint,
-          }}>CHOOSE WHAT YOU BECOME</div>
+            textAlign: 'center', maxWidth: 460, lineHeight: 1.7,
+          }}>
+            {hud.level <= hud.draftLevel ? (
+              <>
+                CATCHING UP TO YOUR CHECKPOINT
+                <div style={{ letterSpacing: 0.6, fontSize: 10, color: C.boneFaint, marginTop: 3 }}>
+                  You resumed deep in the stair — pick the build you would have earned on the way down.
+                </div>
+              </>
+            ) : 'CHOOSE WHAT YOU BECOME'}
+          </div>
           {/**
             * ⚠️ YAN YANA — ama telefonu KIRMADAN.
             *
