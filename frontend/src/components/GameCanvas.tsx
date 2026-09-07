@@ -213,6 +213,15 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       deepestCleared: g?.stage.deepestCleared ?? 0,
       rareGold: Math.floor(g?.rareGold ?? 0),
       bossDamage: Math.floor(g?.bossDamage ?? 0),
+      /**
+       * 🔴 BU SATIR DA EKSİKTİ — zincirin İKİNCİ kopuk halkası.
+       * Sonuç nesnesi burada ELLE kuruluyor, motorun `snapshot`ı olduğu gibi
+       * geçmiyor; motor `killsByType`ı tutsa bile buraya yazılmadığı için
+       * `finishRun`a hiç ulaşmıyordu. THE BINDING'in ölü kalmasının iki
+       * sebebinden biri buydu (diğeri `/run/finish` gövdesi).
+       * ⚠️ Elle kurulan her nesne, motora eklenen yeni alanı SESSİZCE düşürür.
+       */
+      killsByType: g?.killsByType ?? {},
     });
   }, [onFinish, mode, stage.id]);
 

@@ -572,6 +572,24 @@ export interface RunResult {
    * musluğu doğrulanamayan bir kanala açmak olurdu.
    */
   bossDamage?: number;
+  /**
+   * 🔴 TİPTE YOKTU VE PET SİSTEMİNİ TAMAMEN ÖLÜ BIRAKIYORDU (2026-09-07).
+   *
+   * Motor bu sayacı tutuyor (`engine.ts` killsByType) ve koşu sonucuna
+   * KOYUYORDU; sunucunun zod şeması da alanı KABUL ediyordu (daha önce
+   * düzeltilmiş, yorumu `index.ts`te duruyor). Ama arada `RunResult` TİPİ
+   * alanı tanımıyordu — dolayısıyla `/run/finish` gövdesine kimse yazmadı ve
+   * `applyKills` her koşuda `undefined` alıp sayacı olduğu gibi bıraktı.
+   *
+   * Sonuç: `Player.kills` sonsuza kadar boş → `canBind` hep "kill_yetersiz"
+   * → 12 petin HİÇBİRİ bağlanamıyordu. Sunucu tarafı onarılmış ama zincir
+   * bir halka öteden kopuk kalmıştı.
+   *
+   * ⚠️ İddia serbest değil: sunucu `applyKills` içinde `maxKills` tavanıyla
+   * kırpıyor — o koruma zaten yazılıydı, sadece kendisine hiç veri
+   * ulaşmıyordu.
+   */
+  killsByType?: Record<string, number>;
 }
 
 /**

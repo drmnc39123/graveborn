@@ -688,6 +688,14 @@ export async function finishRun(
       deepestCleared: run.deepestCleared,
       rareGold: run.rareGold,
       cleared: run.cleared,
+      /**
+       * 🔴 BU SATIR EKSİKTİ — THE BINDING'i tamamen ölü bırakıyordu.
+       * Motor sayacı tutuyor, sunucu şeması kabul ediyor, `applyKills`
+       * kırpıp yazıyor, `canBind` okuyor — ama alan gövdeye hiç konmadığı
+       * için `Player.kills` sonsuza kadar boş kalıyordu ve 12 petin hiçbiri
+       * bağlanamıyordu. Zincirin son halkası buydu.
+       */
+      killsByType: run.killsByType ?? {},
     },
   });
 
