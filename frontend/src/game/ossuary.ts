@@ -51,16 +51,31 @@ const TIERS = [
 
 const ROMAN = ['', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
 
+/**
+ * Seviyeyi tek bir kapıdan geçir.
+ *
+ * ⚠️ ÜÇ FONKSİYON AYNI BOZUK GİRDİYE ÜÇ FARKLI CEVAP VERİYORDU: NaN bir
+ * seviye `ossuaryCost`ta NaN, `ossuarySpent`te 0, `ossuaryTier`da
+ * "Necropolis ×NaN" üretiyordu. Sunucu (`db.ts`) `Number(x) || 0` ile
+ * temizlediği için bugün ulaşılamaz — ama üç ayrı davranış, ileride birinin
+ * sessizce bozulacağı tam yerdir. Arayüzde NaN bir maliyet, düğmeyi hatasız
+ * biçimde ölü bırakır.
+ */
+function guvenliSeviye(level: number): number {
+  const lv = Math.floor(Number(level));
+  return Number.isFinite(lv) ? Math.max(0, lv) : 0;
+}
+
 /** Bir sonraki seviyenin maliyeti. `level` = ŞU ANKİ seviye (0 = hiç yükseltilmemiş) */
 export function ossuaryCost(level: number): number {
-  const lv = Math.max(0, Math.floor(level));
-  return Math.round(OSSUARY.baseCost * Math.pow(OSSUARY.growth, lv));
+  return Math.round(OSSUARY.baseCost * Math.pow(OSSUARY.growth, guvenliSeviye(level)));
 }
 
 /** Şimdiye kadar anıta gömülen toplam gold */
 export function ossuarySpent(level: number): number {
   let s = 0;
-  for (let i = 0; i < Math.max(0, Math.floor(level)); i++) s += ossuaryCost(i);
+  const n = guvenliSeviye(level);
+  for (let i = 0; i < n; i++) s += ossuaryCost(i);
   return s;
 }
 
@@ -69,15 +84,25 @@ export function ossuarySpent(level: number): number {
  * tavansız bir sistemde adların da tükenmemesi gerekir.
  */
 export function ossuaryTier(level: number): string {
-  const lv = Math.max(0, Math.floor(level));
+  const lv = guvenliSeviye(level);
   const i = Math.floor(lv / OSSUARY.tierEvery);
   if (i < TIERS.length) return TIERS[i];
-  const tur = Math.floor(i / TIERS.length);
+  /**
+   * ⚠️ RİTİM KORUNUYOR: liste bitince de rütbe HER `tierEvery` seviyede bir
+   * değişmeli. Sayaç `i / TIERS.length` ile hesaplansaydı ad 80 seviyede bir
+   * değişirdi — yani L80 ile L150 aynı rütbeyi gösterirdi. Ölçüldü: bu
+   * seviyeler pratikte ulaşılamaz (L80 ≈ 542 gün kesintisiz farm), ama
+   * sistemin sattığı TEK ŞEY görünürlük; ilerledikçe donan bir rütbe onu
+   * sessizce iptal ederdi.
+   * ⚠️ GERİYE DÜŞMEZ: listeye baştan dönmek (Necropolis → Unmarked Grave)
+   * bir terfiyi rütbe düşüşü gibi gösterirdi.
+   */
+  const tur = i - TIERS.length + 1;
   const ad = TIERS[TIERS.length - 1];
-  return `${ad} ${ROMAN[Math.min(tur, ROMAN.length - 1)] || `×${tur}`}`;
+  return `${ad} ${ROMAN[tur] ?? `×${tur + 1}`}`;
 }
 
 /** Rütbe içindeki ilerleme (0..1) — arayüz çubuğu için */
 export function ossuaryTierProgress(level: number): number {
-  return (Math.max(0, Math.floor(level)) % OSSUARY.tierEvery) / OSSUARY.tierEvery;
+  return (guvenliSeviye(level) % OSSUARY.tierEvery) / OSSUARY.tierEvery;
 }

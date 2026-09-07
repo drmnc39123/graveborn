@@ -77,8 +77,24 @@ console.log('\n[2] Ossuary rütbeleri');
       const p = ossuaryTierProgress(lv);
       return p >= 0 && p < 1;
     }));
-  check('rütbe her tierEvery seviyede değişiyor',
-    ossuaryTier(OSSUARY.tierEvery - 1) !== ossuaryTier(OSSUARY.tierEvery));
+  /**
+   * 🔴 BU MÜHÜR YALAN SÖYLÜYORDU (2026-09-07 ölçüldü). Adı "her tierEvery
+   * seviyede değişiyor" diyordu ama YALNIZCA İLK SINIRI (L9 ↔ L10)
+   * yokluyordu. Gerçekte L80–L159 arası bütün seviyeler aynı rütbeyi
+   * gösteriyordu ve bu kontrol onu geçirdi — üstteki `gorulen.size >= 8`
+   * eşiği de geçirdi, çünkü 200 seviyede yine 10 farklı ad çıkıyordu.
+   *
+   * ⚠️ DERS: adı vaat ettiğinden azını ölçen bir mühür, hiç olmayandan
+   * daha tehlikelidir — kapsandığını sanırsın. Artık TÜM sınırlar taranıyor.
+   */
+  let donan = 0;
+  let onceki = ossuaryTier(0);
+  for (let lv = OSSUARY.tierEvery; lv <= 400; lv += OSSUARY.tierEvery) {
+    const ad = ossuaryTier(lv);
+    if (ad === onceki) donan++;
+    onceki = ad;
+  }
+  check('rütbe her tierEvery seviyede değişiyor — L400 taraması', donan === 0, `${donan} donma`);
 }
 
 console.log('\n[3] Ossuary satın alma kapısı');
