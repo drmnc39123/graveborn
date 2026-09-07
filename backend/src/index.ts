@@ -20,7 +20,7 @@ import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from '
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
 import { rpcCagir } from './rpc.js';
-import { goldToLamports, solCost } from '@game/solPrice';
+import { ossuarySolPrice, solPrice } from '@game/solPrice';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
   upgradeGuild,
@@ -660,19 +660,22 @@ app.post('/sol/quote', wrap(async (req, res) => {
   if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
 
   if (urun === 'reliquary10') {
-    res.json({ product: urun, lamports: solCost(PULL_COST * SOL_PULL_BUNDLE), gold: PULL_COST * SOL_PULL_BUNDLE });
+    res.json({ product: urun, lamports: solPrice('reliquary10'), gold: PULL_COST * SOL_PULL_BUNDLE });
     return;
   }
   if (urun === 'ossuary') {
     const { ossuaryCost } = await import('@game/ossuary');
-    const g = ossuaryCost(toProgress(player).ossuary);
-    res.json({ product: urun, lamports: solCost(g), gold: g });
+    const lv = toProgress(player).ossuary;
+    const l = ossuarySolPrice(lv);
+    // ⚠️ Tavanin ustunde `null` — arayuz dugmeyi hic cizmiyor, uc de reddeder
+    if (l === null) { res.status(400).json({ error: 'sol_rayinda_degil' }); return; }
+    res.json({ product: urun, lamports: l, gold: ossuaryCost(lv) });
     return;
   }
   if (urun === 'guild') {
     // ⚠️ "Zaten loncada" ödemeden ÖNCE söylenmeli
     if (player.guildId) { res.status(400).json({ error: 'zaten_loncada' }); return; }
-    res.json({ product: urun, lamports: solCost(GUILD_COST), gold: GUILD_COST });
+    res.json({ product: urun, lamports: solPrice('guild'), gold: GUILD_COST });
     return;
   }
   if (urun === 'guild_up') {
@@ -680,7 +683,7 @@ app.post('/sol/quote', wrap(async (req, res) => {
     const sonraki = benim ? nextGuildLevel(benim.level) : undefined;
     if (!benim || !sonraki) { res.status(400).json({ error: 'yukseltilemez' }); return; }
     if (benim.owner !== wallet) { res.status(403).json({ error: 'sadece_kurucu' }); return; }
-    res.json({ product: urun, lamports: solCost(sonraki.cost), gold: sonraki.cost });
+    res.json({ product: urun, lamports: solPrice('guild_up'), gold: sonraki.cost });
     return;
   }
   res.status(400).json({ error: 'bilinmeyen_urun' });
@@ -697,7 +700,7 @@ export const SOL_PULL_BUNDLE = 10;
  * ⚠️ Zarı yine SUNUCU atıyor — ödeme yolu gacha'nın adaletini değiştirmiyor.
  */
 app.post('/reliquary/pull-sol', wrap(async (req, res) => {
-  await solAlim(req, res, 'reliquary10', solCost(PULL_COST * SOL_PULL_BUNDLE),
+  await solAlim(req, res, 'reliquary10', solPrice('reliquary10'),
     `${SOL_PULL_BUNDLE} pulls`, async (wallet) => {
       const player = await getOrCreatePlayer(wallet);
       if (player.banned) throw new Error('yasakli');
@@ -737,10 +740,15 @@ app.post('/ossuary/raise-sol', wrap(async (req, res) => {
   const wallet0 = auth(req);
   if (!wallet0) { res.status(401).json({ error: 'oturum_yok' }); return; }
   const oyuncu = await getOrCreatePlayer(wallet0);
-  const { ossuaryCost } = await import('@game/ossuary');
   const seviye = toProgress(oyuncu).ossuary;
 
-  await solAlim(req, res, 'ossuary', solCost(ossuaryCost(seviye)), `L${seviye + 1}`,
+  /**
+   * ⚠️ FIYAT SEVIYEYE GORE BASAMAKLI ve TAVANI VAR (bkz. `solPrice.ts`).
+   * Duz tek fiyat olculdu ve elendi: 1 SOL, gold ile 102.076 saat suren bir
+   * rutbeyi satin alirdi. `ossuarySolPrice` tavanin ustunde `null` doner ve
+   * `solAlim` bunu 400 `sol_rayinda_degil` yapar.
+   */
+  await solAlim(req, res, 'ossuary', ossuarySolPrice(seviye), `L${seviye + 1}`,
     async (wallet) => {
       const player = await getOrCreatePlayer(wallet);
       const { raiseOssuary } = await import('@game/progress');
@@ -756,7 +764,7 @@ app.post('/ossuary/raise-sol', wrap(async (req, res) => {
 
 /** LONCA KURMA — SOL ile. Gold yolu (`/guild/create`) her zaman açık. */
 app.post('/guild/create-sol', wrap(async (req, res) => {
-  await solAlim(req, res, 'guild', solCost(GUILD_COST), null, async (wallet) => {
+  await solAlim(req, res, 'guild', solPrice('guild'), null, async (wallet) => {
     const player = await getOrCreatePlayer(wallet);
     // ⚠️ `ucretsizGold = true`: gold düşülmüyor, ama ad/etiket doğrulaması
     // ve tekillik kontrolleri AYNEN çalışıyor — ödeme yolu kuralları
@@ -774,7 +782,7 @@ app.post('/guild/upgrade-sol', wrap(async (req, res) => {
   const sonraki = benim ? nextGuildLevel(benim.level) : undefined;
   if (!benim || !sonraki) { res.status(400).json({ error: 'yukseltilemez' }); return; }
 
-  await solAlim(req, res, 'guild_up', solCost(sonraki.cost), `L${sonraki.level}`,
+  await solAlim(req, res, 'guild_up', solPrice('guild_up'), `L${sonraki.level}`,
     async (wallet) => ({ guild: await upgradeGuild(wallet, true) }));
 }));
 

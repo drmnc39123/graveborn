@@ -92,7 +92,7 @@ export async function solOde(
  * önce söylenmeli; parayı alıp ürün verememek en pahalı hatadır.
  */
 export async function solIleAl<T>(
-  urun: 'reliquary10' | 'ossuary' | 'guild' | 'guild_up',
+  urun: 'reliquary10' | 'ossuary' | 'guild' | 'guild_up' | 'battlepass',
   redeem: (sig: string) => Promise<T>,
   ek?: Record<string, unknown>,
 ): Promise<T> {

@@ -11,7 +11,7 @@ import { OSSUARY, ossuaryCost, ossuarySpent, ossuaryTier, ossuaryTierProgress } 
 import type { Progress } from '@/game/progress';
 import { raiseOssuary, raiseOssuarySol } from '@/lib/gameSession';
 import { SolPayButton, SolRateNote } from '@/components/SolPayButton';
-import { solCost } from '@/game/solPrice';
+import { OSSUARY_SOL_MAX, ossuarySolPrice } from '@/game/solPrice';
 import { Card, CardSection, Tag } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
 
@@ -85,7 +85,7 @@ export function OssuarySection({ progress, onChange, onError }: {
           <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center' }}>
             <SolPayButton
               urun="ossuary"
-              lamports={solCost(cost)}
+              lamports={ossuarySolPrice(lv)}
               disabled={busy}
               onError={onError}
               onDone={async (sig) => { onChange(await raiseOssuarySol(sig)); }}

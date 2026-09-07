@@ -18,7 +18,7 @@ import { panelUnlocked } from '@/lib/testMode';
 import { getMode } from '@/lib/session';
 import { api } from '@/lib/session';
 import { solIleAl, type SolConfig } from '@/lib/solPay';
-import { rateLabel, solLabel } from '@/game/solPrice';
+import { solLabel } from '@/game/solPrice';
 import { C, FONT } from '@/lib/theme';
 
 /** Ray durumu bir kez okunur ve modül boyunca paylaşılır */
@@ -49,7 +49,7 @@ const HATA_METNI: Record<string, string> = {
 };
 
 export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: {
-  urun: 'reliquary10' | 'ossuary' | 'guild' | 'guild_up';
+  urun: 'reliquary10' | 'ossuary' | 'guild' | 'guild_up' | 'battlepass';
   /** gösterilecek fiyat — null ise ürün SOL rayında değil, düğme çizilmez */
   lamports: number | null;
   onDone: (sig: string) => Promise<void>;
@@ -91,7 +91,7 @@ export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: 
     <button
       onClick={bas}
       disabled={busy || disabled}
-      title={rateLabel()}
+      title="Pay in SOL instead of gold"
       style={{
         all: 'unset', boxSizing: 'border-box',
         cursor: busy || disabled ? 'default' : 'pointer',
@@ -111,11 +111,12 @@ export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: 
 }
 
 /**
- * Kur açıklaması — fiyatın yanında bir kez yazılır.
+ * SOL yolunun ne olduğunu söyleyen tek satır.
  *
- * ⚠️ KUR GÖRÜNMEK ZORUNDA. "Neden 0,11 SOL?" sorusunun cevabı ekranda
- * olmazsa fiyat keyfî görünür. Kurun kendisi zaten gold'un değerini ilan
- * eden cümle.
+ * ⚠️ KUR AÇIKLAMASI KALDIRILDI: referans kur kavramı kullanıcı kararıyla
+ * kalktı, fiyatlar artık düz. Geriye söylenmesi gereken tek şey kalıyor —
+ * bu bir KOLAYLIK, zorunluluk değil. O cümle kalmalı: yanında SOL düğmesi
+ * duran bir gold fiyatı, söylenmezse "asıl yol bu mu?" sorusunu doğurur.
  */
 export function SolRateNote() {
   const [acik, setAcik] = useState(false);
@@ -128,7 +129,7 @@ export function SolRateNote() {
   if (!acik) return null;
   return (
     <div style={{ fontSize: 10, color: C.boneFaint, fontFamily: FONT.ui, marginTop: 4 }}>
-      {rateLabel()} · paying in SOL costs a little more — gold is the cheaper road.
+      Paying in SOL is optional — everything here can be earned with gold.
     </div>
   );
 }

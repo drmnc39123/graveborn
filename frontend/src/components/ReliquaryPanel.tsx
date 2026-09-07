@@ -27,7 +27,7 @@ import { pixel, BTN, PixelButton } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 import { OssuarySection } from '@/components/OssuarySection';
 import { SolPayButton, SolRateNote } from '@/components/SolPayButton';
-import { solCost } from '@/game/solPrice';
+import { solPrice } from '@/game/solPrice';
 import { pullReliquarySol } from '@/lib/gameSession';
 import { WagerSection } from '@/components/WagerSection';
 
@@ -282,7 +282,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
             gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
             <SolPayButton
               urun="reliquary10"
-              lamports={solCost(PULL_COST * 10)}
+              lamports={solPrice('reliquary10')}
               disabled={busy}
               onError={onError}
               onDone={async (sig) => {

@@ -117,11 +117,18 @@ console.log('\n[4] FIYAT SUNUCUDA');
   // Istemciden tutar alinsaydi L60'taki oyuncu L1 fiyatini gonderirdi.
   check('istemciden lamports OKUNMUYOR',
     !/body[\s\S]{0,40}lamports|lamports[\s\S]{0,20}req\.body/.test(idx));
-  check('fiyat solCost ile turetiliyor',
-    (idx.match(/solCost\(/g) ?? []).length >= 4);
+  /**
+   * ⚠️ KUR KALDIRILDI (kullanici karari 2026-09-08): fiyatlar artik duz bir
+   * listeden (`SOL_PRICES`) ve anit basamakli (`ossuarySolPrice`) geliyor.
+   * Olcut degismedi: fiyat SUNUCUDA turetiliyor mu.
+   */
+  check('fiyat solPrice/ossuarySolPrice ile turetiliyor',
+    (idx.match(/solPrice\(/g) ?? []).length >= 4);
   check('odeme oncesi yoklama ucu var (/sol/quote)', /'\/sol\/quote'/.test(idx));
-  check('quote fiyati da solCost ile veriyor',
-    /\/sol\/quote'[\s\S]{0,2500}solCost\(/.test(idx));
+  check('quote fiyati da ayni fonksiyonlardan veriyor',
+    /\/sol\/quote'[\s\S]{0,2500}solPrice\(/.test(idx));
+  // ⚠️ Kur kavrami sunucuya da geri sizmamali
+  check('sunucuda kur kalmadi', !/goldToLamports|goldPerSol|solCost\(/.test(idx));
 }
 
 console.log('\n[5] KAPI VE SINIRLAR');

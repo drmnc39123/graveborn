@@ -1,113 +1,119 @@
-// SOL ÖDEME RAYI — TEK REFERANS KUR.
+// SOL FIYATLARI — DUZ LISTE.
 //
-// ⚠️ NİYE TEK SABİT: her dükkâna elle SOL fiyatı yazmak, ikinci bir örtük
-// kur yaratır ve iki yer zamanla ayrışır. Bu depoda "aynı kural iki yerde
-// yazılınca ayrışır" dersi defalarca alındı (tılsım fiyatı, kilitli bina,
-// kasa payı). Bütün SOL fiyatları BU dosyadan türer ve arayüzde kur
-// AÇIKÇA yazılır.
+// ⚠️ KUR YOK, FORMUL YOK. Fiyatlar burada elle yazili. Onceki surumde bir
+// referans kur (1 SOL = N gold) vardi ve her fiyat ondan turuyordu;
+// kullanici karariyla kaldirildi — bir kur, SOL fiyati her oynadiginda
+// gozden gecirilmesi gereken canli bir bag yaratiyordu ve oyuncuya
+// aciklanmasi gereken fazladan bir kavramdi. Duz fiyat okunur, degistirmesi
+// tek satir.
 //
-// ⚠️ SOL RAYI BİLEREK PAHALI. Amaç oyuncuyu SOL'a itmek değil; gold'un
-// gerçek bir değeri olduğunu İLAN ETMEK. Ödeyen kişi zamanını satın alıyor,
-// avantaj değil.
+// ⚠️ BU RAY GUC SATMAZ — rayin var olus sarti.
+// Olculdu (`balance.probe`, 12 seed x 30 dk): Forge agaci derinligi
+// 8,2 → 16,6 ve kosu gold'unu 268 → 915 yapiyor. Forge'u SOL'a acmak
+// (a) THE PIT'i dogrudan pay-to-win yapardi — arena kurulumu `permanent`
+// alanini "Forge + ekipman + beceri toplami" diye tanimliyor ve iki tarafi
+// da onunla simule ediyor — ve (b) SOL → Forge → 3,4x gold → marketplace
+// → $GRAVE zincirini acardi. Ana sayfadaki SSS'de yazili soz de buna
+// dayaniyor: "Depth is gated by survival, not by spending."
 //
-// ⚠️ BU RAY GÜÇ SATMAZ — kural bu dosyanın var oluş şartı.
-// Ölçüldü (`balance.probe`, 12 seed × 30 dk): Forge ağacı derinliği
-// 8,2 → 16,6 ve koşu gold'unu 268 → 915 yapıyor. Yani Forge'u SOL'a açmak
-// (a) THE PIT'i doğrudan pay-to-win yapardı — arena kurulumu `permanent`
-// alanını "Forge + ekipman + beceri toplamı" diye tanımlıyor ve iki tarafı
-// da onunla simüle ediyor — ve (b) SOL → Forge → 3,4× gold → marketplace
-// → $GRAVE zincirini açardı. Hazine token BASMASA da ödeyen kişi token
-// kazanma kapasitesini nakitle satın almış olurdu.
-// Ana sayfadaki SSS'de yazılı söz de buna dayanıyor:
-// "Depth is gated by survival, not by spending."
+// SOL rayina ACIK olanlar (hicbiri guc vermiyor):
+//   · Reliquary demeti — kozmetik + toz
+//   · Ossuary tasi     — yalniz gorunurluk
+//   · Lonca kurma / yukseltme — perk XP, gold basmiyor
+//   · Sezon karti      — kozmetik + toz yolu
 //
-// SOL rayına AÇIK olanlar (hiçbiri güç vermiyor):
-//   · Reliquary çekilişi — kozmetik + toz
-//   · Ossuary seviyesi   — yalnız görünürlük, tavansız
-//   · Lonca kurma/yükseltme — perk XP, gold basmıyor
-//   · Kozmetik / sezon geçişi
-//
-// ⚠️ SAF VERİ — sunucu da bu dosyayı okuyor.
+// ⚠️ SAF VERI — sunucu da bu dosyayi okuyor.
 
-/** 1 SOL kaç lamport */
+/** 1 SOL kac lamport */
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 
-export const SOL_RATE = {
+/**
+ * FIYAT LISTESI (SOL).
+ *
+ * ⚠️ ELLE BELIRLENDI, hesaplanmadi. Degistirmek isteyen buradaki sayiyi
+ * degistirir; baska hicbir yerde SOL tutari yazili degil.
+ */
+export const SOL_PRICES = {
+  /** 10'lu Reliquary cekilisi */
+  reliquary10: 0.05,
+  /** lonca kurma */
+  guild: 0.1,
   /**
-   * REFERANS KUR: 1 SOL kaç gold eder.
-   *
-   * ⚠️ NASIL SEÇİLDİ (tahmin değil, ölçümden): oyuncu tekrar koşusunda
-   * ~6.124 gold/saat üretiyor (`balance.probe`). 300.000 gold ≈ 49 saatlik
-   * oyun demek. Ürünlerin düştüğü bant da kontrol edildi:
-   *   10'lu çekiliş (4.500 G) → ~0,02 SOL   · dürtüsel alım bandı
-   *   lonca kurma  (25.000 G) → ~0,11 SOL   · ciddi ama erişilebilir
-   *   Ossuary L50 (158.800 G) → ~0,71 SOL   · geç oyun, isteğe bağlı
-   *
-   * ⚠️ SOL FİYATI OYNAK. Bu sabit bir kez yazılıp unutulacak bir şey değil;
-   * SOL ciddi hareket ettiğinde gözden geçirilmeli. Tek yerde durmasının
-   * sebebi tam olarak bu — güncellemesi tek satır.
+   * lonca seviyesi.
+   * ⚠️ Kullanici bu kalemi soylemedi; kurmanin biraz ustune konuldu.
+   * Gold tarafinda seviye bedelleri 40.000 → 600.000 arasinda degisiyor,
+   * SOL tarafi duz.
    */
-  goldPerSol: 300_000,
-  /**
-   * SOL rayının gold rayına göre pahalılık katsayısı.
-   *
-   * ⚠️ 1,0 OLAMAZ. Eşit fiyat, "gold toplamanın bir anlamı yok" demenin
-   * en kısa yolu olurdu; oyunun bütün sink tasarımı gold'un kıt olmasına
-   * dayanıyor. %35 fark, beklemek istemeyene açık bir kapı bırakırken
-   * gold'u hâlâ ucuz yol olarak koruyor.
-   */
-  markup: 1.35,
-  /**
-   * En küçük SOL alımı (lamport).
-   *
-   * ⚠️ NİYE VAR: tek bir 450 gold'luk çekiliş ~0,002 SOL eder — ağ ücreti
-   * yanında anlamsız kalan, cüzdanda "0.002" diye görünen bir tutar.
-   * Bu eşiğin altındaki ürünler DEMET hâlinde satılmalı (10'lu çekiliş
-   * gibi); eşik, o kuralı unutmayı engelliyor.
-   */
-  minLamports: 5_000_000,
-  /** Fiyatlar bu adıma yuvarlanır — 0,0001 SOL. Ekranda okunur sayı çıksın. */
-  stepLamports: 100_000,
+  guild_up: 0.15,
+  /** sezon karti — bir sezon boyunca kozmetik/toz yolu */
+  battlepass: 0.5,
 } as const;
 
-/**
- * Gold fiyatının SOL karşılığı (lamport).
- *
- * ⚠️ YUKARI yuvarlanır. Aşağı yuvarlamak, hazineye ürünün altında bir
- * ödeme geçirmenin kapısıdır ve tam sayı bölmesinde sessizce olur.
- */
-export function goldToLamports(gold: number): number {
-  const g = Math.max(0, Math.floor(Number(gold) || 0));
-  if (g <= 0) return 0;
-  const ham = (g * SOL_RATE.markup * LAMPORTS_PER_SOL) / SOL_RATE.goldPerSol;
-  const adim = SOL_RATE.stepLamports;
-  return Math.ceil(ham / adim) * adim;
-}
-
-/** Bu ürün SOL rayında satılabilir mi (eşiğin üstünde mi) */
-export function solSellable(gold: number): boolean {
-  return goldToLamports(gold) >= SOL_RATE.minLamports;
-}
+export type SolProduct = keyof typeof SOL_PRICES;
 
 /**
- * Ödenecek tutar — eşiğin altındaysa `null`.
+ * ANIT TASI — UC BASAMAK + TAVAN.
  *
- * ⚠️ Eşiğin altını EŞİĞE YUVARLAMIYORUZ: oyuncuya 450 gold'luk bir şey için
- * 0,005 SOL (≈ 1.500 gold) istemek, kurun kendisini yalanlar. O ürün ya
- * demet hâlinde satılır ya hiç satılmaz.
+ * 🔴 NIYE DUZ TEK FIYAT DEGIL — OLCULDU (2026-09-08). Anitin gold bedeli
+ * ustel (400 · 1,13^n), duz bir SOL fiyati ise degismiyor. Sinirsiz duz
+ * fiyatta:
+ *
+ *   seviye   gold ile toplam        gold ile sure     duz 0,01 SOL ile
+ *     50      1.383.803 gold           226 saat            0,50 SOL
+ *    100    625.113.459 gold       102.076 saat            1,00 SOL
+ *
+ * Yani 1 SOL, gold ile ulasilmasi imkansiz bir rutbeyi satin alirdi ve
+ * siralama satirindaki rutbe rozeti "kim cok kasti" degil "kim odedi"
+ * anlamina gelirdi — rozeti KAZANAN herkes icin degersizlesirdi.
+ *
+ * ⚠️ ELENEN IKI SECENEK:
+ *   · gold'a ORANTILI fiyat — bu bir kur demek (kullanici kararıyla kur
+ *     kaldirildi) ve ustelik satilamaz: L70'te tek tas ~4 SOL ederdi.
+ *   · gunluk ADET siniri — sinirsiz harcamayi keser ama rozeti yine
+ *     parayla aldirir, sadece yavaslatir.
+ *
+ * ⚠️ TAVAN L60'TA cunku orasi gold ile 768 saat: ciddi bir basari ve
+ * ustundeki Necropolis rutbeleri PARAYLA ALINAMAMALI. Bir oyuncunun anita
+ * harcayabilecegi tavan 2,40 SOL.
+ *
+ * Basamaklar ELLE yazildi; degistirmek isteyen buradaki sayilari degistirir.
  */
-export function solCost(gold: number): number | null {
-  const l = goldToLamports(gold);
-  return l >= SOL_RATE.minLamports ? l : null;
+export const OSSUARY_SOL_LADDER: readonly { readonly upTo: number; readonly sol: number }[] = [
+  { upTo: 20, sol: 0.01 },
+  { upTo: 40, sol: 0.03 },
+  { upTo: 60, sol: 0.08 },
+] as const;
+
+/** SOL rayinin durdugu anit seviyesi — ustu kazanilir */
+export const OSSUARY_SOL_MAX = OSSUARY_SOL_LADDER[OSSUARY_SOL_LADDER.length - 1].upTo;
+
+/** Urunun lamport karsiligi */
+export function solPrice(p: SolProduct): number {
+  return Math.round(SOL_PRICES[p] * LAMPORTS_PER_SOL);
 }
 
-/** Ekranda gösterilecek SOL metni — 4 hane, gereksiz sıfır yok */
+/**
+ * Bir sonraki anit tasinin SOL fiyati (lamport) — tavanin ustunde `null`.
+ *
+ * `lv` = oyuncunun SU ANKI seviyesi; satin alacagi tas `lv + 1`.
+ *
+ * ⚠️ TEK KAYNAK: sunucu da bu fonksiyonu cagiriyor. Arayuz 0,01 gosterip
+ * sunucu 0,08 beklerse oyuncu odemesi reddedilmis olarak geri doner ve
+ * sebebini anlamaz.
+ */
+export function ossuarySolPrice(lv: number): number | null {
+  const tas = Math.max(0, Math.floor(Number(lv) || 0)) + 1;
+  const basamak = OSSUARY_SOL_LADDER.find((b) => tas <= b.upTo);
+  return basamak ? Math.round(basamak.sol * LAMPORTS_PER_SOL) : null;
+}
+
+/** Bu anit tasi SOL rayinda mi (tavanin altinda mi) */
+export function ossuarySolAvailable(lv: number): boolean {
+  return ossuarySolPrice(lv) !== null;
+}
+
+/** Ekranda gosterilecek SOL metni — gereksiz sifir yok */
 export function solLabel(lamports: number): string {
   const sol = Math.max(0, lamports) / LAMPORTS_PER_SOL;
   return `${sol.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')} SOL`;
-}
-
-/** Kurun kendisi — arayüz bunu AÇIKÇA yazıyor */
-export function rateLabel(): string {
-  return `1 SOL = ${SOL_RATE.goldPerSol.toLocaleString('en-US')} gold`;
 }

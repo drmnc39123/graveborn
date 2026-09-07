@@ -15,7 +15,7 @@ import {
 } from '@/lib/gameSession';
 import { getMode } from '@/lib/session';
 import { SolPayButton, SolRateNote } from '@/components/SolPayButton';
-import { solCost } from '@/game/solPrice';
+import { solPrice } from '@/game/solPrice';
 import { buyGuildUpgradeSol, createGuildSol } from '@/lib/gameSession';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { PixelButton } from '@/components/ui/kit';
@@ -127,7 +127,7 @@ export function GuildPanel({ progress, onChange, onError }: {
               <div style={{ marginTop: 7, display: 'flex', justifyContent: 'flex-end' }}>
                 <SolPayButton
                   urun="guild_up"
-                  lamports={solCost(next.cost)}
+                  lamports={solPrice('guild_up')}
                   disabled={busy}
                   onError={onError}
                   onDone={async (sig) => { await buyGuildUpgradeSol(sig); await yukle(); }}
@@ -215,7 +215,7 @@ export function GuildPanel({ progress, onChange, onError }: {
         <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <SolPayButton
             urun="guild"
-            lamports={solCost(GUILD_COST)}
+            lamports={solPrice('guild')}
             disabled={busy || ad.trim().length < 3 || etiket.length < 2}
             ek={{ name: ad, tag: etiket }}
             onError={onError}
