@@ -20,6 +20,16 @@ import {
   type Cuzdan, KURULUM, MOBIL_CUZDANLAR, bulunanCuzdanlar, cuzdanlariIzle, kurulmayanlar, mobilMi,
 } from '@/lib/wallets';
 
+/**
+ * Oyuncu sayacının görünmeye başladığı eşik.
+ *
+ * ⚠️ Değer keyfi ama YÖNÜ değil: altında sayaç ziyaretçiyi kaçırır, üstünde
+ * ikna eder. 25, "birkaç kişi denemiş" ile "topluluk var" arasındaki ilk
+ * inandırıcı basamak. Yükseltilecekse sorun yok; DÜŞÜRÜLÜRSE bu gerekçe
+ * tekrar okunsun.
+ */
+const SAYAC_ESIGI = 25;
+
 export default function Home() {
   const router = useRouter();
   const [stats, setStats] = useState<{ players: number; runs: number } | null>(null);
@@ -120,8 +130,21 @@ export default function Home() {
           Clear the stage · descend forever · <span style={{ color: C.bone }}>rise again</span>
         </div>
 
-        {/* Sunucu kapalıysa bu satır hiç görünmez — uydurma sayı göstermeyiz */}
-        {stats && (
+        {/**
+          * ⚠️ SAYAÇ BİR EŞİĞİN ALTINDA HİÇ GÖSTERİLMİYOR.
+          *
+          * 🔴 Ölçüldü (2026-09-07, canlı): ziyaretçi daha hiçbir şeye
+          * tıklamadan "1 gravebound · 4 descents survived" görüyordu. Sayı
+          * DOĞRUYDU ama yeni gelen onu "burası ölü" diye okur — açılış
+          * gününde en pahalı cümle bu.
+          *
+          * ⚠️ SAYI ŞİŞİRİLMİYOR. Dosyanın zaten yazılı kuralı: sunucu
+          * kapalıysa satır hiç çizilmez, uydurma sayı gösterilmez. Aynı
+          * kural buraya da uzatıldı — YALAN SÖYLEMEK yerine SÖYLEMEMEK.
+          * Eşiği geçince sayaç kendiliğinden geri geliyor ve o andan
+          * itibaren lehimize çalışıyor.
+          */}
+        {stats && stats.players >= SAYAC_ESIGI && (
           <div style={{ fontFamily: FONT.ui, fontSize: 11.5, color: C.boneFaint }}>
             {stats.players.toLocaleString('en-US')} gravebound · {stats.runs.toLocaleString('en-US')} descents survived
           </div>

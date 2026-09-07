@@ -29,6 +29,13 @@ import { BAR_DOLGU, BTN } from '../components/ui/kit.js';
 import { Game } from './engine.js';
 import { ARENA } from './arena.js';
 
+/**
+ * Oyuncuya DEĞİL operatöre giden sayfalar — Türkçe metin serbest.
+ * ⚠️ Yol değişirse BURASI güncellenir; dize arayan bir istisna, klasör
+ * yeniden adlandırıldığı gün sessizce çöker (2026-09-07'de tam olarak oldu).
+ */
+const OPERATOR_ARACLARI = ['gbadmin123', 'editor'] as const;
+
 const FAIL: string[] = [];
 function check(ad: string, kosul: boolean, detay = '') {
   if (kosul) console.log(`  ✓ ${ad}${detay ? ` — ${detay}` : ''}`);
@@ -303,7 +310,14 @@ console.log('\n[7] Oyuncu metni İNGİLİZCE — Türkçe sızıntısı yok');
    *
    * ⚠️ KOD YORUMLARI TÜRKÇE KALIR — projenin kuralı bu. Aranan şey yalnız
    * OYUNCUYA GİDEN metin.
-   * ⚠️ `admin/` ve `editor/` HARİÇ: onlar operatör araçları, oyun değil.
+   * ⚠️ OPERATÖR ARAÇLARI HARİÇ: admin paneli ve harita editörü oyuncuya
+   * değil tek bir kişiye gidiyor, bilerek Türkçe.
+   *
+   * ⚠️ İSTİSNA YOL ADINA DEĞİL, KLASÖR LİSTESİNE BAĞLI. Önceden `/admin/`
+   * dizesi aranıyordu; panel `/gbadmin123`e taşınınca istisna sessizce
+   * tutmadı ve bekçi 13 SAHTE sızıntı bildirdi. Yol değişebilir, listenin
+   * kendisi tek doğru kaynak olmalı — ve buradaki hata türü tam da bekçinin
+   * kovaladığı türden: sessizce yanlış cevap.
    */
   const TR = /[ışğüöçİŞĞÜÖÇ]/;
   const dosyalar: string[] = [];
@@ -313,7 +327,7 @@ console.log('\n[7] Oyuncu metni İNGİLİZCE — Türkçe sızıntısı yok');
       if (statSync(p).isDirectory()) { tara(p); continue; }
       if (!/\.(ts|tsx)$/.test(ad) || ad.includes('.test.')) continue;
       const n = p.replace(/\\/g, '/');
-      if (n.includes('/admin/') || n.includes('/editor/')) continue;
+      if (OPERATOR_ARACLARI.some((d) => n.includes(`/${d}/`))) continue;
       dosyalar.push(p);
     }
   };
