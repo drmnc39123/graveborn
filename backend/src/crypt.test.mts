@@ -13,7 +13,8 @@ import { CRYPT_CUT, cryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { prisma } from './db.js';
 import { NON_SINK_KINDS, SINK_KINDS, claimCrypt, contributeToVault, isCryptSink, vaultState } from './crypt.js';
-import { LEDGER_KINDS } from './ledger.js';
+import { LEDGER_KINDS, withLedger } from './ledger.js';
+import fs from 'node:fs';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -139,6 +140,88 @@ console.log('\n[6] Boş kasadan çekim');
   check('boş kasadan çekim reddediliyor', r.ok === false && r.reason === 'kasa_bos');
   const p1 = await prisma.player.findUniqueOrThrow({ where: { wallet: w(1) } });
   check('reddedilen çekim gold yazmadı', p1.gold === 0, `${p1.gold}`);
+}
+
+console.log('\n[7] ⭐ HER DEFTER GECİDİ KASAYI BESLİYOR');
+{
+  /**
+   * 🔴 NİYE VAR: 2026-09-07'de ölçüldü — `wager` SINK_KINDS'ta YAZILIYDI ama
+   * bahis yanması `withLedger`den GEÇMİYORDU (tek başına `ledgerWrite` +
+   * dizi transaction'ı). Kasa kancası `withLedger` içinde olduğu için her
+   * bahis kasayı EKSİK dolduruyordu ve arayüzdeki "harcayıp geri alamadığın
+   * her gold'un %10'u kasaya düşer" cümlesi yalandı.
+   *
+   * Yukarıdaki bölümlerin hiçbiri bunu göremezdi: hepsi `contributeToVault`ı
+   * DOĞRUDAN çağırıyor, yani fonksiyonun doğru olduğunu ölçüyor — ÇAĞRILDIĞINI
+   * değil. Bu depoda tekrar eden en pahalı hata sınıfı tam olarak bu
+   * (Barrow ödülü, pet bağlama zinciri): parçalar doğru, aradaki taşıma kopuk.
+   */
+  const src = new Map<string, string>();
+  for (const f of fs.readdirSync('src')) {
+    if (!f.endsWith('.ts') || f.endsWith('.test.mts')) continue;
+    src.set(f, fs.readFileSync(`src/${f}`, 'utf8'));
+  }
+  check('kaynak dosyalar okundu', src.size > 5, `${src.size} dosya`);
+
+  /** Bir `kind: 'x'` yazımı kasa kancasına bağlı mı */
+  function kacaklar(dosyalar: Map<string, string>): string[] {
+    const out: string[] = [];
+    for (const [ad, metin] of dosyalar) {
+      if (ad === 'crypt.ts') continue;   // set tanımlarının kendisi
+      for (const m of metin.matchAll(/kind:\s*'(\w+)'/g)) {
+        if (!SINK_KINDS.has(m[1])) continue;
+        /**
+         * ⚠️ PENCERE: yazma ya `withLedger(` çağrısının İÇİNDE olmalı (geçit
+         * kancayı kendi çalıştırır) ya da aynı blokta `contributeToVault`
+         * görünmeli. İkisi de yoksa o gold kasaya UĞRAMIYOR.
+         */
+        const bas = Math.max(0, m.index! - 1400);
+        const pencere = metin.slice(bas, m.index! + 1400);
+        if (/withLedger\(/.test(metin.slice(bas, m.index!))) continue;
+        if (/contributeToVault\(/.test(pencere)) continue;
+        out.push(`${ad}:${metin.slice(0, m.index!).split('\n').length} kind='${m[1]}'`);
+      }
+    }
+    return out;
+  }
+
+  const kacak = kacaklar(src);
+  check('sink yazan her defter yolu kasaya uğruyor', kacak.length === 0,
+    kacak.join(' | ') || 'kaçak yok');
+
+  /**
+   * ⚠️ ÇİFT TARAFLI — kontrol grubu. Tarama her şeye "evet" diyor olabilirdi;
+   * kancasız bir sink yazımı enjekte edilip YAKALANDIĞI görülmeli. Bu depoda
+   * bir mühür tam olarak böyle bir enjeksiyonla yalan söylerken yakalandı.
+   */
+  const sahte = new Map([['sahte.ts',
+    "await tx.ledger.create({ data: { wallet, kind: 'forge', gold: -500 } });"]]);
+  check('kancasız bir sink yazımı GERÇEKTEN yakalanıyor (kontrol grubu)',
+    kacaklar(sahte).length === 1, kacaklar(sahte).join(''));
+  // Ve geçitten geçen aynı yazım yakalanmamalı — tarama aşırı hassas olmamalı
+  const temiz = new Map([['temiz.ts',
+    "await withLedger(wallet, data, { kind: 'forge', gold: -500 }, rev);"]]);
+  check('geçitten geçen yazım yanlış alarm vermiyor', kacaklar(temiz).length === 0);
+}
+
+console.log('\n[8] ⭐ `rev`SİZ DAL DA KASAYI BESLİYOR (çalışma anı)');
+{
+  /**
+   * `withLedger`ın iki dalı var ve katkı uzun süre SADECE `rev`li dalda
+   * vardı. Bugün o daldan geçen tek tür `admin_grant` (sink değil), yani
+   * görünür bir kaçak yoktu — ama bir sink `rev` vermeyi unuttuğu gün kasa
+   * SESSİZCE eksik dolardı. Kaynak taraması bunu göremez (yazım geçitten
+   * geçiyor), o yüzden burada ÇALIŞTIRILARAK ölçülüyor.
+   */
+  const v0 = await vaultState();
+  await prisma.player.update({ where: { wallet: w(3) }, data: { gold: 10_000 } });
+  await withLedger(w(3), { gold: 9_000 }, { kind: 'forge', gold: -1_000, detail: 'revsiz dal' });
+  const v1 = await vaultState();
+  check('rev verilmeden yazılan sink de kasayı doldurdu',
+    v1.filled - v0.filled === Math.floor(1_000 * CRYPT_CUT),
+    `+${v1.filled - v0.filled} (beklenen ${Math.floor(1_000 * CRYPT_CUT)})`);
+  const defter = await prisma.ledger.count({ where: { wallet: w(3), kind: 'forge' } });
+  check('defter kaydı da yazıldı (dal bozulmadı)', defter === 1, `${defter} satır`);
 }
 
 // ── temizlik ──

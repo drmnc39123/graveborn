@@ -115,11 +115,28 @@ export async function withLedger(
 ) {
   if (rev === undefined) {
     if (extra) throw new Error('withLedger: extra icin rev zorunlu');
-    const [saved] = await prisma.$transaction([
-      prisma.player.update({ where: { wallet }, data }),
-      ledgerWrite({ ...entry, wallet }),
-    ]);
-    return saved;
+    /**
+     * ⚠️ BU DAL DA KASAYA KATKI YAPAR — eskiden YAPMIYORDU.
+     *
+     * `contributeToVault` yalnizca asagidaki `rev` dalinda cagriliyordu.
+     * Bugun bu daldan gecen tek tur `admin_grant` (sink degil), yani gorunur
+     * bir kacak yoktu; ama bir sink `rev` vermeyi unuttugu gun kasa SESSIZCE
+     * eksik dolar ve hicbir test bunu soylemezdi. Katki tek dala degil,
+     * defterin HER gecidine bagli olmali — bu depoda "tek kaynak" dersi
+     * tam olarak boyle hatalardan cikti.
+     */
+    return prisma.$transaction(async (tx) => {
+      const saved = await tx.player.update({ where: { wallet }, data });
+      await contributeToVault(tx, entry.kind, entry.gold);
+      if (entry.gold < 0) void trackQuest(wallet, 'spend', -entry.gold);
+      await tx.ledger.create({
+        data: {
+          id: crypto.randomUUID(), wallet,
+          kind: entry.kind, gold: Math.round(entry.gold), detail: entry.detail ?? null,
+        },
+      });
+      return saved;
+    });
   }
   return prisma.$transaction(async (tx) => {
     const hit = await tx.player.updateMany({

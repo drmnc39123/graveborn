@@ -204,6 +204,8 @@ export interface LeaderRow {
   hero: string;
   /** takılı kozmetikler — sıralamayı ETKİLEMEZ, sadece kim olduğunu gösterir */
   equipped?: { title?: string; plate?: string; trophy?: string };
+  /** anıt seviyesi — rütbe ADI istemcide türetilir (`ossuaryTier`) */
+  ossuary?: number;
 }
 
 export async function fetchLeaderboard(): Promise<{ rows: LeaderRow[]; me: { rank: number; row: LeaderRow } | null }> {

@@ -57,7 +57,7 @@ const getFrom = (port: number) => (path: string, secret?: string) =>
   const rotalar = [...fs.readFileSync('src/index.ts', 'utf8')
     .matchAll(/app\.(?:get|post)\('(\/admin[^']*)'/g)]
     .map((m) => m[1]);
-  const panel = fs.readFileSync('../frontend/src/app/admin/page.tsx', 'utf8');
+  const panel = fs.readFileSync('../frontend/src/app/gbadmin123/page.tsx', 'utf8');
 
   check('admin rotaları bulundu', rotalar.length > 10, `${rotalar.length} rota`);
   const ekransiz = [...new Set(rotalar)]

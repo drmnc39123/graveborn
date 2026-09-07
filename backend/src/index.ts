@@ -17,7 +17,7 @@ import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun, 
 import { PetError, bindPet, upgradePet, fusePet, equipPets, buyPetSlot } from './pets.js';
 import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard.js';
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
-import { claimCrypt, deedList, vaultState } from './crypt.js';
+import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
   upgradeGuild,
@@ -804,21 +804,40 @@ app.post('/run/start', wrap(async (req, res) => {
    * ödediği tılsımı kaybetmemeli.
    */
   if (!gunluk && (charms.length || bahis)) {
-    const temizle = prisma.player.update({
-      where: { wallet },
-      data: {
-        charms: [],
-        wager: DbNull,   // geçersiz olsa bile temizlenir — koşuya taşınmayan bahis kalmaz
-        ...(bahisGecerli ? { gold: { decrement: bahis!.stake } } : {}),
-      },
-    });
-    // ⚠️ Bahis yanması da deftere girer ve AYNI transaction'da: yoksa
-    // "gold nereye gitti" sorusunun cevabı bir yerde eksik kalır.
-    await (bahisGecerli
-      ? prisma.$transaction([temizle, ledgerWrite({
-          wallet, kind: 'wager', gold: -bahis!.stake, detail: `target d${bahis!.target}`,
-        })])
-      : temizle);
+    const temizlik = {
+      charms: [],
+      wager: DbNull,   // gecersiz olsa bile temizlenir — kosuya tasinmayan bahis kalmaz
+      ...(bahisGecerli ? { gold: { decrement: bahis!.stake } } : {}),
+    };
+    if (bahisGecerli) {
+      const stake = bahis!.stake;
+      const hedef = bahis!.target;
+      /**
+       * ⚠️ BAHIS YANMASI KASAYA KATKI YAPAR — eskiden YAPMIYORDU.
+       *
+       * `wager` `crypt.ts` SINK_KINDS icinde yazili, yani tanim geregi
+       * yakilan gold'un %10'u Crypt Vault'a dusmeli. Ama bu yol tek
+       * `ledgerWrite` cagrisiyla `$transaction([...])` dizisinden geciyordu;
+       * kasa kancasi `withLedger` icinde oldugu icin HIC calismiyordu.
+       * Sonuc: her bahis kasayi eksik dolduruyordu ve arayuzun "harcayip
+       * geri alamadigin her gold'un %10'u kasaya duser" cumlesi yalandi.
+       *
+       * ⚠️ AYNI TRANSACTION'DA olmasi sart: yanma ile katki ayrilirsa
+       * `paid <= filled` yapisal garantisi anlamini kaybeder.
+       */
+      await prisma.$transaction(async (tx) => {
+        await tx.player.update({ where: { wallet }, data: temizlik });
+        await contributeToVault(tx, 'wager', -stake);
+        await tx.ledger.create({
+          data: {
+            id: crypto.randomUUID(), wallet, kind: 'wager', gold: -stake,
+            detail: `target d${hedef}`,
+          },
+        });
+      });
+    } else {
+      await prisma.player.update({ where: { wallet }, data: temizlik });
+    }
   }
 
   // Checkpoint SUNUCUDA çözülür — istemcinin isteği burada kırpılır

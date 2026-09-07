@@ -593,6 +593,7 @@ function Line({ row, mine }: { row: LeaderRow; mine: boolean }) {
             title: row.equipped?.title,
             plate: row.equipped?.plate,
             trophy: row.equipped?.trophy,
+            ossuary: row.ossuary,
           }} />
         </span>
         <Tag tone="gold">DEPTH {row.depth}</Tag>

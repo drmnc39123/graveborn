@@ -11,6 +11,7 @@
 // leaderboard'da 100 satır olabilir, her biri için rAF döngüsü kurulamaz).
 
 import { cosmeticById } from '@/game/cosmetics';
+import { ossuaryTier } from '@/game/ossuary';
 import type { Progress } from '@/game/progress';
 import { pixel } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
@@ -21,6 +22,16 @@ export interface Identity {
   title?: string;
   plate?: string;
   trophy?: string;
+  /**
+   * ⚠️ ANIT SEVİYESİ — rütbe ADI burada türetilir (`ossuaryTier`), sunucudan
+   * metin olarak gelmez: aynı kuralın iki yerde yazılması bu depoda defalarca
+   * ayrışmayla sonuçlandı.
+   *
+   * 0 ise HİÇ ÇİZİLMEZ. `ossuaryTier(0)` "Unmarked Grave" döner ve her satıra
+   * basılsaydı tabloyu anlamsız bir tekrarla doldururdu; rütbenin işi
+   * ayırt etmek.
+   */
+  ossuary?: number;
 }
 
 /** Progress'ten kimlik çıkar — kendi kaydın için */
@@ -30,6 +41,7 @@ export function identityOf(p: Progress, name: string): Identity {
     title: p.equipped.title,
     plate: p.equipped.plate,
     trophy: p.equipped.trophy,
+    ossuary: p.ossuary,
   };
 }
 
@@ -100,6 +112,20 @@ export function IdentityLine({ id, compact = false, size = 14 }: {
             color: C.boneFaint, whiteSpace: 'nowrap',
             overflow: 'hidden', textOverflow: 'ellipsis',
           }}>{title.name}</span>
+        )}
+        {/* ⚠️ ANIT RÜTBESİ — Ossuary'nin SATTIĞI TEK ŞEY BU ve uzun süre
+            hiçbir yerde görünmüyordu (ölçüldü 2026-09-07: leaderboard satırı
+            seviyeyi taşımıyordu bile). Sonsuz gold sinkinin karşılığı
+            başkalarının gördüğü bir rütbe; görünmediği sürece sink ölür. */}
+        {!!id.ossuary && id.ossuary > 0 && (
+          <span
+            title={`Monument level ${id.ossuary}`}
+            style={{
+              fontSize: compact ? 8.5 : 9.5, fontWeight: 900, letterSpacing: 1,
+              color: C.ice, border: `1px solid ${C.ice}44`, background: `${C.ice}12`,
+              padding: '1px 5px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >{ossuaryTier(id.ossuary).toUpperCase()}</span>
         )}
       </span>
     </>

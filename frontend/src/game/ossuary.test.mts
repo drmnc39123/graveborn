@@ -179,5 +179,51 @@ console.log('\n[7] EKONOMİ — sink gerçekten emiyor mu');
     tekL50 > 30 && tekL50 < 46, `${tekL50.toFixed(1)} saat`);
 }
 
+console.log('\n[G] * RUTBE BASKALARINA GORUNUYOR - zincir');
+{
+  /**
+   * NIYE VAR: 2026-09-07'de olculdu - rutbe HICBIR YERDE baskasina
+   * gorunmuyordu. Bu dosyanin kendi basligi Ossuary'nin verdigi tek seyi
+   * "leaderboard'da yaninda duran rutbe" diye tanimliyor; gerceklikte seviye
+   * leaderboard satirinda TASINMIYORDU bile, rutbe yalniz oyuncunun kendi
+   * profil kartinda ciziliyordu.
+   *
+   * Yani sonsuz gold sinki, sattigi gorunurlugu kimseye vermiyordu. Bu depoda
+   * tekrar eden en pahali hata sinifi bu: kod calisiyor, veri var, son adimda
+   * oluyor (bkz. Barrow odulu, pet baglama zinciri, kasa katkisi).
+   *
+   * leaderboard.ts kendi yorumunda kurali zaten yaziyordu - kozmetikler icin:
+   * "prestij ANCAK baskalari gorurse degerlidir". Kural dogruydu, anita
+   * UYGULANMAMISTI.
+   */
+  const oku2 = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+  const lb = oku2('../backend/src/leaderboard.ts');
+  check('1. sunucu satir tipi anit seviyesini tasiyor', /ossuary:\s*number/.test(lb));
+  // IKI SORGU DA: liste ve "senin siran" ayri select bloklari - biri
+  // unutulursa oyuncu kendi satirinda rutbesiz gorunur.
+  const selects = (lb.match(/ossuary:\s*true/g) ?? []).length;
+  check('2. her iki sorgu da alani cekiyor', selects >= 2, `${selects} select`);
+  check('3. satira yaziliyor', /ossuary:\s*(r|me)\.ossuary/.test(lb));
+
+  const sess = oku2('src/lib/gameSession.ts');
+  check('4. istemci tipi alani taniyor', /ossuary\?:\s*number/.test(sess));
+
+  const rec = oku2('src/components/RecordsPanel.tsx');
+  check('5. leaderboard satiri kimlige geciriyor', /ossuary:\s*row\.ossuary/.test(rec));
+
+  const ident = oku2('src/components/ui/Identity.tsx');
+  check('6. kimlik satiri rutbeyi CIZIYOR', /ossuaryTier\(id\.ossuary\)/.test(ident));
+  // SEVIYE DEGIL, RUTBE ADI ciziliyor ve ad ISTEMCIDE turetiliyor: sunucudan
+  // metin gelseydi iki taraf ayrisirdi.
+  check('7. rutbe adi istemcide turetiliyor (metin agdan gelmiyor)',
+    !/ossuaryRank|rankName/.test(lb));
+  // L0 CIZILMEMELI: ossuaryTier(0) "Unmarked Grave" doner ve her satira
+  // basilsaydi tabloyu anlamsiz bir tekrarla doldururdu. Rutbenin isi AYIRT ETMEK.
+  check('8. seviye 0 olan satirda rutbe cizilmiyor', /!!id\.ossuary/.test(ident));
+
+  check('uydurma desen bulunmuyor (kontrol grubu)',
+    !/ossuaryZZZ/.test(lb + sess + rec + ident));
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ OSSUARY SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

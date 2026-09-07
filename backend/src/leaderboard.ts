@@ -24,6 +24,19 @@ export interface Row {
   hero: string;
   /** takılı kozmetikler — SADECE görünür, sıralamayı etkilemez */
   equipped: { title?: string; plate?: string; trophy?: string };
+  /**
+   * ⚠️ ANIT SEVİYESİ — 2026-09-07'de ölçüldü: satırda YOKTU.
+   *
+   * `game/ossuary.ts` kendi başlığında Ossuary'nin verdiği TEK şeyi
+   * "leaderboard'da yanında duran rütbe" diye tanımlıyor; oysa rütbe yalnız
+   * oyuncunun kendi profil kartında çiziliyordu. Yani sonsuz gold sinki,
+   * satın aldığı görünürlüğü hiç kimseye göstermiyordu.
+   *
+   * Aşağıdaki `equipped` yorumunun kuralı buna da aynen uyuyor: prestij
+   * ANCAK başkaları görürse değerlidir. Seviye gönderiliyor, rütbe ADI
+   * istemcide türetiliyor (`ossuaryTier`) — iki tarafta tek kaynak.
+   */
+  ossuary: number;
 }
 
 /**
@@ -101,7 +114,7 @@ export async function top(limit = 50): Promise<Row[]> {
     // ve Reliquary bir gold sinki olarak işlevini kaybeder.
     select: {
       wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true,
-      equipped: true,
+      equipped: true, ossuary: true,
     },
   });
   return rows.map((r, i) => ({
@@ -112,6 +125,7 @@ export async function top(limit = 50): Promise<Row[]> {
     rating: r.bestRating,
     hero: r.hero,
     equipped: wornOf(r.equipped),
+    ossuary: r.ossuary,
   }));
 }
 
@@ -127,7 +141,7 @@ export async function rankOf(wallet: string): Promise<{ rank: number; row: Row }
     where: { wallet },
     select: {
       wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true,
-      banned: true, equipped: true,
+      banned: true, equipped: true, ossuary: true,
     },
   });
   if (!me || me.banned || me.bestRating <= 0) return null;
@@ -141,6 +155,7 @@ export async function rankOf(wallet: string): Promise<{ rank: number; row: Row }
     row: {
       rank, wallet: me.wallet, stage: me.bestStage, depth: me.bestDepth,
       rating: me.bestRating, hero: me.hero, equipped: wornOf(me.equipped),
+      ossuary: me.ossuary,
     },
   };
 }
