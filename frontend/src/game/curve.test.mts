@@ -307,9 +307,19 @@ console.log(`     ilk 3 satır ağacın %${((top3 / tree) * 100).toFixed(1)}'i`)
 
 check('ağacın ilk 3 satırı %60\'ı geçmiyor', top3 / tree <= 0.60,
   `%${((top3 / tree) * 100).toFixed(1)}`);
-check('en pahalı tek seviye tekrar koşusunun 60 katını geçmiyor',
-  rows[0].top <= repeatGold * 60,
-  `${rows[0].top.toLocaleString('tr-TR')} gold = ${Math.round(rows[0].top / Math.max(1, repeatGold))} koşu`);
+/**
+ * 🔴 BU KONTROL ADININ ÖLÇTÜĞÜNDEN AZINI ÖLÇÜYORDU (2026-09-07 onarıldı).
+ * "En pahalı tek seviye" diyordu ama yalnız EN PAHALI HATTIN zirvesine
+ * (`rows[0]`) bakıyordu. Ölçüldü: `revival`ın tek seviyesi 42.578 gold'a
+ * çıkmıştı ve bu kontrol onu HİÇ GÖRMEDİ, çünkü revival'ın TOPLAMI
+ * armor'ınkinden azdı. Artık bütün hatlar taranıyor.
+ * ⚠️ Bu depoda aynı hata sınıfı ("adı 'her' diyen kontrol tek örnek
+ * yokluyor") bugün ikinci kez çıktı — bkz. sinks.test rütbe kontrolü.
+ */
+const enPahaliSeviye = rows.reduce((m, r) => (r.top > m.top ? r : m), rows[0]);
+check('en pahalı tek seviye tekrar koşusunun 60 katını geçmiyor (TÜM hatlar)',
+  enPahaliSeviye.top <= repeatGold * 60,
+  `${enPahaliSeviye.name}: ${enPahaliSeviye.top.toLocaleString('tr-TR')} gold = ${Math.round(enPahaliSeviye.top / Math.max(1, repeatGold))} koşu`);
 
 // ── [6] COIN SENSE AMORTİSMANI ──
 //

@@ -73,8 +73,68 @@ export function effectText(u: ForgeUpgrade, level: number): string {
  */
 export const FORGE: readonly ForgeUpgrade[] = [
   // ── ucuz giriş: ilk bölümün ardından hemen bir şey alınabilmeli ──
-  { id: 'might', name: 'Whetstone', desc: '+5% damage', stat: 'might', perLevel: 0.05, maxLevel: 20, baseCost: 110, growth: 1.30 },
-  { id: 'health', name: 'Thick Hide', desc: '+6% max health', stat: 'maxHp', perLevel: 0.06, maxLevel: 20, baseCost: 110, growth: 1.30 },
+  /**
+   * ══════════════════════════════════════════════════════════════════
+   * ⚠️ FİYATLAR ÖLÇÜLEREK HİZALANDI (2026-09-07). Elle seçilmiş değiller.
+   * ══════════════════════════════════════════════════════════════════
+   * 🔴 SORUN: 5 tohumlu ölçümde (d22, hayatta kalma süresi) hatların
+   * 10.000 gold başına getirisi 10,7 KAT ayrışıyordu ve sıralama TERSTİ —
+   * `revival` ağacın EN UCUZ hattıyken EN GÜÇLÜSÜYDÜ (54,5 sn/10K),
+   * `area` ise pahalı ve en zayıfı (5,1). Pratik sonucu: optimal oyuncu
+   * revival+amount+armor alıp gerisini görmezden geliyor, yani 14 hatlık
+   * ağacın yarısı TUZAK SEÇENEK oluyordu.
+   *
+   * ÇÖZÜM: her hattın toplam maliyeti ölçülen etkisiyle orantılandı.
+   * `baseCost` oranla ölçeklendi — `growth` ve `maxLevel` DEĞİŞMEDİ, yani
+   * maliyet eğrisinin şekli aynı kaldı.
+   *   yayılım 10,7x → 2,1x · ağaç toplamı 593.697 → 594.032 (+%0,1)
+   *
+   * ⚠️ %100 DEĞİL %70 HİZALANDI ve bu bilinçli. Ölçüm senaryosu "az kaç,
+   * hasar al" olduğu için `revival`ın değerini ABARTIYOR: kaçmayı bilen
+   * oyuncu fazladan candan daha az fayda görür. Tek bir metriğe tam
+   * güvenip hepsini eşitlemek, ölçemediğim oyun tarzını cezalandırırdı.
+   * Kalan 2,1x fark tuzak değil, ÇEŞİTLİLİK.
+   *
+   * ⚠️ AĞAÇ TOPLAMI KORUNDU. `hours.test`/`curve.test` ağacı 98-145 saat
+   * diye ölçüyor ve o sayı başka denge kararlarının dayanağı; toplamı
+   * değiştirmek bu denetimin kapsamı dışındaydı.
+   *
+   * ⚠️ ÜÇ HAT AYRICA "DUVAR" KISITINA TAKILDI ve düzeltildi. `curve.test`
+   * tek bir seviyenin tekrar koşusunun 60 katını (≈22.560 gold) geçmemesini
+   * istiyor — haklı: tek satın alma bir duvar olmamalı. İlk hizalamada
+   * `armor` 25.221'e, `revival` 42.578'e çıkmıştı. Çözüm `growth`u
+   * düşürüp `baseCost`u yükseltmek oldu: TOPLAM benzer kaldı, ZİRVE düştü.
+   * 3 seviyeli hatlar (amount/revival) bu tavana yapısal olarak sıkışıyor —
+   * toplamları o yüzden hedeflenenden düşük tutuldu.
+   *   sonuç: yayılım 2,5x · en yüksek seviye 20.728 (tavanın %8 altı)
+   *   ağaç 593.697 → 564.111 (94-138 saat, eski 98-145)
+   *
+   * ⚠️ HİZALAMA `growth` İLE YAPILDI, `baseCost` İLE DEĞİL — ve bunu bir
+   * mühür öğretti. İlk denemede ucuzlayan hatların `baseCost`u düşürüldü;
+   * `forge.test` "ilk derinliklerde de ilerleme var" kontrolüyle kırmızı
+   * verdi: derinlik 0'da 131 seviye alınabiliyordu ve d5/d10 hiçbir şey
+   * eklemiyordu — erken oyun eğrisi düzleşmişti. Giriş fiyatı ERKEN OYUNU
+   * belirliyor, toplam ise GEÇ oyunu. Toplamı düşürmek gerekiyorsa doğru
+   * kol `growth`; `baseCost` orijinal değerinde bırakıldı.
+   *
+   * ⚠️⚠️ ÖLÇÜM GÜRÜLTÜLÜ — SONRADAN AYAR YAPACAK OLAN BUNU BİLMELİ.
+   * 20 tohumla ölçüldü: aynı taban koşusu ortalama 55,5 sn ama SAPMA
+   * 35,1 sn (%63); aralık 30,9-180,8. 5 tohumluk bir ölçümün kendi
+   * ortalaması 27,5 sn oynuyor. Sinyal/gürültü ayrımı:
+   *   ≥2 sapma (GERÇEK) : revival · armor · amount · mspeed
+   *   1,2-2   (sınırda) : health · might · cooldown · recovery
+   *   <1      (GÜRÜLTÜ) : area · duration · pspeed — birbirinden ayırt EDİLEMEZ
+   * Yani düzeltmenin YÖNÜ sağlam (10,7x'lik ters sıralama gürültünün çok
+   * üstündeydi) ama kalan 2,5x fark ÖLÇÜM BELİRSİZLİĞİNİN İÇİNDE. Daha ince
+   * ayar yapmak gürültüyü ölçmek olur; durulacak yer burası.
+   * ⚠️ Yeniden ayar yapılacaksa ÖNCE tohum sayısını artır (20+), sonra oran.
+   *
+   * ⚠️ EKONOMİ HATLARINA (greed/magnet/growth) DOKUNULMADI: onların ölçütü
+   * hayatta kalma değil gold/XP. Ölçmediğim bir şeyi ayarlamak, ölçtüğüm
+   * hatayı başka yere taşımak olurdu.
+   */
+  { id: 'might', name: 'Whetstone', desc: '+5% damage', stat: 'might', perLevel: 0.05, maxLevel: 20, baseCost: 110, growth: 1.272 },
+  { id: 'health', name: 'Thick Hide', desc: '+6% max health', stat: 'maxHp', perLevel: 0.06, maxLevel: 20, baseCost: 110, growth: 1.275 },
   // ⚠️ Açıklama "from new depths" DEĞİL: greed artık nadir düşüş miktarını da
   // çarpıyor (bkz. config.rareDropChance başlığı). Eski metin, duvarına
   // çarpmış oyuncuya işe yaramaz bir şey sattığımızı gizliyordu.
@@ -82,16 +142,16 @@ export const FORGE: readonly ForgeUpgrade[] = [
   { id: 'magnet', name: 'Grave Pull', desc: '+6% pickup radius', stat: 'magnet', perLevel: 0.06, maxLevel: 12, baseCost: 130, growth: 1.47 },
 
   // ── orta kademe ──
-  { id: 'area', name: 'Wide Swing', desc: '+4% attack area', stat: 'area', perLevel: 0.04, maxLevel: 18, baseCost: 170, growth: 1.30 },
-  { id: 'recovery', name: 'Slow Mend', desc: '+0.12 HP/sec', stat: 'recovery', perLevel: 0.12, maxLevel: 12, baseCost: 170, growth: 1.48, unit: 'hpsec' },
-  { id: 'pspeed', name: 'Swift Shot', desc: '+5% projectile speed', stat: 'projSpeed', perLevel: 0.05, maxLevel: 10, baseCost: 190, growth: 1.56 },
-  { id: 'duration', name: 'Lasting Mark', desc: '+5% effect duration', stat: 'duration', perLevel: 0.05, maxLevel: 10, baseCost: 190, growth: 1.56 },
+  { id: 'area', name: 'Wide Swing', desc: '+4% attack area', stat: 'area', perLevel: 0.04, maxLevel: 18, baseCost: 170, growth: 1.227 },
+  { id: 'recovery', name: 'Slow Mend', desc: '+0.12 HP/sec', stat: 'recovery', perLevel: 0.12, maxLevel: 12, baseCost: 170, growth: 1.451, unit: 'hpsec' },
+  { id: 'pspeed', name: 'Swift Shot', desc: '+5% projectile speed', stat: 'projSpeed', perLevel: 0.05, maxLevel: 10, baseCost: 190, growth: 1.494 },
+  { id: 'duration', name: 'Lasting Mark', desc: '+5% effect duration', stat: 'duration', perLevel: 0.05, maxLevel: 10, baseCost: 190, growth: 1.513 },
   // Hareket hızı survivors-like'ta en güçlü istatistik — bilerek küçük adımlı
-  { id: 'mspeed', name: 'Restless Boots', desc: '+3% move speed', stat: 'moveSpeed', perLevel: 0.03, maxLevel: 12, baseCost: 215, growth: 1.45 },
+  { id: 'mspeed', name: 'Restless Boots', desc: '+3% move speed', stat: 'moveSpeed', perLevel: 0.03, maxLevel: 12, baseCost: 278, growth: 1.45 },
 
   // ── pahalı, güçlü ──
-  { id: 'armor', name: 'Bone Plating', desc: '+1 armor (flat damage cut)', stat: 'armor', perLevel: 1, maxLevel: 10, baseCost: 290, growth: 1.58, unit: 'flat' },
-  { id: 'cooldown', name: 'Quick Hands', desc: '-2% cooldown', stat: 'cooldown', perLevel: 0.02, maxLevel: 12, baseCost: 310, growth: 1.41, inverse: true },
+  { id: 'armor', name: 'Bone Plating', desc: '+1 armor (flat damage cut)', stat: 'armor', perLevel: 1, maxLevel: 10, baseCost: 883, growth: 1.42, unit: 'flat' },
+  { id: 'cooldown', name: 'Quick Hands', desc: '-2% cooldown', stat: 'cooldown', perLevel: 0.02, maxLevel: 12, baseCost: 310, growth: 1.371, inverse: true },
   { id: 'growth', name: 'Soul Harvest', desc: '+5% experience', stat: 'growth', perLevel: 0.05, maxLevel: 10, baseCost: 360, growth: 1.51 },
 
   /**
@@ -129,8 +189,8 @@ export const FORGE: readonly ForgeUpgrade[] = [
   // ⚠️ Bu ikisinde growth DEĞİL baseCost yükseltildi: sadece 3 seviyeleri var,
   // geometrik büyüme 3 adımda anlamlı bir toplam üretemiyor. Oyunu değiştiren
   // alımlar pahalı KALMALI, yoksa erken oyunda alınıp eğriyi düzleştirirler.
-  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 3360, growth: 2.4, unit: 'flat' },
-  { id: 'revival', name: 'Second Burial', desc: '+1 revival per run', stat: 'revival', perLevel: 1, maxLevel: 3, baseCost: 2640, growth: 2.4, unit: 'flat' },
+  { id: 'amount', name: 'Echo of War', desc: '+1 projectile on every weapon', stat: 'amount', perLevel: 1, maxLevel: 3, baseCost: 12000, growth: 1.30, unit: 'flat' },
+  { id: 'revival', name: 'Second Burial', desc: '+1 revival per run', stat: 'revival', perLevel: 1, maxLevel: 3, baseCost: 12000, growth: 1.30, unit: 'flat' },
 ] as const;
 
 /** Bir sonraki seviyenin maliyeti (level = şu anki seviye, 0 = hiç alınmamış) */
