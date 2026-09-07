@@ -35,6 +35,7 @@ import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
 import { MotionStyles, Reveal, motionOff, useCountUpInt, useMotionOff } from '@/components/ui/motion';
 import { Card, PanelHead, Pips, Tag, prettyId } from '@/components/ui/cards';
 import { permanentBonus } from '@/game/forge';
+import { LOCKED_BUILDINGS } from '@/game/locked';
 import { charmBonus, mergeBonus } from '@/game/charms';
 import {
   ASCENSION, STAGES, ascensionDamageMul, ascensionDropMul, ascensionHpMul, ascensionUnlockDepth,
@@ -1688,28 +1689,12 @@ function DescentStart({ label, hint, primary, onClick }: {
   );
 }
 
-// Kapalı binalar. "Coming soon" tek başına oyuncuya hiçbir şey söylemiyordu;
-// burada NE olacağı ve NİYE kapalı olduğu yazıyor.
-// ⚠️ Hiçbir yerde "swap gold for $GRAVE" DEMİYORUZ: hazine sabit kurdan alım
-// yaparsa oyun token BASMIŞ olur ve sıfır-emisyon sözü çöker. İkisi de P2P.
-const LOCKED: Record<string, { kicker: string; title: string; body: string; bullets: string[]; gate: string; accent?: string }> = {
-  // ⚠️ `shop` ARTIK BURADA DEĞİL — StallPanel canlı.
-  // ⚠️ `market` ARTIK BURADA DEĞİL — MarketPanel canlı (listeleme + escrow +
-  // iptal çalışıyor, sadece satın alma tarafı token bekliyor).
-  exchange: {
-    kicker: 'THE EXCHANGE', title: 'Not yet trading', accent: C.ice,
-    body: 'Standing bids: post what you would pay for gold and let sellers come to you. The Marketplace next door already takes listings.',
-    bullets: [
-      'Player-to-player only, no house counterparty',
-      'A fee on token trades; half of it burned',
-      'Gold-priced trades stay fee-free',
-    ],
-    gate: 'Opens with $GRAVE.',
-  },
-};
+// Kapalı binalar artık `game/locked.ts`te — TEK KAYNAK.
+// ⚠️ Buradaydı ve köydeki kapı ipucu bunu göremiyordu: kapı "Enter" derken
+// panel "kapalı" diyordu. İki kopya yerine tek kaynak (bkz. locked.ts).
 
 function ComingSoon({ id }: { id: BuildingId }) {
-  const l = LOCKED[id];
+  const l = LOCKED_BUILDINGS[id];
   if (!l) {
     return <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: C.bone }}>{id}</h2>;
   }

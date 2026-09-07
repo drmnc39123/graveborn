@@ -3,6 +3,7 @@
 // bu bileşen köprü: harita yükleme, girdi, döngü ve React tarafı istemler.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isLockedBuilding } from '@/game/locked';
 import { createHub, stepHub, warp, type HubState } from '@/game/hub';
 import { renderHub, DEBUG } from '@/game/hubRender';
 import { loadMapWorld } from '@/game/mapWorld';
@@ -270,7 +271,17 @@ export function HubCanvas({
           if (hub.justWarped) { setWarpMsg(hub.justWarped); hub.justWarped = null; setTimeout(() => setWarpMsg(null), 1800); }
           if (hub.atFight) setHint({ kind: 'fight', title: hub.world.fight?.label ?? 'Fight Portal', sub: 'Choose a stage and descend' });
           else if (hub.atTravel) setHint({ kind: 'travel', title: hub.atTravel.label, sub: 'Step through to travel' });
-          else if (hub.atDoor) setHint({ kind: 'door', title: hub.atDoor.label, sub: 'Enter' });
+          /**
+           * ⚠️ KİLİTLİ KAPI "Enter" DEMEZ. Aynı ipucu her kapıda çıkınca
+           * oyuncu Exchange'e yürüyüp çalışan bir dükkân bekliyor ve kapalı
+           * bir panelle karşılaşıyordu. Kilit bilgisi `game/locked.ts`ten —
+           * panelle AYNI kaynaktan — geliyor; ikisi ayrışamaz.
+           */
+          else if (hub.atDoor) setHint({
+            kind: 'door',
+            title: hub.atDoor.label,
+            sub: isLockedBuilding(hub.atDoor.id) ? 'Locked — not yet trading' : 'Enter',
+          });
           else setHint(null);
         }
       };
