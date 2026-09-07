@@ -161,6 +161,55 @@ export function bossRoomStage(def: BossDef, stageId = 0): StageDef {
 /** Odadaki boss'un bir koşuluk canı — ortak havuzdan bağımsız */
 export const BOSS_ROOM_HP = 220_000;
 
+// ══════════════════════════════════════════════════════════════════════
+// HAFTALIK ÖDÜL — 2026-09-07'ye kadar YOKTU.
+// ══════════════════════════════════════════════════════════════════════
+// 🔴 Panel "WHAT THIS PAYS — dust and marks of the barrow" diyordu ama
+// hiçbir yerde ödeme yapılmıyordu: `contribute` hasarı yazıyor, haftalık
+// kapanış (`settleSeasons`) ise `seasonRating` ile sıralıyor ve o puanı
+// besleyen `recordSeason` YALNIZ descent modunu, derinliğe göre sayıyor.
+// Yani oyuncu bir hafta boyunca boss'a vuruyor, tablo doluyor, hafta
+// mühürleniyor ve hiçbir şey ödenmiyordu. Söz verilmiş ama tutulmamış.
+//
+// ⚠️ SADECE İLK 5 (kullanıcı kararı). Sezon tablosu 100 kişiye kadar iniyor
+// ama oradaki ölçüt DERİNLİK — sunucunun kırpabildiği, doğrulanabilir bir
+// sayı. Buradaki ölçüt HASAR ve hasar tam doğrulanamıyor (`maxBossDamage`
+// yalnız bir TAVAN koyuyor, gerçeği ölçmüyor). Doğrulanamayan bir sıralamayı
+// derine yaymak, şişirilmiş iddianın ödül alma ihtimalini artırırdı.
+//
+// ⚠️ TOZ MİKTARLARI KASITLI KÜÇÜK. Sezonun 1.'si 420 toz alıyor; burada 150.
+// Toplam haftalık musluk 400 toz — tek bir sezon birincisinden bile az.
+// Toz kozmetik parası, yani ekonomiye dokunmuyor; ama sessizce büyütülürse
+// Reliquary'nin çekiliş değerini düşürür. Büyütülecekse `sinks.test`
+// yeniden ölçülmeli.
+
+export interface BarrowReward {
+  from: number;
+  to: number;
+  /** ⚠️ `cosmetics.ts`te GERÇEKTEN var olan bir id olmalı — uydurma bir id
+   *  sessizce hiçbir şey vermez. `r_wreath` doğrulandı (rare, Barrow temalı). */
+  cosmetic?: string;
+  dust: number;
+  label: string;
+}
+
+export const BARROW_REWARDS: readonly BarrowReward[] = [
+  { from: 1, to: 1, cosmetic: 'r_wreath', dust: 150, label: 'Wreath of the Barrow' },
+  { from: 2, to: 3, dust: 80, label: 'Second Hammer' },
+  { from: 4, to: 5, dust: 45, label: 'Counted at the Barrow' },
+] as const;
+
+/** Ödül alan en son sıra — arayüz ve sunucu bu sayıyı KENDİ yazmasın */
+export const BARROW_PAYOUT_DEPTH =
+  BARROW_REWARDS.reduce((m, r) => Math.max(m, r.to), 0);
+
+/** Sıranın ödülü; ödül yoksa `null` */
+export function barrowRewardForRank(rank: number): BarrowReward | null {
+  const r = Math.floor(rank);
+  if (!Number.isFinite(r) || r < 1) return null;
+  return BARROW_REWARDS.find((x) => r >= x.from && r <= x.to) ?? null;
+}
+
 /** Ortak canın ne kadarı indi (0..1) */
 export function bossProgress(hp: number, maxHp: number): number {
   if (maxHp <= 0) return 0;

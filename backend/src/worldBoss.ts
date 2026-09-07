@@ -14,7 +14,9 @@
 //      satırı; ekonomiye hiç dokunmuyor (bkz. worldBoss.ts başlığı)
 
 import crypto from 'node:crypto';
-import { bossOfWeek, bossWeek, maxBossDamage, weekEndsAt } from '@game/worldBoss';
+import {
+  BARROW_PAYOUT_DEPTH, barrowRewardForRank, bossOfWeek, bossWeek, maxBossDamage, weekEndsAt,
+} from '@game/worldBoss';
 import { permanentBonus } from '@game/forge';
 import { heroById } from '@game/heroes';
 import { mergeStats } from '@game/heroes';
@@ -150,4 +152,139 @@ export async function contribute(
   }
 
   return { accepted, claimed: ham, capped, state: await bossState(wallet, now) };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// HAFTALIK KAPANIŞ — kapanmış Barrow haftalarının ödülünü dağıt.
+// ══════════════════════════════════════════════════════════════════════
+// 🔴 NİYE YENİ: hasar aylardır kaydediliyordu ama ÖDENMİYORDU. Panel
+// "WHAT THIS PAYS" diyordu, hiçbir yerde ödeme yoktu — haftalık kapanış
+// derinlik puanına göre sıralıyor ve boss hasarı o puana hiç girmiyor.
+//
+// ⚠️ CRON YOK — `settleSeasons` ile aynı gerekçe: kapanış İSTEK ÜZERİNE
+// tetikleniyor. Arka plan işine bağlı bir ödül, sunucu uykudayken sessizce
+// kaybolur. Kimse oynamazsa dağıtım gecikir ama YAPILIR: ödül hafta
+// numarasına bağlı, "şu an" ne olduğuna değil.
+//
+// ⚠️ ÇİFT ÖDÜL KORUMASI YAZMA SIRASINDA: `BossClose` satırı ödüllerle AYNI
+// transaction'da ve İLK yaratılıyor; `week` birincil anahtar. İki istek aynı
+// anda girerse ikincisi anahtara çarpar, işlem geri alınır, ödül BİR KEZ
+// verilir. Sıra tersine olsaydı ödüller verilip kapanış düşerdi.
+
+export async function settleBarrow(now = new Date()): Promise<{ week: number; winners: number }[]> {
+  const week = bossWeek(now);
+  const out: { week: number; winners: number }[] = [];
+
+  // Kapanmayı bekleyen haftalar: hasar kaydı olan ama BU haftadan eskiler.
+  const bekleyen = await prisma.bossDamage.findMany({
+    where: { week: { lt: week }, damage: { gt: 0 } },
+    select: { week: true },
+    distinct: ['week'],
+    orderBy: { week: 'asc' },
+    take: 12,   // güvenlik tavanı — tek istekte 12 haftadan fazlasını kapatma
+  });
+  if (bekleyen.length === 0) return out;
+
+  const kapali = await prisma.bossClose.findMany({
+    where: { week: { in: bekleyen.map((b) => b.week) } },
+    select: { week: true },
+  });
+  const bitti = new Set(kapali.map((c) => c.week));
+
+  for (const { week: w } of bekleyen) {
+    if (bitti.has(w)) continue;
+    try { out.push(await kapatBir(w)); }
+    catch {
+      // Anahtar çakışması = başka bir istek aynı haftayı kapattı.
+      // Hata değil, yarışın kaybeden tarafı.
+    }
+  }
+  return out;
+}
+
+async function kapatBir(week: number): Promise<{ week: number; winners: number }> {
+  /**
+   * ⚠️ BANLI OYUNCU ELENİYOR ve bu kritik: hasar tam doğrulanamayan tek
+   * sayı, yani şişirme en çok BURADA işe yarardı. Ban kararı sonradan
+   * verilse bile hafta henüz kapanmamışsa ödül gitmez.
+   * ⚠️ Eşitlikte ÖNCE VURAN kazanır (`id` artan) — rastgele değil.
+   */
+  /**
+   * ⚠️ BANLI ELEME SORGUDA DEĞİL, KODDA. `BossDamage`in `Player` ile bir
+   * ilişkisi yok (yalnız `wallet` metni tutuyor), yani `where` içinden
+   * süzülemiyor — tsc bunu yakaladı. Çözüm şema değiştirmek değil, GENİŞ
+   * çekip elemek: ilk 5'i alacaksak 5 satır çekmek yetmez, tepedekiler
+   * banlıysa liste eksik kalırdı.
+   */
+  const aday = await prisma.bossDamage.findMany({
+    where: { week, damage: { gt: 0 } },
+    orderBy: [{ damage: 'desc' }, { id: 'asc' }],
+    take: BARROW_PAYOUT_DEPTH * 6,
+    select: { wallet: true, damage: true },
+  });
+
+  const oyuncular = aday.length > 0
+    ? await prisma.player.findMany({
+      where: { wallet: { in: aday.map((r) => r.wallet) } },
+      select: { wallet: true, cosmetics: true, banned: true },
+    })
+    : [];
+  const banli = new Set(oyuncular.filter((p) => p.banned).map((p) => p.wallet));
+  /**
+   * ⚠️ Hesabı SİLİNMİŞ cüzdan da eleniyor (`oyuncular`da yoksa) — ödül
+   * yazılamayacak bir cüzdana sıra ayırmak, ilk 5'i dörde düşürürdü.
+   */
+  const kayitli = new Set(oyuncular.map((p) => p.wallet));
+  const satirlar = aday
+    .filter((r) => kayitli.has(r.wallet) && !banli.has(r.wallet))
+    .slice(0, BARROW_PAYOUT_DEPTH);
+  const sahipOlunan = new Map(oyuncular.map((p) => [
+    p.wallet,
+    Array.isArray(p.cosmetics)
+      ? (p.cosmetics as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [],
+  ]));
+
+  const kayitlar: {
+    id: string; week: number; wallet: string; rank: number;
+    cosmetic: string | null; dust: number;
+  }[] = [];
+  const odemeler: { wallet: string; dust: number; cosmetic: string | null }[] = [];
+
+  for (let i = 0; i < satirlar.length; i++) {
+    const rank = i + 1;
+    const odul = barrowRewardForRank(rank);
+    if (!odul) continue;
+    const wallet = satirlar[i].wallet;
+    // Zaten sahip olunan kozmetik ikinci kez eklenmez — envanter bir küme.
+    const eldeki = sahipOlunan.get(wallet) ?? [];
+    const eklenecek = odul.cosmetic && !eldeki.includes(odul.cosmetic) ? odul.cosmetic : null;
+    odemeler.push({ wallet, dust: odul.dust, cosmetic: eklenecek });
+    kayitlar.push({
+      id: crypto.randomUUID(), week, wallet, rank,
+      cosmetic: odul.cosmetic ?? null, dust: odul.dust,
+    });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // ⚠️ İLK YAZILAN BU (bkz. başlıktaki çift ödül notu).
+    await tx.bossClose.create({ data: { week, winners: satirlar.length } });
+
+    for (const o of odemeler) {
+      const eldeki = sahipOlunan.get(o.wallet) ?? [];
+      await tx.player.update({
+        where: { wallet: o.wallet },
+        data: {
+          dust: { increment: o.dust },
+          ...(o.cosmetic ? { cosmetics: [...eldeki, o.cosmetic] } : {}),
+        },
+      });
+    }
+
+    if (kayitlar.length > 0) {
+      await tx.bossAward.createMany({ data: kayitlar, skipDuplicates: true });
+    }
+  });
+
+  return { week, winners: satirlar.length };
 }

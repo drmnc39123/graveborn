@@ -429,6 +429,32 @@ model AuthNonce {
 // aynı transaction'da yapılıyor: satır zaten varsa dağıtım da yapılmıştır.
 // Eşzamanlı iki istek aynı haftayı kapatmaya kalkarsa ikincisi birincil
 // anahtara çarpar ve sessizce düşer — çift ödül imkânsız.
+/// Barrow (haftalık ortak boss) kapanış mührü.
+///
+/// ⚠️ `SeasonClose` ile AYNI TABLO DEĞİL ve bu kasıtlı — `PvpClose` ile aynı
+/// gerekçe: üç sıralama farklı ölçütlerle kapanıyor (derinlik · ELO · hasar)
+/// ve biri gecikirse diğerleri beklememeli. Tek tabloya sığdırmak, bir
+/// sıralamanın kapanışını diğerinin anahtarına bağlamak olurdu.
+model BossClose {
+  week      Int      @id
+  settledAt DateTime @default(now())
+  winners   Int      @default(0)
+}
+
+/// Bir oyuncunun bir Barrow haftasından aldığı ödül.
+model BossAward {
+  id        String   @id
+  week      Int
+  wallet    String
+  rank      Int
+  cosmetic  String?
+  dust      Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@unique([week, wallet])
+  @@index([wallet])
+}
+
 model SeasonClose {
   /// kapatılan hafta
   week      Int      @id

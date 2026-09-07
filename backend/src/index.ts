@@ -46,7 +46,7 @@ import { USTALIK_ESIK, USTALIK_MAX, ustalikKademesi } from '@game/mastery';
 import { wagerPayout } from '@game/wager';
 import { PULL_COST } from '@game/cosmetics';
 import { profileOf } from './profile.js';
-import { bossState, contribute } from './worldBoss.js';
+import { bossState, contribute, settleBarrow } from './worldBoss.js';
 import { attachPresence, presenceCount } from './presence.js';
 import { arenaStats, attachArena, joinQueue, leaveQueue } from './arena.js';
 import { pvpAwards, pvpBoard, settlePvpSeasons } from './pvpSeason.js';
@@ -502,6 +502,18 @@ app.get('/events', wrap(async (_req, res) => {
 }));
 
 app.get('/worldboss', wrap(async (req, res) => {
+  /**
+   * ⚠️ KAPANMIŞ HAFTALARIN ÖDÜLÜ BURADA DAĞITILIYOR (`settleBarrow`) —
+   * `/leaderboard/season`daki `settleSeasons` ile birebir aynı gerekçe:
+   * arka plan işi yok, paneli açan ilk kişi geçen haftayı da kapatmış
+   * oluyor. Uyuyan bir sunucuda cron çalışmaz ve ödül sessizce kaybolurdu;
+   * dağıtım hafta numarasına bağlı olduğu için GECİKEBİLİR ama BOZULMAZ.
+   *
+   * ⚠️ Hata YUTULUYOR: kapanış düşerse boss ekranı yine açılmalı. Ödül bir
+   * sonraki istekte tekrar denenir; panelin çökmesi ise oyuncunun boss'a
+   * hiç vuramaması demek olurdu.
+   */
+  try { await settleBarrow(); } catch { /* bir sonraki istekte tekrar denenir */ }
   // Kimlik ZORUNLU DEĞİL: boss odası herkese görünür, "gir de gör" olsun.
   res.json(await bossState(auth(req) ?? undefined));
 }));

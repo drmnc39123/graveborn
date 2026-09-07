@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { BTN, PixelButton } from '@/components/ui/kit';
-import { BOSS_RUN_SEC, bossProgress } from '@/game/worldBoss';
+import { BARROW_PAYOUT_DEPTH, BARROW_REWARDS, BOSS_RUN_SEC, bossProgress } from '@/game/worldBoss';
 import { ENEMY_ART } from '@/game/sprites';
 import { fetchWorldBoss, worldBossAvailable, type BossState } from '@/lib/gameSession';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
@@ -221,10 +221,35 @@ export function WorldBossPanel({ onEnter }: { onEnter: () => void }) {
       )}
 
       <CardSection label="WHAT THIS PAYS">
-        <span style={{ fontSize: 11, color: C.boneFaint, lineHeight: 1.5 }}>
-          Dust and marks of the barrow — never gold. Damage is the one number the
-          server cannot fully re-check, so nothing here is allowed to touch the
-          economy everyone else is digging in.
+        {/**
+          * 🔴 BU BÖLÜM ESKİDEN BİR VAATTİ, ÖDEME DEĞİLDİ (2026-09-07 ölçüldü).
+          * "Dust and marks of the barrow" yazıyordu ama hiçbir yerde ödeme
+          * yoktu: haftalık kapanış derinlik puanına göre sıralıyor ve boss
+          * hasarı o puana hiç girmiyordu. Artık `settleBarrow` ödüyor ve
+          * TABLO BURADA YAZILI — oyuncu neyin peşinde olduğunu bilsin.
+          * ⚠️ Sayılar `BARROW_REWARDS`ten TÜRÜYOR, elle yazılmıyor: tablo
+          * değişirse ekran da değişir, iki gerçeklik oluşmaz.
+          */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {BARROW_REWARDS.map((r) => (
+            <div key={r.label} style={{
+              display: 'flex', justifyContent: 'space-between', gap: 10,
+              fontSize: 11, color: C.boneDim,
+            }}>
+              <span style={{ color: C.bone }}>
+                {r.from === r.to ? `#${r.from}` : `#${r.from}–${r.to}`}
+              </span>
+              <span style={{ flex: 1, textAlign: 'left', color: C.boneFaint }}>{r.label}</span>
+              <span style={{ color: C.candle, fontWeight: 900 }}>
+                {r.dust} dust{r.cosmetic ? ' + relic' : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+        <span style={{ display: 'block', marginTop: 8, fontSize: 11, color: C.boneFaint, lineHeight: 1.5 }}>
+          Top {BARROW_PAYOUT_DEPTH} only, paid when the week seals. Dust and relics —
+          never gold. Damage is the one number the server cannot fully re-check, so
+          nothing here is allowed to touch the economy everyone else is digging in.
         </span>
       </CardSection>
 
