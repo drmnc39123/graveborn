@@ -13,9 +13,11 @@ import { PixelButton, BTN } from '@/components/ui/kit';
 import { Fade } from '@/components/ui/motion';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import {
-  fetchLeaderboard, fetchProfile, fetchSeasonBoard,
+  addFollow, fetchLeaderboard, fetchProfile, fetchSeasonBoard,
   type LeaderRow, type ProfileData, type ProfileRun, type SeasonAwardRow,
 } from '@/lib/gameSession';
+import { panelUnlocked } from '@/lib/testMode';
+import { getMode } from '@/lib/session';
 import { SEASON_COSMETIC_DEPTH, SEASON_REWARDS, rewardForRank } from '@/game/season';
 import { cosmeticById } from '@/game/cosmetics';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
@@ -575,6 +577,45 @@ function RunLine({ run }: { run: ProfileRun }) {
   );
 }
 
+/**
+ * SIRALAMA SATIRINDAN TAKİBE EKLE.
+ *
+ * 🔴 NİYE VAR: 2026-09-07'de ölçüldü — takip listesine birini eklemenin TEK
+ * yolu 44 karakterlik bir cüzdan adresini ELLE YAPIŞTIRMAKTI. Oyuncunun
+ * başkalarıyla karşılaştığı her yer (sıralama, tavern) adresi zaten
+ * `7dau…HBo4` diye KISALTARAK gösteriyor, yani kopyalanacak bir metin bile
+ * yok. Sistem çalışıyordu; girişi yoktu. WATCH paneli bu yüzden pratikte
+ * herkeste boş kalıyordu.
+ *
+ * ⚠️ Kendi satırında ÇIKMAZ ve demo modunda çıkmaz (sunucu yok).
+ */
+function WatchButton({ wallet }: { wallet: string }) {
+  const [durum, setDurum] = useState<'idle' | 'busy' | 'ok' | 'err'>('idle');
+  if (!panelUnlocked(getMode())) return null;
+  const metin = durum === 'ok' ? 'WATCHING' : durum === 'err' ? 'FAILED' : 'WATCH';
+  return (
+    <button
+      disabled={durum !== 'idle'}
+      title={durum === 'ok' ? 'Added to your watch list' : 'Add to your watch list'}
+      onClick={() => {
+        setDurum('busy');
+        // ⚠️ Zaten takiptekini yeniden eklemek sunucuda hata DEĞİL (upsert);
+        // buton yine de "WATCHING" der, çünkü oyuncu için sonuç aynı.
+        addFollow(wallet).then(() => setDurum('ok')).catch(() => setDurum('err'));
+      }}
+      style={{
+        all: 'unset', flexShrink: 0, cursor: durum === 'idle' ? 'pointer' : 'default',
+        padding: '2px 7px', borderRadius: 4, fontSize: 8.5, fontWeight: 900,
+        letterSpacing: 1, fontFamily: FONT.ui,
+        color: durum === 'ok' ? C.ok : durum === 'err' ? C.badText : C.boneFaint,
+        border: `1px solid ${durum === 'ok' ? C.ok : C.border}66`,
+        background: durum === 'ok' ? `${C.ok}12` : 'transparent',
+        opacity: durum === 'busy' ? 0.5 : 1,
+      }}
+    >{metin}</button>
+  );
+}
+
 function Line({ row, mine }: { row: LeaderRow; mine: boolean }) {
   const stage = STAGES.find((s) => s.id === row.stage);
   const medal = row.rank === 1 ? C.candle : row.rank <= 3 ? C.bone : C.boneFaint;
@@ -600,6 +641,10 @@ function Line({ row, mine }: { row: LeaderRow; mine: boolean }) {
         <span style={{ flexShrink: 0, fontSize: 10, color: C.boneFaint, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {stage?.name ?? `Stage ${row.stage}`}
         </span>
+        {/* ⚠️ TAKİP GİRİŞİ TAM BURADA OLMALI: oyuncunun başka birini ilk kez
+            gördüğü yer bu satır. Girişi WATCH paneline saklamak, oradaki
+            tek yolu (adres yapıştırmak) zorunlu kılıyordu. */}
+        {!mine && <WatchButton wallet={row.wallet} />}
       </div>
     </Card>
   );

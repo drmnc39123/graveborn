@@ -20,6 +20,7 @@ import { QUESTS, QUEST_POOL, questAccumulate, questsFor, dayDustCeiling } from '
 const DENEYIMLI = { deepestDepth: 40, cleared: true };
 const YENI = { deepestDepth: 0, cleared: false };
 import { utcDay } from '@game/progress';
+import fs from 'node:fs';
 import { prisma } from './db.js';
 import {
   claimQuest as claimQuestAt, listQuests as listQuestsAt, trackQuest as trackQuestAt,
@@ -290,6 +291,39 @@ async function red(fn: () => Promise<unknown>): Promise<boolean> {
 }
 
 await prisma.player.deleteMany({ where: { wallet: { startsWith: P } } });
+
+console.log('\n[8] * HER GOREV TURUNUN CALISAN BIR SAYACI VAR');
+{
+  /**
+   * NIYE VAR: bir gorev turunun sayaci hic cagrilmiyorsa o gorev SONSUZA
+   * KADAR yapilamaz - ama panelde gorunur, ilerlemesi 0 kalir ve oyuncu
+   * neden olmadigini anlamaz. Bu depoda ayni sey 12 pette yasandi:
+   * `killsByType` iki yerde dusuyordu ve hicbir test soylemedi.
+   *
+   * Sayaclar altı ayri dosyada: koşu ve derinlik index.ts'te, duello
+   * duel.ts'te, arena arena.ts'te, harcama ledger.ts'te (tek gecit),
+   * parcalama gear.ts'te. Biri silinirse burasi kirmizi verir.
+   */
+  const oku = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+  const kaynak = ['index.ts', 'duel.ts', 'arena.ts', 'gear.ts', 'ledger.ts']
+    .map((f) => oku(`src/${f}`)).join('\n');
+  // YORUMLAR SOYULUYOR: bir turden YORUMDA bahsetmek onu izlemek degil.
+  // Bu alet hatasi bu depoda marketGuard ve ossuary taramalarinda cikti.
+  const temiz = kaynak.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+  const turler = [...new Set(QUEST_POOL.map((q) => q.kind))];
+  const sayacsiz = turler.filter((k) => !new RegExp(`trackQuest[^;]{0,120}'${k}'`).test(temiz));
+  check('havuzdaki her turun canli sayaci var', sayacsiz.length === 0,
+    sayacsiz.join(', ') || `${turler.length} tur: ${turler.join(' · ')}`);
+
+  // CIFT TARAFLI: tarama her seye "evet" diyor olabilirdi
+  check('uydurma bir tur GERCEKTEN yakalanir (kontrol grubu)',
+    !new RegExp("trackQuest[^;]{0,120}'zzz_yok'").test(temiz));
+
+  // HARCAMA SAYACI DEFTERIN ICINDE olmali - harcama noktalarina tek tek
+  // serpilseydi yeni bir sink eklendiginde biri unutulurdu.
+  check('harcama sayaci tek gecitte (ledger)', /trackQuest[^;]{0,120}'spend'/.test(oku('src/ledger.ts')));
+}
 
 console.log(`\n${FAIL.length === 0 ? '✅ GÜNLÜK GÖREVLER SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

@@ -10,6 +10,7 @@
 // Çalıştır:  npx tsx src/follow.test.mts
 
 import { SIM_VERSION } from '@game/config';
+import fs from 'node:fs';
 import { prisma } from './db.js';
 import { FOLLOW_MAX, follow, listFollows, unfollow } from './follow.js';
 import { publishRecord, settleDuel } from './duel.js';
@@ -146,6 +147,34 @@ console.log('\n[5] Bırakma ve tavan');
 }
 
 await prisma.follow.deleteMany({ where: { wallet: { startsWith: P } } });
+console.log('\n[G] * TAKIBE EKLEMENIN GIRISI VAR MI');
+{
+  /**
+   * NIYE VAR: 2026-09-07'de olculdu - takip listesine birini eklemenin TEK
+   * yolu 44 karakterlik cuzdan adresini ELLE YAPISTIRMAKTI. Oyuncunun
+   * baskalariyla karsilastigi her yer (siralama, tavern) adresi zaten
+   * KISALTARAK gosteriyor, yani kopyalanacak metin bile yok.
+   *
+   * Sunucu tarafi kusursuzdu: tek yonlu takip, 50 tavan, kendini takip
+   * engelli, cift ekleme sessiz. Sadece GIRISI yoktu ve panel herkeste bos
+   * kaliyordu. Bu depoda tekrar eden hata sinifi: sistem calisiyor, oyuncu
+   * ona dokunamiyor.
+   */
+  const oku = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+  const rec = oku('../frontend/src/components/RecordsPanel.tsx');
+  check('siralama satirindan takibe eklenebiliyor', /addFollow\(/.test(rec));
+  check('dugme siralama satirinda cizilyor', /WatchButton wallet=/.test(rec));
+  // KENDI SATIRINDA CIKMAMALI: sunucu kendini takibi reddediyor, buton
+  // gorunseydi her tiklama hata verirdi.
+  check('kendi satirinda cikmiyor', /!mine && <WatchButton/.test(rec));
+  // DEMO MODUNDA CIKMAMALI: sunucu yok, istek her zaman duserdi.
+  check('demo modunda cizilmiyor', /panelUnlocked\(getMode\(\)\)/.test(rec));
+
+  const fp = oku('../frontend/src/components/FollowPanel.tsx');
+  check('elle adres yapistirma yolu da duruyor (ikinci yol)', /addFollow\(/.test(fp));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/followZZZ/.test(rec + fp));
+}
+
 await prisma.duel.deleteMany({ where: { challenger: { startsWith: P } } });
 await prisma.duelRecord.deleteMany({ where: { wallet: { startsWith: P } } });
 await prisma.player.deleteMany({ where: { wallet: { startsWith: P } } });
