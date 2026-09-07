@@ -8,7 +8,7 @@
 // oyuncu "aldım ama gitti" demeden önce niye gittiğini bilmeli.
 
 import { useState } from 'react';
-import { CHARMS, CHARM_SLOTS, charmById, type CharmDef } from '@/game/charms';
+import { CHARMS, CHARM_SLOTS, charmById, charmCost, charmDepthOf, charmPriceMul, type CharmDef } from '@/game/charms';
 import type { Progress } from '@/game/progress';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import { BTN, Icon, IconText, PixelButton } from '@/components/ui/kit';
@@ -25,12 +25,20 @@ export function StallPanel({ progress, onChange }: {
   const [err, setErr] = useState<string | null>(null);
 
   const dolu = progress.charms.length >= CHARM_SLOTS;
+  /**
+   * ⚠️ FİYAT İLERLEMEYLE ÖLÇEKLENİYOR ve HESAP SUNUCUYLA AYNI FONKSİYONDAN
+   * geliyor (`charms.ts`). Arayüz kendi fiyatını yazsaydı oyuncu 410 görür,
+   * sunucu 1.045 keserdi.
+   */
+  const derinlik = charmDepthOf(progress.depthPaid);
+  const carpan = charmPriceMul(derinlik);
+  const fiyat = (c: CharmDef) => charmCost(c, derinlik);
 
   const buy = (c: CharmDef) => {
-    if (dolu || progress.gold < c.cost || busy) return;
+    if (dolu || progress.gold < fiyat(c) || busy) return;
     setErr(null); setBusy(true);
     play('buy');
-    buyCharm(c.id, progress, c.cost)
+    buyCharm(c.id, progress, fiyat(c))
       .then(onChange)
       .catch(() => setErr('The pedlar turned you away — try again.'))
       .finally(() => setBusy(false));
@@ -96,9 +104,9 @@ export function StallPanel({ progress, onChange }: {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
         {CHARMS.map((c) => {
-          const parasiVar = progress.gold >= c.cost;
+          const parasiVar = progress.gold >= fiyat(c);
           const can = !dolu && parasiVar && !busy;
-          const eksik = c.cost - Math.floor(progress.gold);
+          const eksik = fiyat(c) - Math.floor(progress.gold);
           return (
             <Card key={c.id} dim={dolu}>
               <div style={{ padding: '11px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
@@ -122,7 +130,7 @@ export function StallPanel({ progress, onChange }: {
                   variant={BTN.buy} scale={2}
                   onClick={() => buy(c)} disabled={!can}
                   style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 900, minWidth: 0, padding: '0 10px' }}>
-                  {c.cost.toLocaleString('en-US')} G
+                  {fiyat(c).toLocaleString('en-US')} G
                 </PixelButton>
               </div>
             </Card>

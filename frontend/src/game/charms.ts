@@ -29,6 +29,78 @@ export interface CharmDef {
 /** Aynı anda taşınabilecek tılsım sayısı — seçim zorlasın diye dar */
 export const CHARM_SLOTS = 2;
 
+// ══════════════════════════════════════════════════════════════════════
+// FİYAT İLERLEMEYLE ÖLÇEKLENİYOR (2026-09-07)
+// ══════════════════════════════════════════════════════════════════════
+// 🔴 SORUN ÖLÇÜLDÜ: fiyat SABİTTİ, gelir ise derinlikle ÜSTEL büyüyor.
+// İki yuvayı doldurmak 410 gold; yeni bir derinliğin ödülü d10'da 560,
+// d100'de 12.530. Yani aynı 410 gold d10'da ödülün %73'ü (ciddi bir karar),
+// d100'de %3'ü (düşünmeden alınır). Sink geç oyunda çalışmayı bırakıyordu.
+//
+// ⚠️ DÜZ ZAM YANLIŞ ÇÖZÜMDÜ ve ölçümle elendi: tekrar koşusu 376 gold
+// kazandırıyor, iki dolu yuva zaten 410 — erken oyuncu HALİHAZIRDA net
+// zararda. Düz zam onu tamamen dışlardı. Sorun fiyatın düşüklüğü değil,
+// ÖLÇEKLENMEMESİYDİ.
+//
+// ⚠️ ÜS DERİNLİK ÖDÜLÜNDEN TÜRETİLDİ, seçilmedi: `depthGold` ölçüldü
+// (d5=220 · d10=560 · d25=1.928 · d50=4.915 · d100=12.530) ve büyümesi
+// yaklaşık d^1,35. Aynı üs kullanılınca tılsım/ödül oranı d25-d200 arası
+// SABİT %21 kalıyor.
+//
+// ⚠️ ÇAPA d25 ve ALTINDA ÇARPAN 1: mevcut fiyatlar yaklaşık oraya
+// kalibreliydi (d25'te ödülün %21'i). Daha sığ oyuncu bugünkü fiyatı
+// ödüyor — zaten en zorlandığı yer orası, zam görmemeli.
+//
+// ⚠️ TAVAN VAR: derinlik teorik olarak sonsuz (`descentStage` d1000'i bile
+// üretiyor). Tavansız bir çarpan, derin oyuncuya tılsımı tamamen kapatırdı;
+// sink'in işi caydırmak değil, anlamlı kalmak.
+export const CHARM_SCALE = {
+  /** bu derinliğe kadar çarpan 1 — mevcut fiyatlar buraya kalibre */
+  anchor: 25,
+  /** `depthGold` büyüme üssünden ölçülerek alındı */
+  exponent: 1.35,
+  /** çarpanın üst sınırı */
+  max: 20,
+} as const;
+
+/**
+ * Oyuncunun en derin inişine göre fiyat çarpanı. SAF FONKSİYON —
+ * sunucu da istemci de bunu çağırıyor; fiyat iki yerde YAZILMIYOR.
+ */
+export function charmPriceMul(deepestDepth: number): number {
+  const d = Math.floor(Number(deepestDepth));
+  // ⚠️ Bozuk girdi çarpanı 1 yapar, 0 ya da NaN DEĞİL: NaN bir fiyat
+  // "yetersiz gold" hatasına dönüşür ve tezgâh sessizce kapanırdı.
+  if (!Number.isFinite(d) || d <= CHARM_SCALE.anchor) return 1;
+  return Math.min(CHARM_SCALE.max, Math.pow(d / CHARM_SCALE.anchor, CHARM_SCALE.exponent));
+}
+
+/** Tılsımın BU oyuncu için fiyatı — tek doğru kaynak */
+export function charmCost(def: CharmDef, deepestDepth: number): number {
+  return Math.round(def.cost * charmPriceMul(deepestDepth));
+}
+
+/**
+ * Fiyatın dayandığı derinlik: ÖDENMİŞ en derin iniş (tüm bölümler).
+ *
+ * ⚠️ İKİ TARAF AYNI FONKSİYONU ÇAĞIRMAK ZORUNDA. Sunucu `bestDepth`,
+ * arayüz `depthPaid` kullansaydı iki farklı fiyat çıkardı: oyuncu 410
+ * görür, sunucu 1.045 keser. Bu depoda "aynı kural iki yerde yazılınca
+ * ayrışır" dersi defalarca alındı; burada tek kaynak bu fonksiyon.
+ *
+ * ⚠️ `depthPaid` SEÇİLDİ çünkü sunucunun ÖDEDİĞİ, yani doğruladığı ve
+ * kırptığı değer. İstemcinin iddiası değil.
+ */
+export function charmDepthOf(depthPaid: Record<number, number> | undefined): number {
+  if (!depthPaid) return 0;
+  let en = 0;
+  for (const v of Object.values(depthPaid)) {
+    const n = Math.floor(Number(v));
+    if (Number.isFinite(n) && n > en) en = n;
+  }
+  return en;
+}
+
 /**
  * ⚠️ HEPSİ MOTORUN GERÇEKTEN OKUDUĞU İSTATİSTİKLER. Forge'daki kuralın
  * aynısı: çalışmayan bir şeyi satmak oyuncuyu kandırmaktır.

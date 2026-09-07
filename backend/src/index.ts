@@ -363,20 +363,33 @@ app.post('/charm/buy', wrap(async (req, res) => {
   const id = z.string().max(40).safeParse(req.body?.id);
   if (!id.success) { res.status(400).json({ error: 'gecersiz_tilsim' }); return; }
 
-  const { CHARMS, CHARM_SLOTS } = await import('@game/charms');
+  const { CHARMS, CHARM_SLOTS, charmCost, charmDepthOf } = await import('@game/charms');
   const c = CHARMS.find((x) => x.id === id.data);
   if (!c) { res.status(400).json({ error: 'bilinmeyen_tilsim' }); return; }
 
   const player = await getOrCreatePlayer(wallet);
   const p = toProgress(player);
   if (p.charms.length >= CHARM_SLOTS) { res.status(400).json({ error: 'slot_dolu' }); return; }
-  if (p.gold < c.cost) { res.status(400).json({ error: 'yetersiz_gold' }); return; }
 
-  p.gold -= c.cost;
+  /**
+   * ⚠️ FİYATI SUNUCU HESAPLIYOR. İstemci ne fiyat gösterdiğini söylemiyor —
+   * söyleseydi herkes taban fiyata alırdı. Dayanak `depthPaid`: sunucunun
+   * ÖDEDİĞİ, yani doğruladığı ve kırptığı derinlik.
+   * ⚠️ `bestDepth` DEĞİL `depthPaid` — arayüzün elinde `bestDepth` yok ve
+   * iki taraf farklı alan kullansaydı farklı fiyat gösterirdi.
+   * ⚠️ Fiyat `charms.ts`te TEK YERDE yazılı; arayüz aynı fonksiyonu çağırıp
+   * aynı sayıyı gösteriyor, iki gerçeklik oluşamıyor.
+   */
+  const fiyat = charmCost(c, charmDepthOf(p.depthPaid));
+  if (p.gold < fiyat) { res.status(400).json({ error: 'yetersiz_gold' }); return; }
+
+  p.gold -= fiyat;
   p.charms = [...p.charms, c.id];
   const saved = await withLedger(wallet, fromProgress(p),
-    { kind: 'charm', gold: -c.cost, detail: c.id }, player.rev);
-  res.json({ progress: toProgress(saved), spent: c.cost });
+    // Defterde ÖDENEN fiyat duruyor, taban fiyat değil — yoksa denetim
+    // "gold nereye gitti" sorusuna yanlış cevap verirdi.
+    { kind: 'charm', gold: -fiyat, detail: `${c.id}@d${charmDepthOf(p.depthPaid)}` }, player.rev);
+  res.json({ progress: toProgress(saved), spent: fiyat });
 }));
 
 // ── THE RELIQUARY ──
