@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MenuBackground } from '@/components/MenuBackground';
 import { HomeSections } from '@/components/HomeSections';
+import { SocialLinks } from '@/components/SocialLinks';
 import { Panel, PixelButton } from '@/components/ui/kit';
 import { Turnstile, turnstileEnabled } from '@/components/Turnstile';
 import { BRAND, C, FONT, glass } from '@/lib/theme';
@@ -287,10 +288,16 @@ export default function Home() {
           </div>
         )}
 
+        {/* ── SOSYAL ──
+            ⚠️ 2026-09-07'ye kadar buraya hiçbir şey konmamıştı çünkü hesaplar
+            YOKTU; olmayan bağlantı koymak ziyaretçiyi boşa tıklatmaktır.
+            Hesaplar açıldı ve adresler tek tek yoklandı (ikisi de 200). */}
+        <SocialLinks />
+
         {/* ── ALT BİLGİ ── */}
-        {/* Sadece GERÇEK olanlar. Sosyal hesaplar ve dokümanlar henüz yok;
-            olmayan bağlantı koymak ziyaretçiyi boşa tıklatmak olurdu.
-            $GRAVE de henüz çıkmadı — sahte bir kontrat adresi ASLA gösterilmez. */}
+        {/* Sadece GERÇEK olanlar. Dokümanlar hâlâ yok, o yüzden bağlantısı da
+            yok. $GRAVE de henüz çıkmadı — sahte bir kontrat adresi ASLA
+            gösterilmez. */}
         <div style={{ marginTop: 10, textAlign: 'center', fontFamily: FONT.ui }}>
           {/* ⚠️ AÇIK BETA — sıfırlama BURADA, oynamaya başlamadan önce yazılı.
               Sonradan söylenirse 15 gün grind eden oyuncu haklı olarak

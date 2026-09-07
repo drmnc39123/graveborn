@@ -486,6 +486,7 @@ console.log('\n[G] YÜZEY DİLİ — canvas üstünde `glass` kullanılamaz');
     'NoticeBanner.tsx',   // duyuru şeridi
     'ProfileCard.tsx',    // sol üst kimlik
     'ReadyCard.tsx',      // sağ kolon, EventBanner'ın ALTINDA
+    'SocialLinks.tsx',    // sağ kolonun BAŞI, minimap'in hemen altı
     'FirstRun.tsx',       // ilk koşu kartı
     'HubCanvas.tsx',      // portal ipucu
     'GameCanvas.tsx',     // koşu HUD'u
