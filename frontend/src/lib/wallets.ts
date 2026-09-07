@@ -316,9 +316,40 @@ export const MOBIL_CUZDANLAR: readonly { id: string; ad: string; baglanti(url: s
   },
 ];
 
-/** Masaüstünde cüzdanı olmayan ziyaretçi için kurulum adresleri */
+/**
+ * KURULU OLMAYAN popüler cüzdanlar — seçim ekranının ikinci bölümü.
+ *
+ * 🔴 NİYE VAR: seçim ekranı bir KATALOG DEĞİL, yalnız kurulu olanları
+ * gösteriyor. Oyuncu üç satır görüp "sadece bu üçü mü destekleniyor" diye
+ * düşünebiliyor — oysa desteklenmeyen cüzdan yok, o üçü onda KURULU olanlar.
+ * Bu liste farkı kapatıyor: kurulu değilse kurulum bağlantısıyla görünüyor.
+ *
+ * ⚠️ HER ADRES TEK TEK YOKLANDI (2026-09-07), tahmin yok:
+ *   · Magic Eden cüzdanı ELENDİ — `wallet.magiceden.io` 404 döndü.
+ *   · Coinbase'in `/wallet` sayfası artık `base.app`e YÖNLENİYOR; kurulum
+ *     için doğru adres `/wallet/downloads`.
+ *   · Phantom `phantom.app` → `phantom.com`a taşınmış (derin bağlantı
+ *     `phantom.app/ul/...` olarak KALIYOR, dokümandaki adres o).
+ */
 export const KURULUM: readonly { ad: string; url: string }[] = [
-  { ad: 'Phantom', url: 'https://phantom.app/' },
-  { ad: 'Solflare', url: 'https://solflare.com/' },
+  { ad: 'Phantom', url: 'https://phantom.com/' },
+  { ad: 'Solflare', url: 'https://www.solflare.com/' },
   { ad: 'Backpack', url: 'https://backpack.app/' },
+  { ad: 'MetaMask', url: 'https://metamask.io/' },
+  { ad: 'OKX', url: 'https://web3.okx.com/' },
+  { ad: 'Coinbase Wallet', url: 'https://www.coinbase.com/wallet/downloads' },
+  { ad: 'Exodus', url: 'https://www.exodus.com/' },
+  { ad: 'Trust', url: 'https://trustwallet.com/' },
 ];
+
+/**
+ * Katalogtan, kurulu OLMAYANLARI ver.
+ *
+ * ⚠️ Kurulu bir cüzdanı ikinci kez "kur" diye göstermek, oyuncuya zaten
+ * sahip olduğu şeyi satmaya çalışmak olurdu. Eşleştirme `adAnahtari` ile:
+ * cüzdan kendini "Coinbase Wallet" ya da "OKX Wallet" diye tanıtabiliyor.
+ */
+export function kurulmayanlar(bulunan: readonly Cuzdan[]): readonly { ad: string; url: string }[] {
+  const var_ = new Set(bulunan.map((c) => adAnahtari(c.ad)));
+  return KURULUM.filter((k) => !var_.has(adAnahtari(k.ad)));
+}

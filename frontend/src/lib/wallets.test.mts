@@ -54,7 +54,7 @@ const W = () => globalThis as unknown as { window: SahteWindow; navigator: { use
 
 const {
   bulunanCuzdanlar, cuzdanlariIzle, kayitlariSifirla, adAnahtari, standartUygun,
-  mobilMi, MOBIL_CUZDANLAR, KURULUM,
+  mobilMi, MOBIL_CUZDANLAR, KURULUM, kurulmayanlar,
 } = await import('./wallets.js');
 
 // ── sahte cüzdan üreticileri ──
@@ -285,9 +285,27 @@ console.log('\n[11] KURULUM BAĞLANTILARI');
 {
   // ⚠️ Depo kuralı: olmayan/çalışmayan bağlantı koymak ziyaretçiyi boşa
   // tıklatmaktır. En azından biçimsel olarak yoklanıyor.
-  check('kurulum listesi dolu', KURULUM.length >= 2, `${KURULUM.length}`);
+  check('kurulum listesi dolu', KURULUM.length >= 6, `${KURULUM.length}`);
   check('hepsi https', KURULUM.every((k) => k.url.startsWith('https://')));
   check('hepsinin adı var', KURULUM.every((k) => k.ad.length > 1));
+  check('adlar tekil', new Set(KURULUM.map((k) => adAnahtari(k.ad))).size === KURULUM.length);
+
+  /**
+   * ⚠️ KURULU OLANI "KUR" DİYE GÖSTERME. Oyuncunun zaten sahip olduğu
+   * cüzdanı kurulum listesinde görmesi, listenin tamamına güvenini keser.
+   * Eşleştirme `adAnahtari` ile: cüzdan kendini "Coinbase Wallet" ya da
+   * "OKX Wallet" diye tanıtabiliyor, katalogdaki ad birebir aynı değil.
+   */
+  const sahte = (ad: string) => ({ ad, id: 'x', kaynak: 'standart' as const,
+    baglan: async () => 'x', imzala: async () => new Uint8Array() });
+  const kalan = kurulmayanlar([sahte('Phantom'), sahte('OKX Wallet')]);
+  check('kurulu olan katalogdan düşüyor',
+    !kalan.some((k) => adAnahtari(k.ad) === 'phantom'), kalan.map((k) => k.ad).join(','));
+  check('farklı adlandırma da eşleşiyor (OKX Wallet → OKX)',
+    !kalan.some((k) => adAnahtari(k.ad) === 'okx'), kalan.map((k) => k.ad).join(','));
+  check('kalanlar hâlâ sunuluyor', kalan.length === KURULUM.length - 2, `${kalan.length}`);
+  // ⚠️ ÇİFT TARAFLI: hiçbiri kurulu değilse katalog TAM gelmeli
+  check('hiç kurulu yoksa katalog tam', kurulmayanlar([]).length === KURULUM.length);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ CÜZDAN KAPISI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

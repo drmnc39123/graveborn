@@ -17,7 +17,7 @@ import { Turnstile, turnstileEnabled } from '@/components/Turnstile';
 import { BRAND, C, FONT, glass } from '@/lib/theme';
 import { fetchStats, setMode, signInWithWallet } from '@/lib/session';
 import {
-  type Cuzdan, KURULUM, MOBIL_CUZDANLAR, bulunanCuzdanlar, cuzdanlariIzle, mobilMi,
+  type Cuzdan, KURULUM, MOBIL_CUZDANLAR, bulunanCuzdanlar, cuzdanlariIzle, kurulmayanlar, mobilMi,
 } from '@/lib/wallets';
 
 export default function Home() {
@@ -193,6 +193,28 @@ export default function Home() {
                     </PixelButton>
                   ))}
                 </div>
+
+                {/* ⚠️ SEÇİM EKRANI BİR KATALOG DEĞİL — yalnız KURULU cüzdanları
+                    gösteriyor. Üç satır gören oyuncu "sadece bunlar mı
+                    destekleniyor" sanabiliyor; oysa desteklenmeyen cüzdan yok.
+                    Bu bölüm farkı kapatıyor. Mobilde gizli: telefonda tarayıcı
+                    eklentisi kurmanın anlamı yok. */}
+                {!mobil && kurulmayanlar(cuzdanlar).length > 0 && (
+                  <div style={{ marginTop: 11, borderTop: `1px solid ${C.boneFaint}33`, paddingTop: 9 }}>
+                    <div style={{ fontSize: 9.5, letterSpacing: 1.2, color: C.boneFaint, textAlign: 'center' }}>
+                      NOT INSTALLED
+                    </div>
+                    <div style={{ fontSize: 11, color: C.boneDim, textAlign: 'center', marginTop: 6, lineHeight: 1.9 }}>
+                      {kurulmayanlar(cuzdanlar).map((k, i) => (
+                        <span key={k.ad}>
+                          {i > 0 && <span style={{ color: C.boneFaint }}> · </span>}
+                          <a href={k.url} target="_blank" rel="noreferrer noopener"
+                            style={{ color: C.candle, textDecoration: 'underline' }}>{k.ad}</a>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             ) : mobil ? (
               /* ⚠️ MOBİLDE EKLENTİ YOKTUR — "cüzdan bulunamadı" burada bir
