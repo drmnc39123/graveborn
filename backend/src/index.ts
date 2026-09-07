@@ -129,7 +129,7 @@ for (const yol of [
   // (RPC) tetikliyor ve sınırsız bırakılırsa özel sağlayıcı kotasını
   // yakmanın en ucuz yolu olurdu.
   '/sol/quote', '/sol/blockhash', '/reliquary/pull-sol', '/ossuary/raise-sol',
-  '/guild/create-sol', '/guild/upgrade-sol',
+  '/guild/create-sol', '/guild/upgrade-sol', '/vigil/buy-sol', '/vigil/claim',
 ]) app.use(yol, paraLimiti);
 
 /**
@@ -678,6 +678,12 @@ app.post('/sol/quote', wrap(async (req, res) => {
     res.json({ product: urun, lamports: solPrice('guild'), gold: GUILD_COST });
     return;
   }
+  if (urun === 'battlepass') {
+    // ⚠️ "Zaten var" ÖDEMEDEN ÖNCE söylenmeli
+    if (player.vigil) { res.status(400).json({ error: 'zaten_var' }); return; }
+    res.json({ product: urun, lamports: solPrice('battlepass'), gold: null });
+    return;
+  }
   if (urun === 'guild_up') {
     const benim = await myGuild(wallet);
     const sonraki = benim ? nextGuildLevel(benim.level) : undefined;
@@ -784,6 +790,85 @@ app.post('/guild/upgrade-sol', wrap(async (req, res) => {
 
   await solAlim(req, res, 'guild_up', solPrice('guild_up'), `L${sonraki.level}`,
     async (wallet) => ({ guild: await upgradeGuild(wallet, true) }));
+}));
+
+/**
+ * THE LONG VIGIL — sezon kartı.
+ *
+ * ⚠️ KART GÜÇ SATMAZ: açtığı yolun her ödülü kozmetik ve toz. `solPrice.ts`
+ * kuralı burada da geçerli.
+ *
+ * ⚠️ TEK SEFERLİK VE KALICI. Sezon bu oyunda HAFTALIK; haftalık 0,5 SOL
+ * yılda 26 SOL eder ve kimse ödemez. Aylık yapmak ise İKİNCİ BİR TAKVİM
+ * kavramı doğururdu — `season.ts` bunu açıkça yasaklıyor.
+ */
+app.post('/vigil/buy-sol', wrap(async (req, res) => {
+  await solAlim(req, res, 'battlepass', solPrice('battlepass'), null, async (wallet) => {
+    /**
+     * ⚠️ KOŞULLU YAZMA: `vigil: false` şartı olmadan aynı anda gelen iki
+     * istek iki ayrı ödeme alır ve ikincisi hiçbir şey vermez. Şart
+     * `updateMany`de olduğu için yarış YAZMA anında kesiliyor.
+     * ⚠️ Yine de ikinci ödeme ZATEN düşmüş olurdu — `Payment.sig @unique`
+     * aynı imzayı ikinci kez kabul etmiyor. Buradaki kontrol FARKLI iki
+     * ödeme için.
+     */
+    const hit = await prisma.player.updateMany({
+      where: { wallet, vigil: false }, data: { vigil: true },
+    });
+    if (hit.count === 0) throw new Error('zaten_var');
+    return { progress: toProgress(await getOrCreatePlayer(wallet)) };
+  });
+}));
+
+/**
+ * Kademe ödülünü al.
+ *
+ * ⚠️ DERİNLİK SUNUCUDAN OKUNUYOR (`paidDepth` — ödemesi yapılmış derinlik),
+ * istemcinin iddiasından değil. Aynı kaynak beceri puanlarında da
+ * kullanılıyor; ikinci bir "en derin" tanımı oyuncuya iki farklı sayı
+ * öğretirdi.
+ *
+ * ⚠️ "AL VE HEPSİNİ KAP" DEĞİL: kart yolu açıyor, yolu oyuncu yürüyor.
+ */
+app.post('/vigil/claim', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const player = await getOrCreatePlayer(wallet);
+  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
+  if (!player.vigil) { res.status(400).json({ error: 'kart_yok' }); return; }
+
+  const { vigilClaimable, vigilKey } = await import('@game/vigil');
+  const p = toProgress(player);
+  const enDerin = STAGES.reduce((m, st) => Math.max(m, paidDepth(p, st.id)), 0);
+  const alinabilir = vigilClaimable(true, enDerin, p.vigilClaimed ?? []);
+  if (alinabilir.length === 0) { res.status(400).json({ error: 'alinacak_yok' }); return; }
+
+  /**
+   * ⚠️ AÇILAN HER KADEME BİRLİKTE VERİLİYOR. Tek tek almak, on iki kez
+   * düğmeye basmak demekti; hiçbiri karar içermiyor.
+   */
+  let toz = 0;
+  const kozmetik: string[] = [];
+  for (const t of alinabilir) {
+    toz += t.dust;
+    if (t.cosmetic && !p.cosmetics.includes(t.cosmetic)) kozmetik.push(t.cosmetic);
+  }
+  const yeniClaimed = [...(p.vigilClaimed ?? []), ...alinabilir.map(vigilKey)];
+
+  /**
+   * ⚠️ DEFTERE `gold: 0`. Kart ödülü gold ekonomisine dokunmuyor; toz
+   * yalnız kozmetik alır (`cosmetics.ts` dustCost) ve ekonomiye sızmaz.
+   */
+  const saved = await withLedger(wallet, {
+    dust: { increment: toz },
+    cosmetics: [...p.cosmetics, ...kozmetik],
+    vigilClaimed: yeniClaimed,
+  }, { kind: 'reliquary', gold: 0, detail: `vigil ${alinabilir.length} tier` }, player.rev);
+
+  res.json({
+    progress: toProgress(saved), dust: toz, cosmetics: kozmetik,
+    tiers: alinabilir.map(vigilKey),
+  });
 }));
 
 app.get('/worldboss', wrap(async (req, res) => {

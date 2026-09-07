@@ -58,6 +58,17 @@ export interface Progress {
    * (bkz. ossuary.ts). Sadece görünürlük verir, güç vermez.
    */
   ossuary: number;
+  /**
+   * THE LONG VIGIL kartı alındı mı (SOL ile, tek seferlik ve kalıcı).
+   *
+   * ⚠️ KART GÜÇ VERMEZ — açtığı yolun her ödülü kozmetik ve toz.
+   * ⚠️ SADECE SUNUCU YAZAR: `false` → `true` geçişi yalnız ödeme zincirde
+   * doğrulandıktan sonra oluyor. Demo modunda hep `false`; oradaki bir
+   * `true`, localStorage'a yazılan bir satırdan ibaret olurdu.
+   */
+  vigil?: boolean;
+  /** Kartın alınmış kademeleri (`vigilKey`) — bir kez alınır */
+  vigilClaimed?: string[];
   /** Alınmış başarımlar (achievements.ts id) — bir kez alınır */
   achievements: string[];
   /**
@@ -106,6 +117,7 @@ export function emptyProgress(): Progress {
     gold: 0, unlockedStage: 1, cleared: {}, upgrades: {},
     firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO, charms: [],
     cosmetics: [], equipped: {}, dust: 0, ossuary: 0, wager: null,
+    vigil: false, vigilClaimed: [],
     achievements: [], streak: { days: 0, last: '' },
     kills: {}, pets: {}, petLevels: {}, petFused: [], equippedPets: [], petSlot2: false,
   };
@@ -197,6 +209,14 @@ function normalize(p: Partial<Progress>): Progress {
     equipped: {},   // aşağıda sahiplik listesine göre doldurulur
     dust: Math.max(0, Math.floor(Number(p.dust) || 0)),
     ossuary: Math.max(0, Math.floor(Number(p.ossuary) || 0)),
+    // ⚠️ Bozuk/elle düzenlenmiş kayda karşı: kart bir BOOLEAN, kademe
+    // listesi de yalnız metin. Aksi hâlde kayda `vigil: 1` yazmak kartı
+    // bedava almanın yolu olurdu — sunucu yine de kendi satırını okuyor
+    // ama istemci tarafı da yalan söylememeli.
+    vigil: p.vigil === true,
+    vigilClaimed: Array.isArray(p.vigilClaimed)
+      ? p.vigilClaimed.filter((x): x is string => typeof x === 'string')
+      : [],
     wager: cleanWager(p.wager),
     achievements: Array.isArray(p.achievements)
       ? [...new Set(p.achievements.filter((a) => typeof a === 'string'))]

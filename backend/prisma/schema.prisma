@@ -46,6 +46,13 @@ model Player {
   dust         Int   @default(0)
   /// anıt seviyesi — TAVANI YOK, ekonominin dipsiz kovası (bkz. ossuary.ts)
   ossuary      Int   @default(0)
+  /// THE LONG VIGIL karti alindi mi (SOL, tek seferlik ve kalici)
+  /// ⚠️ Kart GUC VERMEZ — actigi yolun her odulu kozmetik ve toz.
+  /// ⚠️ Bu alani yazan TEK yer `/vigil/buy-sol`; `fromProgress` bilerek
+  /// disarida birakiyor, yoksa istemci "kartim var" diyebilirdi.
+  vigil        Boolean @default(false)
+  /// Kartin alinmis kademeleri (`vigilKey` → "d5", "d10", ...)
+  vigilClaimed Json    @default("[]")
   /// KURULMUŞ bahis (henüz yanmadı). Koşu AÇILIRKEN Run satırına taşınır.
   wager        Json?
   /// alınmış başarımlar (achievements.ts id'leri)

@@ -39,7 +39,13 @@ export interface CosmeticDef {
    * tek değeri "satın alınamaz" olmasıdır; gacha havuzunda da bulunursa o
    * değer anında yok olur. `rollCosmetic` bunları dışarıda bırakıyor.
    */
-  source?: 'reliquary' | 'earned';
+  /**
+   * ⚠️ `reliquary` DIŞINDAKİ HİÇBİRİ ÇEKİLİŞE GİRMEZ. `earned` olanların tek
+   * değeri satın alınamaz olmaları; `vigil` olanların tek değeri karta özel
+   * olmaları. İkisi de gacha havuzunda bulunursa o değer anında yok olur.
+   * `rollCosmetic` artık İZİN LİSTESİ kullanıyor (bkz. oradaki not).
+   */
+  source?: 'reliquary' | 'earned' | 'vigil';
   /** plate: isim gradyanı */
   plate?: { from: string; to: string };
   /** trophy: /art/loot/ şeridi (32×32) */
@@ -174,6 +180,18 @@ export const COSMETICS: readonly CosmeticDef[] = [
   { ...T('t_undying', 'the Undying', 'legendary', 'First on the ladder when a season closed. Nobody sold you this.'), source: 'earned' },
   { ...P('p_season', 'Vigil Silver', 'epic', '#d8e0e8', '#6d7a86', 'Second and third place still had to walk down there.'), source: 'earned' },
   { ...R('r_wreath', 'Barrow Wreath', 'rare', 'spr_crown_strip5', 5, 'Cut for the top ten of a week that has since ended.'), source: 'earned' },
+
+  // ── SEZON KARTI (THE LONG VIGIL) — çekilişte YOK ──────────────────
+  // ⚠️ Bunların tek değeri KARTA ÖZEL olmaları. Çekilişe girerlerse kart
+  // "biraz toz + zaten çıkabilecek şeyler" olur ve 0,5 SOL'un karşılığı
+  // kalmaz. Kazanılması yine de OYNAMAYA bağlı: kart yolu açıyor, yolu
+  // oyuncu yürüyor (bkz. vigil.ts).
+  { ...A('v_lamp', 'Wardens Lamp', 'rare', '#efa72e', 50, 'Carried by whoever agreed to stay awake.'), source: 'vigil' },
+  { ...T('v_watch', 'Keeper of the Long Watch', 'epic', 'Nobody relieved you. Nobody was coming.'), source: 'vigil' },
+  { ...A('v_ash', 'Ashfall', 'epic', '#b8ae98', 54, 'It settles on you and does not brush off.'), source: 'vigil' },
+  { ...P('v_hollow', 'Hollow Silver', 'epic', '#d8e0e8', '#8a97a3', 'The name is still there. The shine is not.'), source: 'vigil' },
+  { ...R('v_crown', 'Vigil Crown', 'legendary', 'spr_crown_strip5', 5, 'Worn by the one who kept counting after everyone stopped.'), source: 'vigil' },
+  { ...T('v_eternal', 'The Vigil Never Ends', 'legendary', 'Eighty floors down you stopped calling it a night.'), source: 'vigil' },
 ] as const;
 
 export function cosmeticById(id: string): CosmeticDef | undefined {
@@ -185,8 +203,25 @@ export function cosmeticsInSlot(slot: CosmeticSlot): CosmeticDef[] {
 }
 
 /** Çekilişten çıkabilen kozmetikler — koleksiyon sayacı bunu kullanmalı */
+/**
+ * ⭐ ÇEKİLİŞE GİRER Mİ — TEK YÜKLEM.
+ *
+ * 🔴 NİYE TEK YERDE: bu kural İKİ yerde yazılıydı (`rollCosmetic` havuzu ve
+ * `rollableCosmetics`) ve ikisi de `source !== 'earned'` diyordu. Kart
+ * kozmetikleri (`source:'vigil'`) eklendiğinde biri düzeltildi, diğeri
+ * kalmıştı — ölçüldü: `rollCosmetic` 41 kozmetik üretiyordu ama
+ * `rollableCosmetics` 47 sayıyordu. Aynı soruya iki farklı cevap.
+ *
+ * ⚠️ İZİN LİSTESİ, KARA LİSTE DEĞİL. Kara liste hâliyle YENİ bir kaynak
+ * eklendiğinde havuza SESSİZCE giriyordu ve satın alınamaz olması gereken
+ * şey gacha'dan çıkabiliyordu.
+ */
+function cekilebilirMi(c: CosmeticDef): boolean {
+  return c.source === undefined || c.source === 'reliquary';
+}
+
 export function rollableCosmetics(): CosmeticDef[] {
-  return COSMETICS.filter((c) => c.source !== 'earned');
+  return COSMETICS.filter(cekilebilirMi);
 }
 
 /** Başarımla kazanılanlar — Reliquary'de "kazanılır, satın alınmaz" olarak gösterilir */
@@ -214,9 +249,8 @@ export function rollCosmetic(rarityRoll: number, pickRoll: number): CosmeticDef 
     acc += RARITY[key].weight;
     if (target < acc) { chosen = key; break; }
   }
-  // ⚠️ `earned` kozmetikler HAVUZDA YOK — başarımla kazanılanlar satın
-  // alınamamalı (bkz. CosmeticDef.source).
-  const pool = COSMETICS.filter((c) => c.rarity === chosen && c.source !== 'earned');
+  // ⚠️ Havuz kuralı `cekilebilirMi` — TEK kaynak (bkz. oradaki not)
+  const pool = COSMETICS.filter((c) => c.rarity === chosen && cekilebilirMi(c));
   const i = Math.min(pool.length - 1, Math.floor(Math.max(0, pickRoll) * pool.length));
   return pool[i];
 }

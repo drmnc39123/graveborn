@@ -53,7 +53,7 @@ console.log('\n[1] ** RAY GUC SATMIYOR');
   check('tarama SOL uclarini buluyor (kontrol grubu)', acik.length >= 4, `${acik.length} uc`);
 
   // Fiyat kaynagi da guc satmamali: solPrice yalnizca izinli urunlerde
-  const izinli = ['reliquary10', 'ossuary', 'guild', 'guild_up'];
+  const izinli = ['reliquary10', 'ossuary', 'guild', 'guild_up', 'battlepass'];
   const urunler = [...idx.matchAll(/solAlim\(req, res, '(\w+)'/g)].map((m) => m[1]);
   check('her SOL urunu izinli listede', urunler.every((u) => izinli.includes(u)),
     urunler.join(' · '));
@@ -137,7 +137,8 @@ console.log('\n[5] KAPI VE SINIRLAR');
   // Her deneme bir RPC okumasi tetikliyor; sinirsiz birakmak ozel
   // saglayici kotasini yakmanin en ucuz yolu olurdu.
   for (const yol of ['/sol/quote', '/sol/blockhash', '/reliquary/pull-sol',
-    '/ossuary/raise-sol', '/guild/create-sol', '/guild/upgrade-sol']) {
+    '/ossuary/raise-sol', '/guild/create-sol', '/guild/upgrade-sol',
+    '/vigil/buy-sol', '/vigil/claim']) {
     check(`${yol} hiz sinirinda`, new RegExp(`'${yol}'`).test(
       idx.slice(idx.indexOf('paraLimiti'), idx.indexOf('app.use(yol, paraLimiti)'))));
   }

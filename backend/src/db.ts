@@ -11,6 +11,7 @@ export function toProgress(p: {
   charms?: unknown;
   cosmetics?: unknown; equipped?: unknown; dust?: number;
   ossuary?: number; wager?: unknown;
+  vigil?: boolean; vigilClaimed?: unknown;
   achievements?: unknown; streak?: unknown;
   kills?: unknown; pets?: unknown; petLevels?: unknown;
   petFused?: unknown; equippedPets?: unknown; petSlot2?: boolean;
@@ -29,6 +30,11 @@ export function toProgress(p: {
     equipped: obj<Progress['equipped']>(p.equipped),
     dust: Math.max(0, Math.floor(Number(p.dust) || 0)),
     ossuary: Math.max(0, Math.floor(Number(p.ossuary) || 0)),
+    // ⚠️ Kart SADECE SUNUCUDAN gelir; `true` yazan tek yer ödeme ucu.
+    vigil: p.vigil === true,
+    vigilClaimed: Array.isArray(p.vigilClaimed)
+      ? (p.vigilClaimed as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [],
     // ⚠️ Ham JSON doğrudan geçiyor; doğrulamayı `normalize` DEĞİL, saf
     // fonksiyonlar yapıyor. Buradaki tek iş taşımak.
     wager: (p.wager ?? null) as Progress['wager'],
@@ -69,6 +75,14 @@ export function fromProgress(p: Progress) {
     equipped: p.equipped as object,
     dust: Math.max(0, Math.floor(p.dust)),
     ossuary: Math.max(0, Math.floor(p.ossuary)),
+    /**
+     * ⚠️ KART İSTEMCİDEN GELEMEZ. `fromProgress` istemcinin gönderdiği
+     * ilerlemeyi de yazabiliyor; `vigil` alanı buradan geçseydi "kartım
+     * var" demek yeterli olurdu. Bu yüzden alan BİLEREK YAZILMIYOR —
+     * kartı yalnız `/vigil/buy-sol` ucu, ödeme zincirde doğrulandıktan
+     * sonra `vigil: true` ile ayrıca set ediyor.
+     */
+    vigilClaimed: (p.vigilClaimed ?? []) as object,
     // ⚠️ `undefined` DEĞİL `Prisma.DbNull`. Prisma'da `undefined` "bu alana
     // dokunma" demek — bahis o zaman ASLA temizlenemez ve koşu açıldıktan
     // sonra da kayıtta durup ikinci kez yanardı. Nullable Json'u boşaltmanın

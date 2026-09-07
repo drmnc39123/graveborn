@@ -22,6 +22,7 @@ import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSes
 import { play } from '@/game/sfx';
 import { Fade } from '@/components/ui/motion';
 import { CryptSection } from '@/components/CryptSection';
+import { VigilSection } from '@/components/VigilSection';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { pixel, BTN, PixelButton } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
@@ -112,7 +113,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
   onError: (msg: string) => void;
 }) {
   /** hangi sink görünüyor — üçü de gold'u ekonomiden çıkarır */
-  const [view, setView] = useState<'relics' | 'monument' | 'wager' | 'crypt'>('relics');
+  const [view, setView] = useState<'relics' | 'monument' | 'wager' | 'crypt' | 'vigil'>('relics');
   const [tab, setTab] = useState<CosmeticSlot>('trophy');
   const [busy, setBusy] = useState(false);
   /** son çekilişin sonucu — açılış animasyonu bunu gösterir */
@@ -188,7 +189,8 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
         kicker="THE RELIQUARY" accent={C.candleSoft}
         title={view === 'relics' ? 'What the dead left behind'
           : view === 'monument' ? 'Your monument'
-          : view === 'crypt' ? 'Ground of your own' : 'A bet with the dead'}
+          : view === 'crypt' ? 'Ground of your own'
+          : view === 'vigil' ? 'The long vigil' : 'A bet with the dead'}
       />
 
       {/* ⚠️ ÜÇÜ AYNI BİNADA. Hepsi aynı işi yapıyor — gold'u ekonomiden
@@ -201,6 +203,10 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
           { id: 'monument', label: 'MONUMENT' },
           { id: 'wager', label: 'THE WAGER' },
           { id: 'crypt', label: 'THE DEED' },
+          // ⚠️ KART DA BURADA: Reliquary kozmetiklerin binasi ve kartin
+          // butun odulu kozmetik. Ayri bir kapi acmak, oyuncuya iki ayri
+          // kozmetik sistemi varmis gibi gosterirdi.
+          { id: 'vigil', label: 'THE VIGIL' },
         ] as const).map((v) => {
           const on = view === v.id;
           return (
@@ -230,6 +236,9 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
       )}
       {view === 'crypt' && (
         <CryptSection progress={progress} onChange={onChange} onError={onError} />
+      )}
+      {view === 'vigil' && (
+        <VigilSection progress={progress} onChange={onChange} onError={onError} />
       )}
       {view === 'relics' && <>
       {/* ⚠️ Bu cümle KALDIRILAMAZ — oyuncu neye para verdiğini bilmeli */}

@@ -492,6 +492,23 @@ export function streakAvailable(p: Progress): boolean {
 // İkisi de saf fonksiyonu paylaşıyor; cüzdan modunda sunucu, demoda istemci
 // çalıştırıyor. Fiyat ve hedef HER İKİ YOLDA DA saf fonksiyondan geliyor.
 
+/**
+ * THE LONG VIGIL karti — SOL ile, tek seferlik.
+ *
+ * ⚠️ SADECE CUZDAN MODUNDA. Demo sunucuya dokunmuyor; oradaki bir kart
+ * localStorage'a yazilan bir satirdan ibaret olurdu.
+ */
+export async function buyVigilSol(sig: string): Promise<{ progress: Progress }> {
+  return api('/vigil/buy-sol', { method: 'POST', body: { sig } });
+}
+
+/** Acilan kademeleri topla — derinlik SUNUCUDAN okunur, iddiadan degil */
+export async function claimVigil(): Promise<{
+  progress: Progress; dust: number; cosmetics: string[]; tiers: string[];
+}> {
+  return api('/vigil/claim', { method: 'POST', body: {} });
+}
+
 /** Anit seviyesi — SOL ile. Fiyat SUNUCUDA, oyuncunun mevcut seviyesinden. */
 export async function raiseOssuarySol(sig: string): Promise<Progress> {
   const { progress } = await api<{ progress: Progress }>('/ossuary/raise-sol', {
