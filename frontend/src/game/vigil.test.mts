@@ -160,5 +160,45 @@ console.log('\n[6] ** SUNUCU ZINCIRI');
   check('toProgress `vigil` okuyor', /vigil: p\.vigil === true/.test(db));
 }
 
+console.log('\n[7] ** RAY KAPALIYKEN KART BOZUK GORUNMUYOR');
+{
+  /**
+   * 🔴 KULLANICI OLCUMU (2026-09-08): oyuna girdi, SOL dugmelerini goremedi.
+   * Ray kapali oldugu icin dogruydu — ama sezon kartinin TEK eylemi SOL ve
+   * dugme yok olunca geriye tiklanacak hicbir seyi olmayan bir kutu
+   * kaliyordu. Oyuncu kartin bozuk oldugunu sanar.
+   *
+   * Gold dugmesi yaninda duran bir SOL dugmesinin kaybolmasi sorun DEGIL
+   * (Reliquary/Ossuary/Guild): orada calisan bir yol zaten var. Kural
+   * yalniz TEK EYLEMI SOL olan kartlar icin.
+   *
+   * Ayni ders Exchange kapisinda alinmisti: kapali bir sey KAPALI oldugunu
+   * SOYLEMELI.
+   */
+  const v = oku('src/components/VigilSection.tsx');
+  check('kart ray durumunu okuyor', /useSolRail\(\)/.test(v));
+  check('kapaliyken "NOT OPEN YET" yaziyor', /NOT OPEN YET/.test(v));
+  check('kapaliyken NIYE kapali oldugu aciklaniyor',
+    /payments are not switched on/.test(v));
+  /**
+   * ⚠️ TARIH VERILMIYOR: takvime bagli bir soz, o gun geldiginde
+   * arkasindaki is bitmemisse de gelir ve tutulamaz (bkz. locked.ts).
+   */
+  const kapaliMetin = (v.match(/The card cannot be bought yet[^<]*/) ?? [''])[0];
+  check('kapali metni TARIH icermiyor',
+    !/[0-9]{4}|tomorrow|next week|soon/i.test(kapaliMetin), kapaliMetin.slice(0, 60));
+  // ⚠️ Gold yolunun hala acik oldugu SOYLENMELI — oyuncu "her sey kapandi"
+  // sanmamali.
+  check('gold yolunun acik oldugu soyleniyor', /bought with gold/.test(v));
+
+  const btn = oku('src/components/SolPayButton.tsx');
+  check('ray kancasi disariya acildi (tek kaynak)', /export function useSolRail/.test(btn));
+  // CIFT TARAFLI: dugme hala kapaliyken null donmeli — gold yaninda duran
+  // SOL dugmesi icin dogru davranis bu.
+  check('dugme kapaliyken hala cizilmiyor',
+    /if \(!acik \|\| lamports === null\) return null/.test(btn));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/useSolZZZ/.test(v + btn));
+}
+
 console.log(`\n${FAIL.length === 0 ? 'VIGIL SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

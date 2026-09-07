@@ -19,7 +19,7 @@ import { paidDepth, type Progress } from '@/game/progress';
 import { VIGIL_TIERS, vigilClaimable, vigilKey, vigilTotalDust } from '@/game/vigil';
 import { cosmeticById, RARITY } from '@/game/cosmetics';
 import { buyVigilSol, claimVigil } from '@/lib/gameSession';
-import { SolPayButton } from '@/components/SolPayButton';
+import { SolPayButton, useSolRail } from '@/components/SolPayButton';
 import { solPrice } from '@/game/solPrice';
 import { Card, CardSection, Tag } from '@/components/ui/cards';
 import { BTN, PixelButton } from '@/components/ui/kit';
@@ -31,6 +31,7 @@ export function VigilSection({ progress, onChange, onError }: {
   onError: (msg: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const ray = useSolRail();
   const kart = progress.vigil === true;
   const alinan = useMemo(() => new Set(progress.vigilClaimed ?? []), [progress.vigilClaimed]);
 
@@ -81,12 +82,25 @@ export function VigilSection({ progress, onChange, onError }: {
               <span style={{ fontSize: 13, fontWeight: 900, color: C.bone }}>THE LONG VIGIL</span>
               <Tag tone="gold">{VIGIL_TIERS.length} TIERS</Tag>
               <span style={{ marginLeft: 'auto' }}>
-                <SolPayButton
-                  urun="battlepass"
-                  lamports={solPrice('battlepass')}
-                  onError={onError}
-                  onDone={async (sig) => { onChange((await buyVigilSol(sig)).progress); }}
-                />
+                {/* 🔴 RAY KAPALIYKEN SESSİZ KALINMAZ. Kartın TEK eylemi SOL;
+                    düğme yok olunca geriye tıklanacak hiçbir şeyi olmayan
+                    bir kutu kalıyor ve oyuncu kartın bozuk olduğunu sanıyor.
+                    Exchange kapısındaki dersin aynısı: kapalı bir şey KAPALI
+                    olduğunu SÖYLEMELİ. */}
+                {ray === 'acik' ? (
+                  <SolPayButton
+                    urun="battlepass"
+                    lamports={solPrice('battlepass')}
+                    onError={onError}
+                    onDone={async (sig) => { onChange((await buyVigilSol(sig)).progress); }}
+                  />
+                ) : (
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 900, letterSpacing: 1,
+                    color: C.boneFaint, border: `1px solid ${C.border}66`,
+                    padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
+                  }}>{ray === 'bilinmiyor' ? '…' : 'NOT OPEN YET'}</span>
+                )}
               </span>
             </div>
             <div style={{ marginTop: 7, fontSize: 11.5, color: C.boneDim, lineHeight: 1.5 }}>
@@ -94,6 +108,20 @@ export function VigilSection({ progress, onChange, onError }: {
               along the way. Every tier is opened by going deeper — the card unlocks the road,
               it does not walk it for you.
             </div>
+            {/* ⚠️ NE ZAMAN AÇILACAĞI DEĞİL, NİYE KAPALI OLDUĞU yazılıyor.
+                Takvime bağlı bir söz, o gün geldiğinde arkasındaki iş
+                bitmemişse de gelir ve tutulamaz (bkz. `locked.ts`). */}
+            {ray === 'kapali' && (
+              <div style={{
+                marginTop: 8, padding: '7px 9px', borderRadius: 5,
+                border: `1px solid ${C.border}66`, background: 'rgba(0,0,0,0.22)',
+                fontSize: 11, color: C.boneFaint, lineHeight: 1.5,
+              }}>
+                The card cannot be bought yet — payments are not switched on. The road
+                below is what it opens, and it is not going anywhere. Everything else in
+                the village is still bought with gold.
+              </div>
+            )}
           </div>
         </Card>
       )}

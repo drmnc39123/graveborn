@@ -30,6 +30,31 @@ function solConfig(): Promise<SolConfig> {
   return cfgSoz;
 }
 
+/**
+ * ⭐ RAY AÇIK MI — paylaşılan kanca.
+ *
+ * 🔴 NİYE DIŞARI AÇILDI: `SolPayButton` kapalıyken `null` dönüyor ve bu
+ * doğru — gold düğmesi yanında duran bir SOL düğmesinin kaybolması hiçbir
+ * şeyi bozmuyor. AMA tek eylemi SOL olan bir kart (sezon kartı) o zaman
+ * TIKLANACAK HİÇBİR ŞEYİ OLMAYAN bir kutuya dönüşüyor ve oyuncu kartın
+ * bozuk olduğunu sanıyor. Ölçüldü (2026-09-08): kullanıcı tam bunu gördü.
+ *
+ * Aynı ders Exchange kapısında da alınmıştı: kapalı bir şey, KAPALI
+ * olduğunu SÖYLEMELİ.
+ */
+export function useSolRail(): 'bilinmiyor' | 'acik' | 'kapali' {
+  const [durum, setDurum] = useState<'bilinmiyor' | 'acik' | 'kapali'>('bilinmiyor');
+  useEffect(() => {
+    let iptal = false;
+    // ⚠️ Demo modunda sunucu yok — sormadan "kapalı" de, yoksa her panel
+    // açılışında düşen bir istek atılırdı.
+    if (!panelUnlocked(getMode())) { setDurum('kapali'); return; }
+    solConfig().then((c) => { if (!iptal) setDurum(c.open ? 'acik' : 'kapali'); });
+    return () => { iptal = true; };
+  }, []);
+  return durum;
+}
+
 const HATA_METNI: Record<string, string> = {
   sol_kapali: 'SOL payments are not open yet.',
   sol_rayinda_degil: 'This one is gold only.',
