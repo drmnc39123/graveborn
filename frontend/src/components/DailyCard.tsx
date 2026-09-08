@@ -10,13 +10,15 @@
 // kapatan şey o). Demoda boş bir kart göstermek, tıklanamayan bir düğme
 // göstermek olurdu.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchDaily, type DailyDurum } from '@/lib/gameSession';
 import { Card } from '@/components/ui/cards';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 
-const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+const kisa = (w: string) => oyuncuAdi({ wallet: w });
 
 /** 00:00 UTC'ye kalan süre — hakkın ne zaman yenileneceği */
 function kalanSure(): string {

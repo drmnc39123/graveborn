@@ -6,6 +6,7 @@ export const prisma = new PrismaClient();
 
 /** DB satırı → oyunun Progress arayüzü (frontend'le AYNI şekil) */
 export function toProgress(p: {
+  name?: string | null; renames?: number;
   gold: number; unlockedStage: number; hero: string;
   cleared: unknown; firstClear: unknown; depthPaid: unknown; upgrades: unknown;
   charms?: unknown;
@@ -18,6 +19,10 @@ export function toProgress(p: {
 }): Progress {
   const obj = <T,>(v: unknown): T => (v && typeof v === 'object' ? (v as T) : ({} as T));
   return {
+    // ⚠️ `undefined` DEĞİL `null`: istemci "ad yok" ile "alan gelmedi"yi
+    // ayırt edememeli — ad penceresi tam bu değere bakıyor.
+    name: p.name ?? null,
+    renames: Math.max(0, Math.floor(Number(p.renames) || 0)),
     gold: p.gold,
     unlockedStage: p.unlockedStage,
     hero: heroById(p.hero).id,

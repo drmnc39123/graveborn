@@ -5,6 +5,7 @@
 // Boş bir "lonca yok" ekranı gösterip oyuncuyu başka bir sekmeye yollamak,
 // en kritik anda (katılma kararı) fazladan bir tıklama koymak olurdu.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useCallback, useEffect, useState } from 'react';
 import { panelUnlocked } from '@/lib/testMode';
 import { GUILD_COST, NAME_MAX, TAG_MAX, guildGrowth, nextGuildLevel } from '@/game/guild';
@@ -152,7 +153,8 @@ export function GuildPanel({ progress, onChange, onError }: {
           {mine.members.map((m) => (
             <div key={m.wallet} style={{ display: 'flex', gap: 8, padding: '3px 0', fontSize: 11.5 }}>
               <span style={{ color: m.wallet === mine.owner ? C.candle : C.bone }}>
-                {m.wallet === state.wallet ? 'You' : `${m.wallet.slice(0, 4)}…${m.wallet.slice(-4)}`}
+                {/* ⚠️ TEK ÇÖZÜCÜ — "You" kararı da orada. */}
+                {oyuncuAdi(m, m.wallet === state.wallet)}
               </span>
               {m.wallet === mine.owner && <Tag tone="gold">FOUNDER</Tag>}
               <span style={{ marginLeft: 'auto', color: C.boneFaint }}>

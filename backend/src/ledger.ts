@@ -55,6 +55,10 @@ export const LEDGER_KINDS = [
   // ⚠️ Bu deponun ilk PARAYLA ALINAN gold musluğu; defterde gorunmesi
   // pazarliksiz.
   'vigil',
+  // ⭐ AD DEĞİŞTİRME — ilk ad bedava, sonrakiler artan gold. Bir GİDER.
+  // ⚠️ Ayrı tür olması şart: `admin_grant` ya da `guild` içine karıştırmak
+  // "oyuncular kimliğe ne kadar harcıyor" sorusunu ölçülemez yapardı.
+  'rename',
 ] as const;
 
 /**

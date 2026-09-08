@@ -34,6 +34,9 @@ export const SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
   // Kural artık tek cümle: yok edilen her gold'un %10'u kasaya gider —
   // geri alınabilenler (iptal edilen ilan) ve deed'in kendisi hariç.
   'reforge', 'pet',
+  // ⭐ AD DEĞİŞTİRME — yok edilen gold, hiçbir şey üretmiyor. Kuralın
+  // kendi cümlesi: "yok edilen her gold'un %10'u kasaya gider".
+  'rename',
 ]);
 
 /**

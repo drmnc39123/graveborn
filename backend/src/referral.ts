@@ -24,6 +24,8 @@
 // ⚠️ KOD BİR KİMLİK: `refCode @unique`. İki oyuncuya aynı kod düşerse
 // ödül yanlış kişiye gider ve bunu geri almanın yolu yoktur.
 
+import { adlariCoz } from './names.js';
+import { oyuncuAdi } from '@game/playerName';
 import {
   KOD_ALFABE as ALFABE, KOD_PENCERESI_GUN, KOD_UZUNLUK, ODUL_DERINLIGI,
   ODUL_TAVANI, ODUL_TOZ, kodTemizle,
@@ -123,7 +125,11 @@ export async function referralDurum(wallet: string, now = new Date()): Promise<R
     code: kod,
     invited: davetliler.length,
     rewarded: davetliler.filter((d) => d.refRewarded).length,
-    joinedWith: p?.referredBy ? `${p.referredBy.slice(0, 4)}…${p.referredBy.slice(-4)}` : null,
+    // ⚠️ TEK ÇÖZÜCÜ: davet edenin adı varsa adı görünsün — "beni kim
+    // çağırdı" sorusunun cevabı bir cüzdan parçası olmamalı.
+    joinedWith: p?.referredBy
+      ? oyuncuAdi({ wallet: p.referredBy, name: (await adlariCoz([p.referredBy])).get(p.referredBy) ?? null })
+      : null,
     // ⚠️ Zaten kod girmişse ya da pencere kapandıysa alan gösterilmemeli:
     // tıklanınca hep hata veren bir kutu, bozuk bir kutudur.
     canEnter: !p?.referredBy && yas <= KOD_PENCERESI_GUN,

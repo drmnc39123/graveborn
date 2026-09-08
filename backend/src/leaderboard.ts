@@ -19,6 +19,12 @@ import { ultraMi } from './ultra.js';
 export interface Row {
   rank: number;
   wallet: string;
+  /**
+   * Oyuncunun sectigi ad — yoksa `null` ve istemci kisa cuzdana duser.
+   * ⚠️ SUNUCU DOLDURUYOR. Istemciden gelen bir ada guvenmek, siralamada
+   * herkesin herkesi taklit edebilmesi demektir.
+   */
+  name: string | null;
   stage: number;
   depth: number;
   rating: number;
@@ -127,6 +133,10 @@ export async function top(limit = 50): Promise<Row[]> {
     // değerlidir. Sadece kendi panelinde görünen bir unvana kimse gold vermez
     // ve Reliquary bir gold sinki olarak işlevini kaybeder.
     select: {
+      // ⚠️ `name` DE ÇEKİLİYOR: oyuncu ad koyup sıralamada cüzdanını
+      // görürse ad koymanın anlamı kalmaz — bu depoda "kod çalışıyor,
+      // son adımda ölüyor" hata sınıfının tam örneği.
+      name: true,
       wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true,
       equipped: true, ossuary: true,
     },
@@ -134,6 +144,7 @@ export async function top(limit = 50): Promise<Row[]> {
   return rows.map((r, i) => ({
     rank: i + 1,
     wallet: r.wallet,
+    name: r.name,
     stage: r.bestStage,
     depth: r.bestDepth,
     rating: r.bestRating,
@@ -154,6 +165,10 @@ export async function rankOf(wallet: string): Promise<{ rank: number; row: Row }
   const me = await prisma.player.findUnique({
     where: { wallet },
     select: {
+      // ⚠️ `name` DE ÇEKİLİYOR: oyuncu ad koyup sıralamada cüzdanını
+      // görürse ad koymanın anlamı kalmaz — bu depoda "kod çalışıyor,
+      // son adımda ölüyor" hata sınıfının tam örneği.
+      name: true,
       wallet: true, bestStage: true, bestDepth: true, bestRating: true, hero: true,
       banned: true, equipped: true, ossuary: true,
     },
@@ -167,7 +182,7 @@ export async function rankOf(wallet: string): Promise<{ rank: number; row: Row }
   return {
     rank,
     row: {
-      rank, wallet: me.wallet, stage: me.bestStage, depth: me.bestDepth,
+      rank, wallet: me.wallet, name: me.name, stage: me.bestStage, depth: me.bestDepth,
       rating: me.bestRating, hero: me.hero, equipped: wornOf(me.equipped),
       ossuary: me.ossuary,
     },

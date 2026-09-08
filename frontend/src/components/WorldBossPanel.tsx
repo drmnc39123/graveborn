@@ -10,6 +10,7 @@
 // daha düşük. Panelde bunu oyuncuya da söylüyoruz — "aynı anda göreceksin"
 // sözü verip vermemek en kolay güven kaybı olurdu.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useCallback, useEffect, useState } from 'react';
 import { BTN, PixelButton } from '@/components/ui/kit';
 import { BARROW_PAYOUT_DEPTH, BARROW_REWARDS, BOSS_RUN_SEC, bossProgress } from '@/game/worldBoss';
@@ -18,7 +19,8 @@ import { fetchWorldBoss, worldBossAvailable, type BossState } from '@/lib/gameSe
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { C } from '@/lib/theme';
 
-const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+const short = (w: string) => oyuncuAdi({ wallet: w });
 const big = (n: number) => n.toLocaleString('en-US');
 
 /**

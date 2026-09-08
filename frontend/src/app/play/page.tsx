@@ -3,6 +3,7 @@
 // Hub'da gezersin, Warden's Post'tan bölüm seçersin, bölüm biter/ölürsün,
 // gold TAVANA GÖRE cüzdana yazılır ve hub'a dönersin.
 
+import { NameGate } from '@/components/NameGate';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
@@ -734,7 +735,7 @@ export default function PlayPage() {
       {/* ⚠️ Rıhtım ve köy kapısı AYNI fonksiyonu çağırıyor (`hedefiAc`) —
           ikisi ayrı yazıldığında `pit` yalnız rıhtımdan çalışıyordu. */}
       <BuildingDock open={panel} onOpen={hedefiAc} onClose={() => setPanel(null)}
-        gold={progress?.gold ?? 0} wallet={wallet}
+        gold={progress?.gold ?? 0} wallet={wallet} ad={progress?.name ?? null}
         onHeight={setDockH}
         onLeft={setDockLeft}
         // ⚠️ ŞERİT RIHTIMIN İÇİNDE, sayfada ayrı bir katmanda DEĞİL — gerekçe
@@ -753,7 +754,22 @@ export default function PlayPage() {
           12 bina buluyor; hiçbiri "önce şunu yap" demiyordu. Tutorial ancak
           koşunun İÇİNDE başlıyor. Panel açıkken gösterilmiyor — oyuncu zaten
           bir şeye bakıyor demektir. */}
-      {!panel && !ilkGizli && isNewcomer(progress) && (
+      {/* ── AD KAPISI ──
+          🔴 Kullanıcı isteği: *"Oyuncu kayıt olurken zorunlu olarak açılacak
+          bir pencerede, oyuna başlamadan önce bir nick koysun."*
+          ⚠️ KOŞULLAR: cüzdan bağlı VE adı yok. Demo'da (cüzdan yok) ASLA —
+          demo'nun kuralı sıfır backend çağrısı ve orada rezerve edilecek bir
+          kimlik de yok.
+          ⚠️ AYRI BİR "GÖRDÜ MÜ" BAYRAĞI YOK: `progress.name` alanının kendisi
+          kapı. İkinci bir doğruluk kaynağı bir gün ayrışırdı — `isNewcomer`
+          de aynı gerekçeyle Progress'ten türüyor.
+          ⚠️ HER ŞEYİN ÜSTÜNDE ve FirstRun'dan ÖNCE: ikisi aynı anda
+          görünürse oyuncu hangisine cevap vereceğini bilemez. */}
+      {wallet && progress?.name === null && (
+        <NameGate onDone={(p) => setProgress(p)} />
+      )}
+
+      {!panel && !ilkGizli && !(wallet && progress?.name === null) && isNewcomer(progress) && (
         <FirstRun
           // ⚠️ Kahraman ve mod SORULMUYOR: ilk koşuda oyuncunun bunlara
           // verecek cevabı yok, sadece engel oluyorlar.

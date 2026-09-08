@@ -29,6 +29,7 @@
 // İkisini tek sayıya indirmek, parayla alınanla oynayarak kazanılanı aynı
 // kefeye koymak olurdu.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useEffect, useMemo, useState } from 'react';
 import { panelUnlocked } from '@/lib/testMode';
 import { getMode } from '@/lib/session';
@@ -46,7 +47,8 @@ import { useCountUpInt } from '@/components/ui/motion';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 /** Cüzdan adresini kısalt — kart dar, kimlik için 8 hane yeter */
-const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+const short = (w: string) => oyuncuAdi({ wallet: w });
 
 /**
  * ⚠️ AÇIK/KAPALI TERCİHİ HATIRLANIYOR. Kartı her açılışta yeniden kapatmak,

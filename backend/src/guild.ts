@@ -39,7 +39,9 @@ async function view(id: string): Promise<GuildView | null> {
     where: { id },
     include: {
       members: {
-        select: { wallet: true, hero: true, bestRating: true },
+        // ⚠️ `name` DE: oyuncu ad koyup burada cüzdanını görürse ad
+        // koymanın anlamı kalmaz.
+        select: { wallet: true, name: true, hero: true, bestRating: true },
         orderBy: { bestRating: 'desc' },
         take: 32,
       },
@@ -305,9 +307,19 @@ export async function growthOf(wallet: string): Promise<number> {
  * `GuildView` kuruyor (üye listesi, seviye, maliyet) — bir etiket için
  * ödenecek bedel değil.
  */
-export async function tagOf(wallet: string): Promise<{ id: string; tag: string } | null> {
+/**
+ * KİMLİK — ad VE lonca, TEK SORGUDA.
+ *
+ * ⚠️ Eskiden `tagOf` yalnız loncayı çekiyordu ve başlığındaki gerekçe
+ * "ikisi tek sorguda, ayrı çağrı iki gidiş-dönüş" idi. Ad da aynı satırda
+ * duruyor; ikinci bir sorgu açmak o gerekçeyi çiğnemek olurdu.
+ */
+export async function kimlikOf(wallet: string): Promise<{
+  name: string | null; guild: { id: string; tag: string } | null;
+}> {
   const p = await prisma.player.findUnique({
-    where: { wallet }, select: { guild: { select: { id: true, tag: true } } },
+    where: { wallet },
+    select: { name: true, guild: { select: { id: true, tag: true } } },
   });
-  return p?.guild ? { id: p.guild.id, tag: p.guild.tag } : null;
+  return { name: p?.name ?? null, guild: p?.guild ?? null };
 }

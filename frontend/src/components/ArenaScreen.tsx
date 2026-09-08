@@ -10,6 +10,7 @@
 // simülasyonu etkiliyor (doğum halkası) ve iki oyuncunun ekranı farklı
 // olabilir; arena sabit 1280×720 simüle edip ekrana ölçekleniyor.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { applyStoredQuality } from '@/components/SettingsPanel';
 import { quality } from '@/game/quality';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -28,7 +29,8 @@ import { isTestMode, TEST_PVP_SEASON } from '@/lib/testMode';
 import { C, FONT, glass } from '@/lib/theme';
 import { CUBUK_BOS, cubukCiz, cubukTak, type Cubuk } from '@/lib/stick';
 
-const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+const kisa = (w: string) => oyuncuAdi({ wallet: w });
 
 type Durum =
   | { k: 'idle' }

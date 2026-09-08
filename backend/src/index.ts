@@ -11,6 +11,7 @@ import cors from 'cors';
 import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma, toProgress, fromProgress, getOrCreatePlayer, saveProgress, YarisHatasi } from './db.js';
+import { oyuncuAdi, renameCost, validatePlayerName } from '@game/playerName';
 import { buildMessage, isValidWallet, issueNonce, issueToken, readToken, verifySignature, verifyTurnstile } from './auth.js';
 import { eventMul, eventWindow } from '@game/events';
 import { acceptDepth, canStart, resolveAscension, resolveStartDepth, settleRun, maxKills, applyKills, STAGES } from './reward.js';
@@ -127,6 +128,8 @@ for (const yol of [
   '/gear/equip', '/gear/unequip', '/gear/salvage', '/gear/reforge',
   '/pets/bind', '/pets/upgrade', '/pets/fuse', '/pets/equip', '/pets/slot',
   '/skills/set', '/duel/start', '/duel/find',
+  // ⚠️ Ad değiştirme gold harcıyor ve benzersizlik yazması yapıyor.
+  '/player/name',
   '/arena/queue', '/quests/claim', '/follow', '/tickets', '/tickets/reply',
   // ⚠️ SOL uçları da BURADA olmak zorunda: her deneme bir zincir okuması
   // (RPC) tetikliyor ve sınırsız bırakılırsa özel sağlayıcı kotasını
@@ -997,7 +1000,7 @@ app.get('/referral/card/:code', wrap(async (req, res) => {
   const p = await prisma.player.findFirst({
     where: { refCode: kod, banned: false },
     select: {
-      wallet: true, hero: true, bestDepth: true, bestStage: true,
+      wallet: true, name: true, hero: true, bestDepth: true, bestStage: true,
       ossuary: true, cleared: true, equipped: true,
     },
   });
@@ -1009,7 +1012,9 @@ app.get('/referral/card/:code', wrap(async (req, res) => {
 
   res.json({
     // ⚠️ TAM CUZDAN DEGIL: kart bir davettir, bir kimlik fisi degil.
-    name: `${p.wallet.slice(0, 4)}…${p.wallet.slice(-4)}`,
+    // ⚠️ Ad varsa ad: paylasilan kartta "ABCD…WXYZ went down to depth 40"
+    // yerine oyuncunun kendi adi duruyor — kartin tum amaci bu.
+    name: oyuncuAdi({ wallet: p.wallet, name: p.name }),
     hero: p.hero,
     depth: p.bestDepth,
     stage: p.bestStage,
@@ -1919,6 +1924,117 @@ app.get('/guild', wrap(async (req, res) => {
     listGuilds(),
   ]);
   res.json({ mine, list, cost: GUILD_COST, levels: GUILD_LEVELS });
+}));
+
+// ── OYUNCU ADI ──────────────────────────────────────────────────────
+//
+// 🔴 NİYE VAR (kullanıcı): oyuncular her yerde `7dau…Bo4` diye görünüyordu.
+// Ad, cüzdan bağlandığı anda zorunlu bir pencerede alınıyor.
+//
+// ⚠️ DOĞRULAMA `@game/playerName`DEN — ikinci bir kopya YOK. İstemci kabul
+// edip sunucu reddederse oyuncu sebebini göremez; `guild.ts` de aynı
+// gerekçeyle `@game/guild`den alıyor.
+
+/**
+ * Ad müsait mi — oyuncu göndermeden ÖNCE öğrensin.
+ *
+ * ⚠️ NİYE AYRI UÇ: "gönder" dedikten sonra 409 yemek, en pahalı hata
+ * biçimi. `GuildPanel` de aynı dersi taşıyor ("parayı alıp sonra ad
+ * reddedildi demek").
+ * ⚠️ BU BİR REZERVASYON DEĞİL: iki oyuncu aynı anda "müsait" görebilir.
+ * Gerçek kapı yazma anındaki `@unique` — burası yalnız nezaket.
+ */
+app.get('/player/name/check', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const v = validatePlayerName(req.query?.name);
+  if (!v.ok) { res.json({ ok: false, reason: v.reason }); return; }
+  const sahip = await prisma.player.findUnique({
+    where: { nameKey: v.key }, select: { wallet: true },
+  });
+  // ⚠️ Kendi adın "alınmış" sayılmıyor — aksi hâlde oyuncu kendi adını
+  // yeniden yazdığında anlamsız bir hata görürdü.
+  const alinmis = !!sahip && sahip.wallet !== wallet;
+  res.json({ ok: !alinmis, reason: alinmis ? 'That name is taken.' : undefined });
+}));
+
+app.post('/player/name', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  const v = validatePlayerName(req.body?.name);
+  if (!v.ok) { res.status(400).json({ error: 'ad_gecersiz', reason: v.reason }); return; }
+
+  const player = await getOrCreatePlayer(wallet);
+  const ucret = renameCost(player.renames);
+  if (ucret > 0 && player.gold < ucret) {
+    res.status(400).json({ error: 'yetersiz_gold' });
+    return;
+  }
+  // ⚠️ Aynı adı tekrar yazmak ÜCRETSİZ ve etkisiz: oyuncu yanlışlıkla
+  // parasını yakmasın.
+  if (player.nameKey === v.key && player.name === v.value) {
+    res.json({ progress: toProgress(player) });
+    return;
+  }
+
+  try {
+    /**
+     * ⚠️ GOLD HARCAYAN HER YOL `withLedger` + `rev` KULLANIR. Defter
+     * satırı olmadan `/admin/economy` gider toplamı yalan söyler; `rev`
+     * olmadan iki eşzamanlı istekte gold bir kez düşüp iki ad yazılabilir.
+     */
+    await withLedger(
+      wallet,
+      {
+        name: v.value,
+        nameKey: v.key,
+        ...(ucret > 0 ? { gold: { decrement: ucret }, renames: { increment: 1 } }
+          : { renames: { increment: 1 } }),
+      },
+      { kind: 'rename', gold: -ucret, detail: v.value },
+      player.rev,
+    );
+  } catch (e) {
+    /**
+     * 🔴 ÇAKIŞMA `P2002` İLE AYIRT EDİLİYOR — `guild.ts`teki kısayol
+     * BİLEREK kopyalanmadı. Orası her hatayı yakalayıp "etiket kullanımda"
+     * diyor; gerçek bir veritabanı hatası o zaman oyuncuya "ad alınmış"
+     * diye görünür ve hata KAYBOLUR.
+     */
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      res.status(409).json({ error: 'ad_alinmis' });
+      return;
+    }
+    if (e instanceof YarisHatasi) { res.status(409).json({ error: 'es_zamanli_degisim' }); return; }
+    throw e;
+  }
+  res.json({ progress: toProgress(await getOrCreatePlayer(wallet)) });
+}));
+
+/**
+ * ADMIN YENİDEN ADLANDIRMA — taklit/istismar için.
+ *
+ * ⚠️ KÜFÜR FİLTRESİ YERİNE BU VAR (bkz. `@game/playerName`): liste diller
+ * arası güvenilmez ve yanlış güven verir. Gerçek kol bir insanın
+ * müdahalesi.
+ */
+app.post('/admin/player/name', adminOnly, wrap(async (req, res) => {
+  const hedef = String(req.body?.wallet ?? '');
+  const v = validatePlayerName(req.body?.name);
+  if (!hedef || !v.ok) { res.status(400).json({ error: 'ad_gecersiz' }); return; }
+  try {
+    await prisma.player.update({
+      where: { wallet: hedef },
+      data: { name: v.value, nameKey: v.key },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+      res.status(409).json({ error: 'ad_alinmis' });
+      return;
+    }
+    throw e;
+  }
+  res.json({ ok: true, name: v.value });
 }));
 
 app.post('/guild/create', wrap(async (req, res) => {

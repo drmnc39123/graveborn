@@ -10,6 +10,7 @@
 // listeden çıkarmak "rakip kalmadı" hissi verirdi; sebebiyle göstermek
 // "birazdan tekrar" der.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useCallback, useEffect, useState } from 'react';
 import { BTN, PixelButton } from '@/components/ui/kit';
 import { panelUnlocked } from '@/lib/testMode';
@@ -23,7 +24,14 @@ import { displayWallet, getMode } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { C, FONT, glass } from '@/lib/theme';
 
-const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+/**
+ * ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+ * Ölçüldü: depoda 15 ayrı yerde aynı kısaltma elle yazılmıştı. Ad geldiği
+ * gün yarısı güncellenir, yarısı cüzdan göstermeye devam ederdi.
+ * ⚠️ Cüzdan-only satırlar (henüz `name` taşımayan uçlar) için `kisa`
+ * çözücünün cüzdan dalını kullanıyor.
+ */
+const kisa = (w: string) => oyuncuAdi({ wallet: w });
 
 export function DuelPanel({ hero, onHero, onChallenge, onError }: {
   /** seçili kahraman — brifingde değiştirilebiliyor */

@@ -269,7 +269,7 @@ export async function findMatch(
 }
 
 export interface DuelLadderRow {
-  rank: number; wallet: string; rating: number;
+  rank: number; wallet: string; name: string | null; rating: number;
   wins: number; losses: number; hero: string;
 }
 
@@ -289,16 +289,16 @@ export async function ladder(wallet: string, limit = 10): Promise<{
     where: { banned: false, ...oynamis },
     orderBy: [{ duelRating: 'desc' }, { duelWins: 'desc' }],
     take: Math.min(Math.max(limit, 1), 50),
-    select: { wallet: true, duelRating: true, duelWins: true, duelLosses: true, hero: true },
+    select: { wallet: true, name: true, duelRating: true, duelWins: true, duelLosses: true, hero: true },
   });
   const list = rows.map((r, i) => ({
-    rank: i + 1, wallet: r.wallet, rating: r.duelRating,
+    rank: i + 1, wallet: r.wallet, name: r.name, rating: r.duelRating,
     wins: r.duelWins, losses: r.duelLosses, hero: r.hero,
   }));
 
   const ben = await prisma.player.findUnique({
     where: { wallet },
-    select: { duelRating: true, duelWins: true, duelLosses: true, hero: true, banned: true },
+    select: { name: true, duelRating: true, duelWins: true, duelLosses: true, hero: true, banned: true },
   });
   if (!ben || ben.banned || (ben.duelWins === 0 && ben.duelLosses === 0)) {
     return { rows: list, me: null };
@@ -314,7 +314,7 @@ export async function ladder(wallet: string, limit = 10): Promise<{
   return {
     rows: list,
     me: {
-      rank: ustum + 1, wallet, rating: ben.duelRating,
+      rank: ustum + 1, wallet, name: ben.name, rating: ben.duelRating,
       wins: ben.duelWins, losses: ben.duelLosses, hero: ben.hero,
     },
   };

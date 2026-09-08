@@ -18,6 +18,7 @@
 // olmayacak. O panelleri şimdi çizmek sonsuza kadar sıfır gösteren bir
 // grafik demekti — Exchange'e OpenSea görünümü vermekle aynı yalan.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BTN, Icon, PixelButton } from '@/components/ui/kit';
 import {
@@ -49,7 +50,8 @@ const VARSAYILAN_MAX_ILAN = 10;
 const ISTEMCI_SIRALAMA_SINIRI = 100;
 
 /** Cüzdan adresini kısalt — tam adres yer kaplıyor, kimlik için 8 hane yeter */
-const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+const short = (w: string) => oyuncuAdi({ wallet: w });
 
 /**
  * BİRİM FİYAT — SAYISAL. Sıralama ve "en iyi fiyat" bununla hesaplanıyor.

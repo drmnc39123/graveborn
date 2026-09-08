@@ -8,6 +8,7 @@
 // ⚠️ ÇEVRİMİÇİ OLANLAR ÜSTTE. Listenin işe yaradığı an tam olarak birinin
 // çevrimiçi olduğu an; onu aşağıda aratmak listeyi ölü içeriğe çevirir.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useCallback, useEffect, useState } from 'react';
 import { panelUnlocked } from '@/lib/testMode';
 import { heroById } from '@/game/heroes';
@@ -20,7 +21,8 @@ import { getMode } from '@/lib/session';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { C, FONT, glass } from '@/lib/theme';
 
-const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+const kisa = (w: string) => oyuncuAdi({ wallet: w });
 
 export function FollowPanel({ onChallenge, onError }: {
   onChallenge: (recordId: string) => void;

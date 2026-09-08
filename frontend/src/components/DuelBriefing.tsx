@@ -15,6 +15,7 @@
 // "gold yok", "günlük toz tavanı", "6 saat soğuma" — hepsi oyuncunun
 // SONRADAN öğrenip şaşırdığı şeyler. Sürpriz, kural değildir.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DUEL, duelTier } from '@/game/duel';
@@ -27,7 +28,8 @@ import type { DuelRow } from '@/lib/gameSession';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
 
-const kisa = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
+const kisa = (w: string) => oyuncuAdi({ wallet: w });
 
 export function DuelBriefing({ row, myWallet, myRating, myHero, rewardedToday, onHero, onEnter, onCancel }: {
   row: DuelRow;

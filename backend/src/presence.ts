@@ -18,13 +18,14 @@
 // birkaç kez değişiyor ve KALICI DEĞİL — her yazımı diske indirmek anlamsız
 // yük olurdu. Sunucu yeniden başlarsa oda boşalır ve kendini doldurur.
 
+import { oyuncuAdi } from '@game/playerName';
 import type { Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { routeUpgrade } from './wsRoute.js';
 import { readToken } from './auth.js';
 import { bossWeek } from '@game/worldBoss';
 import { kaydet, konusabilir, son as sonMesajlar, temizle, type Kanal } from './chat.js';
-import { tagOf } from './guild.js';
+import { kimlikOf } from './guild.js';
 
 /** Sunucunun yayın hızı — istemci daha sık gönderse bile bu hızda dağıtılır */
 const TICK_MS = 125;              // 8 Hz
@@ -75,6 +76,13 @@ interface Peer {
   /** takılı hale — hayaletin rengi ondan geliyor */
   aura: string | null;
   /**
+   * Oyuncunun adı — yoksa `null` ve kısa cüzdana düşülüyor.
+   * ⚠️ Lonca etiketiyle AYNI sorgudan geliyor (bkz. `guild.kimlikOf`) ve
+   * aynı takası paylaşıyor: bağlanırken bir kez okunuyor. Ad değiştiren
+   * oyuncunun köydeki etiketi bir sonraki bağlantıda güncellenir.
+   */
+  ad: string | null;
+  /**
    * Lonca etiketi. ⚠️ BAĞLANIRKEN BİR KEZ okunuyor, her mesajda değil:
    * mesaj başına bir veritabanı sorgusu, sohbeti sunucunun en pahalı
    * işlemi yapardı. Lonca değiştirenin etiketi bir sonraki bağlantıda
@@ -116,8 +124,9 @@ interface Peer {
 
 const peers = new Map<WebSocket, Peer>();
 
-/** Kısa cüzdan — tam adresi yayınlamaya gerek yok */
-const short = (w: string) => `${w.slice(0, 4)}…${w.slice(-4)}`;
+// ⚠️ YEREL `short` SİLİNDİ — kısaltma artık TEK ÇÖZÜCÜDE
+// (`@game/playerName oyuncuAdi`). Burada ikinci bir kopya tutmak,
+// ad geldiğinde köyün cüzdan göstermeye devam etmesi demekti.
 
 function broadcast() {
   const now = Date.now();
@@ -172,7 +181,7 @@ function bossYayini(list: Peer[]) {
       if (!o.gorunur) continue;
       if (others.length >= MAX_GHOSTS) break;
       others.push({
-        n: short(o.wallet),
+        n: oyuncuAdi({ wallet: o.wallet, name: o.ad }),
         x: Math.round(o.x), y: Math.round(o.y),
         f: o.facingRight ? 1 : 0,
         a: o.aura ?? undefined,
@@ -217,7 +226,18 @@ function koyYayini(list: Peer[], now: number) {
   }
 
   // 2) Hücre başına TEK liste (kendi hücresi + 8 komşu), tavanla — O(hücre)
-  const listeler = new Map<string, ReturnType<typeof ozet>[]>();
+  /**
+   * ⚠️ ÖZETİN YANINDA CÜZDAN DA TUTULUYOR — ve bu bir HATA DÜZELTMESİ.
+   *
+   * 🔴 Eski kod kendini listeden ADA BAKARAK eliyordu
+   * (`o.n !== short(p.wallet)`). Ad artık oyuncunun seçtiği bir şey; aynı
+   * adı taşıyan iki hayalet aynı hücrede birbirini yayından SİLERDİ.
+   * (Adlar benzersiz, ama benzersizlik anahtar üzerinden — "Ash en" ile
+   * "Ashen" farklı GÖSTERİLEN adlar olabilir ve daha kötüsü bu, kimliğin
+   * gösterime bağlanmasıydı.) Kimlik cüzdandır; filtre de ona bakmalı.
+   * ⚠️ Cüzdan YAYINLANMIYOR: yalnız sunucu tarafında eşleştirme için.
+   */
+  const listeler = new Map<string, { w: string; o: ReturnType<typeof ozet> }[]>();
   for (const k of kovalar.keys()) {
     const [cx, cy] = k.split(',').map(Number);
     const aday: Peer[] = [];
@@ -228,7 +248,7 @@ function koyYayini(list: Peer[], now: number) {
       }
     }
     aday.sort((a, b) => (a.wallet < b.wallet ? -1 : a.wallet > b.wallet ? 1 : 0));
-    listeler.set(k, aday.slice(0, KOY_TAVAN).map((p) => ozet(p, now)));
+    listeler.set(k, aday.slice(0, KOY_TAVAN).map((p) => ({ w: p.wallet, o: ozet(p, now) })));
   }
 
   // 3) Gönder — herkes kendi hücresinin listesini alır, KENDİSİ çıkarılmış
@@ -237,7 +257,7 @@ function koyYayini(list: Peer[], now: number) {
     const liste = p.gorunur ? listeler.get(hucreOf(p.x, p.y)) : undefined;
     // ⚠️ Kendini listeden çıkarmak burada, gönderirken: hücre listesi ORTAK,
     // kişiye özel kopya çıkarmak paylaşmanın anlamını yok ederdi.
-    const others = liste ? liste.filter((o) => o.n !== short(p.wallet)) : [];
+    const others = liste ? liste.filter((x) => x.w !== p.wallet).map((x) => x.o) : [];
     try {
       p.ws.send(JSON.stringify({ t: 'peers', peers: others }));
     } catch { /* yazılamıyorsa bir sonraki turda düşecek */ }
@@ -248,7 +268,8 @@ function koyYayini(list: Peer[], now: number) {
 function ozet(p: Peer, now: number) {
   const balonlu = p.sonMesaj !== null && now - p.sonMesajAt < BALON_OMRU_MS;
   return {
-    n: short(p.wallet),
+    // ⚠️ Ad varsa ad, yoksa kısa cüzdan — TEK ÇÖZÜCÜ (`@game/playerName`).
+    n: oyuncuAdi({ wallet: p.wallet, name: p.ad }),
     x: Math.round(p.x), y: Math.round(p.y),
     f: p.facingRight ? 1 : 0,
     a: p.aura ?? undefined,
@@ -291,6 +312,9 @@ export function attachPresence(server: Server) {
     peers.set(ws, {
       ws, wallet, week, x: 0, y: 0, facingRight: true, aura: null,
       lastSeen: Date.now(),
+      // ⚠️ Ad bağlanırken sorulup dolduruluyor (kimlikOf); o dönene kadar
+      // hayalet kısa cüzdanla görünür — boş bir etiketten iyidir.
+      ad: null,
       gorunur: false,   // konum gelene kadar hayalet DEĞİL (bkz. alan başlığı)
       tag: null,
       guildId: null,
@@ -309,9 +333,9 @@ export function attachPresence(server: Server) {
         ws.send(JSON.stringify({ t: 'chat_history', msgs: sonMesajlar(gid) }));
       } catch { /* yok */ }
     };
-    tagOf(wallet).then((g) => {
+    kimlikOf(wallet).then((k) => {
       const p = peers.get(ws);
-      if (p) { p.tag = g?.tag ?? null; p.guildId = g?.id ?? null; }
+      if (p) { p.ad = k.name; p.tag = k.guild?.tag ?? null; p.guildId = k.guild?.id ?? null; }
       // ⚠️ Bağlantı bu arada kapanmış olabilir — `p` yoksa gönderme.
       if (!p) return;
       // ⚠️ LONCA DURUMUNU SUNUCU SÖYLÜYOR, istemci ayrıca SORMUYOR.
@@ -320,7 +344,7 @@ export function attachPresence(server: Server) {
       // ama soketin kaydı hâlâ loncasız olduğu için mesajları sessizce
       // düşerdi. Kanalı yönlendiren kayıt ne diyorsa arayüz onu göstermeli.
       try { ws.send(JSON.stringify({ t: 'me', g: p.tag })); } catch { /* yok */ }
-      gecmisGonder(g?.id ?? null);
+      gecmisGonder(k.guild?.id ?? null);
     }).catch(() => { gecmisGonder(null); });
 
     ws.on('message', (raw) => {
@@ -369,7 +393,9 @@ export function attachPresence(server: Server) {
           p.lastSeen = Date.now();   // konuşmak da canlılık işareti
           // ⚠️ TAM CUZDAN DA GONDERILIYOR: `short()` ciktisi geri cevrilemez ve
           // o hâliyle sohbetten kimse takip listesine eklenemiyordu.
-          const msg = kaydet(short(p.wallet), metin, Date.now(), p.tag, kanal, p.guildId, p.wallet);
+          // ⚠️ SOHBETTEKİ AD DA SUNUCUDAN. İstemciden gelen bir ada
+          // güvenmek, herkesin herkesi taklit edebilmesi demekti.
+          const msg = kaydet(oyuncuAdi({ wallet: p.wallet, name: p.ad }), metin, Date.now(), p.tag, kanal, p.guildId, p.wallet);
           // Loncasız biri lonca kanalına yazdıysa mesaj hiç doğmaz.
           if (!msg) return;
           // ⚠️ BALON İÇİN SON MESAJ. Metin SUNUCUNUN temizlediği hâli

@@ -24,6 +24,7 @@
 // sayısı, Forge maliyeti, kapı sayısı) canlı hesaplanıyor ki elle yazılan
 // sayı bayatlamasın; anlatı cümleleri o korumaya sahip değil.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useEffect, useState } from 'react';
 import { STAGES } from '@/game/config';
 import { COSMETICS } from '@/game/cosmetics';
@@ -302,7 +303,7 @@ export function HomeSections() {
                   color: i === 0 ? C.candle : i < 3 ? C.bone : C.boneFaint }}>#{i + 1}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: C.boneDim,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {r.wallet.slice(0, 4)}…{r.wallet.slice(-4)}
+                  {oyuncuAdi(r)}
                 </span>
                 <span style={{ fontSize: 11, color: C.boneFaint }}>
                   {STAGES.find((s) => s.id === r.stage)?.name ?? `Stage ${r.stage}`}

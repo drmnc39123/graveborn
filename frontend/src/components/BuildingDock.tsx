@@ -9,6 +9,7 @@
 // Ayrıca haritada 'quests' kapısı HİÇ YOK — Warden's Post'a tek giriş dövüş
 // portalıydı. Bu navbar o boşluğu da kapatıyor.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { PixelButton, Icon, BTN } from '@/components/ui/kit';
 import { useCountUpInt } from '@/components/ui/motion';
@@ -151,7 +152,9 @@ export const BUILDINGS: readonly DockEntry[] = [
  * Sabit sayı yerine GERÇEK yükseklik ölçülüyor; düğme sayısı ya da ekran
  * genişliği değişince kendiliğinden doğru kalıyor.
  */
-export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, style, onHeight, onLeft, footer }: {
+export function BuildingDock({
+  /** oyuncunun adı — yoksa kısa cüzdan gösterilir */
+  ad = null, open, onOpen, onClose, gold, grave = 0, wallet, style, onHeight, onLeft, footer }: {
   /** açık olan panel — buton "Selected" görünür */
   open: string | null;
   onOpen: (id: string) => void;
@@ -168,6 +171,8 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
   grave?: number;
   /** bağlı cüzdan; yoksa DEMO modundayız */
   wallet?: string | null;
+  /** oyuncunun adi — yoksa kisa cuzdan gosterilir */
+  ad?: string | null;
   style?: CSSProperties;
   /** rıhtımın kapladığı toplam yükseklik (px) — panel boşluğu buna göre ayarlanır */
   onHeight?: (h: number) => void;
@@ -411,7 +416,10 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
             background: wallet ? 'rgba(95,158,74,0.16)' : 'rgba(239,167,46,0.14)',
             border: `1px solid ${wallet ? 'rgba(95,158,74,0.34)' : 'rgba(239,167,46,0.30)'}`,
           }}>
-            {wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'DEMO'}
+            {/* ⚠️ OYUNCUNUN KENDİ KİMLİĞİ — ad koyduysa ADI görünüyor.
+                Burada cüzdan göstermeye devam etseydik, oyuncu ad koyar ve
+                en çok baktığı yerde onu göremezdi. */}
+            {wallet ? oyuncuAdi({ wallet, name: ad }) : 'DEMO'}
           </span>
           {/**
             * SOSYAL İKONLAR — minimap'in HEMEN SOLUNDA, navbar hizasında.

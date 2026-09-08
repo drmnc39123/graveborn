@@ -159,6 +159,33 @@ export async function loadSessionProgress(): Promise<Progress> {
   return progress;
 }
 
+/**
+ * OYUNCU ADI — koy ve ilk giris.
+ *
+ * ⚠️ DEMO'DA CAGRILMIYOR. Demo'nun kurali: cuzdan yokken SIFIR backend
+ * cagrisi. Ad penceresi de zaten yalniz cuzdanli oyuncuya aciliyor;
+ * buradaki kontrol ikinci kapi (`isWallet`), yanlislikla cagrilirsa
+ * sunucuya gitmesin.
+ */
+export async function setPlayerName(name: string): Promise<Progress> {
+  if (!isWallet()) throw new Error('Connect a wallet first.');
+  const { progress } = await api<{ progress: Progress }>('/player/name', {
+    method: 'POST', body: { name },
+  });
+  return progress;
+}
+
+/**
+ * Ad musait mi — oyuncu GONDERMEDEN once.
+ * ⚠️ Bir REZERVASYON DEGIL: gercek kapi yazma anindaki `@unique`.
+ */
+export async function checkPlayerName(name: string): Promise<{ ok: boolean; reason?: string }> {
+  if (!isWallet()) return { ok: false, reason: 'Connect a wallet first.' };
+  return api<{ ok: boolean; reason?: string }>(
+    `/player/name/check?name=${encodeURIComponent(name)}`,
+  );
+}
+
 export async function setHero(hero: string, current: Progress): Promise<Progress> {
   if (!isWallet()) {
     const next = { ...current, hero };
@@ -198,6 +225,8 @@ export async function buyUpgrade(id: string, current: Progress, cost: number): P
 export interface LeaderRow {
   rank: number;
   wallet: string;
+  /** oyuncunun adı — yoksa `null`, `oyuncuAdi()` kısa cüzdana düşürür */
+  name?: string | null;
   stage: number;
   depth: number;
   rating: number;
@@ -912,7 +941,7 @@ export interface GuildSummary {
 export interface MyGuild {
   id: string; name: string; tag: string; owner: string;
   level: number; treasury: number; donated: number;
-  members: { wallet: string; hero: string; bestRating: number }[];
+  members: { wallet: string; name?: string | null; hero: string; bestRating: number }[];
   cap: number; growth: number; nextCost: number | null;
 }
 

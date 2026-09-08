@@ -135,6 +135,11 @@ const METIN: Record<string, string> = {
   zaten_loncada: 'You are already in a guild.',
   sadece_kurucu: 'Only the founder can do that.',
   etiket_kullanimda: 'That tag is taken.',
+  // ── OYUNCU ADI ──
+  // ⚠️ `ad_gecersiz` sunucudan AYRICA bir `reason` taşıyor (hangi kural
+  // çiğnendi). Buradaki metin son çare: arayüz `reason` varsa onu gösterir.
+  ad_gecersiz: 'That name cannot be used.',
+  ad_alinmis: 'That name is taken.',
   hazine_yetersiz: 'The guild treasury is short.',
 
   // ── kasa / düello / diğer ──

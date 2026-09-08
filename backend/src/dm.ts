@@ -23,6 +23,8 @@
 // gösteriyor — orada gold escrow'a kilitleniyor ve alım tek işlemde
 // kapanıyor.
 
+import { adlariCoz } from './names.js';
+import { oyuncuAdi } from '@game/playerName';
 import crypto from 'node:crypto';
 import { prisma } from './db.js';
 
@@ -205,10 +207,14 @@ export async function threadler(
   }
   const okunmamisHarita = new Map(okunmamis.map((o) => [o.from, o._count._all]));
 
+  // ⚠️ TEK SORGU: satır başına `findUnique` çağırmak arkadaş sayısı kadar
+  // sorgu açardı (bkz. `names.ts` başlığı).
+  const adlar = await adlariCoz(arkadaslar);
   return arkadaslar
     .map((w) => ({
       wallet: w,
-      name: `${w.slice(0, 4)}…${w.slice(-4)}`,
+      // ⚠️ TEK ÇÖZÜCÜ — ad varsa ad, yoksa kısa cüzdan.
+      name: oyuncuAdi({ wallet: w, name: adlar.get(w) ?? null }),
       online: online(w),
       lastBody: sonHarita.get(w)?.body ?? null,
       lastAt: sonHarita.get(w)?.at ?? null,

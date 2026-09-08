@@ -5,6 +5,7 @@
 // backend beklemesine gerek yok. Market/Exchange'in aksine burada uydurma bir
 // "yakında" ekranı göstermek gereksiz olurdu.
 
+import { oyuncuAdi } from '@/game/playerName';
 import { useEffect, useMemo, useState } from 'react';
 import { STAGES, depthGold, MAX_WEAPONS } from '@/game/config';
 import { FORGE, costOf, spentOn } from '@/game/forge';
@@ -630,7 +631,8 @@ function Line({ row, mine }: { row: LeaderRow; mine: boolean }) {
             vermez ve sink işlevini kaybeder. */}
         <span style={{ flex: 1, minWidth: 0 }}>
           <IdentityLine compact size={12} id={{
-            name: mine ? 'You' : `${row.wallet.slice(0, 4)}…${row.wallet.slice(-4)}`,
+            // ⚠️ TEK ÇÖZÜCÜ — "You" kararı da orada (bkz. `oyuncuAdi`).
+            name: oyuncuAdi(row, mine),
             title: row.equipped?.title,
             plate: row.equipped?.plate,
             trophy: row.equipped?.trophy,

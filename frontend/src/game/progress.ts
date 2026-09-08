@@ -27,6 +27,17 @@ const KEY = 'graveborn:progress:v2';
 const KEY_V1 = 'graveborn:progress:v1';
 
 export interface Progress {
+  /**
+   * OYUNCUNUN ADI — yoksa `null` ve ilk girişte SORULUYOR.
+   *
+   * ⚠️ `null` olması bir eksiklik değil, KAPININ KENDİSİ: ad penceresi
+   * "gördü mü" diye ayrı bir bayrak tutmuyor, bu alana bakıyor. İkinci bir
+   * doğruluk kaynağı bir gün ayrışırdı — `FirstRun.isNewcomer` de aynı
+   * gerekçeyle Progress'ten türüyor.
+   */
+  name: string | null;
+  /** kaç kez ad değiştirdi — sonraki değişimin fiyatı bundan türüyor */
+  renames: number;
   /** harcanabilir toplam gold */
   gold: number;
   /** oynanabilir en yüksek bölüm (1'den başlar) */
@@ -114,6 +125,7 @@ export interface Progress {
 
 export function emptyProgress(): Progress {
   return {
+    name: null, renames: 0,
     gold: 0, unlockedStage: 1, cleared: {}, upgrades: {},
     firstClear: {}, depthPaid: {}, hero: DEFAULT_HERO, charms: [],
     cosmetics: [], equipped: {}, dust: 0, ossuary: 0, wager: null,
@@ -185,6 +197,10 @@ function cleanEquipped(
 /** Eksik/bozuk alanlara karşı savunmacı normalize — kayıt biçimi değişse de oyun açılsın */
 function normalize(p: Partial<Progress>): Progress {
   const out: Progress = {
+    // ⚠️ Bos string de `null` sayiliyor: ad penceresi bu alana bakiyor ve
+    // bos bir ad "ad var" gibi okunursa pencere hic acilmaz.
+    name: typeof p.name === 'string' && p.name.length > 0 ? p.name : null,
+    renames: Math.max(0, Math.floor(Number(p.renames) || 0)),
     gold: Math.max(0, Number(p.gold) || 0),
     unlockedStage: Math.min(STAGES.length, Math.max(1, Number(p.unlockedStage) || 1)),
     cleared: p.cleared ?? {},

@@ -34,6 +34,25 @@ model Player {
   upgrades   Json @default("{}")
 
   // ── DAVET ────────────────────────────────────────────────────────
+  // ── OYUNCU ADI ───────────────────────────────────────────────────
+  /// Oyuncunun sectigi ad — YAZILDIGI GIBI gosterilir.
+  /// ⚠️ Nullable: mevcut oyuncular adsiz kaliyor ve ilk giriste soruluyor.
+  /// Zorunlu yapmak, calisan bir uretim veritabanina migration sirasinda
+  /// deger uydurmak demekti.
+  name        String?
+  /// BENZERSIZLIK ANAHTARI — kucuk harf, ayraclar atilmis, karistirilabilir
+  /// harfler Latin'e katlanmis hali (bkz. `@game/playerName` adAnahtari).
+  /// 🔴 `name`i dogrudan @unique yapmak YETMEZ: Postgres karsilastirmasi
+  /// harf duyarli, yani "Ashen" ve "ashen" ikisi de alinabilirdi ve
+  /// benzersizlik bir soz olmaktan oteye gecmezdi. Daha kotusu Kiril "а"
+  /// ile Latin "a" ekranda AYNI gorunur — anahtar olmadan siralamada
+  /// birinci olan oyuncunun adinin birebir kopyasi alinabilirdi.
+  nameKey     String? @unique
+  /// Kac kez ad degistirdi — fiyat bundan turuyor (ilk ad BEDAVA).
+  /// ⚠️ ARTAN FIYAT: sabit fiyat, ad degistirip itibardan kacmayi ucuz
+  /// birakirdi. Adin benzersiz olmasinin anlami da buydu.
+  renames     Int     @default(0)
+
   /// Bu oyuncunun paylastigi kod. Ilk istendiginde uretilir.
   /// ⚠️ @unique: iki oyuncuya ayni kod dusemez — kod bir KIMLIK.
   refCode     String? @unique
