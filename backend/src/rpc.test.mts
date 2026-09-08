@@ -27,12 +27,17 @@ const A = 'https://uc-a.test';
 const B = 'https://uc-b.test';
 process.env.RPC_URLS = `${A},${B}`;
 
-const { RpcHatasi, mainnetUcuMu, rpcCagir, rpcCezalariSifirla, rpcSaglik, rpcUclari } = await import('./rpc.js');
+const {
+  MAINNET_GENESIS, RpcHatasi, agKayitlariniSifirla, aglariDogrula, mainnetUcuMu,
+  rpcCagir, rpcCezalariSifirla, rpcSaglik, rpcUclari,
+} = await import('./rpc.js');
 
 /** Hangi uca kac istek gitti */
 let cagrilar: string[] = [];
 /** url -> nasil davransin */
 let davranis = new Map<string, 'ok' | 'http500' | 'kota' | 'bozukParam' | 'as'>();
+/** url -> o ucun genesis hash'i (varsayilan mainnet) */
+let genesis = new Map<string, string>();
 
 function agiKur() {
   globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
@@ -54,6 +59,14 @@ function agiKur() {
       });
     }
     if (d === 'http500') return new Response('bozuk', { status: 500 });
+    // ⚠️ Ag dogrulamasi ayri bir metot — sahte ag da onu cevaplamali,
+    // yoksa test urunun HIC calismayan bir yolunu olcmus olur.
+    const govdeMetin = String((init as { body?: string } | undefined)?.body ?? '');
+    if (govdeMetin.includes('getGenesisHash')) {
+      const gen = genesis.get(u) ?? MAINNET_GENESIS;
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: gen }),
+        { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     const govde = d === 'kota'
       ? { jsonrpc: '2.0', id: 1, error: { message: 'Too many requests, rate limit exceeded' } }
       : d === 'bozukParam'
@@ -68,7 +81,9 @@ function agiKur() {
 function sifirla() {
   cagrilar = [];
   davranis = new Map();
+  genesis = new Map();
   rpcCezalariSifirla();
+  agKayitlariniSifirla();
   agiKur();
 }
 
@@ -262,6 +277,53 @@ console.log('\n[8] ** MAINNET DISI UC REDDEDILIYOR - gercek para acigi');
   check('hepsi devnet ise MAINNET varsayilanina dusuluyor',
     hepsiDevnet.every(mainnetUcuMu) && hepsiDevnet.length > 0, hepsiDevnet.join(' , '));
   process.env.RPC_URLS = eski;
+}
+
+console.log('\n[9] ** AGIN KANITI - genesis hash');
+{
+  /**
+   * 🔴 URL KONTROLU BIR SEZGI, GENESIS HASH BIR KANIT. Kendi alan adinin
+   * arkasinda devnet calistiran bir uc `mainnetUcuMu`den rahatca gecer;
+   * genesis hash taklit edilemez.
+   *
+   * Bedeli: devnet SOL BEDAVA ve yanlis aga bakan bir dogrulamada
+   * `odemeDogrula`nin butun kontrolleri temiz gecer.
+   */
+  sifirla();
+  const r = await aglariDogrula();
+  check('mainnet uclari dogrulaniyor', r.every((x) => x.mainnet), JSON.stringify(r.map((x) => x.mainnet)));
+  check('saglik tablosu agi gosteriyor',
+    rpcSaglik().every((u) => u.ag === 'mainnet'), rpcSaglik().map((u) => u.ag).join(' , '));
+
+  // ⭐ ASIL KONTROL: mainnet gibi gorunen ama DEVNET olan bir uc
+  sifirla();
+  genesis.set(A, 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG');   // devnet genesis
+  await aglariDogrula();
+  cagrilar = [];
+  const c = await cagir();
+  check('yanlis agdaki uc HIC denenmiyor',
+    c.ok && !cagrilar.includes(A) && cagrilar.includes(B), cagrilar.join(' → '));
+  check('saglik tablosu "yanlis" diyor', rpcSaglik()[0].ag === 'yanlis');
+
+  /**
+   * ⚠️ ULASILAMAYAN UC DISLANMAMALI. "Cevap vermedi" ile "yanlis ag" ayni
+   * sey degil; ilki gecici bir kesinti olabilir ve kalici olarak elemek,
+   * bir dakikalik arizayi surekli bir kayba cevirirdi.
+   */
+  sifirla();
+  davranis.set(A, 'http500');
+  await aglariDogrula();
+  rpcCezalariSifirla();
+  cagrilar = [];
+  await cagir();
+  check('ulasilamayan uc DISLANMIYOR (sadece bilinmiyor)',
+    cagrilar[0] === A && rpcSaglik()[0].ag === 'bilinmiyor', `${cagrilar.join(' → ')} · ${rpcSaglik()[0].ag}`);
+
+  // CIFT TARAFLI: dogrulanmamis uc izinli olmali (acilis penceresi)
+  sifirla();
+  cagrilar = [];
+  await cagir();
+  check('dogrulanmadan once uc izinli (acilis penceresi)', cagrilar[0] === A);
 }
 
 console.log(`\n${FAIL.length === 0 ? 'RPC YEDEKLEME SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);

@@ -19,7 +19,7 @@ import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
-import { rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
+import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ossuarySolPrice, solPrice } from '@game/solPrice';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
@@ -2702,6 +2702,21 @@ const server = app.listen(port, () => {
   const hazine = hazineAdresi();
   if (hazine) {
     console.log(`[HAZINE] ${hazine} · SOL rayi ${solRayiAcik() ? 'ACIK' : 'KAPALI (RPC_URLS eksik)'}`);
+    /**
+     * ⚠️ AG DOGRULAMASI ACILISTA VE ENGELLEMEDEN. Genesis hash agin
+     * KIMLIGI; yanlis aga bakan bir dogrulama sahte odemeyi gecerli
+     * sayardi (devnet SOL bedava). Sunucunun ayaga kalkmasini bekletmiyor:
+     * kontrol birkac yuz milisaniye suruyor ve o pencerede odeme gelmesi
+     * pratikte imkansiz.
+     */
+    if (solRayiAcik()) {
+      void aglariDogrula().then((r) => {
+        for (const u of r) {
+          console.log(`[RPC] ${u.url.replace(/([?&](api-key|apikey|key)=)[^&]+/i, '$1***')} → `
+            + (u.ag === null ? 'ULASILAMADI (dislanmadi)' : u.mainnet ? 'mainnet ✓' : `YANLIS AG ${u.ag}`));
+        }
+      }).catch(() => { /* dogrulama basarisizsa uclar bilinmiyor kalir */ });
+    }
   } else {
     console.log('[HAZINE] TREASURY_ADDRESS yok — SOL rayi kapali');
   }

@@ -114,7 +114,14 @@ const cezali = new Map<string, number>();
 
 /** Denenecek uclar — cezalilar sona degil, DISARI atilir */
 function siraliUclar(now = Date.now()): string[] {
-  const hepsi = rpcUclari();
+  /**
+   * ⚠️ AGI KANITLANMIS SEKILDE YANLIS OLAN UC HIC DENENMEZ — cezali bile
+   * degil, TAMAMEN disarida. Ceza gecici bir arizanin cevabi; yanlis ag
+   * gecici degil ve oradan gelen "basarili" bir odeme sahtedir.
+   * Henuz dogrulanmamis uclar (kayit yok) izinli: acilis kontrolu birkac
+   * yuz milisaniye suruyor ve o pencerede kapiyi kapatmak gereksiz.
+   */
+  const hepsi = rpcUclari().filter((u) => agDogrulandi.get(u) !== false);
   const temiz = hepsi.filter((u) => (cezali.get(u) ?? 0) <= now);
   /**
    * ⚠️ HEPSI CEZALIYSA YINE DE DENE. Cezanin amaci beklemek degil SIRA
@@ -147,10 +154,14 @@ function ucunSucuMu(mesaj: string): boolean {
 }
 
 /** Uclarin o anki durumu — operatör gorunurlugu icin */
-export function rpcSaglik(now = Date.now()): { url: string; cezali: boolean; kalanSn: number }[] {
+export function rpcSaglik(now = Date.now()): {
+  url: string; cezali: boolean; kalanSn: number; ag: 'mainnet' | 'yanlis' | 'bilinmiyor';
+}[] {
   return rpcUclari().map((url) => {
     const bitis = cezali.get(url) ?? 0;
+    const d = agDogrulandi.get(url);
     return {
+      ag: d === true ? 'mainnet' as const : d === false ? 'yanlis' as const : 'bilinmiyor' as const,
       // ⚠️ ANAHTAR SIZDIRILMIYOR: Helius gibi saglayicilarda API anahtari
       // URL'nin icinde. Operator panelinde tam URL gostermek onu ekrana
       // basmak olurdu.
@@ -163,6 +174,70 @@ export function rpcSaglik(now = Date.now()): { url: string; cezali: boolean; kal
 
 /** ⚠️ Yalniz test icin — cezalari sifirla */
 export function rpcCezalariSifirla(): void { cezali.clear(); }
+
+/**
+ * ⭐ AGIN KANITI — genesis hash.
+ *
+ * 🔴 NIYE URL YETMIYOR: `mainnetUcuMu` bir SEZGI, URL metnine bakiyor.
+ * Kendi alan adinin arkasinda devnet calistiran bir uc o kontrolden
+ * rahatca gecer. Genesis hash ise agin KIMLIGI — taklit edilemez.
+ *
+ * Bedeli hatirlatalim: devnet SOL BEDAVA. Yanlis aga bakan bir dogrulamada
+ * `odemeDogrula`nin butun kontrolleri temiz gecer (islem gercekten
+ * basarili, sadece yanlis agda) ve urun bedava dagitilir.
+ *
+ * ⚠️ ACILISTA BIR KEZ, uc basina. Her cagrida sormak her odemeye bir
+ * gidis-donus eklerdi; ag bir ucun ORTASINDA degismez.
+ */
+export const MAINNET_GENESIS = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d';
+
+/** url → mainnet mi (bilinmiyorsa kayit yok) */
+const agDogrulandi = new Map<string, boolean>();
+
+/** ⚠️ Yalniz test icin */
+export function agKayitlariniSifirla(): void { agDogrulandi.clear(); }
+
+async function ucunAgi(url: string): Promise<string | null> {
+  const iptal = new AbortController();
+  const saat = setTimeout(() => iptal.abort(), ZAMAN_ASIMI_MS);
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getGenesisHash', params: [] }),
+      signal: iptal.signal,
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { result?: string };
+    return typeof j.result === 'string' ? j.result : null;
+  } catch { return null; } finally { clearTimeout(saat); }
+}
+
+/**
+ * Yapilandirilmis her ucun AGINI dogrula.
+ *
+ * ⚠️ ULASILAMAYAN UC DISLANMIYOR. "Cevap vermedi" ile "yanlis ag" ayni sey
+ * degil; ilki gecici bir kesinti olabilir ve onu kalici olarak elemek,
+ * bir dakikalik bir arizayi surekli bir kayba cevirirdi. Yalniz agi
+ * KANITLANMIS SEKILDE yanlis olanlar disaniyor.
+ */
+export async function aglariDogrula(): Promise<{ url: string; ag: string | null; mainnet: boolean }[]> {
+  const uclar = rpcUclari();
+  const sonuc = await Promise.all(uclar.map(async (url) => {
+    const ag = await ucunAgi(url);
+    const mainnet = ag === MAINNET_GENESIS;
+    if (ag !== null) agDogrulandi.set(url, mainnet);
+    if (ag !== null && !mainnet) {
+      console.error(
+        '[RPC] UC MAINNET DEGIL — DISLANDI. Devnet/testnet SOL bedavadir ve '
+        + 'oraya bakan bir dogrulama sahte odemeyi gecerli sayardi:',
+        url.replace(/([?&](api-key|apikey|key)=)[^&]+/i, '$1***'), 'genesis:', ag,
+      );
+    }
+    return { url, ag, mainnet };
+  }));
+  return sonuc;
+}
 
 export async function rpcCagir<T>(method: string, params: unknown[]): Promise<T> {
   const uclar = siraliUclar();
