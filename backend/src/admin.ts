@@ -253,6 +253,7 @@ export async function betaSifirla(gercek: boolean): Promise<SifirlamaSayim> {
     players, runs, duelRecords, listings, follows, tickets, ticketMessages,
     pvpAwards, seasonAwards, gearItems,
     ledger, bossDamage, authNonce, duels, worldBoss, seasonClose, pvpClose, guilds,
+    bossAwards, bossCloses, directMessages, payments,
   ] = await Promise.all([
     prisma.player.count(), prisma.run.count(), prisma.duelRecord.count(),
     prisma.listing.count(), prisma.follow.count(), prisma.ticket.count(),
@@ -261,11 +262,17 @@ export async function betaSifirla(gercek: boolean): Promise<SifirlamaSayim> {
     prisma.ledger.count(), prisma.bossDamage.count(), prisma.authNonce.count(),
     prisma.duel.count(), prisma.worldBoss.count(), prisma.seasonClose.count(),
     prisma.pvpClose.count(), prisma.guild.count(),
+    prisma.bossAward.count(), prisma.bossClose.count(),
+    prisma.directMessage.count(), prisma.payment.count(),
   ]);
   Object.assign(sayim, {
     players, runs, duelRecords, listings, follows, tickets, ticketMessages,
     pvpAwards, seasonAwards, gearItems,
     ledger, bossDamage, authNonce, duels, worldBoss, seasonClose, pvpClose, guilds,
+    bossAwards, bossCloses, directMessages,
+    // ⚠️ SAYILIYOR AMA SILINMIYOR — kuru calistirmada "kac makbuz KALACAK"
+    // bilgisi, silinecekler kadar onemli.
+    paymentsKalacak: payments,
   });
 
   if (!gercek) return sayim;
@@ -280,12 +287,36 @@ export async function betaSifirla(gercek: boolean): Promise<SifirlamaSayim> {
     prisma.worldBoss.deleteMany({}),
     prisma.seasonClose.deleteMany({}),
     prisma.pvpClose.deleteMany({}),
-    // 2) Player — 8 tablo cascade ile gider
+    /**
+     * ⚠️ HAFTALIK BOSS GECMISI DE GIDIYOR. Player'a bagli DEGILLER
+     * (`BossClose` haftanin kapanisi, `BossAward` o haftanin odulleri) ve
+     * birakilsalardi yeni dunyada "gecen hafta su kadar hasar vurulmustu"
+     * diyen ama sahibi olmayan kayitlar kalirdi.
+     */
+    prisma.bossAward.deleteMany({}),
+    prisma.bossClose.deleteMany({}),
+    // 2) Player — cascade ile bagli tablolar gider (DirectMessage dahil:
+    //    `onDelete: Cascade` ile gonderene bagli)
     prisma.player.deleteMany({}),
     // 3) Lonca (oyuncular gittikten SONRA)
     prisma.guild.deleteMany({}),
     // 4) Kasa: silinmez, sıfırlanır
     prisma.cryptVault.updateMany({ data: { balance: 0, filled: 0, paid: 0 } }),
+    /**
+     * ══════════════════════════════════════════════════════════════════
+     * 🔴 `Payment` BILEREK SILINMIYOR — VE BU BIR EKSIKLIK DEGIL, KARAR.
+     *
+     * `Payment.sig` zincir imzasi ve `@unique`; TEKRAR KULLANIMI onleyen
+     * TEK sey o satir. Silseydik gecmiste odenmis her imza yeniden
+     * gecerli hale gelirdi: eski bir imzayi ikinci kez gonderen oyuncu
+     * ikinci bir kart/lonca/cekilis alirdi. Yani sifirlama, gecmis butun
+     * odemeleri yeniden harcanabilir yapardi.
+     *
+     * ⚠️ Oyuncu satiri gittigi icin `Payment.wallet` artik oksuz kaliyor
+     * ve bu KABUL EDILEN sonuc: kayit bir kimlik degil, bir MAKBUZ.
+     * ⚠️ Beta sonrasi "kim ne odemis" sorusunun tek cevabi da bu tablo.
+     * ══════════════════════════════════════════════════════════════════
+     */
   ]);
 
   return sayim;
