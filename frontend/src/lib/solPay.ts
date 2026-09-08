@@ -81,6 +81,78 @@ export async function solOde(
 }
 
 /**
+ * ⭐ BEKLEYEN ÖDEME — "para gitti, ürün gelmedi"nin panzehiri.
+ *
+ * 🔴 NİYE VAR: ödeme ZİNCİRE gider, sonra sunucu onu doğrular. Aradaki
+ * adım düşerse (RPC kesintisi, ağ, sekme kapandı) imza sadece cüzdanın
+ * geçmişinde kalıyordu ve oyuncunun elinde hiçbir şey yoktu. Arayüz
+ * "keep the signature" diyordu ama imzayı GÖSTERMİYORDU bile.
+ *
+ * ⚠️ TEKRAR DENEMEK GÜVENLİ: sunucu tarafı zaten fikir birliğinde —
+ * `Payment.sig @unique`. Doğrulama düştüyse satır hiç yazılmamıştır ve
+ * tekrar geçer; başarılıysa ikinci deneme 409 `imza_kullanilmis` alır,
+ * yani "zaten aldın". İki durumda da oyuncu kaybetmez.
+ *
+ * ⚠️ CİHAZDA DURUYOR, sunucuda değil: bu bir kurtarma ipucu, bir hak
+ * değil. Hakkın kanıtı zincirde ve `Payment` tablosunda.
+ */
+const BEKLEYEN = 'graveborn:solBekleyen';
+
+export interface BekleyenOdeme {
+  urun: string;
+  sig: string;
+  /** gönderildiği an (ms) */
+  at: number;
+  ek?: Record<string, unknown>;
+}
+
+function bekleyenOku(): BekleyenOdeme[] {
+  try {
+    const ham = localStorage.getItem(BEKLEYEN);
+    const d = ham ? (JSON.parse(ham) as unknown) : null;
+    return Array.isArray(d) ? (d as BekleyenOdeme[]).filter((x) => x && typeof x.sig === 'string') : [];
+  } catch { return []; }
+}
+
+function bekleyenYaz(liste: BekleyenOdeme[]): void {
+  try { localStorage.setItem(BEKLEYEN, JSON.stringify(liste.slice(-5))); } catch { /* yoksay */ }
+}
+
+/** Bu ürün için bekleyen bir ödeme var mı */
+export function bekleyenOdeme(urun: string): BekleyenOdeme | null {
+  return bekleyenOku().find((b) => b.urun === urun) ?? null;
+}
+
+export function bekleyeniTemizle(urun: string): void {
+  bekleyenYaz(bekleyenOku().filter((b) => b.urun !== urun));
+}
+
+/**
+ * Bekleyen ödeme hâlâ otomatik kurtarılabilir mi.
+ *
+ * ⚠️ SUNUCU 30 DAKİKADAN ESKİ İŞLEMİ REDDEDİYOR (`MAX_YAS_SN`). O süreden
+ * sonra "tekrar dene" düğmesi göstermek, asla çalışmayacak bir düğme
+ * göstermektir — oyuncuya bunun yerine imzası verilip destek kaydı
+ * açması söylenmeli.
+ */
+export const TEKRAR_PENCERESI_MS = 28 * 60 * 1000;
+
+export function tekrarDenenebilir(b: BekleyenOdeme, now = Date.now()): boolean {
+  return now - b.at < TEKRAR_PENCERESI_MS;
+}
+
+/** Bekleyen bir ödemeyi yeniden kullan — yeni bir transfer YAPILMAZ */
+export async function bekleyeniKullan<T>(
+  urun: string, redeem: (sig: string) => Promise<T>,
+): Promise<T> {
+  const b = bekleyenOdeme(urun);
+  if (!b) throw new SolOdemeHatasi('bekleyen_yok');
+  const out = await redeem(b.sig);
+  bekleyeniTemizle(urun);
+  return out;
+}
+
+/**
  * TAM AKIŞ — bir ürünü SOL ile satın al.
  *
  * ⚠️ TEK CÜZDAN ONAYI: sunucudan fiyat ve blockhash alınır, işlem kurulur,
@@ -126,5 +198,17 @@ export async function solIleAl<T>(
 
   const { blockhash } = await api<{ blockhash: string }>('/sol/blockhash');
   const sig = await solOde(cuzdan, adres, teklif.lamports, { treasury: cfg.treasury, blockhash });
-  return redeem(sig);
+
+  /**
+   * ⚠️ İMZA REDEEM'DEN **ÖNCE** SAKLANIYOR ve sırası önemli: redeem
+   * patlarsa (RPC kesintisi, ağ, sekme kapandı) imza yalnız cüzdanın
+   * geçmişinde kalırdı ve oyuncunun elinde hiçbir şey olmazdı. Zincire
+   * para gitti; kaydı BİZ tutmalıyız.
+   */
+  bekleyenYaz([...bekleyenOku().filter((b) => b.urun !== urun), { urun, sig, at: Date.now(), ek }]);
+  const out = await redeem(sig);
+  // ⚠️ Yalnız BAŞARIDA siliniyor — hata durumunda kayıt kalmalı ki
+  // oyuncu tekrar deneyebilsin.
+  bekleyeniTemizle(urun);
+  return out;
 }

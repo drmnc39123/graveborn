@@ -171,5 +171,53 @@ console.log('\n[6] ** ARAYUZ: SOL yolu gold yolunun YANINDA');
   check('uydurma desen bulunmuyor (kontrol grubu)', !/SolPayZZZ/.test(btn));
 }
 
+console.log('\n[7] ** PARA GITTI URUN GELMEDI - kurtarma yolu');
+{
+  /**
+   * 🔴 OLCULDU (2026-09-08): odeme ZINCIRE gidiyor, sonra sunucu onu
+   * dogruluyor. Aradaki adim duserse (RPC kesintisi, ag, sekme kapandi)
+   * `redeem(sig)` firlatiyor ve IMZA KAYBOLUYORDU — oyuncunun elinde
+   * hicbir sey kalmiyordu. Arayuz "keep the signature" diyordu ama imzayi
+   * GOSTERMIYORDU bile.
+   *
+   * ⚠️ TEKRAR DENEMEK GUVENLI: `Payment.sig @unique` sunucu tarafinda.
+   * Dogrulama dustuyse satir hic yazilmamistir ve tekrar gecer; basariliysa
+   * ikinci deneme 409 "zaten aldin" alir. Iki durumda da oyuncu kaybetmez.
+   */
+  const lib = oku('src/lib/solPay.ts');
+  // ⭐ SIRA: imza redeem'den ONCE saklanmali, yoksa redeem patladiginda
+  // saklanacak bir sey kalmaz.
+  const govde = lib.slice(lib.indexOf('export async function solIleAl'));
+  const iYaz = govde.indexOf('bekleyenYaz(');
+  const iRedeem = govde.indexOf('await redeem(sig)');
+  check("imza redeem'den ONCE saklaniyor", iYaz > 0 && iYaz < iRedeem,
+    `yaz@${iYaz} redeem@${iRedeem}`);
+  check('yalniz BASARIDA siliniyor',
+    /await redeem\(sig\);[\s\S]{0,200}bekleyeniTemizle/.test(govde));
+
+  const btn = oku('src/components/SolPayButton.tsx');
+  check('bekleyen varsa dugme "FINISH PAYMENT" oluyor', /FINISH PAYMENT/.test(btn));
+  /**
+   * ⚠️ BEKLEYEN VARKEN YENI ODEME ALINMAMALI: oyuncu ikinci kez oderdi ve
+   * ilki hala kurtarilmayi bekliyor olurdu — sorunun iki kati.
+   */
+  check('bekleyen varken yeni transfer YAPILMIYOR',
+    /if \(b && tekrarDenenebilir\(b\)\)[\s\S]{0,120}bekleyeniKullan/.test(btn));
+  // ⚠️ Pencere gecmisse imza GOSTERILMELI — destek kaydi onsuz ise yaramaz
+  check('pencere gecince imza EKRANDA gosteriliyor',
+    /!tekrarDenenebilir\(bekleyen\)[\s\S]{0,600}bekleyen\.sig/.test(btn));
+  check('imza kopyalanabiliyor', /clipboard\?\.writeText\(bekleyen\.sig\)/.test(btn));
+
+  // Sunucu 30 dk'dan eski islemi reddediyor; pencere ondan KISA olmali,
+  // yoksa asla calismayacak bir "tekrar dene" dugmesi gosterilir.
+  const srv = oku('../backend/src/solPay.ts');
+  const dk = Number((srv.match(/MAX_YAS_SN = (\d+)/) ?? [])[1] ?? 0);
+  check('sunucu yas siniri okunabildi (kontrol grubu)', dk > 0, `${dk} dk`);
+  check('tekrar penceresi sunucu sinirindan KISA',
+    /TEKRAR_PENCERESI_MS = 28 \* 60 \* 1000/.test(lib), '28 dk < 30 dk');
+
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/bekleyenZZZ/.test(lib + btn));
+}
+
 console.log(`\n${FAIL.length === 0 ? 'SOL FIYAT RAYI SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

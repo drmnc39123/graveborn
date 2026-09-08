@@ -17,7 +17,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { panelUnlocked } from '@/lib/testMode';
 import { getMode } from '@/lib/session';
 import { api } from '@/lib/session';
-import { solIleAl, type SolConfig } from '@/lib/solPay';
+import {
+  bekleyenOdeme, bekleyeniKullan, bekleyeniTemizle, solIleAl,
+  tekrarDenenebilir, type BekleyenOdeme, type SolConfig,
+} from '@/lib/solPay';
 import { solLabel } from '@/game/solPrice';
 import { C, FONT } from '@/lib/theme';
 
@@ -84,20 +87,41 @@ export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: 
 }) {
   const [acik, setAcik] = useState(false);
   const [busy, setBusy] = useState(false);
+  /**
+   * ⚠️ BEKLEYEN ÖDEME. Zincire para gitti ama sunucu doğrulaması düştüyse
+   * (RPC kesintisi, ağ, sekme kapandı) imza cihazda duruyor ve düğme
+   * "tekrar dene"ye dönüyor. Yeni bir transfer YAPILMAZ.
+   */
+  const [bekleyen, setBekleyen] = useState<BekleyenOdeme | null>(null);
 
   useEffect(() => {
     let iptal = false;
     if (!panelUnlocked(getMode())) return;
+    setBekleyen(bekleyenOdeme(urun));
     solConfig().then((c) => { if (!iptal) setAcik(c.open); });
     return () => { iptal = true; };
-  }, []);
+  }, [urun]);
 
   const bas = useCallback(async () => {
     if (busy || disabled) return;
     setBusy(true);
     try {
-      await solIleAl(urun, onDone, ek);
+      /**
+       * ⚠️ BEKLEYEN VARSA YENİ ÖDEME ALINMAZ. Aksi hâlde oyuncu ikinci kez
+       * öderdi ve ilki hâlâ kurtarılmayı bekliyor olurdu — "para gitti
+       * ürün gelmedi"nin iki katı.
+       */
+      const b = bekleyenOdeme(urun);
+      if (b && tekrarDenenebilir(b)) {
+        await bekleyeniKullan(urun, onDone);
+        setBekleyen(null);
+      } else {
+        if (b) bekleyeniTemizle(urun);   // penceresi geçmiş, tekrar denenemez
+        await solIleAl(urun, onDone, ek);
+        setBekleyen(null);
+      }
     } catch (e) {
+      setBekleyen(bekleyenOdeme(urun));
       const kod = (e as { code?: string; message?: string })?.code
         ?? (e as { message?: string })?.message ?? '';
       // ⚠️ Cüzdanın kendi iptali HATA DEĞİL: oyuncu vazgeçti, ekrana
@@ -113,6 +137,7 @@ export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: 
   if (!acik || lamports === null) return null;
 
   return (
+    <>
     <button
       onClick={bas}
       disabled={busy || disabled}
@@ -130,8 +155,28 @@ export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: 
         opacity: disabled ? 0.45 : 1,
       }}
     >
-      {busy ? 'WAITING…' : `PAY ${solLabel(lamports)}`}
+      {busy ? 'WAITING…'
+        : bekleyen && tekrarDenenebilir(bekleyen) ? 'FINISH PAYMENT'
+          : `PAY ${solLabel(lamports)}`}
     </button>
+      {/* 🔴 İMZA GÖSTERİLİYOR. Eski metin "keep the signature" diyordu ama
+          imzayı hiçbir yerde GÖSTERMİYORDU — oyuncudan saklayamayacağı bir
+          şeyi saklamasını istemek. Kurtarma penceresi geçtiyse tek yol
+          destek kaydı ve o kayıt bu imza olmadan işe yaramaz. */}
+      {bekleyen && !tekrarDenenebilir(bekleyen) && (
+        <span
+          title="Open a ticket with this signature — we can see the payment on-chain"
+          onClick={() => { try { void navigator.clipboard?.writeText(bekleyen.sig); } catch { /* yoksay */ } }}
+          style={{
+            display: 'block', marginTop: 4, cursor: 'pointer',
+            fontSize: 9, color: C.badText, fontFamily: FONT.ui,
+            wordBreak: 'break-all', lineHeight: 1.35,
+          }}
+        >
+          Paid but not granted — copy this and open a ticket:<br />{bekleyen.sig}
+        </span>
+      )}
+    </>
   );
 }
 
