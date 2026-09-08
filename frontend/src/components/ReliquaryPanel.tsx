@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  COSMETICS, PULL_COST, RARITY, cosmeticById, cosmeticsInSlot,
+  COSMETICS, PULL_COST, RARITY, cosmeticById, cosmeticsInSlot, tozlaAlinabilirMi,
   type CosmeticDef, type CosmeticSlot, type Rarity,
 } from '@/game/cosmetics';
 import type { Progress } from '@/game/progress';
@@ -25,7 +25,7 @@ import { CryptSection } from '@/components/CryptSection';
 import { VigilSection } from '@/components/VigilSection';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { pixel, BTN, PixelButton } from '@/components/ui/kit';
-import { C } from '@/lib/theme';
+import { C, FONT } from '@/lib/theme';
 import { OssuarySection } from '@/components/OssuarySection';
 import { SolPayButton, SolRateNote } from '@/components/SolPayButton';
 import { solPrice } from '@/game/solPrice';
@@ -392,6 +392,8 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
           const have = owned.has(def.id);
           const on = progress.equipped[def.slot] === def.id;
           const cost = RARITY[def.rarity].dustCost;
+          // ⚠️ Kural `cosmetics.ts`te TEK yerde — panel kendi listesini tutmuyor
+          const satilik = tozlaAlinabilirMi(def);
           const affordable = progress.dust >= cost;
           return (
             <Card key={def.id} accent={on} dim={!have}>
@@ -424,12 +426,32 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
                     style={{ flexShrink: 0, minWidth: 120, fontSize: 10.5, letterSpacing: 0.8 }}>
                     {on ? 'REMOVE' : 'WEAR'}
                   </PixelButton>
-                ) : (
+                ) : satilik ? (
                   <PixelButton variant={BTN.buy} scale={2} disabled={busy || !affordable}
                     onClick={() => dustBuy(def.id)}
                     style={{ flexShrink: 0, minWidth: 150, fontSize: 10.5, letterSpacing: 0.8 }}>
                     {cost.toLocaleString('en-US')} DUST
                   </PixelButton>
+                ) : (
+                  /* ⚠️ SATILIK OLMAYANA FİYAT GÖSTERİLMEZ. Panel bu on sekiz
+                     kozmetiği "kazanılır, satın alınmaz" diye tarif ederken
+                     altlarına BUY düğmesi koyuyordu ve düğme GERÇEKTEN
+                     çalışıyordu (ölçüldü: Vigil kartının altı özel kozmetiği
+                     dahil hepsi 190–2.100 tozla alınabiliyordu). Kural
+                     kapatıldı; düğmenin orada kalması artık yalnızca hata
+                     verdiren bir tuzak olurdu.
+                     ⚠️ Nereden geldiği YAZILIYOR: kilitli bir şeyi sebebini
+                     söylemeden göstermek, oyuncuya çözülemeyen bir bilmece
+                     bırakır. */
+                  <span style={{
+                    flexShrink: 0, minWidth: 150, textAlign: 'center',
+                    fontFamily: FONT.ui, fontSize: 10, fontWeight: 900, letterSpacing: 1.1,
+                    color: def.source === 'vigil' ? C.candle : C.boneFaint,
+                    border: `1px solid ${def.source === 'vigil' ? `${C.candle}55` : C.border}`,
+                    borderRadius: 6, padding: '6px 8px', lineHeight: 1.3,
+                  }}>
+                    {def.source === 'vigil' ? 'THE LONG VIGIL' : 'EARNED, NOT SOLD'}
+                  </span>
                 )}
               </div>
             </Card>

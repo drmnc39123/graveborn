@@ -18,7 +18,7 @@ import { permanentBonus } from './forge';
 import { DEFAULT_HERO, heroById } from './heroes';
 import { CHARM_SLOTS, charmById } from './charms';
 import {
-  PULL_COST, RARITY, cosmeticById, resolvePull, rollCosmetic,
+  PULL_COST, RARITY, cosmeticById, resolvePull, rollCosmetic, tozlaAlinabilirMi,
   type CosmeticSlot, type PullResult,
 } from './cosmetics';
 import { petById, toRunPet, FUSE_COPIES, MYTHIC_CAP, type RunPet } from './pets';
@@ -443,6 +443,14 @@ export function buyWithDust(p: Progress, id: string): {
 } {
   const def = cosmeticById(id);
   if (!def) return { progress: p, error: 'unknown item' };
+  /**
+   * 🔴 KAYNAK KONTROLÜ — bu satır YOKTU ve 18 kozmetik sızıyordu: Vigil
+   * kartının altı özel kozmetiğinin TAMAMI ve on iki başarım ödülü.
+   * Kartın 0,5 SOL'luk tek gerçek değeri "satın alınamayan altı kozmetik"
+   * olarak yazılmıştı; ikisi 2.100 tozla doğrudan alınabiliyordu.
+   * ⚠️ Kural `cosmetics.ts`te TEK yerde; sunucu da bu fonksiyonu çağırıyor.
+   */
+  if (!tozlaAlinabilirMi(def)) return { progress: p, error: 'not for sale' };
   if (p.cosmetics.includes(id)) return { progress: p, error: 'already owned' };
   const cost = RARITY[def.rarity].dustCost;
   if (p.dust < cost) return { progress: p, error: 'not enough dust' };

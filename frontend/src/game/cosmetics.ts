@@ -224,6 +224,28 @@ export function rollableCosmetics(): CosmeticDef[] {
   return COSMETICS.filter(cekilebilirMi);
 }
 
+/**
+ * ⭐ TOZLA SATIN ALINABİLİR Mİ — çekiliş kuralının AYNISI.
+ *
+ * 🔴 BU KONTROL YOKTU ve ölçüldü: 18 kozmetik "alınamaz" olduğu hâlde
+ * tozla alınabiliyordu — Vigil kartının ALTI özel kozmetiğinin TAMAMI
+ * (iki legendary dahil) ve on iki başarım ödülü. Yani:
+ *   · 0,5 SOL'luk kartın tek gerçek değeri "satın alınamayan altı
+ *     kozmetik"ti; ikisi 2.100 tozla doğrudan alınabiliyordu
+ *   · Reliquary paneli başarım ödüllerini "kazanılır, satın alınmaz" diye
+ *     tarif ederken altlarına BUY düğmesi koyuyordu
+ *
+ * ⚠️ `cekilebilirMi` İLE AYNI YÜKLEM, ve bilerek: "çekilişten çıkabilen"
+ * ile "tozla alınabilen" aynı küme. Toz zaten çekilişin telafisi (tekrar
+ * çıkan kozmetik toza dönüşüyor, toz da istediğin kozmetiği alıyor) —
+ * çekilişte olmayan bir şeyin telafisi de olamaz.
+ * ⚠️ İki ayrı yüklem yazmak bu depoda her seferinde ayrıştı; ikisi tek
+ * fonksiyondan okuyor.
+ */
+export function tozlaAlinabilirMi(c: CosmeticDef): boolean {
+  return cekilebilirMi(c);
+}
+
 /** Başarımla kazanılanlar — Reliquary'de "kazanılır, satın alınmaz" olarak gösterilir */
 export function earnedCosmetics(): CosmeticDef[] {
   return COSMETICS.filter((c) => c.source === 'earned');

@@ -15,7 +15,8 @@ import fs from 'node:fs';
 import {
   VIGIL_TIERS, vigilClaimable, vigilCosmeticIds, vigilKey, vigilTotalDust, vigilUnlocked,
 } from './vigil.js';
-import { COSMETICS, RARITY, cosmeticById, rollCosmetic } from './cosmetics.js';
+import { COSMETICS, RARITY, cosmeticById, rollCosmetic, tozlaAlinabilirMi } from './cosmetics.js';
+import { buyWithDust, emptyProgress } from './progress.js';
 import { SOL_PRICES } from './solPrice.js';
 
 const FAIL: string[] = [];
@@ -198,6 +199,53 @@ console.log('\n[7] ** RAY KAPALIYKEN KART BOZUK GORUNMUYOR');
   check('dugme kapaliyken hala cizilmiyor',
     /if \(!acik \|\| lamports === null\) return null/.test(btn));
   check('uydurma desen bulunmuyor (kontrol grubu)', !/useSolZZZ/.test(v + btn));
+}
+
+console.log('\n[8] ** KARTIN KOZMETIKLERI SATIN ALINAMAZ');
+{
+  /**
+   * 🔴 KARTIN TEK GERCEK DEGERI BU. `vigil.ts` basligi soyle diyor: "asil
+   * degeri satin alinamayan alti kozmetik". OLCULDU ve DOGRU DEGILDI:
+   * `buyWithDust` KAYNAGA HIC BAKMIYORDU ve on sekiz kozmetik tozla
+   * aliniyordu — kartin alti ozel kozmetiginin TAMAMI (iki legendary dahil)
+   * ve on iki basarim odulu. Yani 0,5 SOL odemeden Vigil Crown alinabiliyordu.
+   *
+   * ⚠️ Mevcut muhurlerin HICBIRI bunu yakalamiyordu; bu bolum o yuzden var.
+   */
+  const dene = (id: string) => buyWithDust({ ...emptyProgress(), dust: 99999 } as never, id);
+
+  const kartinkiler = COSMETICS.filter((c) => c.source === 'vigil');
+  check('kartin kozmetikleri sayilabildi (kontrol grubu)', kartinkiler.length === 6,
+    kartinkiler.length + ' kozmetik');
+  const sizan = kartinkiler.filter((c) => !dene(c.id).error).map((c) => c.id);
+  check('kartin HICBIR kozmetigi tozla ALINAMIYOR', sizan.length === 0,
+    sizan.join(',') || 'sizinti yok');
+
+  // Basarim odulleri ayni kapidan siziyordu — panel "kazanilir, satin
+  // alinmaz" derken altlarina BUY dugmesi koyuyordu ve dugme CALISIYORDU.
+  const kazanilan = COSMETICS.filter((c) => c.source === 'earned');
+  const sizan2 = kazanilan.filter((c) => !dene(c.id).error).map((c) => c.id);
+  check('basarim odulleri de tozla ALINAMIYOR', sizan2.length === 0,
+    sizan2.join(',') || kazanilan.length + ' odul korumali');
+
+  /**
+   * ⚠️ CIFT TARAFLI VE SART: kural fazla genis olsaydi (her seye "satilik
+   * degil" deseydi) muhur yine yesil verirdi ama Reliquary'nin telafi yolu
+   * tamamen kapanirdi. Normal kozmetikler HALA alinabilmeli.
+   */
+  const normal = COSMETICS.filter((c) => c.source === undefined || c.source === 'reliquary');
+  const alinamayan = normal.filter((c) => !!dene(c.id).error).map((c) => c.id);
+  check('normal kozmetikler HALA alinabiliyor (kontrol grubu)', alinamayan.length === 0,
+    alinamayan.join(',') || normal.length + ' kozmetik alinabilir');
+
+  // ⚠️ Kural TEK yuklemden okunuyor — cekilis kuralinin aynisi
+  check('satis kurali cekilis kuraliyla ayni', COSMETICS.every((c) =>
+    tozlaAlinabilirMi(c) === (c.source === undefined || c.source === 'reliquary')));
+
+  const panel = oku('src/components/ReliquaryPanel.tsx');
+  check('panel satilik olmayana BUY gostermiyor', panel.includes(') : satilik ? ('));
+  check('panel nereden geldigini yaziyor',
+    panel.includes('THE LONG VIGIL') && panel.includes('EARNED, NOT SOLD'));
 }
 
 console.log(`\n${FAIL.length === 0 ? 'VIGIL SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
