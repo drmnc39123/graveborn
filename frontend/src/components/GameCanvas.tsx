@@ -26,6 +26,7 @@ import { C, FONT, thinGlass } from '@/lib/theme';
 import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon, preloadKit } from '@/components/ui/kit';
 import { Reveal, motionOff } from '@/components/ui/motion';
 import { LevelUpCard } from '@/components/LevelUpCard';
+import { BuildRail } from '@/components/BuildRail';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
@@ -56,7 +57,14 @@ interface Hud {
   enemies: number; phase: string; fps: number;
   mode: RunMode; depth: number; deepestCleared: number;
   offers: { id: string; name: string; desc: string; kind: string; level?: number }[];
-  weapons: { id: string; name: string; level: number; cd: number; cdMax: number }[];
+  /**
+   * ⚠️ `dmg`/`count` MOTORDAN geliyor, arayuzde turetilmiyor: `weaponDamageAt`
+   * `might`i, `weaponCountAt` `amount`i GORMEZ. Arayuz kendi hesabini
+   * yapsaydi Forge'da 20 seviye Whetstone almis oyuncuya taban hasar
+   * yazardi — yani kart yalan soylerdi.
+   */
+  weapons: { id: string; name: string; level: number; cd: number; cdMax: number;
+    dmg: number; count: number }[];
   passives: { id: string; name: string; level: number }[];
   revives: number;
   /** KALAN diriliş hakkı — `revives` harcanmışı sayar, bu kalanı */
@@ -571,6 +579,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
         weapons: game.weapons.map((w) => ({
           id: w.def.id, name: w.def.name, level: w.level,
           cd: w.cd, cdMax: game.cooldownMaxOf(w),
+          dmg: game.damageOf(w), count: game.countOf(w),
         })),
         passives: game.passives.map((p) => ({ id: p.def.id, name: p.def.name, level: p.level })),
         revives: game.revives,
@@ -740,7 +749,17 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
             </div>
           )}
 
-          {/* alt sol: can küresi + taşınan build */}
+          {/* ⭐ SOL KENAR: TAŞINAN BUILD.
+              ⚠️ Eskiden can küresinin YANINDA, `maxWidth: 330` içinde
+              sarmalayan 32 px'lik bir satırdı: 6 silah + 6 pasif + diriliş
+              rozeti üç sıraya kırılıyordu ve slotlar `title` dışında hiçbir
+              bilgi taşımıyordu. Kullanıcı isteği üzerine sol kenara, düşey
+              iki sütuna, üstüne gelince gerçek sayıları açan bir karta
+              taşındı (bkz. `BuildRail`). */}
+          <BuildRail weapons={hud.weapons} passives={hud.passives}
+            revivalLeft={hud.revivalLeft} dar={darHud} />
+
+          {/* alt sol: can küresi + koşu sayaçları */}
           <div style={{ position: 'absolute', bottom: 18, left: 12, right: 12, pointerEvents: 'none',
             display: 'flex', alignItems: 'flex-end', gap: 10 }}>
             <div style={{ position: 'relative' }}>
@@ -755,67 +774,9 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
               </div>
             </div>
 
-            <div style={{ maxWidth: 330 }}>
-              {/* Silahlar ve pasifler slot çerçevesinde — envanter hissi */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-                {/* ⚠️ Slotlarda silah RESMİ yoktu, sadece seviye rakamı vardı —
-                    oyuncu neyi taşıdığını simgeden tanıyamıyordu. */}
-                {hud.weapons.map((w) => (
-                  <div key={w.id} style={{ position: 'relative' }}>
-                    {/* ⚠️ SOĞUMA HALKASI SONUNDA BAĞLANDI. `cd`/`cdMax` motordan
-                        HUD durumuna kadar taşınıyordu ve son adımda ölüyordu:
-                        veri oradaydı, kimse ÇİZMİYORDU. `CooldownRing` de tam
-                        bu iş için yazılmış, hiçbir yerden çağrılmıyordu.
-                        Ölçüm: 34 "dışarıdan kullanılmayan" ihracat içinde
-                        oyuncuya bakan tek gerçek boşluk buydu. */}
-                    <CooldownRing pct={w.cd / w.cdMax} size={32}>
-                      <Slot type="Weapon" variant="02" scale={2} title={`${w.name} L${w.level}`}>
-                        <img src={weaponArt(w.id).icon} alt="" width={22} height={22}
-                          style={{ imageRendering: 'pixelated', display: 'block' }} />
-                      </Slot>
-                    </CooldownRing>
-                    <span style={{
-                      position: 'absolute', right: -2, bottom: -2, fontSize: 9, fontWeight: 900,
-                      color: C.candle, textShadow: '0 1px 0 #000, 0 0 4px #000',
-                    }}>{w.level}</span>
-                  </div>
-                ))}
-                {/* ⚠️ DİRİLİŞ HAKKI SONUNDA GÖRÜNÜR OLDU.
-                    `revival` DÖRT yerden satın alınabiliyor (Forge "Second
-                    Burial" 2.640 gold, aynı adlı pasif, "Grave Offering"
-                    tılsımı, sigil ekipmanı) ve oyuncu kaç hakkı olduğunu
-                    hiçbir yerde göremiyordu — ölene kadar. 2.640 gold
-                    harcayıp ne aldığını göremeyen oyuncu, bir daha almaz.
-                    ⚠️ KALAN gösteriliyor, HARCANMIŞ değil: oyuncunun
-                    kararını değiştiren sayı "kaç canım kaldı". */}
-                {hud.revivalLeft > 0 && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '3px 7px', borderRadius: 6,
-                    border: `1px solid ${C.ok}55`,
-                    background: 'rgba(0,0,0,0.35)',
-                    fontFamily: FONT.ui, fontSize: 11, fontWeight: 900, color: C.ok,
-                  }} title={`${hud.revivalLeft} revival left — you get back up at half health`}>
-                    <Icon name="sigil" scale={1} />
-                    ×{hud.revivalLeft}
-                  </div>
-                )}
-                {hud.passives.map((p) => (
-                  <div key={p.id} style={{ position: 'relative' }}>
-                    <Slot type="Ring" variant="02" scale={2} title={`${p.name} L${p.level}`}>
-                      <img src={passiveIcon(p.id)} alt="" width={20} height={20}
-                        style={{ imageRendering: 'pixelated', display: 'block' }} />
-                    </Slot>
-                    <span style={{
-                      position: 'absolute', right: -2, bottom: -2, fontSize: 9, fontWeight: 900,
-                      color: C.ice, textShadow: '0 1px 0 #000, 0 0 4px #000',
-                    }}>{p.level}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontFamily: FONT.ui, fontSize: 10.5, color: C.boneFaint, fontVariantNumeric: 'tabular-nums' }}>
-                {Math.floor(hud.rareGold)} gold found · {hud.enemies} enemies · {hud.fps} fps
-              </div>
+            <div style={{ fontFamily: FONT.ui, fontSize: 10.5, color: C.boneFaint,
+              fontVariantNumeric: 'tabular-nums', paddingBottom: 4 }}>
+              {Math.floor(hud.rareGold)} gold found · {hud.enemies} enemies · {hud.fps} fps
             </div>
           </div>
         </>
@@ -890,7 +851,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
             {hud.offers.map((o, i) => (
               <Reveal key={o.id} delay={i * 70} style={{ height: '100%' }}>
                 <LevelUpCard offer={o} index={i} onPick={choose}
-                  weapons={hud.weapons} passives={hud.passives} />
+                  passives={hud.passives} />
               </Reveal>
             ))}
           </div>

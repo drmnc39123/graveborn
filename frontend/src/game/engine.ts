@@ -805,6 +805,23 @@ export class Game {
     return Math.max(0.001, this.wCooldown(this.hero, w));
   }
 
+  /**
+   * HUD icin silahin GERCEK vurus hasari — `might` dahil.
+   *
+   * ⚠️ NIYE MOTORDA: arayuz `weaponDamageAt(def, lv)` ile kendi hesabini
+   * yapabilirdi ama o hesap `might`i GORMEZ — Forge'da 20 seviye Whetstone
+   * almis oyuncuya kartta hala taban hasar yazardi. Ayni kurali iki yere
+   * yazmak bu depoda defalarca ayristi; tek kaynak motor.
+   */
+  damageOf(w: OwnedWeapon): number {
+    return this.wDamage(this.hero, w);
+  }
+
+  /** HUD icin gercek mermi/orb adedi — `stats.amount` dahil */
+  countOf(w: OwnedWeapon): number {
+    return this.wCount(this.hero, w);
+  }
+
   /** Silahın o seviyedeki bekleme süresi — Cooldown istatistiği uygulanır */
   private wCooldown(h: Hero, w: OwnedWeapon) {
     return weaponCooldownAt(w.def, w.level) * h.stats.cooldown;

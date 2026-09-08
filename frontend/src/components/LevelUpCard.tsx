@@ -8,9 +8,9 @@
 //
 // ⚠️ Tüm stiller INLINE · MOR YOK · oyuncu metinleri İngilizce.
 
-import { EVOLUTIONS, PASSIVES, WEAPONS, EVOLVED, weaponById,
-  evrimPasifEsigi, evrimSilahEsigi,
+import { weaponById,
   weaponCooldownAt, weaponCountAt, weaponDamageAt } from '@/game/config';
+import { evrimDurumu } from '@/game/buildInfo';
 import { useState } from 'react';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { PATTERN_TEXT, Tag } from '@/components/ui/cards';
@@ -32,48 +32,38 @@ function Icon({ src, size = 26 }: { src: string; size?: number }) {
 
 /**
  * Bu seçim evrime yaklaştırıyor mu?
- * ⚠️ Oyuncunun bilmesi gereken en değerli bilgi bu: evrim silah MAX + pasif
- * MAX + boss sandığı istiyor. Nerede olduğunu göstermezsek oyuncu tesadüfen
- * bulmayı bekliyoruz demektir.
+ * ⚠️ Oyuncunun bilmesi gereken en değerli bilgi bu: evrim silah eşiği +
+ * pasif eşiği + evrim sandığı istiyor. Nerede olduğunu göstermezsek
+ * oyuncunun tesadüfen bulmasını bekliyoruz demektir.
+ *
+ * ⚠️ EŞİKLER VE EŞLEŞMELER `game/buildInfo.ts`TEN GELİYOR, burada elle
+ * yazılmıyor. Daha önce burada yazılıydı ve motorun şartı gevşetilince
+ * İPUCU ESKİ KURALI ANLATMAYA DEVAM ETTİ: oyuncuya "max'a çıkar" diyordu,
+ * oysa evrim daha erken tetikleniyordu ve "EVOLUTION READY" rozeti hiç
+ * görünmüyordu. Aynı kural artık koşu içi build rayında da okunuyor —
+ * iki ekran, tek kaynak.
  */
 function evolutionHint(id: string, kind: string, level: number | undefined,
-  weapons: { id: string; level: number }[], passives: { id: string; level: number }[]) {
+  passives: { id: string; level: number }[]) {
   if (!kind.startsWith('weapon')) return null;
-  const evo = EVOLUTIONS.find((e) => e.weapon === id);
-  if (!evo) return null;
+  // ⚠️ `level + 1`: ipucu bu seçim YAPILDIKTAN SONRAKİ durumu anlatıyor.
+  const d = evrimDurumu(id, (level ?? 0) + 1, passives);
+  if (!d) return null;
 
-  const def = weaponById(id);
-  const gerekenPasif = PASSIVES.find((p) => p.id === evo.passive);
-  const sahipPasif = passives.find((p) => p.id === evo.passive);
-  const evolvedDef = EVOLVED.find((w) => w.id === evo.to);
-  if (!def || !gerekenPasif || !evolvedDef) return null;
-
-  // ⚠️ EŞİKLER `config.ts`TEN OKUNUYOR, elle YAZILMIYOR.
-  // Burada `>= def.maxLevel` ve `>= gerekenPasif.maxLevel` yazılıydı ve
-  // motorun şartı gevşetilince (SIM_VERSION 11) İPUCU ESKİ KURALI
-  // ANLATMAYA DEVAM ETTİ: oyuncuya "max'a çıkar" diyordu, oysa evrim daha
-  // erken tetikleniyordu, ve "EVOLUTION READY" rozeti hiç görünmüyordu.
-  // Eşiği iki yere yazmak onların ayrışması demek — tek kaynak şart.
-  const silahEsik = evrimSilahEsigi(def);
-  const pasifEsik = evrimPasifEsigi(gerekenPasif);
-  const silahHazir = (level ?? 0) + 1 >= silahEsik;   // bu seçimden SONRA
-  const pasifHazir = (sahipPasif?.level ?? 0) >= pasifEsik;
-
-  if (silahHazir && pasifHazir) {
-    return { tone: 'blood' as const, text: `EVOLUTION READY · ${evolvedDef.name}` };
+  if (d.silahTamam && d.pasifTamam) {
+    return { tone: 'blood' as const, text: `EVOLUTION READY · ${d.hedefAd}` };
   }
-  if (silahHazir) {
-    return { tone: 'dim' as const, text: `Needs ${gerekenPasif.name} (${sahipPasif?.level ?? 0}/${pasifEsik})` };
+  if (d.silahTamam) {
+    return { tone: 'dim' as const, text: `Needs ${d.pasifAd} (${d.pasifSeviye}/${d.pasifEsik})` };
   }
   // ⚠️ "at max" DEĞİL, gerçek eşik yazılıyor — oyuncu hedefi bilmeli.
-  return { tone: 'dim' as const, text: `Evolves into ${evolvedDef.name} at Lv ${silahEsik}` };
+  return { tone: 'dim' as const, text: `Evolves into ${d.hedefAd} at Lv ${d.silahEsik}` };
 }
 
-export function LevelUpCard({ offer, index, onPick, weapons, passives }: {
+export function LevelUpCard({ offer, index, onPick, passives }: {
   offer: OfferView;
   index: number;
   onPick: (id: string) => void;
-  weapons: { id: string; level: number }[];
   passives: { id: string; level: number }[];
 }) {
   const silah = offer.kind.startsWith('weapon');
@@ -114,7 +104,7 @@ export function LevelUpCard({ offer, index, onPick, weapons, passives }: {
     if (n1 > n0) deltas.push({ label: 'PROJECTILES', text: `+${n1 - n0}` });
   }
 
-  const evo = evolutionHint(oz, offer.kind, offer.level, weapons, passives);
+  const evo = evolutionHint(oz, offer.kind, offer.level, passives);
 
   /**
    * DÜŞEY SÜTUN — kartlar YAN YANA, alt alta değil.
