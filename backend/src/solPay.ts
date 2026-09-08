@@ -78,10 +78,17 @@ export function hazineAdresi(): string | null {
 /**
  * SOL rayı açık mı.
  *
- * ⚠️ İKİSİ BİRDEN GEREKİYOR: hazine adresi ve özel RPC. Genel uç sert hız
- * sınırlı; ödeme doğrulaması onun üstünde çalışırsa oyuncunun parası gider
- * ve doğrulama "RPC yanıt vermedi" diye düşer. Bu, olabilecek en kötü
- * hatadır — bu yüzden yapılandırma eksikse kapı hiç açılmıyor.
+ * ⚠️ İKİSİ BİRDEN GEREKİYOR: hazine adresi ve en az bir RPC ucu.
+ *
+ * ⚠️ ÖZEL SAĞLAYICI ŞART DEĞİL — ölçüldü (2026-09-09). Bir satın alma
+ * ~2-4 RPC çağrısı ediyor (1 blockhash + 1 getTransaction, artı olası
+ * tekrar) ve genel uçların sınırları bunun çok üzerinde. Asıl risk hız
+ * sınırı değil KESİNTİ; onu da üç ucun cezalı yedeklemesi (`rpc.ts`) ve
+ * ödeme kurtarma (imza cihazda saklanıyor, `lib/solPay.ts`) karşılıyor.
+ * Önceki yorum "genel uç yetersiz" diyordu; o hüküm ölçülmeden verilmişti.
+ *
+ * Yapılandırma HİÇ yoksa kapı yine de açılmıyor: doğrulayamadığımız bir
+ * ödemeyi kabul etmek, olabilecek en kötü hatadır.
  */
 export function solRayiAcik(): boolean {
   return hazineAdresi() !== null && (process.env.RPC_URLS ?? '').trim().length > 0;
