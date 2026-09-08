@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
 import { sagKolon } from '@/game/hudLayout';
+import { KOLAY_TABAN, tabanDurum, tabanZorluk } from '@/game/descentBase';
 import { PlayConnect } from '@/components/PlayConnect';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
@@ -1391,6 +1392,16 @@ function StageSelect({ progress, onPick, onHero, wilderness, dailyKey }: {
    * ekonomi değil BİLGİYDİ. Aşağıdaki kıyas o boşluğu kapatıyor ve tek bir
    * ekonomi sabitine dokunmuyor.
    */
+  /**
+   * Oyuncunun ULAŞTIĞI en derin nokta — taban zorluğunun kıyas çıpası.
+   *
+   * ⚠️ SUNUCUNUN ÖDEDİĞİ derinlik (`paidDepth`), iddia edilen değil — aynı
+   * kaynak beceri puanlarında ve Vigil kademelerinde de kullanılıyor.
+   * ⚠️ BÖLÜMDEN BAĞIMSIZ: güç bölüme göre değişmiyor, o yüzden hepsinin
+   * en büyüğü alınıyor.
+   */
+  const genelEnDerin = STAGES.reduce((m, st) => Math.max(m, paidDepth(p, st.id)), 0);
+
   const enIyiHat = STAGES.reduce(
     (iyi, st) => {
       const d = paidDepth(p, st.id);
@@ -1418,6 +1429,7 @@ function StageSelect({ progress, onPick, onHero, wilderness, dailyKey }: {
 
       <HeroPicker selected={p.hero} onSelect={onHero} progress={p} />
 
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         {STAGES.map((s) => {
           const locked = s.id > p.unlockedStage;
@@ -1428,6 +1440,10 @@ function StageSelect({ progress, onPick, onHero, wilderness, dailyKey }: {
             <StageCard
               key={s.id} stage={s} locked={locked} cleared={cleared} claimed={claimed}
               bestDepth={best} enIyiHat={enIyiHat} onPick={onPick} wilderness={wilderness}
+              /* ⚠️ BU BOLUMDEKI degil TUM bolumlerdeki en iyi derinlik: taban
+                 zorlugu oyuncunun GUCUYLE kiyaslaniyor ve guc bolume gore
+                 degismiyor. Bu bolumde hic inmemis olmasi onu zayif yapmaz. */
+              genelEnDerin={genelEnDerin}
             />
           );
         })}
@@ -1444,12 +1460,14 @@ function StageSelect({ progress, onPick, onHero, wilderness, dailyKey }: {
  * yapıyordu — hangi yaratıklar var, boss var mı, ne kadar sürer, bir sonraki
  * derinlik ne öder, hiçbiri yazmıyordu. Veri zaten `StageDef`'te duruyordu.
  */
-function StageCard({ stage: s, locked, cleared, claimed, bestDepth, enIyiHat, onPick, wilderness }: {
+function StageCard({ stage: s, locked, cleared, claimed, bestDepth, genelEnDerin, enIyiHat, onPick, wilderness }: {
   stage: (typeof STAGES)[number];
   locked: boolean;
   cleared: boolean;
   claimed: boolean;
   bestDepth: number;
+  /** oyuncunun TÜM bölümlerdeki en derin noktası — taban zorluğunun kıyası */
+  genelEnDerin: number;
   /** Oyuncunun EN ÇOK ÖDEYEN hattı — bu bölümle kıyaslamak için */
   enIyiHat: { stageId: number; depth: number; gold: number };
   onPick: (id: number, mode: RunKind, startDepth?: number, ascension?: number) => void;
@@ -1659,6 +1677,52 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, enIyiHat, on
               Reach depth {ascensionUnlockDepth(1)} to unlock Ascension — harder descents that count for more.
             </div>
           )}
+
+          {/* ⭐ BU TABAN NE KADAR ZOR — kullanıcı bildirimi + ölçüm.
+              🔴 Ekranda ikisi de sadece "DEPTH 1" yazıyordu. Ölçüldü
+              (`descent.probe.mts`, kusursuz kaçan yapay oyuncu): b1'de d1
+              6/6 geçiliyor, b15 ve sonrasında 0/6. Sebep matematik hatası
+              değil — `descentStage` seçilen bölümün çarpanlarını miras
+              alıyor ve `challengeRating` bunu zaten sayıyor, yani taban
+              seçmek KASITLI bir zorluk ekseni. Eksik olan tek şey oyuncunun
+              bunu GÖREBİLMESİYDİ; üstelik `depthGold` bölümle çarpıldığı
+              için oyun onu geçemeyeceği tabana ödülle itiyordu.
+              ⚠️ Hiçbir denge sabitine dokunulmadı. */}
+          {(() => {
+            const z = tabanZorluk(s.id);
+            const durum = tabanDurum(s.id, genelEnDerin);
+            const ton = durum === 'gecilmis' ? C.ok : durum === 'zorlu' ? C.candle : C.badText;
+            return (
+              <div style={{
+                margin: '0 13px 4px', padding: '7px 9px', borderRadius: 7,
+                border: `1px solid ${ton}44`, background: `${ton}0f`,
+                fontFamily: FONT.ui, fontSize: 10.5, lineHeight: 1.5, color: C.boneDim,
+              }}>
+                <span style={{ color: ton, fontWeight: 900, letterSpacing: 0.8 }}>
+                  {durum === 'gecilmis' ? 'WITHIN YOUR REACH'
+                    : durum === 'zorlu' ? 'A STEEP START' : 'FAR ABOVE YOUR BEST'}
+                </span>
+                {' · '}
+                Enemies ×{z.hpMul.toFixed(1)} health, ×{z.damageMul.toFixed(1)} damage
+                {z.esdegerDerinlik > 1 && (
+                  <>
+                    {' — '}Depth 1 here is as hard as{' '}
+                    <strong style={{ color: C.bone }}>Depth {z.esdegerDerinlik}</strong>{' '}
+                    on {KOLAY_TABAN.name}.
+                  </>
+                )}
+                {/* ⚠️ RİSKİN KARŞILIĞI DA YAZILIYOR: zor taban tabloda daha
+                    çok puan ve derinlik başına daha çok gold veriyor. Yalnız
+                    riski göstermek, kararı eksik bilgiyle verdirmek olurdu. */}
+                {durum !== 'gecilmis' && (
+                  <div style={{ marginTop: 3, color: C.boneFaint }}>
+                    Harder ground pays more per depth and counts for more on the board —
+                    but your best is Depth {genelEnDerin || 0}.
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── Nereden başlanacak ──
               Checkpoint yoksa (hiç boss derinliği geçilmemişse) tek düğme
