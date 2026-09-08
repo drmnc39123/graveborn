@@ -10,6 +10,7 @@
 // simülasyonu etkiliyor (doğum halkası) ve iki oyuncunun ekranı farklı
 // olabilir; arena sabit 1280×720 simüle edip ekrana ölçekleniyor.
 
+import { quality } from '@/game/quality';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BTN, Panel, PixelButton } from '@/components/ui/kit';
 import { ARENA, type ArenaSetup } from '@/game/arena';
@@ -256,7 +257,13 @@ function Match({ setup, onEnd }: { setup: ArenaSetup; onEnd: (e: ArenaEnd) => vo
       // ── SUNUCUDAN GELEN KARELERİ UYGULA ──
       h.catchUp();
 
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      /**
+       * ⚠️ ÇÖZÜNÜRLÜK GRAFİK KADEMESİNDEN (`quality.ts`). Sabit `min(dpr, 2)`
+       * bırakılsaydı, ULTRA LOW seçmiş bir telefon oyuncusu KOŞUDA akıcı,
+       * BURADA kasan bir oyun görürdü — aynı cihazda iki farklı bütçe, sessiz
+       * bir tutarsızlık.
+       */
+      const dpr = Math.min(window.devicePixelRatio || 1, quality().pixelCap) * quality().renderScale;
       const cssW = canvas.clientWidth, cssH = canvas.clientHeight;
       if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
         canvas.width = cssW * dpr; canvas.height = cssH * dpr;

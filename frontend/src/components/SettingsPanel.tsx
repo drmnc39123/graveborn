@@ -10,6 +10,9 @@
 // hasar geri bildirimi vinyet + hasar sayısıyla sürüyor, yani bilgi
 // kaybolmuyor — sadece hareket kalkıyor.
 
+import { QualityPicker } from '@/components/QualityPicker';
+import { applyQuality, normalizeTier, type QualityTier } from '@/game/quality';
+import { isTestMode } from '@/lib/testMode';
 import { useCallback, useEffect, useState } from 'react';
 import { TicketSection } from '@/components/TicketSection';
 import { applyFxSettings } from '@/game/fx';
@@ -19,7 +22,7 @@ import { muzikAcik } from '@/game/music';
 import { resetHints } from '@/game/tutorial';
 import { Card, CardSection, PanelHead } from '@/components/ui/cards';
 import { PixelButton, BTN } from '@/components/ui/kit';
-import { C } from '@/lib/theme';
+import { C, FONT } from '@/lib/theme';
 
 /** Ayarları yükle ve motora/ses zincirine uygula — açılışta bir kez çağrılır */
 export function applyStoredSettings(): Settings {
@@ -27,7 +30,34 @@ export function applyStoredSettings(): Settings {
   setVolume(s.volume);
   muzikAcik(s.music);
   applyFxSettings(s);
+  /**
+   * ⚠️ KADEME DE AÇILIŞTA UYGULANIYOR. Kaydedilmiş kademeyi motora
+   * bildirmeden bırakmak, bu depodaki en pahalı hata sınıfı olurdu: ayar
+   * kayıtta doğru duruyor, arayüzde doğru görünüyor, ama çizim onu HİÇ
+   * görmüyor. Zincirin son adımı burası.
+   */
+  applyQuality(testKademesi() ?? s.quality);
   return s;
+}
+
+/**
+ * TEST MODUNDA KADEME SABİTLENİR.
+ *
+ * ⚠️ NİYE: `?test=1` ekran görüntüsü ve ölçüm için kullanılıyor. Kademe
+ * localStorage'dan geldiği için, bir kez ULTRA LOW deneyip unutan biri
+ * bütün sonraki ölçümleri sessizce kaydırırdı — ve fark "ölçüm değişti"
+ * diye değil "oyun bozuldu" diye okunurdu.
+ * ⚠️ `&q=<kademe>` ile bilerek başka bir kademe ölçülebiliyor.
+ * ⚠️ Üretimde `isTestMode()` sabit false, bu dal derlenmiyor.
+ */
+function testKademesi(): QualityTier | null {
+  if (!isTestMode()) return null;
+  try {
+    const q = new URLSearchParams(window.location.search).get('q');
+    return q ? normalizeTier(q) : 'normal';
+  } catch {
+    return 'normal';
+  }
 }
 
 function Toggle({ label, hint, on, onChange }: {
@@ -77,6 +107,9 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
       // duymamak, doğru seviyeyi bulmayı imkânsız kılardı.
       setVolume(v.volume);
       applyFxSettings(v);
+      // ⚠️ Kademe ANINDA uygulanıyor — seçiciye basınca sahne değişmezse
+      // oyuncu ayarın çalışmadığını sanır.
+      applyQuality(v.quality);
       return v;
     });
   }, []);
@@ -135,27 +168,30 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
           />
         </Card>
         <Card>
-          {/* ⚠️ METİN ÖLÇÜMLE DÜZELTİLDİ. Eskisi "For weaker devices"
-              diyordu, yani PERFORMANS vaat ediyordu. ÖLÇÜLDÜ (400 düşmanlık
-              derin sahne, 30 kare, çizim çağrısı sayımı): ayar toplam işi
-              yalnız **%1,1** azaltıyor — 16.776 → 16.596 çağrı.
-              SEBEBİ YAPISAL: `isLowGfx()` sadece `fx.ts` ve `stageGround.ts`
-              tarafından okunuyor; düşmanları/mermileri/mücevherleri çizen
-              `render.ts` bayrağı HİÇ okumuyor.
-              ⚠️ BU BİR EKSİK DEĞİL: asıl performans kazançları zaten
-              yapısal olarak alındı (görüş alanı kırpması · yörünge
-              parıltısının sprite'a pişirilmesi · `ctx.filter`ın sıcak
-              döngüden çıkarılması). Ayar, güvenle kısabileceğinin sınırında.
-              ⚠️ "Zayıf cihaz" vaadini GERİ EKLEME — tutulamayan bir söz.
-              ⚠️ Ölçüm aletinin sınırı: Node'da sprite yüklenmiyor, yani
-              `drawImage` 0 çıkıyor ve düşmanlar yedek daireyle sayılıyor.
-              Kırılım gerçek tarayıcıyı DEĞİL, çağrı hacmini gösterir. */}
-          <Toggle
-            label="Less atmosphere"
-            hint="Fewer corpses, sparks and fog. Calms a crowded screen — it does not make the game easier or noticeably faster."
-            on={s.lowGraphics}
-            onChange={(v) => patch({ lowGraphics: v })}
+          {/* GRAFİK KADEMESİ.
+              🔴 ESKİ "Less atmosphere" ANAHTARININ YERİNE GEÇTİ. O anahtar
+              yalnız leş, kıvılcım, dekor ve sise ulaşıyordu; ÇÖZÜNÜRLÜĞE,
+              meşaleye, vinyete ve ölüm efektlerine hiç dokunmuyordu — yani
+              kasan oyuncunun elindeki tek düğme kasmanın sebebine
+              dokunmuyordu. Kullanıcı bildirdi: *"ileriki bölümlerde FPS fena
+              düşüyor... telefonda nasıl oynanır?"*
+              ⚠️ Eski `lowGraphics: true` tercihi KAYBOLMUYOR — `settings.ts`
+              içindeki `kademeGocu` onu LOW'a taşıyor.
+              ⚠️ Metin performans VAAT ETMİYOR, ne yaptığını söylüyor. Eski
+              metnin dersi buydu ve duruyor. */}
+          <div style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
+            letterSpacing: 1, color: C.boneFaint, marginBottom: 6 }}>
+            GRAPHICS
+          </div>
+          <QualityPicker
+            value={s.quality}
+            onChange={(t) => patch({ quality: t })}
           />
+          <div style={{ marginTop: 6, fontFamily: FONT.ui, fontSize: 9,
+            lineHeight: 1.5, color: C.boneFaint }}>
+            Lower tiers draw fewer pixels and less atmosphere. Enemies, enemy
+            shots and boss warnings stay exactly the same at every tier.
+          </div>
         </Card>
       </div>
 

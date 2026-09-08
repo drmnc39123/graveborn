@@ -19,9 +19,10 @@ import { artOf, descentArt, descentBant, DESCENT_BANT, tileHash, variantOf, type
 // yüzden mum ışıkları parlak zeminde görünmüyordu. Buradaki davranış
 // DEĞİŞMEDİ, yalnız tarifin sahibi değişti.
 import { filtreMetni, gradeli, resetGrade, tintUygula, type Grade } from './grade';
-// ⚠️ Bayrak `fx.ts`te tutuluyor — iki modülün ayrı kopyası olsaydı ayarı
-// açmak birini etkileyip diğerini etkilemezdi. Tek kaynak, tek setter.
-import { isLowGfx } from './fx';
+// ⚠️ GRAFİK KADEMESİ BURAYA PARAMETRE OLARAK GELİYOR, import edilmiyor.
+// Eskiden `fx.isLowGfx()` okunuyordu ve `fx → stageGround → fx` bir döngüydü.
+// Çağıran (`render.ts`) profili zaten bir kez okuyor; buraya sayı geçmek
+// hem döngüyü kırıyor hem bu dosyayı saf bırakıyor.
 
 /**
  * `StageArt`in iki ayrı alanını (`grade` + `tint`) tek bir `Grade`e çevirir.
@@ -263,12 +264,17 @@ export function drawStageDecor(
   ctx: CanvasRenderingContext2D, stageId: number,
   px: number, py: number, w: number, h: number,
   depth = 1,
+  /**
+   * Dekor yoğunluğu çarpanı — grafik kademesinden gelir (`quality.ts`).
+   * ⚠️ VARSAYILAN 1 = bugünkü yoğunluk: parametre vermeyen eski çağrılar
+   * (mühürler, ölçüm aleti) davranış değiştirmiyor.
+   */
+  decor = 1,
 ) {
   // ⚠️ Dekor chunk'a GİRMİYOR, her karede çiziliyor — bant değişimini
   // bedelsiz takip ediyor, ek önbellek yönetimi gerekmiyor.
   const art = sanat(stageId, depth);
   if (!art.decor.length) return;
-  const dusuk = isLowGfx();
 
   // Kenardan bir tur fazla tara: yarısı ekran dışında kalan enkaz aniden
   // belirmesin.
@@ -290,7 +296,15 @@ export function drawStageDecor(
         // ⚠️ Yoğunluk yarıya iniyor, dekor KAPANMIYOR. Tamamen kapatmak
         // sahneyi boş bir karo tarlasına çevirirdi; "daha az" ile "hiç"
         // arasındaki fark, ayarın oyunu çirkinleştirmemesi demek.
-        acc += dusuk ? d.chance * 0.5 : d.chance;
+        /**
+         * ⚠️ YOĞUNLUK ARTIK KADEMEDEN GELİYOR, ikili bir bayraktan değil.
+         * Eskisi `isLowGfx() ? 0.5 : 1` idi; `quality.ts` bunu 0,35 / 0,5 /
+         * 1 / 1 / 1,25 olarak kademelendiriyor. NORMAL'de `decor = 1`, yani
+         * bugünkü yoğunluk BİREBİR aynı.
+         * ⚠️ Dekor hiçbir kademede TAMAMEN kapanmıyor: sahneyi boş bir karo
+         * tarlasına çevirmek, ayarın oyunu çirkinleştirmesi olurdu.
+         */
+        acc += d.chance * decor;
         if (r >= acc) continue;
 
         // +0,12 parlaklık: enkaz zeminden bir tık açık kalsın, yoksa
@@ -336,9 +350,17 @@ export function drawStageDecor(
 export function drawAtmosphere(
   ctx: CanvasRenderingContext2D, stageId: number,
   w: number, h: number, time: number, depth = 1,
+  /**
+   * Sis çarpanı (0 = kapalı) ve vinyet alfa çarpanı — grafik kademesinden.
+   * ⚠️ VARSAYILAN 1: parametresiz eski çağrılar bugünkü görüntüyü verir.
+   * ⚠️ Vinyet ASLA 0 olmamalı (en düşük kademede bile 0,6): sahneyi
+   * köşelerden çerçeveleyen katman o, kaldırınca oyun yıkanmış görünüyor.
+   */
+  fog = 1, vignette = 1,
 ) {
   const art = sanat(stageId, depth);
-  const [r, g, b, a] = art.tint;
+  const [r, g, b, aTint] = art.tint;
+  const a = aTint * vignette;
   const cx = w / 2;
   const cy = h / 2;
   const maxR = Math.hypot(w, h) / 2;
@@ -365,9 +387,15 @@ export function drawAtmosphere(
   // Her karede iki tam ekran radial gradient demek; zayıf cihazda en pahalı
   // kalemlerden biri. Vinyet/ışık halesi DURUYOR, yani sahne okunaklılığını
   // taşıyan katman kaybolmuyor.
-  if (art.fog > 0 && !isLowGfx()) {
-    drawFogBank(ctx, w, h, time * 0.021, art.fog, 0.62);
-    drawFogBank(ctx, w, h, -time * 0.013 + 0.5, art.fog, 0.42);
+  /**
+   * ⚠️ SİS KADEMEDEN GELİYOR. Kare başına İKİ TAM EKRAN radial gradient
+   * demek — telefonda en pahalı kalemlerden biri, ve ölçülen 5 ekranlık
+   * dolgunun 2'si bu. LOW ve altında kapalı; vinyet/ışık halesi DURUYOR,
+   * yani sahne okunaklılığını taşıyan katman kaybolmuyor.
+   */
+  if (art.fog > 0 && fog > 0) {
+    drawFogBank(ctx, w, h, time * 0.021, art.fog * fog, 0.62);
+    drawFogBank(ctx, w, h, -time * 0.013 + 0.5, art.fog * fog, 0.42);
   }
 }
 

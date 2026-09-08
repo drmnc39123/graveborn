@@ -2,6 +2,7 @@
 // Kalın hatlı, gotik, düşük detay: 600 varlık çizilirken stil bütçesi düşük olmalı.
 // Kural: aynı renkteki nesneler tek path'te toplanır (ctx durum değişimi pahalı).
 
+import { quality } from './quality';
 import { C, FONT } from '@/lib/theme';
 import {
   pixelCiz, pixelFontHazir, pixelFontYukle, pixelKapsiyor, pixelOlc,
@@ -41,7 +42,14 @@ export function resetEffects() {
 
 function pumpEffects(g: Game, dt: number) {
   for (let i = 0; i < g.deaths.length; i++) {
-    if (deathFx.length >= MAX_FX) break;
+    /**
+     * ⚠️ TAVAN KADEMEDEN. 90 × 58² `lighter` blit ≈ 300k piksel eklemeli
+     * harman — sürü ölümünde en pahalı ani kalem. NORMAL'de 90, yani
+     * `MAX_FX` ile aynı: bugünkü davranış birebir korunuyor.
+     * ⚠️ DÖNGÜNÜN KENDİSİ KAPANMIYOR: `g.deaths` yine tamamen tüketiliyor
+     * (aşağıda `length = 0`). Kapı yalnız EFEKT ÜRETMEYİ kısıyor.
+     */
+    if (deathFx.length >= Math.min(MAX_FX, quality().deathFx)) break;
     const d = g.deaths[i];
     // ⚠️ `art` isteğe bağlı (motor tipinde `string | undefined`) — boş
     // gelirse `flesh` tabanına düşer, efekt KAYBOLMAZ.
@@ -174,6 +182,18 @@ export function render(
   const cx = w / 2;
   const cy = h / 2;
   artTime += dt;
+  /**
+   * ⚠️ PROFİL KARE BAŞINA BİR KEZ OKUNUYOR. Her çizim fonksiyonunun kendi
+   * `quality()` çağrısını yapması, kademe kare ortasında değişirse yarısı
+   * eski yarısı yeni bir kare üretirdi.
+   *
+   * 🔴 AŞAĞIDAKİ KAPILARIN HEPSİ KUYRUK BOŞALTMADAN SONRA. `render()`
+   * motorun kozmetik kuyruklarını (`g.arcs`, `g.deaths`, `g.hits`,
+   * `g.hurts`, `g.petBlasts`…) boşaltan TEK yer; bir kademe kapısı
+   * `pumpFx`/`pumpEffects`/`pumpPetFx`i atlarsa o diziler koşu boyunca
+   * SINIRSIZ büyür. Kapılar yalnız ÇİZİMİ atlıyor.
+   */
+  const q = quality();
 
   // zemin
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -203,9 +223,12 @@ export function render(
   // (`stageGround.sanat` → `descentArt`); kampanyada `depth` 1 kalıyor ve
   // hiçbir şey değişmiyor.
   drawStageGround(ctx, g.stage.def.id, focus.px, focus.py, w, h, g.stage.depth);
-  drawStageDecor(ctx, g.stage.def.id, focus.px, focus.py, w, h, g.stage.depth);
+  drawStageDecor(ctx, g.stage.def.id, focus.px, focus.py, w, h, g.stage.depth, q.decor);
   // ⚠️ IŞIK ZEMİNDEN SONRA, DÜŞMANLARDAN ÖNCE — bkz. drawTorch başlığı
-  drawTorch(ctx, g, focus);
+  // ⚠️ MEŞALE KADEMEYE BAĞLI: 860² `lighter` blit ≈ 0,8 ekran alanı. Yalnız
+  // ZEMİNİ aydınlatıyor — kapanınca hiçbir bilgi kaybolmuyor, sahne yalnız
+  // daha düz görünüyor. Bu yüzden LOW'da kapatılabilir bir kalem.
+  if (q.torch) drawTorch(ctx, g, focus);
   drawArenaEdge(ctx, g);
   drawGems(ctx, g);
   drawChests(ctx, g);
@@ -227,7 +250,8 @@ export function render(
   drawPetFx(ctx);
   drawPets(ctx, g.hero);
   if (g.rival) drawPets(ctx, g.rival);
-  drawCosmeticAura(ctx, g, auraId);  // halenin ALTINDA kalması gereken tek şey oyuncu
+  // ⚠️ Saf kozmetik — oyuncunun satın aldığı süs. En düşük kademede kapalı.
+  if (q.cosmeticAura) drawCosmeticAura(ctx, g, auraId);  // halenin ALTINDA kalması gereken tek şey oyuncu
   // ⚠️ RAKİP ÖNCE ÇİZİLİYOR: üst üste geldiklerinde KENDİ karakterin
   // üstte kalmalı, yoksa kalabalıkta kendini kaybediyorsun.
   if (g.rival) drawPlayer(ctx, g, g.rival === focus ? g.hero : g.rival);
@@ -240,7 +264,7 @@ export function render(
 
   // ⚠️ ATMOSFER EN SONDA, ekran uzayında. Kameradan önce çizilseydi dünyayla
   // birlikte kayardı; oyuncunun taşıdığı ışık halesi ekranda SABİT durmalı.
-  drawAtmosphere(ctx, g.stage.def.id, w, h, artTime, g.stage.depth);
+  drawAtmosphere(ctx, g.stage.def.id, w, h, artTime, g.stage.depth, q.fog, q.vignette);
   // ⚠️ BOSS GİRİŞİ ATMOSFERİN ÜSTÜNDE: bölümün kendi karartması isim
   // kartını yutmamalı. Ama hasar vinyetinin ALTINDA — giriş sırasında bile
   // "vuruldum" sinyali en üstte kalmalı, oyuncu o 2 saniyede hâlâ ölebilir.

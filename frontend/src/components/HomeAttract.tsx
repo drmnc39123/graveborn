@@ -15,6 +15,7 @@
 // ⚠️ SKOR YOK, KAYIT YOK, SUNUCU YOK. Bu bir koşu değil, bir vitrin:
 // `onFinish` yok, ilerleme yazılmıyor, mühürle ilgisi yok.
 
+import { quality } from '@/game/quality';
 import { useEffect, useRef } from 'react';
 import { Game } from '@/game/engine';
 import { STAGES, TICK } from '@/game/config';
@@ -64,7 +65,13 @@ export function HomeAttract() {
     const g = new Game(seedFromString('attract'), STAGES[0], {}, 'descent', undefined, 8);
     g.setViewport(GORUS_W, GORUS_H);
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    /**
+     * ⚠️ ÇÖZÜNÜRLÜK GRAFİK KADEMESİNDEN (`quality.ts`). Sabit `min(dpr, 2)`
+     * bırakılsaydı, ULTRA LOW seçmiş bir telefon oyuncusu KOŞUDA akıcı,
+     * BURADA kasan bir oyun görürdü — aynı cihazda iki farklı bütçe, sessiz
+     * bir tutarsızlık.
+     */
+    const dpr = Math.min(window.devicePixelRatio || 1, quality().pixelCap) * quality().renderScale;
     canvas.width = Math.round(GORUS_W * dpr);
     canvas.height = Math.round(GORUS_H * dpr);
 

@@ -17,6 +17,7 @@
 // VE oyunun kendi `lowGraphics` ayarı. Birincisi hiç kullanılmıyordu; oyuncu
 // sistem genelinde "hareketi azalt" dese bile oyun umursamıyordu.
 
+import { profileOf } from '@/game/quality';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { loadSettings } from '@/game/settings';
 
@@ -31,7 +32,10 @@ export function motionOff(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return true;
-    return loadSettings().lowGraphics;
+    // ⚠️ `lowGraphics` KALKTI, yerine grafik kademesi geldi. `uiMotion`
+    // yalnız NORMAL ve üstünde açık — yani eski `lowGraphics: true`
+    // davranışı (göçle `low`a düşen oyuncu) birebir korunuyor.
+    return !profileOf(loadSettings().quality).uiMotion;
   } catch {
     return false;
   }

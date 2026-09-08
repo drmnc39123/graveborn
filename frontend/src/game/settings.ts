@@ -14,6 +14,8 @@
 // yine `globalThis` üzerinden — `progress.ts`'teki aynı gerekçe, dosya
 // testlerde Node altında da çalışabilsin.
 
+import { guessTier, normalizeTier, type QualityTier } from './quality';
+
 const KEY = 'graveborn:settings:v1';
 
 export interface Settings {
@@ -39,14 +41,37 @@ export interface Settings {
    */
   music: boolean;
   /**
-   * Düşük grafik: leş, kıvılcım ve atmosfer katmanı azalır.
-   * Zayıf cihazda kare hızı için — denge etkisi YOK.
+   * GRAFİK KADEMESİ — tablo ve gerekçeler `quality.ts`te.
+   *
+   * 🔴 `lowGraphics: boolean`IN YERİNE GEÇTİ. Eski anahtar yalnız leş,
+   * kıvılcım, dekor ve sise ulaşıyordu; çözünürlüğe, meşaleye, vinyete ve
+   * ölüm efektlerine hiç dokunmuyordu — yani kasan oyuncunun elindeki tek
+   * düğme kasmanın sebebine dokunmuyordu. Eski kayıtlar
+   * `normalizeSettings` tarafından göç ettiriliyor, tercih kaybolmuyor.
+   *
+   * ⚠️ BU AYAR DA DENGEYİ ETKİLEMİYOR — VE ÇÖZÜNÜRLÜK DAHİL.
+   * `pixelCap` tehlikeli görünüyor çünkü görüş alanı bir zamanlar
+   * SİMÜLASYONU etkiliyordu (doğum halkasının yarıçapı ondan geliyordu).
+   * Ama `GameCanvas.tsx` her koşuda `game.lockViewport(RUN_VIEW.w,
+   * RUN_VIEW.h)` çağırıyor: halka 1280×720'de çakılı ve `resize()`
+   * içindeki `setViewport` belgelenmiş bir no-op. Ayrıca `render()` CSS
+   * ölçülerini alıyor — görünür dünya dikdörtgeni her kademede aynı,
+   * yalnız piksel yoğunluğu değişiyor.
+   *
+   * Bunu buraya yazıyorum çünkü bu satırı okumadan `pixelCap`i gören biri
+   * ya paniğe kapılıp ya da "düzelteyim" diye simülasyona sokabilir.
    */
-  lowGraphics: boolean;
+  quality: QualityTier;
 }
 
 export function defaultSettings(): Settings {
-  return { volume: 0.7, damageNumbers: true, music: true, lowGraphics: false };
+  /**
+   * ⚠️ KADEME CİHAZDAN TAHMİN EDİLİYOR — ama yalnız burada, yani hiç
+   * kaydı olmayan oyuncuda. Kullanıcı kararı: telefonda LOW ile başla,
+   * ilk izlenim akıcı olsun. Node'da `guessTier()` her zaman 'normal'
+   * döner, mühürler deterministik kalır.
+   */
+  return { volume: 0.7, damageNumbers: true, music: true, quality: guessTier() };
 }
 
 function clamp01(v: unknown, fallback: number): number {
@@ -56,15 +81,39 @@ function clamp01(v: unknown, fallback: number): number {
 }
 
 /** Eksik/bozuk kayda karşı savunmacı — ayar dosyası da elle düzenlenebilir */
-export function normalizeSettings(raw: Partial<Settings> | null | undefined): Settings {
+export function normalizeSettings(
+  raw: (Partial<Settings> & { lowGraphics?: unknown }) | null | undefined,
+): Settings {
   const d = defaultSettings();
   if (!raw || typeof raw !== 'object') return d;
   return {
     volume: clamp01(raw.volume, d.volume),
     damageNumbers: typeof raw.damageNumbers === 'boolean' ? raw.damageNumbers : d.damageNumbers,
     music: typeof raw.music === 'boolean' ? raw.music : d.music,
-    lowGraphics: typeof raw.lowGraphics === 'boolean' ? raw.lowGraphics : d.lowGraphics,
+    quality: kademeGocu(raw, d.quality),
   };
+}
+
+/**
+ * ESKİ `lowGraphics` KAYDINI KADEMEYE ÇEVİR.
+ *
+ * 🔴 TERCİH KAYBOLMAMALI. `lowGraphics: true` seçmiş oyuncu bunu bir sebeple
+ * seçti (muhtemelen kasıyordu); göç etmezse bir sürümde sessizce yüksek
+ * kademeye atlar ve oyunu bozulur.
+ *
+ * ⚠️ `lowGraphics: false` → `normal`, cihaz tahmini DEĞİL. O oyuncu bu
+ * cihazda zaten bugünkü görüntüyü görüyordu; telefonda bile olsa onu
+ * LOW'a düşürmek, hiç istemediği bir gerilemedir. Tahmin yalnız HİÇ kaydı
+ * olmayan oyuncu için.
+ *
+ * ⚠️ Bilinmeyen kademe adı sessizce varsayılana düşer — dosya elle
+ * düzenlenebilir ve bu dosyanın duruşu savunmacı.
+ */
+function kademeGocu(raw: Partial<Settings> & { lowGraphics?: unknown }, yedek: QualityTier): QualityTier {
+  if (raw.quality !== undefined) return normalizeTier(raw.quality, yedek);
+  if (raw.lowGraphics === true) return 'low';
+  if (raw.lowGraphics === false) return 'normal';
+  return yedek;
 }
 
 interface KeyValueStore {

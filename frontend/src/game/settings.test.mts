@@ -10,6 +10,7 @@
 import { Game } from './engine.js';
 import { TICK } from './config.js';
 import { applyFxSettings, drawFxWorld, fxSayim, isLowGfx, pumpFx, resetFx } from './fx.js';
+import { TIER_IDS, applyQuality, profileOf, type QualityTier } from './quality.js';
 import { defaultSettings, normalizeSettings, type Settings } from './settings.js';
 import { HINTS, nextHint } from './tutorial.js';
 
@@ -48,7 +49,8 @@ console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
 {
   // Aynı seed, aynı girdi, TAMAMEN farklı ayarlar → BİREBİR aynı koşu.
   // Bu, "ayar denge değiştirmiyor" iddiasının tek gerçek kanıtı.
-  const kosu = (s: { damageNumbers: boolean; lowGraphics?: boolean }) => {
+  const kosu = (s: { damageNumbers: boolean; quality: QualityTier }) => {
+    applyQuality(s.quality);
     const g = new Game(13579);
     g.setViewport(1280, 720);
     resetFx();
@@ -81,9 +83,23 @@ console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
     };
   };
 
-  const hepsiAcik = kosu({ damageNumbers: true, lowGraphics: false });
-  const hepsiKapali = kosu({ damageNumbers: false, lowGraphics: true });
-  const karisik = kosu({ damageNumbers: true, lowGraphics: true });
+  /**
+   * 🔴 EKSEN DEĞİŞTİ: iki boolean yerine BEŞ KADEME.
+   *
+   * Bu mührün asıl işi "grafik ayarı dengeyi değiştirmiyor" iddiasını
+   * KANITLAMAK. Kademe sistemi geldiğinde en tehlikeli görünen kol
+   * `pixelCap` oldu — çünkü görüş alanı bir zamanlar SİMÜLASYONU
+   * etkiliyordu (doğum halkasının yarıçapı ondan geliyordu). Artık
+   * `lockViewport` onu 1280×720'de çakılı tutuyor ama iddia ölçülmeden
+   * durmamalı.
+   *
+   * ⚠️ TÜM KADEMELER DÖNGÜYLE geziliyor, elle üçü seçilerek değil: yarın
+   * eklenecek bir kademe de bu mührün altına kendiliğinden giriyor.
+   */
+  const kademeler = TIER_IDS.map((t) => ({ t, r: kosu({ damageNumbers: t !== 'low', quality: t }) }));
+  const hepsiAcik = kademeler[0].r;
+  const hepsiKapali = kademeler[kademeler.length - 1].r;
+  const karisik = kademeler[2].r;
 
   const ayni = (a: typeof hepsiAcik, b: typeof hepsiAcik) =>
     a.kills === b.kills && a.level === b.level
@@ -96,6 +112,21 @@ console.log('\n[3] ⭐ AYARLAR SİMÜLASYONU ETKİLEMİYOR');
   check('TÜM ayarlar kapalı koşu, açık koşuyla birebir aynı', ayni(hepsiAcik, hepsiKapali),
     `${hepsiAcik.kills} = ${hepsiKapali.kills} kill`);
   check('karışık ayar da aynı sonucu veriyor', ayni(hepsiAcik, karisik));
+  /**
+   * ⭐ BEŞ KADEMENİN HEPSİ, ÜÇÜ DEĞİL. Üç örnek seçmek, seçilmeyen
+   * kademede açılan bir sızıntıyı görmezdi — ve en tehlikeli kol
+   * (`pixelCap 4`, ULTRA) tam da uçta duruyor.
+   */
+  const sapan = kademeler.filter((k) => !ayni(hepsiAcik, k.r)).map((k) => k.t);
+  check('BEŞ kademenin hepsi birebir aynı koşuyu veriyor', sapan.length === 0,
+    sapan.length ? `sapan: ${sapan.join(', ')}` : `${kademeler.length} kademe`);
+  /**
+   * ⚠️ KONTROL GRUBU: kademeler GERÇEKTEN farklı profiller mi? Hepsi aynı
+   * profile çözülseydi yukarıdaki kontrol boş geçerdi — bu depoda boş
+   * geçen bir iddia bir kez dört gün "yeşil" durdu.
+   */
+  const capUniq = new Set(TIER_IDS.map((t) => profileOf(t).pixelCap)).size;
+  check('kademeler gerçekten farklı (kontrol grubu)', capUniq >= 3, `${capUniq} ayrı pixelCap`);
   // ⚠️ Ölçüm testinde oyuncu bir şey YAPMIŞ olmalı, yoksa test hiçbir şey
   // ölçmeden "geçer" (projede bir kez düşülen tuzak)
   check('koşu gerçekten oynandı', hepsiAcik.kills > 0 && hepsiAcik.level > 1,
@@ -117,11 +148,12 @@ console.log('\n[3b] ⭐ DÜŞÜK GRAFİK GERÇEKTEN BİR ŞEY YAPIYOR MU');
   // 2 → 2 çıkıyordu. Kıvılcım kısıtı ancak düşman DAYANIKLIYKEN, yani
   // öldürmeyen vuruş çoğaldığında ve havuz baskı altındayken anlam kazanıyor —
   // tam da zayıf cihazın zorlandığı an.
-  const kosu = (lowGraphics: boolean) => {
+  const kosu = (tier: QualityTier) => {
     const g = new Game(24680, undefined, undefined, 'descent', undefined, 20);
     g.setViewport(1280, 720);
     resetFx();
-    applyFxSettings({ damageNumbers: true, lowGraphics });
+    applyQuality(tier);
+    applyFxSettings({ damageNumbers: true });
     let enCokLes = 0, enCokSpark = 0;
     for (let i = 0; i < 1800; i++) {
       if (g.phase === 'levelup') g.choose(g.offers[0].id);
@@ -137,8 +169,8 @@ console.log('\n[3b] ⭐ DÜŞÜK GRAFİK GERÇEKTEN BİR ŞEY YAPIYOR MU');
     return { kills: g.kills, enCokLes, enCokSpark };
   };
 
-  const acik = kosu(false);
-  const dusuk = kosu(true);
+  const acik = kosu('normal');
+  const dusuk = kosu('ultraLow');
 
   console.log(`     normal: ${acik.kills} kill · en çok ${acik.enCokLes} leş · ${acik.enCokSpark} kıvılcım`);
   console.log(`     düşük : ${dusuk.kills} kill · en çok ${dusuk.enCokLes} leş · ${dusuk.enCokSpark} kıvılcım`);
@@ -156,9 +188,10 @@ console.log('\n[3b] ⭐ DÜŞÜK GRAFİK GERÇEKTEN BİR ŞEY YAPIYOR MU');
   check('kıvılcım SIFIRLANMIYOR (öldüren vuruş hâlâ görünür)', dusuk.enCokSpark > 0,
     `${dusuk.enCokSpark} kıvılcım`);
 
-  check('bayrak modüller arası TEK KAYNAK', isLowGfx() === true);
-  applyFxSettings({ damageNumbers: true, lowGraphics: false });
-  check('bayrak geri kapanıyor', isLowGfx() === false);
+  check('LOW modüller arası TEK KAYNAK (stageGround da aynı bayrağı görüyor)',
+    isLowGfx() === true);
+  applyQuality('normal');
+  check('NORMAL"da bayrak kapalı', isLowGfx() === false);
 }
 
 console.log('\n[4] Kapalı sayılar çizimi bozmuyor');

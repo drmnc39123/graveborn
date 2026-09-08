@@ -5,6 +5,7 @@
 // yalan söylemek olurdu ("içeride bu var" dediğin şey içeride yok), hem de
 // ikinci bir varlık takımının bakımı demekti. Aynı harita, aynı çizim kodu.
 
+import { quality } from '@/game/quality';
 import { useEffect, useRef, useState } from 'react';
 import { loadMapWorld, type MapWorld } from '@/game/mapWorld';
 import { renderMenuBackground } from '@/game/hubRender';
@@ -42,7 +43,13 @@ export function MenuBackground() {
     let dpr = 1, cssW = 0, cssH = 0;
 
     const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      /**
+       * ⚠️ ÇÖZÜNÜRLÜK GRAFİK KADEMESİNDEN (`quality.ts`). Sabit `min(dpr, 2)`
+       * bırakılsaydı, ULTRA LOW seçmiş bir telefon oyuncusu KOŞUDA akıcı,
+       * BURADA kasan bir oyun görürdü — aynı cihazda iki farklı bütçe, sessiz
+       * bir tutarsızlık.
+       */
+      dpr = Math.min(window.devicePixelRatio || 1, quality().pixelCap) * quality().renderScale;
       cssW = canvas.clientWidth;
       cssH = canvas.clientHeight;
       canvas.width = Math.round(cssW * dpr);

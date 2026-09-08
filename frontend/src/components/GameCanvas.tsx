@@ -3,6 +3,7 @@
 // her frame güncellemek 60Hz'de re-render fırtınası yaratır, o yüzden HUD ~10Hz'de
 // ayrıca örneklenir. Oyun döngüsü React render döngüsünden BAĞIMSIZ.
 
+import { applyQuality, onQualityChange, quality, type QualityTier } from '@/game/quality';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Game, type RunMode } from '@/game/engine';
 import type { RunResult } from '@/game/progress';
@@ -27,6 +28,8 @@ import { Banner, Bar, Orb, Slot, PixelButton, BTN, CooldownRing, Icon, preloadKi
 import { Reveal, motionOff } from '@/components/ui/motion';
 import { LevelUpCard } from '@/components/LevelUpCard';
 import { BuildRail } from '@/components/BuildRail';
+import { QualityPicker } from '@/components/QualityPicker';
+import { loadSettings, saveSettings } from '@/game/settings';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
@@ -76,6 +79,29 @@ interface Hud {
 }
 
 const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/**
+ * GÜVENLİ PİKSEL ÖLÇEĞİ.
+ *
+ * 🔴 iOS SAFARI'NİN SERT BİR TUVAL ALANI SINIRI VAR ve aşılınca tuval
+ * YAVAŞ DEĞİL **BOŞ** çiziliyor. ULTRA kademesi `pixelCap 4`; DPR 3'lük bir
+ * telefonda bu NORMAL'in 9 katı piksel demek ve o sınırı rahatlıkla aşar.
+ * Yani en yüksek kademe, en pahalı cihazda oyunu SİYAH ekrana çevirebilirdi
+ * — ve bu "yavaşladı" gibi görünmez, "bozuldu" gibi görünür.
+ *
+ * ⚠️ Tavan 8,3 milyon piksel (~2880×2880): yaygın olarak bildirilen iOS
+ * sınırının altında, geniş masaüstü ekranlarda ise devreye hiç girmiyor.
+ * ⚠️ Kademeli iniyor, sıfıra düşmüyor: taban 1 (kademenin altına inmiyoruz,
+ * yalnız üstünü kırpıyoruz).
+ */
+const TUVAL_TAVANI = 8.3e6;
+
+function olcek(istenen: number, cssW: number, cssH: number): number {
+  const alan = Math.max(1, cssW * cssH);
+  let e = istenen;
+  while (e > 1 && alan * e * e > TUVAL_TAVANI) e -= 0.25;
+  return Math.max(0.25, e);
+}
 
 export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, startDepth = 1, ascension = 0, aura = null, timeLimitSec, livePresence = false, duelTarget, wager = null, allowedWeapons, pets, onFinish }: {
   stage: StageDef;
@@ -204,8 +230,44 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   }, []);
 
   const [confirmExit, setConfirmExit] = useState(false);
+  /**
+   * KOŞU İÇİ GRAFİK AYARI (kullanıcı isteği: *"oyundan yani bölümden
+   * çıkmamak için sağ en üste bir ayarlar butonu koyabiliriz"*).
+   *
+   * 🔴 DURAKLATMIYOR — VE BU BİLİNÇLİ BİR KARAR. `pausedRef` bugün yalnız
+   * çıkış onayına hizmet ediyor. Ayar katmanının duraklatması, bahisli
+   * koşularda, düellolarda ve sıralamada herkese TEKRARLANABİLİR BEDAVA
+   * DURAKLAMA verirdi: simülasyon bozulmaz ama OYUN değişir. Panel küçük
+   * ve köşede, koşu oynanır kalıyor.
+   */
+  const [gfxAcik, setGfxAcik] = useState(false);
+  const [kademe, setKademe] = useState<QualityTier>('normal');
+  /**
+   * 🔴 SEÇİCİ AKTİF PROFİLİ GÖSTERİR, KAYITTAKİNİ DEĞİL.
+   *
+   * İlk sürüm `loadSettings().quality` okuyordu ve TARAYICIDA YALAN
+   * SÖYLERKEN yakalandı: `?test=1` kademeyi `normal`e sabitliyor ama kayıtta
+   * `low` duruyordu — panel "LOW · ON" yazarken oyun NORMAL çiziliyordu.
+   * Oyuncuya hangi kademede olduğunu söyleyen tek ekran bu; yanlış söylerse
+   * ayarın tamamı güvenilmez olur.
+   *
+   * ⚠️ Efekt içinde: `quality()` modül durumu ve sunucuda `applyQuality`
+   * henüz çağrılmamış olabilir — render sırasında okumak hidrasyon
+   * uyuşmazlığı üretirdi (bu depoda `motion.tsx`te ölçülmüş tuzak).
+   * ⚠️ ABONE DE OLUYOR: kademe başka bir yerden (köy paneli) değişirse
+   * bu ekran sessizce eskimesin.
+   */
+  useEffect(() => {
+    setKademe(quality().tier);
+    return onQualityChange((p) => setKademe(p.tier));
+  }, []);
   const pausedRef = useRef(false);
+  // ⚠️ REF ŞART: klavye dinleyicisi efekt içinde BİR KEZ kuruluyor ve
+  // kapanışı React state'inin sonraki değerini göremez (`pausedRef` ile
+  // aynı gerekçe).
+  const gfxAcikRef = useRef(false);
   pausedRef.current = confirmExit;
+  gfxAcikRef.current = gfxAcik;
 
   const choose = useCallback((id: string) => {
     gameRef.current?.choose(id);
@@ -342,15 +404,47 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
     let cssW = 0;
     let cssH = 0;
     const resize = () => {
-      dpr = Math.min(window.devicePixelRatio || 1, 2); // 2'nin üstü mobilde bedava fps kaybı
       cssW = canvas.clientWidth;
       cssH = canvas.clientHeight;
+      /**
+       * ⭐ ÇÖZÜNÜRLÜK GRAFİK KADEMESİNDEN — VE BU EN BÜYÜK KOL.
+       *
+       * Eskisi sabit `Math.min(devicePixelRatio, 2)` idi. DPR 3'lük bir
+       * telefonda bu hâlâ DPR 1'in DÖRT KATI piksel demek; ölçülen darboğaz
+       * da tam olarak dolgu hızı (kare başına ~5 ekran alanı harmanlanıyor).
+       *
+       * 🔴 DENGEYE DOKUNMUYOR ve gerekçesi tek satır ötede: `render()`
+       * aşağıda **CSS ölçüleriyle** (`cssW/cssH`) çağrılıyor — görünür
+       * dünya dikdörtgeni her kademede BİREBİR aynı, yalnız o görüntünün
+       * kaç pikselle boyandığı değişiyor. Üstelik `game.lockViewport`
+       * (yukarıda) doğum halkasını 1280×720'de çakılı tutuyor, yani
+       * aşağıdaki `setViewport` belgelenmiş bir no-op.
+       */
+      const q = quality();
+      dpr = olcek(Math.min(window.devicePixelRatio || 1, q.pixelCap) * q.renderScale, cssW, cssH);
       canvas.width = Math.round(cssW * dpr);
       canvas.height = Math.round(cssH * dpr);
+      // ⚠️ 1'in altına inince en-yakın-komşu şart: yumuşatılmış bir
+      // küçültme piksel sanatını bulanık bir lekeye çevirir.
+      canvas.style.imageRendering = dpr < 1 ? 'pixelated' : '';
       game.setViewport(cssW, cssH);
     };
     resize();
     window.addEventListener('resize', resize);
+    /**
+     * 🔴 KADEME DEĞİŞİNCE TUVAL YENİDEN BOYUTLANMALI — ZİNCİRİN SON ADIMI.
+     *
+     * Kademedeki her şey (sis, meşale, dekor, bütçeler) modül durumundan
+     * okunduğu için bir sonraki karede kendiliğinden canlı. ÇÖZÜNÜRLÜK
+     * DEĞİL: `canvas.width` yalnız burada yazılıyor. Bu aboneliği unutmak,
+     * bu depodaki en pahalı hata sınıfı olurdu — oyuncu ULTRA LOW'a basar,
+     * sis ve meşale kapanır, "bir şeyler oldu" der, ama asıl kol hiç
+     * çekilmemiştir.
+     * ⚠️ `canvas.width` yazmak tuvali temizler ve ctx durumunu sıfırlar;
+     * zararsız — bir sonraki kare her şeyi yeniden çiziyor, duraklatılmış
+     * dalda bile (`pausedRef`) render her karede çalışıyor.
+     */
+    const kademeAbonesi = onQualityChange(() => resize());
 
     // ── girdi ──
     // Tarayıcı otomatik oynatmayı engeller — ilk kullanıcı hareketinde aç.
@@ -372,6 +466,12 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       // ESC = çıkış onayı (aç/kapa). Koşu sürerken oyuncunun kaçış yolu olmalı.
       if (e.key === 'Escape' && game.phase === 'running') {
         e.preventDefault();
+        /**
+         * ⚠️ AYAR PANELİ AÇIKSA ÖNCE ONU KAPATIR. Tek tuşun iki iş yapması
+         * ("ayarı kapat" + "çıkış onayını aç") oyuncuya kazara koşusunu
+         * bıraktırırdı. Panel varsa Escape ona ait.
+         */
+        if (gfxAcikRef.current) { setGfxAcik(false); return; }
         setConfirmExit((v) => !v);
       }
     };
@@ -598,6 +698,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
       // köy müziği sessiz açılır ve sebebi hiçbir yerde görünmezdi.
       muzikDurakla(false);
       window.removeEventListener('resize', resize);
+      kademeAbonesi();
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       cubukSok();
@@ -685,6 +786,20 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                     fontSize: 12, lineHeight: 1, padding: 0 }}>
                   {muted ? '🔇' : '🔊'}
                 </button>
+                {/* ⭐ GRAFİK AYARI — kullanıcı isteği: koşudan ÇIKMADAN
+                    kademe değiştirebilmek. Yeri mute düğmesinin yanı,
+                    ölçüsü onunla AYNI (26×22): üst şeridin sağ grubu
+                    zaten süre · kill · mute · EXIT taşıyor ve yeni bir
+                    ölçü eklemek satırı dar ekranda taşırırdı. */}
+                <button
+                  onClick={() => setGfxAcik((v) => !v)}
+                  aria-label="Graphics quality"
+                  aria-expanded={gfxAcik}
+                  style={{ pointerEvents: 'auto', width: 26, height: 22, borderRadius: 6, cursor: 'pointer',
+                    border: `1px solid ${gfxAcik ? C.candle : C.border}`, background: 'rgba(0,0,0,0.4)',
+                    color: gfxAcik ? C.candle : C.boneFaint, fontSize: 12, lineHeight: 1, padding: 0 }}>
+                  ⚙
+                </button>
                 {/* Koşudan çıkış — oyuncu bir run'a kilitlenmemeli */}
                 {hud.phase === 'running' && (
                   <PixelButton variant={BTN.strong} scale={2} onClick={() => setConfirmExit(true)}
@@ -758,6 +873,63 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
               taşındı (bkz. `BuildRail`). */}
           <BuildRail weapons={hud.weapons} passives={hud.passives}
             revivalLeft={hud.revivalLeft} dar={darHud} />
+
+          {/* ── GRAFİK AYARI KATMANI ──
+              ⚠️ `zIndex: 8` ŞART. `GameCanvas` başka hiçbir yerde z-index
+              kullanmıyor (DOM sırasına güveniyor) ama `BuildRail`
+              `zIndex: 3` taşıyor — yani z-index vermeseydik bu panel sol
+              şeridin ALTINDA kalırdı. (Aynı sebeple çıkış diyaloğunun
+              üstüne de şerit boyanıyor; o `pointerEvents:'none'` olduğu
+              için tıklama çalmıyor, yalnız görüntü sorunu.)
+              ⚠️ Sağ üstte, düğmenin hemen altında. Sol alttaki HP küresini
+              ve joystick alanını kapatmıyor.
+              ⚠️ Genişlik `min(...)` ile: dar ekranda 260 px sert taban
+              olsaydı taşardı — bu depoda ölçülmüş bir tuzak. */}
+          {gfxAcik && (
+            <div style={{
+              position: 'absolute', zIndex: 8, top: 52, right: 8,
+              width: 'min(250px, calc(100vw - 24px))',
+              pointerEvents: 'auto',
+              padding: 10, borderRadius: 10,
+              border: `1px solid ${C.border}`,
+              background: 'rgba(10,8,6,0.94)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                marginBottom: 7 }}>
+                <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
+                  letterSpacing: 1.2, color: C.boneFaint }}>GRAPHICS</span>
+                {/* ⚠️ CANLI FPS BURADA: oyuncu kademeyi değiştirince etkisini
+                    ANINDA görmeli. Yoksa "değiştirdim ama bir şey oldu mu?"
+                    sorusu kalır ve ayar bir inanç meselesine döner. */}
+                <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
+                  fontVariantNumeric: 'tabular-nums',
+                  color: hud.fps >= 50 ? C.ok : hud.fps >= 30 ? C.candle : C.bloodSoft }}>
+                  {hud.fps} fps
+                </span>
+              </div>
+              <QualityPicker
+                value={kademe}
+                compact
+                onChange={(t) => {
+                  setKademe(t);
+                  /**
+                   * ⚠️ ÜÇ ADIM DA ŞART: kaydet · motora bildir · tuvali
+                   * yeniden boyutlandır. Sonuncusu `applyQuality`nin
+                   * tetiklediği `onQualityChange` aboneliğiyle oluyor
+                   * (`resize`). Biri eksik kalsaydı ayar "çalışıyor gibi"
+                   * görünüp en büyük kolu hiç çekmezdi.
+                   */
+                  saveSettings({ ...loadSettings(), quality: t });
+                  applyQuality(t);
+                }}
+              />
+              <div style={{ marginTop: 7, fontFamily: FONT.ui, fontSize: 8.5,
+                lineHeight: 1.45, color: C.boneFaint }}>
+                The run keeps going while this is open. Enemies and their
+                shots look the same at every tier.
+              </div>
+            </div>
+          )}
 
           {/* alt sol: can küresi + koşu sayaçları */}
           <div style={{ position: 'absolute', bottom: 18, left: 12, right: 12, pointerEvents: 'none',

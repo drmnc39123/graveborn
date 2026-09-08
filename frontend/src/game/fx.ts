@@ -16,6 +16,7 @@
 // aktif sayaç + swap-remove. Motor tam da bu disiplinle yazıldı (GC spike'ı
 // yok → frame düşmesi yok); render katmanı da aynı disipline uymak zorunda.
 
+import { onQualityChange, quality } from './quality';
 import type { Game } from './engine';
 import { C, FONT } from '@/lib/theme';
 import { drawActor, drawCell, ENEMY_ART, FX } from './sprites';
@@ -116,11 +117,22 @@ let numbersOn = true;
  * ASLA kapatılmayanlar: hasar sayısı (kendi ayarı var), boss telegrafı,
  * HP küresi, soğuma halkaları. Oyuncu görmesi gereken hiçbir şeyi kaybetmez.
  */
-let lowGfx = false;
-
-/** `stageGround` de okuyor — bayrak tek yerde tutulsun diye buradan veriliyor */
+/**
+ * ⚠️ BAYRAK ARTIK BURADA TUTULMUYOR — `quality.ts` TÜRETİYOR.
+ *
+ * Eskiden `applyFxSettings(v)` `v.lowGraphics`i buraya yazıyordu ve
+ * `stageGround` de buradan okuyordu. Artık tek kaynak grafik profili:
+ * ikinci bir "düşük mü" gerçeği tutmak, ayar iki yerden değiştiğinde
+ * ayrışırdı.
+ *
+ * ⚠️ KABUK BİLEREK DURUYOR: `stageGround.ts` bunu iki yerde çağırıyor ve
+ * `settings.test` onu ölçüyor. Aynı commit'te hepsini birden değiştirmek,
+ * kırıldığında hangisinin kırdığını bilinemez hâle getirirdi. `stageGround`
+ * `q.decor`/`q.fog`u doğrudan okumaya geçtiğinde bu fonksiyon silinecek.
+ */
 export function isLowGfx(): boolean {
-  return lowGfx;
+  const t = quality().tier;
+  return t === 'low' || t === 'ultraLow';
 }
 
 /**
@@ -140,13 +152,27 @@ export function fxSayim(): { spark: number; num: number; corpse: number } {
   };
 }
 
-export function applyFxSettings(v: { damageNumbers: boolean; lowGraphics?: boolean }) {
+export function applyFxSettings(v: { damageNumbers: boolean }) {
   numbersOn = v.damageNumbers;
-  lowGfx = v.lowGraphics ?? false;
-  // Ayar koşu ORTASINDA açılabilir: ekrandaki leşleri hemen temizle, yoksa
-  // "açtım ama hâlâ duruyorlar" görünür.
-  if (lowGfx) for (const c of corpses) c.on = false;
 }
+
+/**
+ * KADEME DEĞİŞİNCE EKRANDAKİ LEŞLERİ BÜTÇEYE İNDİR.
+ *
+ * ⚠️ Ayar koşu ORTASINDA değişebiliyor (koşu içi ayar düğmesi). Yalnız yeni
+ * leşleri kısmak yetmez: ekranda duran 128 leş öylece kalır ve oyuncu
+ * "düşürdüm ama hiçbir şey olmadı" görür. Mevcut davranışın (eski
+ * `applyFxSettings` içindeki temizlik) kademelendirilmiş hâli.
+ *
+ * ⚠️ EN YENİLER KALIYOR, en eskiler söndürülüyor: `t` yaş demek, büyük olan
+ * daha eski. Rastgele söndürmek ekranda göz kırpma yaratırdı.
+ */
+onQualityChange((p) => {
+  const acik = corpses.filter((c) => c.on).sort((a, b) => a.t - b.t);
+  for (let i = p.corpses; i < acik.length; i++) acik[i].on = false;
+  const kivilcim = sparks.filter((s) => s.on).sort((a, b) => a.t - b.t);
+  for (let i = p.sparks; i < kivilcim.length; i++) kivilcim[i].on = false;
+});
 
 /** Yeni koşu — önceki koşudan efekt taşmasın */
 export function resetFx() {
@@ -160,6 +186,17 @@ export function resetFx() {
 
 /** Havuzdan boş yuva al. Doluysa EN ESKİSİNİ geri dönüştür (ring davranışı) —
  *  "efekt hiç görünmedi" yerine "en eskisi kesildi" tercih edilir. */
+/**
+ * Havuzda kaç yuva açık — kademe bütçesi bunun üstünden uygulanıyor.
+ * ⚠️ O(havuz) ama zaten bugün de öyleydi (`sparks.some(...)`), yani ek
+ * maliyet yok.
+ */
+function aktifSayi<T extends { on: boolean }>(pool: T[]): number {
+  let n = 0;
+  for (let i = 0; i < pool.length; i++) if (pool[i].on) n += 1;
+  return n;
+}
+
 function slot<T extends { on: boolean; t: number }>(pool: T[]): T {
   let oldest = pool[0];
   for (let i = 0; i < pool.length; i++) {
@@ -187,7 +224,14 @@ export function pumpFx(g: Game, dt: number) {
     // yuvasını dolduran "bonus" kıvılcımlar kapanıyor — öldüren ve kritik
     // vuruş HER ZAMAN çiziliyor, çünkü onlar süs değil GERİ BİLDİRİM.
     const onemli = h.killed || h.crit;
-    if (onemli || (!lowGfx && sparks.some((s) => !s.on))) {
+    /**
+     * ⚠️ NORMAL'DE BUGÜNKÜ DAVRANIŞ BİREBİR KORUNUYOR. `normal` bütçesi 96
+     * ve havuz da 96 — yani `aktifSayi(sparks) < 96` ile eski
+     * `sparks.some((s) => !s.on)` MANTIKSAL OLARAK AYNI ifade. Alt
+     * kademelerde bütçe düşüyor ve eş zamanlı kıvılcım sayısı kısılıyor.
+     */
+    const kivilcimButcesi = Math.min(sparks.length, quality().sparks);
+    if (onemli || aktifSayi(sparks) < kivilcimButcesi) {
       const s = slot(sparks);
       const art = weaponArt(h.wid).impact;
       s.x = h.x; s.y = h.y; s.t = 0;
@@ -231,7 +275,16 @@ export function pumpFx(g: Game, dt: number) {
     // ⚠️ Leş TAMAMEN kapanıyor: 128 yuvalık havuz, düşük grafikte en pahalı
     // kalem. Ölümün geri bildirimi kaybolmuyor — ölüm patlaması (`render.ts`
     // `drawEffects`) ve hasar sayısı duruyor.
-    if (d.art && !lowGfx) {
+    /**
+     * ⚠️ BÜTÇE HAVUZ BOYUNA EŞİTSE "SINIRSIZ" DEMEK — ve NORMAL'de öyle.
+     * Bugünkü davranış leşi HER ZAMAN doğuruyor; havuz dolduğunda `slot()`
+     * en eskisini geri dönüştürüyor. Düz bir `aktifSayi < bütçe` kontrolü
+     * NORMAL kademede 128 leş dolunca yeni leş doğurmayı durdururdu — yani
+     * "NORMAL = bugünkü oyun" iddiasını sessizce yalanlardı.
+     */
+    const lesButcesi = quality().corpses;
+    const lesYeriVar = lesButcesi >= corpses.length || aktifSayi(corpses) < lesButcesi;
+    if (d.art && lesButcesi > 0 && lesYeriVar) {
       const c = slot(corpses);
       c.x = d.x; c.y = d.y; c.t = 0; c.art = d.art; c.facing = d.facingRight; c.on = true;
     }

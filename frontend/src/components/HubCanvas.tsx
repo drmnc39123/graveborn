@@ -2,6 +2,7 @@
 // Hub sahnesi — editörde çizilen köy. Çizim hubRender.ts'te, mantık hub.ts'te;
 // bu bileşen köprü: harita yükleme, girdi, döngü ve React tarafı istemler.
 
+import { quality } from '@/game/quality';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isLockedBuilding } from '@/game/locked';
 import { createHub, stepHub, warp, type HubState } from '@/game/hub';
@@ -193,7 +194,13 @@ export function HubCanvas({
       hubRef.current = hub;
       let dpr = 1, cssW = 0, cssH = 0;
       const resize = () => {
-        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        /**
+         * ⚠️ ÇÖZÜNÜRLÜK GRAFİK KADEMESİNDEN (`quality.ts`). Sabit `min(dpr, 2)`
+         * bırakılsaydı, ULTRA LOW seçmiş bir telefon oyuncusu KOŞUDA akıcı,
+         * BURADA kasan bir oyun görürdü — aynı cihazda iki farklı bütçe, sessiz
+         * bir tutarsızlık.
+         */
+        dpr = Math.min(window.devicePixelRatio || 1, quality().pixelCap) * quality().renderScale;
         cssW = canvas.clientWidth; cssH = canvas.clientHeight;
         canvas.width = Math.round(cssW * dpr);
         canvas.height = Math.round(cssH * dpr);
