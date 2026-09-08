@@ -35,6 +35,7 @@ import { SolIcon, SolPayButton, useSolRail } from '@/components/SolPayButton';
 import { solPrice } from '@/game/solPrice';
 import { PanelHead, Tag } from '@/components/ui/cards';
 import { Icon } from '@/components/ui/kit';
+import { HeroPortrait } from '@/components/HeroPortrait';
 import { motionOff } from '@/components/ui/motion';
 import { C, FONT, glass, thinGlass } from '@/lib/theme';
 
@@ -42,6 +43,7 @@ const KEYFRAMES = `
 @keyframes gb-vig-in { 0% { opacity: 0; transform: translateY(10px) scale(0.94); } 100% { opacity: 1; transform: none; } }
 @keyframes gb-vig-glow { 0%,100% { box-shadow: 0 0 14px rgba(239,167,46,0.20); } 50% { box-shadow: 0 0 26px rgba(239,167,46,0.42); } }
 @keyframes gb-vig-shine { 0% { background-position: -140% 0; } 100% { background-position: 240% 0; } }
+@keyframes gb-vig-nefes { 0%,100% { transform: scale(1); } 50% { transform: scale(1.035); } }
 @keyframes gb-vig-rise { 0% { opacity: 0; transform: translateY(16px) scale(0.8); } 55% { opacity: 1; transform: translateY(-3px) scale(1.06); } 100% { opacity: 1; transform: none; } }
 `;
 
@@ -157,7 +159,7 @@ export function VigilSection({ progress, onChange, onError }: {
       }}>
         {/* ── GOLD ── */}
         <div style={{
-          ...glass(10), padding: '13px 14px', position: 'relative', overflow: 'hidden',
+          ...glass(10), padding: '15px 16px', position: 'relative', overflow: 'hidden',
           border: `1px solid ${C.candle}55`,
           animation: anim('gb-vig-glow', '3.4s ease-in-out infinite'),
         }}>
@@ -195,27 +197,35 @@ export function VigilSection({ progress, onChange, onError }: {
         </div>
 
         {/* ── KAHRAMAN ── */}
+        {/* ⚠️ KUTU BIRAZ BUYUDU ve NEFES ALIYOR (kullanıcı isteği).
+            Ölçek 1 → 1,035; daha fazlası yanındaki gold kutusuyla hizayı
+            bozuyor ve "titriyor" gibi duruyordu. */}
         <div style={{
-          ...glass(10), padding: '13px 14px', position: 'relative', overflow: 'hidden',
+          ...glass(10), padding: '15px 16px', position: 'relative', overflow: 'hidden',
           border: `1px solid ${C.blood}66`,
+          animation: anim('gb-vig-nefes', '3.2s ease-in-out infinite'),
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/**
+              * 🔴 GERÇEK KARAKTER, HARF DEĞİL (kullanıcı düzeltmesi).
+              * İlk sürüm "M" harfi gösteriyordu çünkü şeridi `<img>` ile
+              * doğru kırpamıyordum. Çözüm kırpma matematiğini yeniden
+              * yazmak değil, OYUNUN KENDİ ÇİZİCİSİNİ kullanmaktı
+              * (`HeroPortrait` → `drawActor`): kare seçimi, `contentRatio`,
+              * `anchorY`, `crop` — hepsi orada ve ölçülerek bulunmuş.
+              * ⚠️ `run` animasyonu: kutuda duran değil YÜRÜYEN bir karakter,
+              * "canlı olarak hareketli" istendi.
+              */}
             <span style={{
-              width: 46, height: 46, flexShrink: 0, borderRadius: 10,
+              width: 60, height: 60, flexShrink: 0, borderRadius: 10,
               display: 'grid', placeItems: 'center', overflow: 'hidden',
-              background: 'rgba(0,0,0,0.34)', border: `1px solid ${C.blood}66`,
-              fontFamily: FONT.title, fontSize: 22, fontWeight: 900, color: C.bloodSoft,
-              textShadow: `0 0 12px ${C.blood}`,
+              background: 'radial-gradient(circle at 50% 70%, rgba(160,18,38,0.22), rgba(0,0,0,0.42))',
+              border: `1px solid ${C.blood}66`,
             }}>
-              {/* ⚠️ SPRITE DEĞİL HARF İŞARETİ. Kahraman şeritleri 46 px'lik
-                  bir kutuda doğru kırpılamıyor (çerçeve boyu ve içerik oranı
-                  karaktere göre değişiyor — `heroes.ts` `crop`/`contentRatio`)
-                  ve yanlış kırpılmış bir sprite, hiç sprite olmamasından
-                  kötü görünür. Kutu kimliği renk ve harfle taşıyor. */}
-              {kahraman.name.charAt(0)}
+              <HeroPortrait hero={VIGIL_HERO} size={58} anim="run" />
             </span>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: FONT.title, fontSize: 16, fontWeight: 900,
+              <div style={{ fontFamily: FONT.title, fontSize: 17, fontWeight: 900,
                 color: C.bone, lineHeight: 1.1 }}>{kahraman.name}</div>
               <div style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
                 letterSpacing: 1.2, color: C.bloodSoft, marginTop: 3 }}>
@@ -404,8 +414,7 @@ export function VigilSection({ progress, onChange, onError }: {
               border: `1px solid ${C.blood}66`,
               animation: 'gb-vig-rise 520ms ease-out 300ms both',
             }}>
-              <span style={{ fontFamily: FONT.title, fontSize: 18, fontWeight: 900,
-                color: C.bloodSoft }}>{kahraman.name.charAt(0)}</span>
+              <HeroPortrait hero={VIGIL_HERO} size={34} anim="run" />
               <span style={{ fontFamily: FONT.ui, fontSize: 12.5, fontWeight: 900,
                 color: C.bone }}>{kahraman.name}</span>
             </div>

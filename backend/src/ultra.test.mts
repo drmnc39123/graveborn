@@ -69,7 +69,15 @@ console.log('\n[2] HER SEY ACIK');
    * vermek "her sey acik" olmazdi.
    */
   check('derinlik de odenmis sayiliyor', Object.values(u.depthPaid).every((d) => d >= 100));
-  check('kart acik (kahraman icin sart)', u.vigil === true);
+  /**
+   * 🔴 KART VERILMIYOR — VE BU BILINCLI. Ilk surum `vigil: true` yaziyordu
+   * ve SATIN ALMA EKRANINI GIZLIYORDU: hazine paneli acinca "YOURS"
+   * goruyor, SOL dugmesi hic cizilmiyordu. Kullanici bildirdi. Ultra modun
+   * var olma sebebi TEST ETMEK; oyunun tek odeme akisini test edilemez
+   * yapan bir kolaylik amacin kendisini yiyordu.
+   */
+  check('kart VERILMIYOR (satin alma test edilebilsin)',
+    !('vigil' in (u as unknown as Record<string, unknown>)));
   /**
    * ⚠️ `firstClear` DE ISARETLI: aksi halde arayuz her bolumde "topla"
    * dugmesi gosterir ve oradan GERCEK bir yazma tetiklenip kaydi kirletir.

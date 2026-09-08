@@ -324,7 +324,8 @@ app.get('/progress', wrap(async (req, res) => {
           ...(gerek.gold > 0 ? { gold: { increment: gerek.gold } } : {}),
           unlockedStage: u.unlockedStage,
           cleared: u.cleared, firstClear: u.firstClear, depthPaid: u.depthPaid,
-          vigil: true,
+          // ⚠️ `vigil` BILEREK VERILMIYOR — satin alma ekrani test
+          // edilebilir kalsin diye (bkz. `ultra.ts`).
         },
       });
       /**

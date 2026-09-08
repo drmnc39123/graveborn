@@ -69,18 +69,28 @@ export interface UltraIlerleme {
   cleared: Record<number, boolean>;
   firstClear: Record<number, boolean>;
   depthPaid: Record<number, number>;
-  vigil: boolean;
 }
 
 /**
  * `/progress` cevabını ultra hâline çevir.
  *
  * ⚠️ `depthPaid` DE AÇILIYOR ve sebebi somut: kahraman kilidi
- * (`priestess` d8), beceri puanları ve Vigil kademelerinin HEPSİ ondan
- * türüyor. Yalnız gold vermek "her şey açık" olmazdı.
+ * (`priestess` d8) ve beceri puanları ondan türüyor. Yalnız gold vermek
+ * "her şey açık" olmazdı.
  *
- * ⚠️ `vigil: true` — kart artık bir kahraman taşıyor (`bladekeeper`), yani
- * onsuz "her şey açık" yalan olurdu.
+ * 🔴 `vigil` VERİLMİYOR — VE BU BİLİNÇLİ BİR GERİ ADIM.
+ *
+ * İlk sürüm `vigil: true` yazıyordu ("her şey açık" olsun diye) ve
+ * SATIN ALMA EKRANINI GİZLİYORDU: hazine cüzdanı paneli açtığında
+ * "YOURS" görüyor, SOL düğmesi hiç çizilmiyordu. Kullanıcı bildirdi:
+ * *"ben burada bir Solana ile ödeme butonu göremedim?"*
+ *
+ * Ultra modun VAR OLMA SEBEBİ test etmek; oyunun tek ödeme akışını test
+ * edilemez yapan bir "kolaylık" amacın kendisini yiyordu. Hazine zaten
+ * ödemeyi KENDİNE yapıyor — gerçek akışı denemenin maliyeti sıfır.
+ *
+ * ⚠️ Sonuç: Metal Bladekeeper ultra hesapta da kilitli kalıyor. Doğru
+ * olan bu — o kahraman kartın içeriği ve kartı almadan görünmemeli.
  *
  * @param stageSayisi `STAGES.length` — sabit burada yazılmıyor, çağıran
  *   veriyor; ikinci bir bölüm sayısı tanımı bir gün ayrışırdı.
@@ -121,5 +131,5 @@ export function ultraIlerleme(stageSayisi: number, derinlik = 200): UltraIlerlem
     firstClear[id] = true;
     depthPaid[id] = derinlik;
   }
-  return { gold: ULTRA_GOLD, unlockedStage: stageSayisi, cleared, firstClear, depthPaid, vigil: true };
+  return { gold: ULTRA_GOLD, unlockedStage: stageSayisi, cleared, firstClear, depthPaid };
 }
