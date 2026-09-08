@@ -1,9 +1,23 @@
 // THE LONG VIGIL — sezon kartı.
 //
-// ⚠️ KART GÜÇ SATMAZ. Bütün ödülleri kozmetik ve toz; hiçbiri hasara,
-// cana, gold'a ya da derinliğe dokunmuyor. `solPrice.ts`teki kural burada
-// da geçerli ve rayın var oluş şartı: ödeyen oyuncu daha derine inemez,
-// yalnız farklı görünür.
+// 🔴 KART GÜÇ SATIYOR — VE BU BİLİNÇLİ BİR KARAR (kullanıcı, 2026-09-08).
+//
+// Kart eskiden yalnız kozmetik ve toz veriyordu; dosyanın başlığı
+// "ödeyen oyuncu daha derine inemez, yalnız farklı görünür" diyordu.
+// ARTIK DOĞRU DEĞİL: kart 1.000 gold ve BAŞKA HİÇBİR YOLDAN AÇILAMAYAN
+// bir kahraman (Metal Bladekeeper) veriyor.
+//
+// ⚠️ NE SATTIĞIMIZ ÖLÇÜLDÜ, tahmin edilmedi:
+//   · Bladekeeper: +%15 hasar · +%15 can · +2 zırh · −%10 hız
+//   · 1.000 gold ≈ 13 dakikalık oyun (ölçülen kazanç ~4.700 gold/saat)
+//
+// ⚠️ BU KARAR OYUN İÇİ METİNLERİ DE DEĞİŞTİRDİ. `codex.ts` oyuncuya
+// "You cannot pay for power" ve "not as a bundle that happens to include
+// it" diyordu; ikisi de düzeltildi. Oyuncuya bir şey vaat edip tersini
+// satmak, satmanın kendisinden daha pahalıya mal olur.
+//
+// ⚠️ HÂLÂ SATILMAYANLAR: Forge · Stall · gear · paths · pets. Bunların
+// ödeme ucu YOK ve `codex.test` bunu tarıyor. Sınır kalktı değil, TAŞINDI.
 //
 // ⚠️ KART TEK SEFERLİK VE KALICI, ABONELİK DEĞİL.
 // İlk tasarım "sezon kartı"ydı ama sezon bu oyunda HAFTALIK
@@ -24,6 +38,26 @@
 // oyuncuya iki farklı sayı öğretirdi.
 //
 // ⚠️ SAF VERİ — sunucu da bu dosyayı okuyor.
+
+/**
+ * KARTIN ANINDA VERDİĞİ GOLD.
+ *
+ * ⚠️ ÖLÇEK: ~13 dakikalık oyun (4.700 gold/saat). Forge ağacının tamamı
+ * 564.516 gold, tek Reliquary çekilişi 450. Yani hızlı bir başlangıç,
+ * ekonomiyi kaydıran bir enjeksiyon değil.
+ * ⚠️ TEK SEFER: `vigil: false` şartlı yazma ile korunuyor, iki ödeme iki
+ * gold vermez.
+ */
+export const VIGIL_GOLD = 1000;
+
+/**
+ * KARTA ÖZEL KAHRAMAN — başka hiçbir yoldan açılmıyor.
+ *
+ * ⚠️ Eskiden "8 bölüm temizle" ile açılıyordu; o kilit KALDIRILDI
+ * (`heroUnlock.ts`). Yani bu kahraman artık oynayarak kazanılamaz.
+ * ⚠️ `heroUnlock.ts` bu sabiti okuyor — kahraman id'si iki yere yazılmaz.
+ */
+export const VIGIL_HERO = 'bladekeeper';
 
 export interface VigilTier {
   /** bu kademeyi açan derinlik (dahil) */

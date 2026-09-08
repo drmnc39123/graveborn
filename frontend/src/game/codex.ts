@@ -227,12 +227,13 @@ export const CODEX: readonly CodexSection[] = [
     body: [
       'There is a second way to pay in four places, and it exists for one reason: some people would rather not wait. Everything on that list can also be bought with gold, and gold is always the cheaper road.',
       'You can pay for a set of relic draws, for monument stones up to a point, for founding or raising a guild, and for the season card. That is the whole list.',
-      'You cannot pay for power. The Forge, the Stall, gear, paths and pets take gold and nothing else. This is not a temporary arrangement: the Pit is decided by permanent power, and selling that would decide it with a wallet.',
+      'The season card is the one place where real money buys something that changes a run: it carries gold and a hero that cannot be unlocked by playing. Everything else that decides outcomes — the Forge, the Stall, gear, paths and pets — still takes gold and nothing else, and none of them has a payment endpoint.',
+      'Being honest about the exception matters more than the exception itself. The card gives a hero with more damage, more health and more armour than the starting one, and it gives gold. Both change how a run goes. Anyone telling you this game sells nothing but appearance is quoting an older version of this page.',
       'The monument stops taking SOL partway up on purpose. The ranks above that are meant to be earned, and a rank anyone can buy is a rank nobody respects.',
       'When you pay, your wallet asks you exactly one thing: to send SOL. There is no message to sign. If something goes wrong after the transfer, the payment is remembered on your device and the button turns into "finish payment" — you are never asked to pay twice.',
     ],
     deep: [
-      'The rule is not about which shops are convenient, it is about which shops decide outcomes. The Pit is settled by permanent power; selling permanent power would settle the Pit with a wallet. The same reasoning excludes gear, paths, pets and charms.',
+      'The line that remains is the permanent ladder. The Forge, gear, paths, pets and charms have no payment endpoint and are not going to get one — those are what a long player accumulates, and a wallet should not skip them. The card is a one-time head start, not a ladder money can climb.',
       'The monument is the interesting case, because it sells only visibility. It still stops taking real money partway up: above that line the rank is a record of time spent, and a rank anyone can buy is a rank nobody respects.',
       'Payments are verified against the chain rather than trusted. A transaction that failed still produces a signature, so we check that the treasury balance actually moved, that the payer is the account that is signed in, and that the signature has never been used before. If the check cannot be completed, the payment is remembered and can be finished later — you are never asked to pay twice.',
     ],
@@ -240,7 +241,7 @@ export const CODEX: readonly CodexSection[] = [
       { label: 'Relic draws', value: `${SOL_PRICES.reliquary10} SOL` },
       { label: 'Found a guild', value: `${SOL_PRICES.guild} SOL` },
       { label: 'Season card', value: `${SOL_PRICES.battlepass} SOL · ${sayi(VIGIL_TIERS.length)} tiers` },
-      { label: 'Power for sale', value: 'none' },
+      { label: 'Power for sale', value: 'season card only' },
     ],
   },
   // ── YALNIZ WHITEPAPER ─────────────────────────────────────────────
@@ -280,13 +281,13 @@ export const CODEX: readonly CodexSection[] = [
     ],
     deep: [
       'Fees are the only thing the project takes from a trade, and they apply to the token side only. Half of what is taken is burned and half goes to the treasury. Gold-priced listings are free, because taxing the side people are trying to sell would only thin the order book.',
-      'Real-money purchases exist in four places and none of them sell power. That boundary is enforced by a test rather than by intention: if a payment endpoint is ever added to the forge, the stall, gear, paths or pets, the build fails.',
+      'Real-money purchases exist in four places. Three of them sell appearance and convenience; the season card also sells gold and a hero. The boundary still enforced by a test rather than by intention is the other one: if a payment endpoint is ever added to the forge, the stall, gear, paths or pets, the build fails.',
       'The plan for treasury revenue is to use part of it to buy the token back and burn it, and to publish both the treasury address and each burn so the claim can be checked rather than believed. Until that is running, saying more than this would be a promise rather than a description.',
     ],
     facts: [
       { label: 'Minting path', value: 'none' },
       { label: 'Fee', value: 'token side only' },
-      { label: 'Power for sale', value: 'none' },
+      { label: 'Power for sale', value: 'season card only' },
     ],
   },
   {
@@ -295,7 +296,7 @@ export const CODEX: readonly CodexSection[] = [
     title: 'What this game will not do',
     webOnly: true,
     body: [
-      'It will not sell power. Not now, not as a limited event, not as a bundle that happens to include it.',
+      'It will not put the Forge, the Stall, gear, paths or pets behind real money. Those are the permanent ladder and a wallet does not climb it. The season card is the stated exception, and what it contains is written in full where it is sold.',
       'It will not print a currency to pay rewards with. Every reward is either something that does not affect the economy, or something another player paid for.',
       'It will not promise a return. There is no yield here to describe, so any number anyone quotes you is invented.',
       'It will not pretend the beta is permanent. Progress made before launch is wiped, deliberately and in advance, so that nobody starts the real economy holding a pile of currency that came from a test.',

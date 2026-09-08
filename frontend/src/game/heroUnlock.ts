@@ -25,6 +25,7 @@
 
 import type { Progress } from './progress';
 import { HEROES } from './heroes';
+import { VIGIL_HERO } from './vigil';
 
 export interface KahramanKilidi {
   /** oyuncuya gösterilen şart (İngilizce — oyuncuya giden metin) */
@@ -56,9 +57,23 @@ export const KILITLER: Record<string, KahramanKilidi> = {
     need: 'Reach depth 8 in a Descent',
     ok: (p) => enDerin(p) >= 8,
   },
-  bladekeeper: {
-    need: 'Clear 8 stages',
-    ok: (p) => temizlenen(p) >= 8,
+  /**
+   * 🔴 ARTIK OYNAYARAK AÇILMIYOR — yalnız The Long Vigil kartıyla gelir
+   * (kullanıcı kararı, 2026-09-08). Eski şartı "8 bölüm temizle" idi.
+   *
+   * ⚠️ BU BİR GERİLEME DEĞİL, KARAR: kilit derinlikten değil ödemeden
+   * okunuyor. Kahramanın istatistikleri +%15 hasar · +%15 can · +2 zırh ·
+   * −%10 hız — yani satılan şey görünüm değil GÜÇ. Oyun içi metinler
+   * (`codex.ts`) buna göre düzeltildi; oyuncuya "güç satılmaz" deyip
+   * satmak, satmanın kendisinden pahalıya mal olurdu.
+   *
+   * ⚠️ ŞART METNİ OYUNCUYA GÖRÜNÜYOR ve kapıyı açıkça söylüyor —
+   * ulaşılamaz bir hedef göstermek, oyuncuya çözülemeyen bir bilmece
+   * bırakmak olurdu.
+   */
+  [VIGIL_HERO]: {
+    need: 'Comes with The Long Vigil',
+    ok: (p) => p.vigil === true,
   },
 };
 

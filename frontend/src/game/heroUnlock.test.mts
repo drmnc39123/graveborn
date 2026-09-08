@@ -58,8 +58,17 @@ check('ranger 2 bölümde KAPALI', !kahramanAcikMi('ranger', temiz(2)));
 check('ranger 3 bölümde AÇIK', kahramanAcikMi('ranger', temiz(3)));
 check('priestess derinlik 7\'de KAPALI', !kahramanAcikMi('priestess', derin(7)));
 check('priestess derinlik 8\'de AÇIK', kahramanAcikMi('priestess', derin(8)));
-check('bladekeeper 7 bölümde KAPALI', !kahramanAcikMi('bladekeeper', temiz(7)));
-check('bladekeeper 8 bölümde AÇIK', kahramanAcikMi('bladekeeper', temiz(8)));
+/**
+ * 🔴 BLADEKEEPER ARTIK OYNAYARAK AÇILMIYOR — yalnız The Long Vigil kartıyla
+ * (kullanıcı kararı, 2026-09-08). Eski şart "8 bölüm temizle" idi ve bu
+ * mühür onu bekliyordu; kural değişince KIRMIZI verdi, işi tam buydu.
+ *
+ * ⚠️ ÜÇ TARAFLI: kartsız KAPALI · kartla AÇIK · bölüm temizlemek artık
+ * AÇMIYOR. Üçüncüsü şart, yoksa eski kapı sessizce açık kalabilirdi.
+ */
+check('bladekeeper kartsiz KAPALI', !kahramanAcikMi('bladekeeper', temiz(0)));
+check('bladekeeper 25 bölüm temizlese bile KAPALI', !kahramanAcikMi('bladekeeper', temiz(25)));
+check('bladekeeper KARTLA açık', kahramanAcikMi('bladekeeper', { ...temiz(0), vigil: true }));
 
 console.log('\n[4] KİLİTLER FARKLI SİSTEMLERİ ÖĞRETİYOR');
 // ⚠️ Üçü de "bölüm temizle" olsaydı kilitler ilerleme değil BEKLEME olurdu.
@@ -82,7 +91,17 @@ for (let n = 0; n <= 25; n++) {
   onceki = sayi;
 }
 check('açık kahraman sayısı hiç azalmıyor', !bozuldu, bozuldu);
-check('yeterli ilerlemede HEPSİ açılıyor', onceki === HEROES.length, `${onceki}/${HEROES.length}`);
+/**
+ * ⚠️ ARTIK 4/4 DEĞİL 3/4: dördüncü kahraman oynayarak açılmıyor, satın
+ * alınıyor. Sayıyı 4'te bırakmak mührü kalıcı kırmızı yapardı; 3'e
+ * indirmek ise sebebini yazmadan gerçeği gizlerdi.
+ */
+check('oynayarak açılabilen HEPSİ açılıyor', HEROES.filter((h) => h.id !== 'bladekeeper')
+  .every((h) => kahramanAcikMi(h.id, { ...temiz(25), depthPaid: { 1: 30 } } as never)),
+  `${HEROES.length - 1} kahraman oynayarak açılıyor`);
+// ⚠️ KART AYRICA ÖLÇÜLÜYOR: satın alan oyuncuda DÖRDÜ DE açık olmalı
+check('kartla dördü de açık', HEROES.every((h) =>
+  kahramanAcikMi(h.id, { ...temiz(25), depthPaid: { 1: 30 }, vigil: true } as never)));
 
 console.log(`\n${FAIL.length === 0 ? '✅ KAHRAMAN KİLİTLERİ SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

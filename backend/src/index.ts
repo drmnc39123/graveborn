@@ -815,10 +815,29 @@ app.post('/vigil/buy-sol', wrap(async (req, res) => {
      * aynı imzayı ikinci kez kabul etmiyor. Buradaki kontrol FARKLI iki
      * ödeme için.
      */
+    const { VIGIL_GOLD } = await import('@game/vigil');
+    /**
+     * 🔴 GOLD DA BURADA VERILIYOR — kullanici karari (2026-09-08). Kart
+     * artik kozmetik+toz degil, GUC de satiyor: 1.000 gold ve baska hicbir
+     * yoldan acilmayan bir kahraman (kahraman kilitten turuyor, ayrica
+     * yazilmiyor).
+     *
+     * ⚠️ AYNI KOSULLU YAZMAYA BINIYOR. Gold'u ayri bir `update` ile
+     * vermek, `vigil: false` sartini gecen ile gold alan islemi AYIRIRDI:
+     * ikinci istek karti alamaz ama gold'u alabilirdi. Tek `updateMany`,
+     * tek kapi.
+     */
     const hit = await prisma.player.updateMany({
-      where: { wallet, vigil: false }, data: { vigil: true },
+      where: { wallet, vigil: false },
+      data: { vigil: true, gold: { increment: VIGIL_GOLD } },
     });
     if (hit.count === 0) throw new Error('zaten_var');
+    /**
+     * ⚠️ DEFTERE YAZILIYOR. Gold ekonominin denetim izi; kaynagi
+     * gorunmeyen bin gold, ay sonunda "bu nereden geldi" sorusunu
+     * cevapsiz birakirdi.
+     */
+    await ledgerWrite({ wallet, kind: 'vigil', gold: VIGIL_GOLD, detail: 'card purchase' });
     return { progress: toProgress(await getOrCreatePlayer(wallet)) };
   });
 }));

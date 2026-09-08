@@ -60,6 +60,9 @@ export const NON_SINK_KINDS: ReadonlySet<string> = new Set<LedgerKind>([
   // zamanlar ne SINK'te ne burada olduğu için sessizce dışarıda kalmıştı
   // ve hiçbir test görmemişti. Her tür ikisinden birinde YAZILI olmalı.
   'admin_grant',
+  // ⚠️ Kart gold'u da bir MUSLUK — kasaya katki yapmaz. Yapsaydi oyuncu
+  // kendi odemesinden pay almis olurdu (`crypt_deed` ile ayni gerekce).
+  'vigil',
 ]);
 
 export function isCryptSink(kind: string, gold: number): boolean {

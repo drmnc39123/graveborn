@@ -48,6 +48,13 @@ export const LEDGER_KINDS = [
   // gold'u göremez. Yöneticinin kendi verdiği gold, defterin en çok
   // ihtiyaç duyduğu satırdır.
   'admin_grant',
+  // ⭐ THE LONG VIGIL KARTI — 0,5 SOL karsiligi verilen 1.000 gold. Bir MUSLUK.
+  // ⚠️ AYRI TUR OLMASI SART: `admin_grant` icine karistirilsaydi
+  // `/admin/economy` ekraninda "yonetici ne kadar verdi" ile "oyuncular ne
+  // kadar satin aldi" ayni sayida toplanirdi ve ikisi bambaska sorular.
+  // ⚠️ Bu deponun ilk PARAYLA ALINAN gold musluğu; defterde gorunmesi
+  // pazarliksiz.
+  'vigil',
 ] as const;
 
 /**

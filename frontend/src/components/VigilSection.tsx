@@ -16,7 +16,8 @@ import { panelUnlocked } from '@/lib/testMode';
 import { getMode } from '@/lib/session';
 import { STAGES } from '@/game/config';
 import { paidDepth, type Progress } from '@/game/progress';
-import { VIGIL_TIERS, vigilClaimable, vigilKey, vigilTotalDust } from '@/game/vigil';
+import { VIGIL_GOLD, VIGIL_HERO, VIGIL_TIERS, vigilClaimable, vigilKey, vigilTotalDust } from '@/game/vigil';
+import { heroById } from '@/game/heroes';
 import { cosmeticById, RARITY } from '@/game/cosmetics';
 import { buyVigilSol, claimVigil } from '@/lib/gameSession';
 import { SolPayButton, useSolRail } from '@/components/SolPayButton';
@@ -31,6 +32,9 @@ export function VigilSection({ progress, onChange, onError }: {
   onError: (msg: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  // ⚠️ Kahraman adı `heroes.ts`ten okunuyor, elle yazılmıyor: iki yere
+  // yazılan bir ad bir gun ayrisir ve oyuncu olmayan bir sey satin alir.
+  const kahramanAdi = heroById(VIGIL_HERO).name;
   const ray = useSolRail();
   const kart = progress.vigil === true;
   const alinan = useMemo(() => new Set(progress.vigilClaimed ?? []), [progress.vigilClaimed]);
@@ -68,11 +72,16 @@ export function VigilSection({ progress, onChange, onError }: {
     <>
       {/* ⚠️ İLK CÜMLE NE OLMADIĞINI SÖYLÜYOR — ödeme ekranında en pahalı
           hata, alanın ne aldığını yanlış sanmasıdır. */}
+      {/* ⚠️ İLK CÜMLE NE ALDIĞINI SÖYLÜYOR — ödeme ekranında en pahalı hata,
+          alanın ne aldığını yanlış sanmasıdır. Metin eskiden "hiç güç
+          vermez" diyordu; kart artık gold ve bir kahraman taşıyor, o yüzden
+          cümle GERÇEĞE çevrildi. Sattığın şeyi küçültmek de büyütmek kadar
+          yanlış — oyuncu ne aldığını tam olarak bilmeli. */}
       <p style={{ margin: '0 0 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
-        The card gives <strong style={{ color: C.bone }}>no power at all</strong> — every reward
-        on this road is a relic or dust. It does not take you deeper; it changes what you
-        look like on the way down. And it is <strong style={{ color: C.bone }}>bought once</strong>,
-        not rented by the season.
+        The card is <strong style={{ color: C.bone }}>bought once</strong>, not rented by the
+        season. It opens with <strong style={{ color: C.candle }}>{VIGIL_GOLD.toLocaleString('en-US')} gold</strong> and
+        <strong style={{ color: C.candle }}> {kahramanAdi}</strong> — a hero you cannot unlock by
+        playing — and then it opens a road of twelve steps you walk yourself.
       </p>
 
       {!kart && (

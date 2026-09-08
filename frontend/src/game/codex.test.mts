@@ -123,9 +123,29 @@ console.log('\n[4] ** TASIYICI IDDIALAR KODLA CELISMIYOR');
   check('SOL uclari gercekten tarandi (kontrol grubu)', solUclari.length >= 4,
     `${solUclari.length} uc`);
 
+  /**
+   * 🔴 IDDIA DEGISTI, MUHUR SILINMEDI — YON DEGISTIRDI.
+   *
+   * Metin eskiden "You cannot pay for power" diyordu ve bu kontrol onu
+   * beklerdi. Kullanici karariyla (2026-09-08) sezon karti artik GOLD ve
+   * oynayarak acilamayan bir KAHRAMAN satiyor, yani o cumle YALAN oldu.
+   *
+   * ⚠️ Kontrolu SILMEK en kotu secenekti: o zaman rehber bir gun sessizce
+   * eski cumleye geri doner ve kimse gormezdi. Artik TERSINI olcuyor —
+   * metin ISTISNAYI ACIKCA SOYLEMEK ZORUNDA. Yani mühür bir sozu degil,
+   * bir IFSAYI koruyor.
+   */
   const metin = CODEX.flatMap((s) => s.body).join(' ');
-  check('metin bu iddiayi gercekten kuruyor',
-    /cannot pay for power/i.test(metin));
+  check('metin artik "guc satilmaz" DEMIYOR', !/cannot pay for power/i.test(metin));
+  check('metin kartin GOLD verdigini soyluyor', /it carries gold/i.test(metin));
+  check('metin kartin KAHRAMAN verdigini soyluyor',
+    /hero that cannot be unlocked by playing/i.test(metin));
+  check('metin kahramanin daha guclu oldugunu soyluyor',
+    /more damage, more health and more armour/i.test(metin));
+  // ⚠️ Kalan sinir HALA yaziyor olmali — istisna, sinirin tamamen kalktigi
+  // anlamina gelmiyor ve oyuncu neyin satilmadigini da bilmeli.
+  check('metin neyin HALA satilmadigini soyluyor',
+    /still takes gold and nothing else/i.test(metin));
 
   /**
    * 🔴 IDDIA: "The game does not print tokens... zero emission."

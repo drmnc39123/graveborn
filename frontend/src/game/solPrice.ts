@@ -16,7 +16,11 @@
 // → $GRAVE zincirini acardi. Ana sayfadaki SSS'de yazili soz de buna
 // dayaniyor: "Depth is gated by survival, not by spending."
 //
-// SOL rayina ACIK olanlar (hicbiri guc vermiyor):
+// SOL rayina ACIK olanlar:
+// ⚠️ ESKIDEN "hicbiri guc vermiyor" yaziyordu. ARTIK DOGRU DEGIL: sezon
+// karti 1.000 gold ve oynayarak acilamayan bir kahraman veriyor (kullanici
+// karari, 2026-09-08). Kalan sinir: Forge · Stall · gear · paths · pets —
+// bunlarin odeme ucu YOK ve `codex.test` bunu tariyor.
 //   · Reliquary demeti — kozmetik + toz
 //   · Ossuary tasi     — yalniz gorunurluk
 //   · Lonca kurma / yukseltme — perk XP, gold basmiyor
