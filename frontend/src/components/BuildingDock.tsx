@@ -86,7 +86,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // ICINE gomuluydu: oyunun tek gercek parali paketi, bir baska panelin
   // alt bolumu olarak duruyordu ve navbardan gorunmuyordu. SPEND grubunun
   // BASINDA — grubun en degerli maddesi.
-  { id: 'vigil', label: 'THE VIGIL', sub: 'The Long Vigil — the season card, bought once' },
+  // ⚠️ AD DEGISTI (kullanici): "THE VIGIL" oyuncuya hicbir sey soylemiyordu.
+  // Kart artik gold + kahraman + alti kalinti veriyor ve hepsi ANINDA — yani
+  // gercekten bir baslangic paketi. Ad ne oldugunu soylemeli.
+  { id: 'vigil', label: 'STARTER PACK', sub: 'Gold, a hero and six relics — all at once' },
   // ⚠️ Forge'la Reliquary'nin ARASINDA duruyor ve bu kasıtlı: Forge dikey
   // ilerleme (gold'la satın alınır), ekipman YATAY (bulunur). İkisini yan yana
   // koymak, oyuncunun iki farklı güç eksenini olduğu gibi okumasını sağlıyor.

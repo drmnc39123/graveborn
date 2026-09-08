@@ -19,7 +19,7 @@ import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
-import { ultraIlerleme, ultraMi } from './ultra.js';
+import { ultraDolumGerekli, ultraIlerleme, ultraMi } from './ultra.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ReferralError, kodGir, kodTemizle, odulKontrol, referralDurum } from './referral.js';
 import { DmError, gonder, konusma, okunmamisSayisi, threadler } from './dm.js';
@@ -300,16 +300,47 @@ app.get('/progress', wrap(async (req, res) => {
   const wallet = auth(req);
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
   const player = await getOrCreatePlayer(wallet);
-  const p = toProgress(player);
   /**
    * ⭐ ULTRA MOD — yalniz hazine cuzdani (kullanici istegi: bolumleri ve
    * derinlikleri test edebilmek icin).
    *
-   * ⚠️ KAYDA YAZMIYOR, CEVABI ZENGINLESTIRIYOR. "Hazineye 10 milyon gold
-   * ver" demek geri alinamaz bir iz birakirdi; boyle bayragi kapatmak eski
-   * hale donmek demek. Ayrintili gerekce `ultra.ts` basliginda.
+   * 🔴 KAYDA GERCEKTEN YAZIYOR. Ilk surum yalniz cevabi zenginlestiriyordu
+   * ve OYUN SUNUCU OTORITELI oldugu icin kirikti: istemci 100M gold
+   * goruyor, Forge'a basiyor, sunucu GERCEK satiri (0 gold) okuyup
+   * `yetersiz_gold` donuyordu. Kullanici bildirdi. Ayrintili gerekce
+   * `ultra.ts` basliginda.
+   *
+   * ⚠️ IDEMPOTENT VE ESIKLI: her istekte degil, gold yariya dusunce
+   * dolduruyor — koyde durup duran bir oyuncuda saniyede bir DB yazmasi
+   * olmasin diye.
    */
-  res.json({ progress: ultraMi(wallet) ? { ...p, ...ultraIlerleme(STAGES.length) } : p });
+  if (ultraMi(wallet)) {
+    const gerek = ultraDolumGerekli(player.gold, player.unlockedStage, STAGES.length);
+    if (gerek.gold > 0 || gerek.stage) {
+      const u = ultraIlerleme(STAGES.length);
+      await prisma.player.update({
+        where: { wallet },
+        data: {
+          ...(gerek.gold > 0 ? { gold: { increment: gerek.gold } } : {}),
+          unlockedStage: u.unlockedStage,
+          cleared: u.cleared, firstClear: u.firstClear, depthPaid: u.depthPaid,
+          vigil: true,
+        },
+      });
+      /**
+       * ⚠️ DEFTERE YAZILIYOR. Kaynagi gorunmeyen milyonlarca gold,
+       * `/admin/economy` musluk toplamini sessizce yalanci yapardi.
+       */
+      if (gerek.gold > 0) {
+        await ledgerWrite({
+          wallet, kind: 'admin_grant', gold: gerek.gold, detail: 'ultra mode top-up',
+        });
+      }
+      res.json({ progress: toProgress(await getOrCreatePlayer(wallet)) });
+      return;
+    }
+  }
+  res.json({ progress: toProgress(player) });
 }));
 
 /**
@@ -825,7 +856,8 @@ app.post('/vigil/buy-sol', wrap(async (req, res) => {
      * aynı imzayı ikinci kez kabul etmiyor. Buradaki kontrol FARKLI iki
      * ödeme için.
      */
-    const { VIGIL_GOLD } = await import('@game/vigil');
+    const { vigilPaket } = await import('@game/vigil');
+    const paket = vigilPaket();
     /**
      * 🔴 GOLD DA BURADA VERILIYOR — kullanici karari (2026-09-08). Kart
      * artik kozmetik+toz degil, GUC de satiyor: 1.000 gold ve baska hicbir
@@ -837,9 +869,27 @@ app.post('/vigil/buy-sol', wrap(async (req, res) => {
      * ikinci istek karti alamaz ama gold'u alabilirdi. Tek `updateMany`,
      * tek kapi.
      */
+    /**
+     * 🔴 HER SEY ANINDA (kullanici karari, 2026-09-08): gold + kahraman +
+     * ALTI KOZMETIK. Kahraman ayrica yazilmiyor, kilit `vigil` bayragindan
+     * turuyor (`heroUnlock.ts`).
+     *
+     * ⚠️ KOZMETIKLER OKUNUP BIRLESTIRILIYOR, koru koru yazilmiyor: oyuncu
+     * baska kozmetiklere sahip ve `set` ile yazmak onlari silerdi.
+     * ⚠️ `Set` ile tekillestiriliyor — ayni kozmetigi iki kez tasiyan bir
+     * dizi arayuzde iki satir cizerdi.
+     */
+    const mevcut = await prisma.player.findUnique({
+      where: { wallet }, select: { cosmetics: true },
+    });
+    const eski = Array.isArray(mevcut?.cosmetics)
+      ? (mevcut.cosmetics as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [];
+    const yeniKozmetik = [...new Set([...eski, ...paket.cosmetics])];
+
     const hit = await prisma.player.updateMany({
       where: { wallet, vigil: false },
-      data: { vigil: true, gold: { increment: VIGIL_GOLD } },
+      data: { vigil: true, gold: { increment: paket.gold }, cosmetics: yeniKozmetik },
     });
     if (hit.count === 0) throw new Error('zaten_var');
     /**
@@ -847,61 +897,27 @@ app.post('/vigil/buy-sol', wrap(async (req, res) => {
      * gorunmeyen bin gold, ay sonunda "bu nereden geldi" sorusunu
      * cevapsiz birakirdi.
      */
-    await ledgerWrite({ wallet, kind: 'vigil', gold: VIGIL_GOLD, detail: 'card purchase' });
+    await ledgerWrite({ wallet, kind: 'vigil', gold: paket.gold, detail: 'card purchase' });
     return { progress: toProgress(await getOrCreatePlayer(wallet)) };
   });
 }));
 
 /**
- * Kademe ödülünü al.
+ * 🔴 `/vigil/claim` KALDIRILDI (kullanici karari, 2026-09-08).
  *
- * ⚠️ DERİNLİK SUNUCUDAN OKUNUYOR (`paidDepth` — ödemesi yapılmış derinlik),
- * istemcinin iddiasından değil. Aynı kaynak beceri puanlarında da
- * kullanılıyor; ikinci bir "en derin" tanımı oyuncuya iki farklı sayı
- * öğretirdi.
+ * Kart eskiden derinlikle acilan on iki kademeli bir yoldu ve bu uc o
+ * kademelerin toz + kozmetik odulunu odüyordu. Kullanici bunu acikca
+ * kaldirdi: *"Bu kartta DUST ile alakalı bir sey olmasin, bu kart sadece
+ * SOL ile satin alinir ve tum oduller aninda verilir."*
  *
- * ⚠️ "AL VE HEPSİNİ KAP" DEĞİL: kart yolu açıyor, yolu oyuncu yürüyor.
+ * Odullerin tamami artik `/vigil/buy-sol` icinde, odeme ile AYNI kosullu
+ * yazmada veriliyor — yani "kart verildi ama odul verilmedi" araligi
+ * ortadan kalkti.
+ *
+ * ⚠️ `Progress.vigilClaimed` alani SEMADA DURUYOR ve bilerek: eski
+ * oyuncularin kaydinda dolu ve silmek bir migration isterdi; okunmayan bir
+ * alan zararsiz, yarim calisan bir migration degil.
  */
-app.post('/vigil/claim', wrap(async (req, res) => {
-  const wallet = auth(req);
-  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
-  const player = await getOrCreatePlayer(wallet);
-  if (player.banned) { res.status(403).json({ error: 'yasakli' }); return; }
-  if (!player.vigil) { res.status(400).json({ error: 'kart_yok' }); return; }
-
-  const { vigilClaimable, vigilKey } = await import('@game/vigil');
-  const p = toProgress(player);
-  const enDerin = STAGES.reduce((m, st) => Math.max(m, paidDepth(p, st.id)), 0);
-  const alinabilir = vigilClaimable(true, enDerin, p.vigilClaimed ?? []);
-  if (alinabilir.length === 0) { res.status(400).json({ error: 'alinacak_yok' }); return; }
-
-  /**
-   * ⚠️ AÇILAN HER KADEME BİRLİKTE VERİLİYOR. Tek tek almak, on iki kez
-   * düğmeye basmak demekti; hiçbiri karar içermiyor.
-   */
-  let toz = 0;
-  const kozmetik: string[] = [];
-  for (const t of alinabilir) {
-    toz += t.dust;
-    if (t.cosmetic && !p.cosmetics.includes(t.cosmetic)) kozmetik.push(t.cosmetic);
-  }
-  const yeniClaimed = [...(p.vigilClaimed ?? []), ...alinabilir.map(vigilKey)];
-
-  /**
-   * ⚠️ DEFTERE `gold: 0`. Kart ödülü gold ekonomisine dokunmuyor; toz
-   * yalnız kozmetik alır (`cosmetics.ts` dustCost) ve ekonomiye sızmaz.
-   */
-  const saved = await withLedger(wallet, {
-    dust: { increment: toz },
-    cosmetics: [...p.cosmetics, ...kozmetik],
-    vigilClaimed: yeniClaimed,
-  }, { kind: 'reliquary', gold: 0, detail: `vigil ${alinabilir.length} tier` }, player.rev);
-
-  res.json({
-    progress: toProgress(saved), dust: toz, cosmetics: kozmetik,
-    tiers: alinabilir.map(vigilKey),
-  });
-}));
 
 /**
  * KİMLİK KARTI ÖZETİ — köyün sol üstündeki kartın tek isteği.

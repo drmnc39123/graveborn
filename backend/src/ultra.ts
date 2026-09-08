@@ -5,13 +5,29 @@
 // sınırsız gold verelim ve her şey açık olsun."*
 //
 // ══════════════════════════════════════════════════════════════════════
-// ⚠️ KAYDA YAZMIYOR, OKUMA ANINDA TÜRETİYOR.
+// 🔴 KAYDA GERÇEKTEN YAZIYOR — VE ÖNCE YAZMAMAYI DENEDİM, ÇALIŞMADI.
 //
-// En kolay yol "hazineye 10 milyon gold ver, bütün bölümleri açık işaretle"
-// olurdu ve o yol geri alınamaz: mod kapatılınca hesapta uydurma bir
-// ilerleme kalırdı ve gerçek veriden ayırt edilemezdi. Bunun yerine
-// `/progress` cevabı ZENGİNLEŞTİRİLİYOR; veritabanındaki satır olduğu gibi
-// duruyor. Bayrağı kapatmak eski hâle dönmek demek.
+// İlk sürüm "kayda dokunma, yalnız `/progress` cevabını zenginleştir"
+// diyordu ve gerekçesi iyiydi (geri alınabilirlik). AMA OYUN SUNUCU
+// OTORİTELİ: istemci 100M gold görüyordu, Forge'a basıyordu, sunucu
+// GERÇEK satırı (0 gold) okuyup `yetersiz_gold` dönüyordu. Bölüme
+// girmek de aynı sebeple reddediliyordu.
+//
+// Kullanıcı bildirimi: *"Treasury wallet'a gold gelmiş fakat forge
+// harcaması yapılmıyor ve stage'de oyuna giremiyorum, hata mesajı
+// veriyor. Hiçbir yerde gold harcanmıyor."*
+//
+// Bu, bu depodaki en pahalı hata sınıfının benim elimden çıkmış hâli:
+// arayüz doğru görünüyor, veri geliyor, SON ADIMDA ölüyor. Doğru cevap
+// tek tek her harcama kontrolüne "ultra mı" sorusu eklemek de değildi —
+// o, oyunun her yerine dallanan bir istisna olurdu. Hesap gerçekten
+// zengin olmalı.
+//
+// ⚠️ YAZMA IDEMPOTENT: gold eşiğin altına düştüyse tekrar dolduruluyor,
+// açık bölümler zaten açıksa dokunulmuyor. Yani "sınırsız" hissi
+// harcadıkça korunuyor.
+// ⚠️ DEFTERE YAZILIYOR (`admin_grant`): kaynağı görünmeyen milyonlarca
+// gold, `/admin/economy` musluk toplamını sessizce yalancı yapardı.
 // ══════════════════════════════════════════════════════════════════════
 //
 // 🔴 SIRALAMADAN DÜŞÜYOR VE BU PAZARLIKSIZ. Ultra hesap d200'e inip tabloya
@@ -19,8 +35,9 @@
 // sezon ödülünü de alırdı (`season.ts` → kozmetik + toz). Test hesabının
 // gerçek oyuncuların ödülünü alması kabul edilemez.
 //
-// ⚠️ EKONOMİYE DE GİRMİYOR: ultra gold defterde yok çünkü GERÇEKTEN
-// verilmiyor. `/admin/economy` musluk toplamı bozulmuyor.
+// ⚠️ EKONOMİYE GİRİYOR AMA GÖRÜNÜR: her dolum deftere `admin_grant`
+// olarak yazılıyor. Görünmeyen bir musluk, `/admin/economy` ekranını
+// sessizce yalancı yapardı — bu satır o ekranın işini korumak için var.
 //
 // ⚠️ TEK KAPI: hazine adresi. Ayrı bir "ultra listesi" ikinci bir sır
 // yönetimi doğururdu; hazine zaten en yetkili adres.
@@ -69,6 +86,26 @@ export interface UltraIlerleme {
  *   veriyor; ikinci bir bölüm sayısı tanımı bir gün ayrışırdı.
  * @param derinlik ultra modda ödenmiş sayılan derinlik
  */
+/**
+ * Hesabı ultra hâline getir — IDEMPOTENT.
+ *
+ * ⚠️ SUNUCU OTORİTELİ OLDUĞU İÇİN GERÇEKTEN YAZIYOR (bkz. dosya başlığı).
+ * Yalnız cevabı süslemek Forge'u ve bölüm girişini kırıyordu.
+ *
+ * ⚠️ EŞİĞİN ALTINA DÜŞÜNCE DOLDURUYOR, her istekte değil: her `/progress`
+ * çağrısında yazmak, köyde durup duran bir oyuncuda saniyede bir DB
+ * yazması demekti.
+ *
+ * @returns eklenen gold (0 = dokunulmadı) — çağıran deftere yazsın diye
+ */
+export function ultraDolumGerekli(gold: number, unlockedStage: number,
+  stageSayisi: number): { gold: number; stage: boolean } {
+  // ⚠️ Yarıya düşünce dolduruluyor: "sınırsız" hissi harcadıkça korunmalı,
+  // ama her kuruşta yazma tetiklenmemeli.
+  const eksikGold = gold < ULTRA_GOLD / 2 ? ULTRA_GOLD - gold : 0;
+  return { gold: eksikGold, stage: unlockedStage < stageSayisi };
+}
+
 export function ultraIlerleme(stageSayisi: number, derinlik = 200): UltraIlerleme {
   const cleared: Record<number, boolean> = {};
   const firstClear: Record<number, boolean> = {};

@@ -8,13 +8,13 @@
 //      `season.settleOne` ona KOZMETIK + TOZ oderdi — gercek oyuncularin
 //      yerine. Iki tablo var, iki kapi gerekiyor.
 //
-// ⚠️ KAYDA YAZILMIYOR: `/progress` cevabi zenginlestiriliyor, veritabani
-// satiri olduğu gibi duruyor. Bayragi kapatmak eski hale donmek demek.
+// ⚠️ KAYDA GERCEKTEN YAZIYOR — ilk surum yalniz cevabi zenginlestiriyordu
+// ve OYUN SUNUCU OTORITELI oldugu icin kirikti (bkz. [4]).
 //
 //   cd backend && npx tsx src/ultra.test.mts
 
 import fs from 'node:fs';
-import { ULTRA_GOLD, ultraIlerleme, ultraMi } from './ultra.js';
+import { ULTRA_GOLD, ultraDolumGerekli, ultraIlerleme, ultraMi } from './ultra.js';
 import { hazineAdresi } from './solPay.js';
 
 const FAIL: string[] = [];
@@ -94,21 +94,43 @@ console.log('\n[3] ** SIRALAMAYA GIRMIYOR (iki tablo, iki kapi)');
   check('kapi recordSeason icinde', /recordSeason[\s\S]{0,900}ultraMi\(wallet\)/.test(se));
 }
 
-console.log('\n[4] ** KAYDA YAZMIYOR');
+console.log('\n[4] ** KAYDA GERCEKTEN YAZIYOR (ilk surum kirikti)');
 {
-  const idx = yorumsuz(oku('src/index.ts'));
-  check('/progress cevabi zenginlestiriliyor',
-    /ultraMi\(wallet\) \? \{ \.\.\.p, \.\.\.ultraIlerleme\(STAGES\.length\) \} : p/.test(idx));
   /**
-   * 🔴 ASIL KONTROL: ultra gold DEFTERE girmemeli, cunku GERCEKTEN
-   * verilmiyor. Girseydi `/admin/economy` musluk toplami yalan soylerdi.
+   * 🔴 ILK SURUM KAYDA YAZMIYORDU ve bu muhur onu "dogru" diye
+   * dogruluyordu. OYUN SUNUCU OTORITELI: istemci 100M gold goruyor,
+   * Forge'a basiyor, sunucu GERCEK satiri (0 gold) okuyup `yetersiz_gold`
+   * donuyordu. Kullanici bildirdi:
+   *   *"Treasury wallet'a gold gelmis fakat forge harcamasi yapilmiyor ve
+   *    stage'de oyuna giremiyorum. Hicbir yerde gold harcanmiyor."*
+   * Muhur artik TERSINI olcuyor.
    */
+  const idx = yorumsuz(oku('src/index.ts'));
   const ultra = yorumsuz(oku('src/ultra.ts'));
-  check('ultra.ts hicbir sey YAZMIYOR (prisma yok)', !/prisma/.test(ultra));
-  check('ultra.ts deftere dokunmuyor', !/ledger/i.test(ultra));
-  check('index ultra gold\'u deftere yazmiyor',
-    !/kind: 'admin_grant'[^)]*ULTRA_GOLD/.test(idx));
-  check('uydurma desen bulunmuyor (kontrol grubu)', !/ultraZZZ/.test(idx + ultra));
+  check('ultra hesabin kaydi GUNCELLENIYOR', idx.includes('prisma.player.update(')
+    && idx.includes('if (ultraMi(wallet)) {'));
+  check('gold gercekten artiriliyor', idx.includes('gold: { increment: gerek.gold }'));
+  check('bolumler gercekten aciliyor', idx.includes('unlockedStage: u.unlockedStage'));
+  check('derinlik de yaziliyor (kahraman + beceri icin)', idx.includes('depthPaid: u.depthPaid'));
+
+  /**
+   * ⚠️ IDEMPOTENT VE ESIKLI: her `/progress` cagrisinda yazmak, koyde
+   * durup duran bir oyuncuda saniyede bir DB yazmasi demekti.
+   */
+  check('dolum esikli', ultra.includes('gold < ULTRA_GOLD / 2'));
+  check('gerek yoksa yazilmiyor', idx.includes('if (gerek.gold > 0 || gerek.stage)'));
+  const g1 = ultraDolumGerekli(0, 1, 25);
+  check('bos hesapta dolum GEREKIYOR', g1.gold > 0 && g1.stage);
+  const g2 = ultraDolumGerekli(ULTRA_GOLD, 25, 25);
+  check('dolu hesapta dolum GEREKMIYOR (cift tarafli)', g2.gold === 0 && !g2.stage);
+
+  /**
+   * 🔴 DEFTERE YAZILIYOR: kaynagi gorunmeyen milyonlarca gold,
+   * `/admin/economy` musluk toplamini sessizce yalanci yapardi.
+   */
+  check('dolum deftere yaziliyor',
+    idx.includes("kind: 'admin_grant', gold: gerek.gold, detail: 'ultra mode top-up'"));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !idx.includes('ultraZZZ'));
 }
 
 console.log(`\n${FAIL.length === 0 ? 'ULTRA MOD SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);

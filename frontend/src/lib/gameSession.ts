@@ -502,12 +502,12 @@ export async function buyVigilSol(sig: string): Promise<{ progress: Progress }> 
   return api('/vigil/buy-sol', { method: 'POST', body: { sig } });
 }
 
-/** Acilan kademeleri topla — derinlik SUNUCUDAN okunur, iddiadan degil */
-export async function claimVigil(): Promise<{
-  progress: Progress; dust: number; cosmetics: string[]; tiers: string[];
-}> {
-  return api('/vigil/claim', { method: 'POST', body: {} });
-}
+/**
+ * 🔴 `claimVigil` KALDIRILDI — kartin tum odulleri artik satin alma
+ * aninda veriliyor (`/vigil/buy-sol`). Ayrintili gerekce
+ * `game/vigil.ts` basliginda.
+ */
+
 
 /**
  * KIMLIK KARTI OZETI — koyun sol ustundeki kart icin TEK istek.

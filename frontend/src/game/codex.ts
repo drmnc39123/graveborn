@@ -35,7 +35,7 @@ import { PETS } from './pets';
 import { QUESTS, QUEST_POOL } from './quests';
 import { ODUL_DERINLIGI, ODUL_TOZ } from './referral';
 import { SOL_PRICES } from './solPrice';
-import { VIGIL_TIERS } from './vigil';
+import { VIGIL_GOLD, vigilCosmeticIds } from './vigil';
 import { WAGER } from './wager';
 
 export interface CodexFact {
@@ -240,7 +240,7 @@ export const CODEX: readonly CodexSection[] = [
     facts: [
       { label: 'Relic draws', value: `${SOL_PRICES.reliquary10} SOL` },
       { label: 'Found a guild', value: `${SOL_PRICES.guild} SOL` },
-      { label: 'Season card', value: `${SOL_PRICES.battlepass} SOL · ${sayi(VIGIL_TIERS.length)} tiers` },
+      { label: 'Season card', value: `${SOL_PRICES.battlepass} SOL · ${sayi(VIGIL_GOLD)} gold + a hero + ${sayi(vigilCosmeticIds().length)} relics` },
       { label: 'Power for sale', value: 'season card only' },
     ],
   },
