@@ -22,7 +22,6 @@ import { buyCosmeticWithDust, equipCosmetic, pullReliquary } from '@/lib/gameSes
 import { play } from '@/game/sfx';
 import { Fade } from '@/components/ui/motion';
 import { CryptSection } from '@/components/CryptSection';
-import { VigilSection } from '@/components/VigilSection';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { pixel, BTN, PixelButton } from '@/components/ui/kit';
 import { C, FONT } from '@/lib/theme';
@@ -113,7 +112,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
   onError: (msg: string) => void;
 }) {
   /** hangi sink görünüyor — üçü de gold'u ekonomiden çıkarır */
-  const [view, setView] = useState<'relics' | 'monument' | 'wager' | 'crypt' | 'vigil'>('relics');
+  const [view, setView] = useState<'relics' | 'monument' | 'wager' | 'crypt'>('relics');
   const [tab, setTab] = useState<CosmeticSlot>('trophy');
   const [busy, setBusy] = useState(false);
   /** son çekilişin sonucu — açılış animasyonu bunu gösterir */
@@ -190,7 +189,7 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
         title={view === 'relics' ? 'What the dead left behind'
           : view === 'monument' ? 'Your monument'
           : view === 'crypt' ? 'Ground of your own'
-          : view === 'vigil' ? 'The long vigil' : 'A bet with the dead'}
+          : 'A bet with the dead'}
       />
 
       {/* ⚠️ ÜÇÜ AYNI BİNADA. Hepsi aynı işi yapıyor — gold'u ekonomiden
@@ -206,7 +205,6 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
           // ⚠️ KART DA BURADA: Reliquary kozmetiklerin binasi ve kartin
           // butun odulu kozmetik. Ayri bir kapi acmak, oyuncuya iki ayri
           // kozmetik sistemi varmis gibi gosterirdi.
-          { id: 'vigil', label: 'THE VIGIL' },
         ] as const).map((v) => {
           const on = view === v.id;
           return (
@@ -237,9 +235,9 @@ export function ReliquaryPanel({ progress, onChange, onError }: {
       {view === 'crypt' && (
         <CryptSection progress={progress} onChange={onChange} onError={onError} />
       )}
-      {view === 'vigil' && (
-        <VigilSection progress={progress} onChange={onChange} onError={onError} />
-      )}
+      {/* ⚠️ VIGIL SEKMESI KALDIRILDI — kartin artik navbarda kendi girisi
+          var (THE VIGIL). Iki yerden acilabilir birakmak, ayni panelin iki
+          farkli baglamda yasamasi demekti. */}
       {view === 'relics' && <>
       {/* ⚠️ Bu cümle KALDIRILAMAZ — oyuncu neye para verdiğini bilmeli */}
       <p style={{ margin: '0 0 14px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>

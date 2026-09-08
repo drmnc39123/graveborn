@@ -248,5 +248,50 @@ console.log('\n[8] ** KARTIN KOZMETIKLERI SATIN ALINAMAZ');
     panel.includes('THE LONG VIGIL') && panel.includes('EARNED, NOT SOLD'));
 }
 
+console.log('\n[9] ** KART KENDI GIRISINE KAVUSTU');
+{
+  /**
+   * 🔴 Kullanici: *"gorunumu rezalet olmus, bu paketin animasyonu, efekti
+   * ve ozel bir gorunusu olmasi lazim. Navbarda ayrica minimapin solunda
+   * kucuk bir yerde bir loot sandigi seklinde bir icon koyarak kullaniciyi
+   * oraya da yonlendirmeliyiz."*
+   *
+   * Kart bugune kadar Reliquary panelinin ICINDE bir sekmeydi: oyunun tek
+   * gercek parali paketi, baska bir panelin alt bolumu olarak duruyordu.
+   */
+  const dock = oku('src/components/BuildingDock.tsx');
+  check('navbarda kendi girisi var', dock.includes("id: 'vigil', label: 'THE VIGIL'"));
+  check('SPEND grubunun BASINDA', /members: \['vigil', 'market'/.test(dock));
+
+  const rel = oku('src/components/ReliquaryPanel.tsx');
+  // ⚠️ CIFT TARAFLI: eski sekme GERCEKTEN gitti mi — iki yerden acilabilir
+  // birakmak ayni panelin iki farkli baglamda yasamasi demekti.
+  check('Reliquary sekmesi KALDIRILDI', !rel.includes("{ id: 'vigil', label: 'THE VIGIL' }"));
+  check('Reliquary artik VigilSection cizmiyor', !rel.includes('<VigilSection'));
+
+  const play = oku('src/app/play/page.tsx');
+  check('panel yonlendirmesi var', play.includes("acik === 'vigil'"));
+
+  const capa = oku('src/components/VigilBeacon.tsx');
+  check('minimap yaninda capa var', capa.length > 500);
+  check('capa sandik gorseli kullaniyor', capa.includes('spr_Chest_1_closed.png'));
+  /**
+   * ⚠️ KONUM MINIMAPIN KUTUSUNDAN TURUYOR. Sabit sayi yazilsaydi dar
+   * ekranda minimap %70'e dustugunde capa havada kalirdi — bugun tam bu
+   * hatayi sag kolonda olcup duzelttik.
+   */
+  check('capa konumu hudLayout modulunden', capa.includes('minimapKutusu(ekranW, navbarH, navbarSol)'));
+  check('capa sayfaya takildi', play.includes('<VigilBeacon'));
+  // ⚠️ Karti olan oyuncuya surekli yanip sonen satis capasi gostermek,
+  // odemis oyuncuyu rahatsiz etmektir.
+  check('kart alinmissa capa sessizlesiyor', capa.includes('!sahip && !hareketKapali'));
+
+  const sec = oku('src/components/VigilSection.tsx');
+  // ⚠️ Yol artik duz liste degil: dolan bir hat + dugumler
+  check('yol dolan bir hat', sec.includes('yolOrani'));
+  check('doluluk DERINLIKTEN turuyor', /enDerin \/ VIGIL_TIERS\[VIGIL_TIERS\.length - 1\]\.depth/.test(sec));
+  check('hareket kapaliysa nabiz yok', sec.includes('hareketKapali'));
+}
+
 console.log(`\n${FAIL.length === 0 ? 'VIGIL SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

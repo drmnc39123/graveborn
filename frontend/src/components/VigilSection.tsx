@@ -23,6 +23,7 @@ import { buyVigilSol, claimVigil } from '@/lib/gameSession';
 import { SolPayButton, useSolRail } from '@/components/SolPayButton';
 import { solPrice } from '@/game/solPrice';
 import { Card, CardSection, Tag } from '@/components/ui/cards';
+import { Reveal, motionOff } from '@/components/ui/motion';
 import { BTN, PixelButton } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
 
@@ -49,6 +50,18 @@ export function VigilSection({ progress, onChange, onError }: {
     [progress],
   );
   const alinabilir = vigilClaimable(kart, enDerin, progress.vigilClaimed ?? []);
+
+  /**
+   * YOLUN NE KADARI DOLU — açılmış kademe SAYISINDAN değil DERİNLİKTEN.
+   *
+   * ⚠️ Kademe sayısı kullanılsaydı çubuk d5'ten d10'a ZIPLARDI ve arada
+   * oynayan oyuncu hiçbir ilerleme görmezdi. Son kademe (d125) çıpa.
+   */
+  const yolOrani = Math.max(0, Math.min(1,
+    enDerin / VIGIL_TIERS[VIGIL_TIERS.length - 1].depth));
+  // ⚠️ Ödeme ekranında yanıp sönen bir şey, hareketi kapatmış oyuncuya
+  // rağmen yanıp sönmemeli.
+  const hareketKapali = motionOff();
 
   const al = useCallback(async () => {
     if (busy || alinabilir.length === 0) return;
@@ -151,44 +164,108 @@ export function VigilSection({ progress, onChange, onError }: {
         </Card>
       )}
 
+      {/* ══════════════════════════════════════════════════════════════
+          ⭐ YOL — düz bir liste DEĞİL, DOLAN BİR HAT.
+          🔴 Kullanıcı: *"görünümü rezalet olmuş, bu paketin animasyonu,
+          efekti ve özel bir görünüşü olması lazım. Yani bu paket özel
+          olmalı."* Eski hâli on iki eşit satırdı; oyunun tek gerçek paralı
+          paketi, bir tablo gibi duruyordu.
+          ⚠️ HAT OYUNCUNUN DERİNLİĞİNE GÖRE DOLUYOR — süs değil, ilerlemeyi
+          TEK BAKIŞTA okutan şey o. Yüzde, açılmış kademe sayısından değil
+          DERİNLİKTEN türüyor; iki kademe arası da doluyor, yoksa çubuk
+          d5'ten d10'a zıplar ve arada oynayan oyuncu hiçbir şey görmezdi.
+          ⚠️ `motionOff` DİNLENİYOR: hareket kapalıysa nabız da yok. Ödeme
+          ekranında yanıp sönen bir şey, ayarını kapatmış oyuncuya rağmen
+          yanıp sönmemeli.
+          ══════════════════════════════════════════════════════════════ */}
+      <style>{`
+@keyframes gb-vigil-nabiz { 0%,100% { box-shadow: 0 0 0 0 rgba(239,167,46,0.55); } 50% { box-shadow: 0 0 0 7px rgba(239,167,46,0); } }
+@keyframes gb-vigil-akis { from { background-position: 0 0; } to { background-position: 0 -22px; } }
+`}</style>
+
       <CardSection label="The road" tone={C.candle}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {VIGIL_TIERS.map((t) => {
-            const acik = enDerin >= t.depth;
-            const alindi = alinan.has(vigilKey(t));
-            const def = t.cosmetic ? cosmeticById(t.cosmetic) : undefined;
-            /**
-             * ⚠️ KİLİTLİ KADEME DE ADIYLA VE ÖDÜLÜYLE GÖRÜNÜYOR. Gizlemek,
-             * oyuncudan karanlıkta ödeme istemek olurdu; `RELIQUARY`de
-             * kilitli kozmetikleri gösterme kuralının aynısı.
-             */
-            return (
-              <div key={t.depth} style={{
-                display: 'flex', alignItems: 'center', gap: 9,
-                padding: '7px 10px', borderRadius: 6, fontFamily: FONT.ui,
-                background: alindi ? 'rgba(95,158,74,0.10)' : acik && kart
-                  ? 'rgba(239,167,46,0.10)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${alindi ? `${C.ok}44` : acik && kart ? `${C.candle}44` : 'rgba(255,255,255,0.08)'}`,
-                opacity: acik ? 1 : 0.55,
-              }}>
-                <span style={{ width: 40, flexShrink: 0, fontSize: 10.5, fontWeight: 900,
-                  color: acik ? C.candle : C.boneFaint }}>D{t.depth}</span>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: C.boneDim,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {t.label}
-                </span>
-                {def && (
-                  <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.6,
-                    color: RARITY[def.rarity].color, whiteSpace: 'nowrap' }}>
-                    {def.name}
-                  </span>
-                )}
-                <span style={{ flexShrink: 0, fontSize: 10.5, color: C.boneFaint,
-                  fontVariantNumeric: 'tabular-nums' }}>{t.dust} dust</span>
-                {alindi && <Tag tone="dim">TAKEN</Tag>}
-              </div>
-            );
-          })}
+        <div style={{ position: 'relative', paddingLeft: 30 }}>
+          {/* ── HAT: sönük gövde + dolan kısım ── */}
+          <div style={{
+            position: 'absolute', left: 11, top: 10, bottom: 10, width: 3,
+            borderRadius: 2, background: 'rgba(255,255,255,0.09)',
+          }} />
+          <div style={{
+            position: 'absolute', left: 11, top: 10, width: 3, borderRadius: 2,
+            height: `calc((100% - 20px) * ${yolOrani})`,
+            background: `linear-gradient(180deg, ${C.candle}, ${C.candleSoft ?? C.candle})`,
+            boxShadow: `0 0 10px ${C.candle}66`,
+            // ⚠️ Akış YALNIZ kart varken ve hareket açıkken: kartı olmayan
+            // oyuncuya "senin yolun ilerliyor" hissi vermek yanlış olurdu.
+            backgroundImage: kart && !hareketKapali
+              ? `repeating-linear-gradient(180deg, ${C.candle} 0 8px, ${C.bone}55 8px 11px)`
+              : undefined,
+            animation: kart && !hareketKapali ? 'gb-vigil-akis 1.1s linear infinite' : undefined,
+            transition: 'height 420ms ease-out',
+          }} />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {VIGIL_TIERS.map((t, i) => {
+              const acik = enDerin >= t.depth;
+              const alindi = alinan.has(vigilKey(t));
+              const bekliyor = kart && acik && !alindi;
+              const def = t.cosmetic ? cosmeticById(t.cosmetic) : undefined;
+              const efsane = def?.rarity === 'legendary';
+              const ton = alindi ? C.ok : bekliyor ? C.candle : acik ? C.boneDim : C.boneFaint;
+              /**
+               * ⚠️ KİLİTLİ KADEME DE ADIYLA VE ÖDÜLÜYLE GÖRÜNÜYOR. Gizlemek,
+               * oyuncudan karanlıkta ödeme istemek olurdu; `RELIQUARY`de
+               * kilitli kozmetikleri gösterme kuralının aynısı.
+               */
+              return (
+                <Reveal key={t.depth} delay={i * 28}>
+                  <div style={{ position: 'relative' }}>
+                    {/* ── DÜĞÜM ── efsane kademe daha büyük ve halkalı */}
+                    <span style={{
+                      position: 'absolute', left: -30 + 12 - (efsane ? 8 : 6),
+                      top: '50%', marginTop: efsane ? -8 : -6,
+                      width: efsane ? 16 : 12, height: efsane ? 16 : 12,
+                      borderRadius: '50%', boxSizing: 'border-box',
+                      background: alindi ? C.ok : acik ? C.candle : 'rgba(10,8,6,0.9)',
+                      border: `2px solid ${alindi ? C.ok : acik ? C.candle : 'rgba(227,216,192,0.22)'}`,
+                      boxShadow: efsane && acik ? `0 0 12px ${C.candle}` : undefined,
+                      animation: bekliyor && !hareketKapali
+                        ? 'gb-vigil-nabiz 1.6s ease-out infinite' : undefined,
+                    }} />
+
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 9,
+                      padding: efsane ? '9px 11px' : '7px 10px', borderRadius: 7,
+                      fontFamily: FONT.ui,
+                      background: alindi ? 'rgba(95,158,74,0.10)'
+                        : bekliyor ? 'rgba(239,167,46,0.13)'
+                        : acik ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${alindi ? `${C.ok}44` : bekliyor ? `${C.candle}66` : 'rgba(255,255,255,0.08)'}`,
+                      opacity: acik ? 1 : 0.6,
+                    }}>
+                      <span style={{ width: 34, flexShrink: 0, fontSize: 10.5, fontWeight: 900,
+                        color: ton, fontVariantNumeric: 'tabular-nums' }}>D{t.depth}</span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: efsane ? 12 : 11.5,
+                        fontWeight: efsane ? 900 : 400, color: efsane ? C.bone : C.boneDim,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t.label}
+                      </span>
+                      {def && (
+                        <span style={{ fontSize: 10, fontWeight: 900, letterSpacing: 0.6,
+                          color: RARITY[def.rarity].color, whiteSpace: 'nowrap' }}>
+                          {def.name}
+                        </span>
+                      )}
+                      <span style={{ flexShrink: 0, fontSize: 10.5, color: C.boneFaint,
+                        fontVariantNumeric: 'tabular-nums' }}>{t.dust} dust</span>
+                      {alindi && <Tag tone="dim">TAKEN</Tag>}
+                      {bekliyor && <Tag tone="gold">READY</Tag>}
+                    </div>
+                  </div>
+                </Reveal>
+              );
+            })}
+          </div>
         </div>
       </CardSection>
     </>

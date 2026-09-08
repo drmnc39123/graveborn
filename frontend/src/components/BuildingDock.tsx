@@ -56,7 +56,7 @@ export const GROUPS: readonly DockGroup[] = [
   // Dövüş önce: oyuncunun oyuna girdiği yer en solda ve en görünür olmalı.
   { id: 'fight', label: 'FIGHT', color: C.blood, members: ['quests', 'boss', 'duel', 'pit'] },
   { id: 'power', label: 'POWER', color: C.candle, members: ['upgrade', 'paths', 'gear', 'pets', 'shop'] },
-  { id: 'spend', label: 'SPEND', color: C.ok, members: ['market', 'exchange', 'reliquary'] },
+  { id: 'spend', label: 'SPEND', color: C.ok, members: ['vigil', 'market', 'exchange', 'reliquary'] },
   { id: 'people', label: 'PEOPLE', color: C.ice, members: ['daily', 'watch', 'friends', 'guild', 'tavern', 'invite'] },
 ] as const;
 
@@ -82,6 +82,11 @@ export const BUILDINGS: readonly DockEntry[] = [
   // "kalıcı güç → görünür prestij" sırasında okunmalı. Forge sonlu, Reliquary
   // değil; ağaç bitince gold'un gideceği yer bir sonraki durak olsun.
   { id: 'reliquary', label: 'RELIQUARY', sub: 'The Reliquary — relics, titles, auras (appearance only)' },
+  // ⭐ KENDI GIRISI VAR (kullanici istegi). Onceden Reliquary panelinin
+  // ICINE gomuluydu: oyunun tek gercek parali paketi, bir baska panelin
+  // alt bolumu olarak duruyordu ve navbardan gorunmuyordu. SPEND grubunun
+  // BASINDA — grubun en degerli maddesi.
+  { id: 'vigil', label: 'THE VIGIL', sub: 'The Long Vigil — the season card, bought once' },
   // ⚠️ Forge'la Reliquary'nin ARASINDA duruyor ve bu kasıtlı: Forge dikey
   // ilerleme (gold'la satın alınır), ekipman YATAY (bulunur). İkisini yan yana
   // koymak, oyuncunun iki farklı güç eksenini olduğu gibi okumasını sağlıyor.

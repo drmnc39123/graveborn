@@ -22,7 +22,7 @@
 import { useCallback, useState } from 'react';
 import { Turnstile } from '@/components/Turnstile';
 import { useCuzdanBaglan } from '@/lib/useWalletConnect';
-import { KONTROL_BOYU } from '@/components/BuildingDock';
+import { BTN, PixelButton } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export function PlayConnect({ style }: { style?: React.CSSProperties }) {
@@ -47,22 +47,26 @@ export function PlayConnect({ style }: { style?: React.CSSProperties }) {
 
   return (
     <div style={{ position: 'relative', ...style }}>
-      <button onClick={ac} disabled={busy} style={{
-        /**
-         * ⚠️ RIHTIMLA AYNI DİL: `KONTROL_BOYU` oradan geliyor, elle
-         * yazılmıyor. Kullanıcı isteği "navbardaki buton yapısının aynı
-         * tarzında" idi; sayıyı kopyalasaydım rıhtım değiştiğinde bu düğme
-         * eski boyda kalırdı.
-         */
-        width: '100%', minHeight: KONTROL_BOYU + 10, boxSizing: 'border-box',
-        cursor: busy ? 'default' : 'pointer', padding: '7px 9px', borderRadius: 7,
-        fontFamily: FONT.ui, fontSize: 10.5, fontWeight: 900, letterSpacing: 1,
-        color: C.void, background: C.candle, border: `1px solid ${C.candle}`,
-        boxShadow: `0 0 14px ${C.candle}55`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-      }}>
+      {/* 🔴 RIHTIMDAKİ DÜĞMENİN BİREBİR AYNISI (kullanıcı düzeltmesi:
+          *"Connect Wallet butonunu navbardaki butonlar ile aynı yap
+          dedim sana"*).
+          İlk sürümde yalnız YÜKSEKLİĞİ ortaktı; gövdesi elle çizilmiş düz
+          bir dikdörtgendi. Rıhtımın bütün düğmeleri `PixelButton` —
+          dokuz-dilim piksel çerçeve, `BTN.action` varyantı, `scale={2}`,
+          aynı punto ve harf aralığı. Elle çizmek onu köyün dilinden
+          koparıyordu.
+          ⚠️ Ölçü de artık elle yazılmıyor: bileşen kendi yüksekliğini
+          getiriyor, `KONTROL_BOYU` sabitine gerek kalmadı. */}
+      <PixelButton
+        variant={BTN.action}
+        scale={2}
+        disabled={busy}
+        onClick={ac}
+        title="Connect a wallet to keep your progress"
+        style={{ width: '100%', fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
+      >
         {busy ? 'CONNECTING…' : 'CONNECT WALLET'}
-      </button>
+      </PixelButton>
 
       {/* ⚠️ NE İŞE YARADIĞI YAZIYOR. "Connect wallet" tek başına bir
           eylem adı; oyuncunun bilmesi gereken şey demo ilerlemesinin

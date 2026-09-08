@@ -9,6 +9,7 @@ import { HubCanvas } from '@/components/HubCanvas';
 import { sagKolon } from '@/game/hudLayout';
 import { KOLAY_TABAN, tabanDurum, tabanZorluk } from '@/game/descentBase';
 import { PlayConnect } from '@/components/PlayConnect';
+import { VigilBeacon } from '@/components/VigilBeacon';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
@@ -16,6 +17,7 @@ import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
 import { PetPanel } from '@/components/PetPanel';
 import { ReliquaryPanel } from '@/components/ReliquaryPanel';
+import { VigilSection } from '@/components/VigilSection';
 import { WorldBossPanel } from '@/components/WorldBossPanel';
 import { GuildPanel } from '@/components/GuildPanel';
 import { GearPanel } from '@/components/GearPanel';
@@ -804,6 +806,16 @@ export default function PlayPage() {
         </div>
       )}
 
+      {/* ⭐ VIGIL ÇAPASI — minimapın SOLUNDA küçük bir sandık (kullanıcı
+          isteği). Konumu minimapın kutusundan türüyor, elle yazılmıyor. */}
+      {!panel && progress && (
+        <VigilBeacon
+          ekranW={ekranW} navbarH={dockH} navbarSol={dockLeft}
+          sahip={progress.vigil === true}
+          onOpen={() => hedefiAc('vigil')}
+        />
+      )}
+
       {/* ⚠️ SAĞ KOLON — MİNİMAP'İN ALTINA HİZALI, üstüne DEĞİL.
           Hemen yukarıdaki not "sağ üste konulamaz" diyor ve haklı: minimap
           canvas'ın İÇİNDE çiziliyor (`hubRender.drawMinimap`), yani HTML
@@ -1220,6 +1232,15 @@ export default function PlayPage() {
               <SettingsPanel onError={setNote} />
             ) : acik === 'boss' ? (
               <WorldBossPanel onEnter={beginBoss} />
+            ) : acik === 'vigil' ? (
+              /* ⭐ KENDI PANELI (kullanici istegi). Onceden Reliquary'nin
+                 ICINDE bir sekmeydi: oyunun tek gercek parali paketi,
+                 baska bir panelin alt bolumu olarak duruyordu. */
+              <VigilSection
+                progress={progress ?? loadProgress()}
+                onChange={setProgress}
+                onError={setNote}
+              />
             ) : acik === 'reliquary' ? (
               <ReliquaryPanel
                 progress={progress ?? loadProgress()}
