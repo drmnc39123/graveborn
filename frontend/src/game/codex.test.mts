@@ -15,7 +15,7 @@
 //   cd frontend && npx tsx src/game/codex.test.mts
 
 import fs from 'node:fs';
-import { CODEX, codexSection } from './codex.js';
+import { CODEX, codexInGame, codexSection } from './codex.js';
 import { STAGES, MAX_WEAPONS } from './config.js';
 import { FORGE, treeTotalCost } from './forge.js';
 import { COSMETICS, PULL_COST } from './cosmetics.js';
@@ -58,7 +58,10 @@ console.log('\n[2] ** GOVDE METNINDE ELLE YAZILMIS RAKAM YOK');
    */
   const kacak: string[] = [];
   for (const s of CODEX) {
-    for (const p of s.body) {
+    // ⚠️ `deep` DE TARANIYOR. Ilk surum yalniz `body`ye bakiyordu ve
+    // whitepaper icin yazilan 30+ derin paragraf hic kontrol edilmiyordu —
+    // yani koruma, korumasi gereken metnin yarisini gormuyordu.
+    for (const p of [...s.body, ...(s.deep ?? [])]) {
       const m = p.match(/\d+/g);
       if (m) kacak.push(`${s.id}: "${p.slice(0, 46)}…" → ${m.join(',')}`);
     }
@@ -186,7 +189,12 @@ console.log('\n[6] OYUNCUYA GIDEN METIN INGILIZCE');
 console.log('\n[7] PANEL VE DUGME BAGLI');
 {
   const panel = oku('src/components/CodexPanel.tsx');
-  check('panel CODEX\'ten ciziyor', /CODEX\.map|CODEX\.find/.test(panel));
+  check("panel codexInGame() ile ciziyor", /codexInGame\(\)/.test(panel));
+  /**
+   * ⚠️ OYUN ICI PANEL `webOnly` BOLUMLERI GOSTERMEMELI. Oyuncu koyde
+   * oynamak icin duruyor; "fair play" ve "token" basliklari sayfanin isi.
+   */
+  check("panel ham CODEX listesini KULLANMIYOR", !/CODEX\.map|CODEX\.find/.test(panel));
   // ⚠️ Metin bilesende OLMAMALI — ikinci bir kopya olurdu
   check('panelde gomulu paragraf yok', !/body: \[/.test(panel));
   check('panel facts blogunu ciziyor', /bolum\.facts/.test(panel));
@@ -286,6 +294,71 @@ console.log('\n[8] ** PAYLASIM ZINCIRI');
   check("19. navbarda INVITE var", /'invite'/.test(oku('src/components/BuildingDock.tsx')));
 
   check('uydurma desen bulunmuyor (kontrol grubu)', !/referralZZZ/.test(sayfa + gorsel + panel));
+}
+
+console.log('\n[9] ** WHITEPAPER SAYFASI (/codex)');
+{
+  /**
+   * ⚠️ AYNI VERI, DAHA DERIN YUZEY. Oyun ici panel `body`yi, sayfa
+   * `body` + `deep`i ciziyor ve `webOnly` bolumleri de ekliyor. Ikinci bir
+   * metin dosyasi tutulsaydi biri guncellenir, digeri sessizce yalan
+   * soylerdi — bu dosyanin butun varlik sebebi o.
+   */
+  const sayfa = oku('src/app/codex/page.tsx');
+  check('sayfa var', sayfa.length > 500);
+  check('sayfa CODEX verisinden ciziyor', /CODEX\.map/.test(sayfa));
+  check('derin katman ciziliyor', /s\.deep/.test(sayfa));
+  check('rakam blogu ciziliyor', /s\.facts/.test(sayfa));
+  // ⚠️ Bir whitepaper aranabilir ve paylasilabilir olmali; istemcide
+  // uretilen metin arama motorlarina gorunmez.
+  check('SUNUCU bileseni', !/'use client'/.test(sayfa));
+  check('kendi OG etiketleri var', /export const metadata/.test(sayfa));
+
+  const nav = oku('src/app/codex/CodexNav.tsx');
+  check('gezinme istemci bileseni', /'use client'/.test(nav));
+  /**
+   * ⚠️ SAYFA JAVASCRIPT OLMADAN DA OKUNMALI. Metin sunucudan geliyor ve
+   * gezinme GERCEK `<a href="#...">` kullaniyor — bir `onClick`
+   * dinleyicisi hem betiksiz tarayicida hem baglanti kopyalamada
+   * kaybettirirdi.
+   */
+  check('gezinme gercek capa baglantisi kullaniyor', /href=\{`#\$\{b\.id\}`\}/.test(nav));
+  // ⚠️ `scroll` dinleyicisi her karede tetiklenir; gozlemci yalniz gecis
+  // aninda konusur.
+  check('kaydirma dinleyicisi DEGIL, IntersectionObserver',
+    /IntersectionObserver/.test(nav) && !/addEventListener\('scroll'/.test(nav));
+  // ⚠️ Capa ile atlayinca baslik yapiskan seridin altinda kalmamali
+  check('capa hedefinde scroll-margin var', /scrollMarginTop/.test(sayfa));
+
+  /**
+   * WHITEPAPER'A OZEL BOLUMLER GERCEKTEN VAR ve oyun ici panelde YOK.
+   */
+  const webOnly = CODEX.filter((x) => x.webOnly);
+  check('whitepaper-ozel bolum var', webOnly.length >= 3,
+    webOnly.map((x) => x.kicker).join(', '));
+  const oyunIci = codexInGame();
+  check('oyun ici panel onlari GOSTERMIYOR',
+    oyunIci.every((x) => !x.webOnly) && oyunIci.length < CODEX.length,
+    `${oyunIci.length} / ${CODEX.length}`);
+
+  // ⚠️ Her bolumun derin katmani olmali: whitepaper "daha derin" olmak
+  // icin var, ozetin kopyasi olmak icin degil.
+  const derinsiz = CODEX.filter((x) => !x.deep || x.deep.length === 0);
+  check('her bolumun derin katmani var', derinsiz.length === 0,
+    derinsiz.map((x) => x.kicker).join(', '));
+
+  /**
+   * 🔴 BAGLANTISI OLMAYAN BELGE, OLMAYAN BELGEDIR. Bu depoda tekrar eden
+   * en pahali hata sinifi tam bu: is dogru yapiliyor, son adimda kimse
+   * ona ulasamiyor (Barrow odulu, anit rutbesi, takip listesi girisi).
+   */
+  const ana = oku('src/components/HomeSections.tsx');
+  check('ana sayfadan baglanti var', /href="\/codex"/.test(ana));
+  const panelKod = oku('src/components/CodexPanel.tsx');
+  check('oyun icinden baglanti var', /href="\/codex"/.test(panelKod));
+  check('yeni sekme guvenli (noopener)', /codex"[\s\S]{0,80}noopener/.test(panelKod));
+
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/codexZZZ/.test(sayfa + nav));
 }
 
 console.log(`\n${FAIL.length === 0 ? 'CODEX SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);

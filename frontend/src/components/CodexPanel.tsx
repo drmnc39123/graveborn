@@ -14,13 +14,19 @@
 // oyuncu zaten giriş yapmaz.
 
 import { useState } from 'react';
-import { CODEX } from '@/game/codex';
+import { codexInGame } from '@/game/codex';
 import { PanelHead } from '@/components/ui/cards';
 import { C, FONT, glass } from '@/lib/theme';
 
 export function CodexPanel() {
-  const [acik, setAcik] = useState<string>(CODEX[0].id);
-  const bolum = CODEX.find((s) => s.id === acik) ?? CODEX[0];
+  /**
+   * ⚠️ `codexInGame()` — whitepaper'a özel bölümler burada YOK. Oyuncu
+   * köyde oynamak için duruyor; "fair play" ve "token" başlıkları
+   * `/codex` sayfasının işi.
+   */
+  const bolumler = codexInGame();
+  const [acik, setAcik] = useState<string>(bolumler[0].id);
+  const bolum = bolumler.find((s) => s.id === acik) ?? bolumler[0];
 
   return (
     <>
@@ -34,7 +40,7 @@ export function CodexPanel() {
           telefonda görünmeyen sekmeler bırakır ve oyuncu onların varlığını
           hiç öğrenmez — `RecordsPanel`de ölçülmüş aynı tuzak. */}
       <div style={{ display: 'flex', gap: 5, marginBottom: 12, flexWrap: 'wrap' }}>
-        {CODEX.map((s) => {
+        {bolumler.map((s) => {
           const on = s.id === bolum.id;
           return (
             <button key={s.id} onClick={() => setAcik(s.id)}
@@ -50,6 +56,15 @@ export function CodexPanel() {
           );
         })}
       </div>
+
+      {/* ⚠️ TAM BELGEYE BAGLANTI. Panel KISA olmak zorunda ama oyuncunun
+          daha fazlasini isteme hakki var; bu satir olmadan `/codex`
+          oyunun icinden GORUNMEZ olurdu — bu depoda tekrar eden hata
+          sinifi tam olarak bu. */}
+      <a href="/codex" target="_blank" rel="noopener noreferrer" style={{
+        display: 'block', marginBottom: 12, fontSize: 10.5, fontWeight: 900,
+        letterSpacing: 1, color: C.candle, textDecoration: 'none',
+      }}>READ THE FULL CODEX →</a>
 
       {/* Gövde */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

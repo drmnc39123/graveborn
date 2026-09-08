@@ -293,6 +293,21 @@ export function HomeSections() {
             </div>
           ))}
         </div>
+        {/* ⚠️ WHITEPAPER'A GIDEN BAGLANTI SSS'IN HEMEN ALTINDA ve bu
+            kasitli: "awkward questions" okuyan kisi zaten AYRINTI
+            ariyor. Bir belge, ancak tam da onu arayan kisinin bulacagi
+            yerde durursa okunur. */}
+        <a href="/codex" style={{
+          display: 'block', marginTop: 12, padding: '13px 14px', borderRadius: 8,
+          border: `1px solid ${C.candle}44`, background: 'rgba(239,167,46,0.07)',
+          color: C.candle, textDecoration: 'none', fontSize: 12.5, lineHeight: 1.55,
+        }}>
+          <strong style={{ letterSpacing: 1 }}>THE CODEX →</strong>
+          <span style={{ color: C.boneDim, display: 'block', marginTop: 3 }}>
+            The whole thing written out: the run, the economy, what real money can and
+            cannot buy, and what this game will not do.
+          </span>
+        </a>
       </Section>
 
       {/* ── DURUM ── */}
