@@ -379,6 +379,31 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
             * gerekçe ve aynı ölçüm: 375 px'de çubuk 302 px'ti ve her piksel
             * minimap ile yarışıyor. Telefonda ikonlar ANA SAYFADA duruyor.
             */}
+          {/**
+            * ⭐ REHBER DÜĞMESİ — minimap'in solunda, sosyal ikonlardan önce.
+            *
+            * 🔴 NİYE VAR: köyde 4 grup, 15 panel ve 12 bina var ve hiçbirini
+            * anlatan bir yer yoktu. Tek onboarding `FirstRun` (tek düğme) ve
+            * koşu içi ipuçlarıydı; ikisi de oyuncuyu İLK koşuya sokup
+            * sonrasını hiç anlatmıyordu.
+            *
+            * ⚠️ DAR EKRANDA DA DURUYOR — sosyal ikonların aksine. Telefonda
+            * gizlenecek ilk şey bağlantılar olabilir; oyunu ANLATAN şey
+            * olamaz. Tek bir 24 px'lik düğme, o yeri hak ediyor.
+            */}
+          <button
+            onClick={() => onOpen('codex')}
+            title="The Codex — how everything here works"
+            aria-label="Open the codex"
+            style={{
+              all: 'unset', boxSizing: 'border-box', cursor: 'pointer', flexShrink: 0,
+              width: 24, height: 24, borderRadius: 6, display: 'grid', placeItems: 'center',
+              fontFamily: FONT.ui, fontSize: 13, fontWeight: 900,
+              color: open === 'codex' ? C.bone : C.boneFaint,
+              background: open === 'codex' ? 'rgba(138,151,163,0.22)' : 'rgba(255,255,255,0.05)',
+              border: `1px solid ${open === 'codex' ? `${C.ice}66` : 'rgba(255,255,255,0.12)'}`,
+            }}
+          >?</button>
           {!dar && <SocialLinks boyut={26} />}
         </span>
       </div>
