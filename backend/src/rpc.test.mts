@@ -27,7 +27,7 @@ const A = 'https://uc-a.test';
 const B = 'https://uc-b.test';
 process.env.RPC_URLS = `${A},${B}`;
 
-const { RpcHatasi, rpcCagir, rpcCezalariSifirla, rpcSaglik, rpcUclari } = await import('./rpc.js');
+const { RpcHatasi, mainnetUcuMu, rpcCagir, rpcCezalariSifirla, rpcSaglik, rpcUclari } = await import('./rpc.js');
 
 /** Hangi uca kac istek gitti */
 let cagrilar: string[] = [];
@@ -218,6 +218,49 @@ console.log('\n[7] ANAHTAR SIZDIRILMIYOR');
   const s = rpcSaglik();
   check('api anahtari maskelenmis', !/GIZLI-ANAHTAR-123/.test(s[0].url), s[0].url);
   check('gerisi okunur kaliyor (cift tarafli)', /helius-rpc\.com/.test(s[0].url), s[0].url);
+  process.env.RPC_URLS = eski;
+}
+
+console.log('\n[8] ** MAINNET DISI UC REDDEDILIYOR - gercek para acigi');
+{
+  /**
+   * 🔴 OLCULDU (2026-09-09): elimizdeki Helius anahtari mainnet'te 403
+   * veriyor ama DEVNET'te 200 donuyor. Yani "calisan" bir devnet URL'si
+   * elimizin altinda ve yanlislikla RPC_URLS'e konmasi cok kolay.
+   *
+   * Bedeli: DEVNET SOL BEDAVA. Kendine airdrop yapan biri hazineye devnet'te
+   * 0,5 SOL gonderir; biz devnet'e baktigimiz icin `odemeDogrula`nin BUTUN
+   * kontrolleri temiz gecer (islem gercekten basarili, sadece yanlis agda)
+   * ve sezon karti bedava dagitilir.
+   */
+  check('devnet reddediliyor', !mainnetUcuMu('https://devnet.helius-rpc.com/?api-key=x'));
+  check('testnet reddediliyor', !mainnetUcuMu('https://api.testnet.solana.com'));
+  check('localhost reddediliyor',
+    !mainnetUcuMu('http://localhost:8899') && !mainnetUcuMu('http://127.0.0.1:8899'));
+  check('?cluster=devnet reddediliyor', !mainnetUcuMu('https://x.example.com/rpc?cluster=devnet'));
+
+  // ⚠️ CIFT TARAFLI: mainnet uclari GECMELI, yoksa kontrol her seyi eler
+  check('mainnet gecerli (kontrol grubu)',
+    mainnetUcuMu('https://mainnet.helius-rpc.com/?api-key=x')
+    && mainnetUcuMu('https://api.mainnet-beta.solana.com')
+    && mainnetUcuMu('https://solana-rpc.publicnode.com'));
+
+  // Listeden SUZULUYOR mu
+  const eski = process.env.RPC_URLS;
+  process.env.RPC_URLS = 'https://devnet.helius-rpc.com/?api-key=x,https://solana-rpc.publicnode.com';
+  const kalan = rpcUclari();
+  check('devnet listeden ATILIYOR', !kalan.some((u) => /devnet/.test(u)), kalan.join(' , '));
+  check('mainnet ucu KALIYOR', kalan.some((u) => /publicnode/.test(u)));
+
+  /**
+   * ⚠️ HEPSI DEVNET ISE varsayilan MAINNET ucuna dusuluyor — bos liste
+   * donmek "hicbir uc yok" demek olurdu ve o da kotu, ama devnet'e
+   * baglanmaktan iyi. Onemli olan: ASLA devnet kullanilmiyor.
+   */
+  process.env.RPC_URLS = 'https://devnet.helius-rpc.com/?api-key=x';
+  const hepsiDevnet = rpcUclari();
+  check('hepsi devnet ise MAINNET varsayilanina dusuluyor',
+    hepsiDevnet.every(mainnetUcuMu) && hepsiDevnet.length > 0, hepsiDevnet.join(' , '));
   process.env.RPC_URLS = eski;
 }
 

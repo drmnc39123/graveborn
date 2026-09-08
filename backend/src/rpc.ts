@@ -19,10 +19,51 @@
 
 const VARSAYILAN_UCLAR = ['https://api.mainnet-beta.solana.com'];
 
-/** `RPC_URLS` virgülle çoklu; sıra ÖNEMLİ — ilki birincil, sonrakiler yedek. */
+/**
+ * 🔴 MAINNET DIŞI UÇ KABUL EDİLMEZ — GERÇEK PARA AÇIĞI.
+ *
+ * ÖLÇÜLDÜ (2026-09-09): elimizdeki Helius anahtarı mainnet'te 403 veriyor
+ * ama DEVNET'te 200 dönüyor. Yani "çalışan" bir devnet URL'si elimizin
+ * altında ve yanlışlıkla `RPC_URLS`e konması çok kolay.
+ *
+ * Bedeli: DEVNET SOL BEDAVA. Kendine airdrop yapan biri hazine adresine
+ * devnet'te 0,5 SOL gönderir, biz devnet'e baktığımız için işlemi GEÇERLİ
+ * sayarız ve sezon kartını bedava veririz. `odemeDogrula`nın bütün
+ * kontrolleri (meta.err, bakiye farkı, ödeyen, tek kullanımlık imza) o
+ * işlem için de TEMİZ geçer — çünkü işlem gerçekten başarılı, sadece
+ * yanlış ağda.
+ *
+ * ⚠️ Bu kontrol URL'e bakıyor, ağa değil. Kusursuz değil (özel bir alan
+ * adının arkasındaki devnet'i göremez) ama bilinen bütün devnet/testnet
+ * uçlarını ve `?cluster=` biçimlerini yakalıyor — ve asıl tehlike zaten
+ * dikkatsizce yapıştırılmış tanıdık bir URL.
+ */
+const AG_DISI = /devnet|testnet|localhost|127\.0\.0\.1|cluster=(dev|test)/i;
+
+export function mainnetUcuMu(url: string): boolean {
+  return !AG_DISI.test(url);
+}
+
+/**
+ * `RPC_URLS` virgülle çoklu; sıra ÖNEMLİ — ilki birincil, sonrakiler yedek.
+ *
+ * ⚠️ Mainnet olmayan uçlar SESSİZCE ATILMAZ, gürültüyle atılır: sessiz
+ * filtreleme "neden çalışmıyor" sorusunu cevapsız bırakırdı.
+ */
+let agUyarildi = false;
+
 export function rpcUclari(): string[] {
   const ham = (process.env.RPC_URLS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  return ham.length ? ham : VARSAYILAN_UCLAR;
+  const temiz = ham.filter(mainnetUcuMu);
+  if (temiz.length !== ham.length && !agUyarildi) {
+    agUyarildi = true;
+    console.error(
+      '[RPC] MAINNET OLMAYAN UC ATILDI — devnet/testnet SOL BEDAVADIR ve '
+      + 'oraya bakan bir dogrulama sahte odemeyi gecerli sayardi:',
+      ham.filter((u) => !mainnetUcuMu(u)).map((u) => u.replace(/([?&](api-key|apikey|key)=)[^&]+/i, '$1***')).join(' , '),
+    );
+  }
+  return temiz.length ? temiz : VARSAYILAN_UCLAR;
 }
 
 /** Özel bir sağlayıcı tanımlanmış mı — açılış kontrol listesi bunu sorar. */
