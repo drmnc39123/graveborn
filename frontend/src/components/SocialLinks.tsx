@@ -59,6 +59,10 @@ export function SocialLinks({ boyut = 32 }: { boyut?: number }) {
           aria-label={`GRAVEBORN on ${b.ad}`}
           title={`GRAVEBORN on ${b.ad}`}
           style={{
+            // ⚠️ `border-box`: kenarlık boyu DIŞARI eklemesin. Olmadan
+            // `boyut` 24 verilse bile kutu 26 çiziliyordu ve navbar'daki
+            // diğer çiplerle 2 px oynuyordu (ölçüldü 2026-09-09).
+            boxSizing: 'border-box',
             width: boyut, height: boyut, borderRadius: Math.round(boyut * 0.26),
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             /**

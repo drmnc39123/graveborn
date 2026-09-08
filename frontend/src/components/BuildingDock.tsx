@@ -61,6 +61,19 @@ export const GROUPS: readonly DockGroup[] = [
 ] as const;
 
 /** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */
+/**
+ * SAĞ KÜMEDEKİ ÇİPLERİN ORTAK YÜKSEKLİĞİ.
+ *
+ * ⚠️ TEK SABİT OLMAK ZORUNDA. Önce üçü de kendi boyunu yazıyordu
+ * (çip 14 · düğme 24 · sosyal ikon 26) ve satır tırtıklı görünüyordu.
+ * Ayrı ayrı yazılan bir ölçü, biri değiştiğinde diğerleri eski kalır.
+ */
+export const KONTROL_BOYU = 24;
+// ⚠️ Bu sayının GERÇEK yükseklik olması için her çip `box-sizing:
+// border-box` kullanmak zorunda: `content-box`ta 1 px kenarlık boyu 26'ya
+// çıkarıyordu ve `?` düğmesi (border-box'lı) diğerlerinden 2 px kısa
+// duruyordu. Ölçüldü 2026-09-09.
+
 export const BUILDINGS: readonly DockEntry[] = [
   { id: 'quests', label: 'STAGES', sub: "The Warden's Post — stages & the Descent" },
   { id: 'upgrade', label: 'FORGE', sub: 'The Forge — permanent power' },
@@ -325,9 +338,22 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
           </PixelButton>
         ) : grupDugmeleri}
 
-        {/* Cüzdan navbar'ın sağ ucunda — ayrı çerçeve tutarsız duruyordu */}
+        {/**
+          * SAĞ KÜME — gold · $GRAVE · hesap · rehber · sosyal.
+          *
+          * 🔴 `alignItems: 'baseline'` İDİ VE BOZUKTU. Baseline METİN TABAN
+          * ÇİZGİSİNİ hizalar, KUTUYU değil; bu kümede 14 px yazı, 9 px'lik
+          * bir çip ve 24 px'lik bir düğme yan yana duruyor. Ölçüldü
+          * (2026-09-09): dikey merkezler 66 · 72 · 71 — yani "biri altta
+          * biri üstte" görüntüsü. `center` kutuları hizalar ve yazı boyu
+          * fark etmez.
+          *
+          * ⚠️ İKİNCİ YARISI YÜKSEKLİK: hizalama tek başına yetmiyordu,
+          * çipler de farklı boydaydı (14 · 24 · 26). Hepsi `KONTROL_BOYU`
+          * kullanıyor artık — tek sabit, tek satır düzeni.
+          */}
         <span style={{
-          display: 'flex', gap: 10, alignItems: 'baseline', fontFamily: FONT.ui,
+          display: 'flex', gap: 8, alignItems: 'center', fontFamily: FONT.ui,
           paddingLeft: 12, marginLeft: 4, borderLeft: `1px solid ${C.border}`,
         }}>
           {/* ⚠️ Oyunun EN ÇOK GÖRÜLEN sayısı bu — navbar her ekranda açık.
@@ -359,10 +385,15 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
           {/* Hangi kayda oynadığın HER ZAMAN görünsün. Demo ilerlemesi bu
               cihazda kalır; oyuncunun bunu sonradan öğrenmesi kötü olurdu. */}
           <span style={{
-            fontSize: 9, fontWeight: 900, letterSpacing: 0.8, padding: '2px 6px',
-            borderRadius: 4, whiteSpace: 'nowrap',
+            // ⚠️ Yükseklik `?` ve sosyal ikonlarla AYNI — bkz. KONTROL_BOYU
+            // ⚠️ `border-box` — bkz. KONTROL_BOYU notu
+            boxSizing: 'border-box',
+            height: KONTROL_BOYU, display: 'inline-flex', alignItems: 'center',
+            fontSize: 9, fontWeight: 900, letterSpacing: 0.8, padding: '0 7px',
+            borderRadius: 5, whiteSpace: 'nowrap',
             color: wallet ? C.ok : C.candle,
             background: wallet ? 'rgba(95,158,74,0.16)' : 'rgba(239,167,46,0.14)',
+            border: `1px solid ${wallet ? 'rgba(95,158,74,0.34)' : 'rgba(239,167,46,0.30)'}`,
           }}>
             {wallet ? `${wallet.slice(0, 4)}…${wallet.slice(-4)}` : 'DEMO'}
           </span>
@@ -397,14 +428,15 @@ export function BuildingDock({ open, onOpen, onClose, gold, grave = 0, wallet, s
             aria-label="Open the codex"
             style={{
               all: 'unset', boxSizing: 'border-box', cursor: 'pointer', flexShrink: 0,
-              width: 24, height: 24, borderRadius: 6, display: 'grid', placeItems: 'center',
+              width: KONTROL_BOYU, height: KONTROL_BOYU, borderRadius: 5,
+              display: 'grid', placeItems: 'center',
               fontFamily: FONT.ui, fontSize: 13, fontWeight: 900,
               color: open === 'codex' ? C.bone : C.boneFaint,
               background: open === 'codex' ? 'rgba(138,151,163,0.22)' : 'rgba(255,255,255,0.05)',
               border: `1px solid ${open === 'codex' ? `${C.ice}66` : 'rgba(255,255,255,0.12)'}`,
             }}
           >?</button>
-          {!dar && <SocialLinks boyut={26} />}
+          {!dar && <SocialLinks boyut={KONTROL_BOYU} />}
         </span>
       </div>
 
