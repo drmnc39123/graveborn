@@ -31,7 +31,27 @@ type Tool = 'object' | 'tile' | 'marker';
  * ⚠️ `BUILDINGS` navbarın da okuduğu tek kaynak (`BuildingDock`). Yeni bir
  * panel eklenince burası kendiliğinden doğru kalıyor.
  */
-const DOOR_ROLES = BUILDINGS.map((b) => ({ id: b.id, name: `${b.label} — ${b.sub}` }));
+const DOOR_ROLES = BUILDINGS.map((b) => ({
+  id: b.id,
+  /** açılır listede görünen açıklama — uzun olması İYİ, doğru paneli seçtiriyor */
+  name: `${b.label} — ${b.sub}`,
+  /**
+   * ⚠️ KAPININ OYUNDAKİ ADI — açılır liste metniyle AYNI ŞEY DEĞİL.
+   *
+   * 🔴 KULLANICI YAKALADI: ilk sürümde etiket alanına `name` yazılıyordu ve
+   * oyunda kapının üstünde *"TAVERN — Tavern — profile & records"* çıkıyordu.
+   * Eski elle konmuş kapıların adları YER İSMİYDİ ("The Forge", "The Rest",
+   * "Market Hall"); açılır liste metni bir AÇIKLAMA. İkisini tek alana
+   * bindirmek benim hatamdı.
+   *
+   * Yer ismi `sub`un uzun tireden ÖNCEKİ parçası: "The Forge — permanent
+   * power" → "The Forge". Tire yoksa navbar etiketine düşüyor.
+   * ⚠️ Bu bir ÖN DOLGU, karar değil: etiket alanı elle düzenlenebilir ve
+   * dört tanesi (GEAR · PATHS · THE PIT · SETTINGS) bir yer ismi gibi
+   * okunmuyor — onları haritayı kuran kişi adlandırmalı.
+   */
+  etiket: b.sub.includes('—') ? b.sub.split('—')[0].trim() : b.label,
+}));
 
 /**
  * ⚠️ KÖYDE KAPISI OLMASI BEKLENEN roller — denetim uyarısı bunlara bakar.
@@ -1142,7 +1162,9 @@ export default function EditorPage() {
                   <select value={selMarker.target ?? ''} onChange={(e) => {
                     const t = e.target.value;
                     const r = DOOR_ROLES.find((x) => x.id === t);
-                    patchM({ target: t, ...(r && (!selMarker.label || selMarker.label === 'door') ? { label: r.name } : {}) });
+                    // ⚠️ `etiket` yazılıyor, `name` DEĞİL: biri kapının adı,
+                    // diğeri listedeki açıklama (bkz. `DOOR_ROLES`).
+                    patchM({ target: t, ...(r && (!selMarker.label || selMarker.label === 'door') ? { label: r.etiket } : {}) });
                   }}
                     style={{ width: '100%', marginTop: 4, padding: '7px 8px', borderRadius: 7, fontSize: 12,
                       background: selMarker.target ? 'rgba(0,0,0,0.4)' : 'rgba(160,18,38,0.22)',
