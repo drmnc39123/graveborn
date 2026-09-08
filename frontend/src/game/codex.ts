@@ -33,6 +33,7 @@ import { HEROES } from './heroes';
 import { OSSUARY } from './ossuary';
 import { PETS } from './pets';
 import { QUESTS, QUEST_POOL } from './quests';
+import { ODUL_DERINLIGI, ODUL_TOZ } from './referral';
 import { SOL_PRICES } from './solPrice';
 import { VIGIL_TIERS } from './vigil';
 import { WAGER } from './wager';
@@ -144,12 +145,15 @@ export const CODEX: readonly CodexSection[] = [
       'Duels are asynchronous: you replay somebody else\'s exact run and try to go deeper. The Pit is the opposite — a live duel, one against one, in the same arena with the same waves, and the last one standing wins.',
       'The Barrow holds one world boss a week. Everyone hits the same creature, the wound is shared, and the week ends whether it dies or not.',
       'Daily work resets at midnight UTC. Three tasks, drawn for you, and a bonus if you finish all three.',
+      'Everyone carries an invitation code. Nobody is paid for signing up — a wallet costs nothing to make, and paying for one would just pay whoever can make the most. The reward opens the first time somebody who joined with your code actually goes down to the depth on the right, and then you both get dust.',
     ],
     facts: [
       { label: 'Found a guild', value: `${sayi(GUILD_COST)} gold` },
       { label: 'Guild levels', value: `${sayi(GUILD_LEVELS.length)} · up to ${sayi(GUILD_LEVELS[GUILD_LEVELS.length - 1].cap)} members` },
       { label: 'Daily tasks', value: `${sayi(QUESTS.perDay)} of ${sayi(QUEST_POOL.length)}` },
       { label: 'All-three bonus', value: `${sayi(QUESTS.allBonus)} dust` },
+      { label: 'Invite reward', value: `${sayi(ODUL_TOZ)} dust each` },
+      { label: 'Opens at', value: `depth ${sayi(ODUL_DERINLIGI)}` },
     ],
   },
   {

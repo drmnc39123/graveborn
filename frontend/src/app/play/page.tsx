@@ -30,6 +30,7 @@ import { EventBanner } from '@/components/EventBanner';
 import { NoticeBanner } from '@/components/NoticeBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { CodexPanel } from '@/components/CodexPanel';
+import { InvitePanel } from '@/components/InvitePanel';
 import { ProfileCard } from '@/components/ProfileCard';
 import { ReadyCard } from '@/components/ReadyCard';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
@@ -1172,6 +1173,8 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : acik === 'invite' ? (
+              <InvitePanel onError={setNote} />
             ) : acik === 'codex' ? (
               /* ⚠️ Rehber CÜZDAN İSTEMİYOR: oyunu anlatmak için giriş
                  yapmış olmak gerekmez — tam tersi, anlamayan oyuncu zaten

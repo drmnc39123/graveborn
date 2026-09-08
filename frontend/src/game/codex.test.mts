@@ -206,5 +206,68 @@ console.log('\n[7] PANEL VE DUGME BAGLI');
   check('uydurma desen bulunmuyor (kontrol grubu)', !/codexZZZ/.test(panel + dock + page));
 }
 
+console.log('\n[8] ** PAYLASIM ZINCIRI');
+{
+  /**
+   * 🔴 BUYUMENIN TEK KANALI ve bu depoda TAMAMEN YOKTU. Zincirin her
+   * halkasi calismali: kart verisi (herkese acik) → OG gorseli →
+   * paylasilan sayfa → kod yakalama → panel.
+   *
+   * Bu depoda tekrar eden en pahali hata sinifi: parcalar dogru, aradaki
+   * tasima kopuk (Barrow odulu, pet baglama, anit rutbesi, kasa katkisi).
+   */
+  const idx = yorumsuz(oku('../backend/src/index.ts'));
+  check('1. kart ucu HERKESE ACIK (auth yok)',
+    /'\/referral\/card\/:code'[\s\S]{0,300}prisma\.player\.findFirst/.test(idx)
+    && !/'\/referral\/card\/:code'[\s\S]{0,200}auth\(req\)/.test(idx));
+  /**
+   * ⚠️ ACIK BIR UC, ANCAK ZATEN ACIK OLANI VEREBILIR. Gold, toz, envanter
+   * gibi hicbir sey donmemeli — kart bir davettir, kimlik fisi degil.
+   */
+  const kartBlok = idx.slice(idx.indexOf("'/referral/card/:code'"));
+  const kb = kartBlok.slice(0, kartBlok.indexOf('}));') + 4);
+  check('2. kart TAM CUZDAN sizdirmiyor', /wallet\.slice/.test(kb));
+  check('3. kart gold/toz DONDURMUYOR', !/gold|dust/.test(kb), 'sizinti yok');
+
+  const sayfa = oku('src/app/s/[code]/page.tsx');
+  check('4. paylasim sayfasi OG etiketi uretiyor', /generateMetadata/.test(sayfa));
+  check('5. sayfa SUNUCU bileseni (X javascript calistirmaz)',
+    !/'use client'/.test(sayfa));
+  check('6. onbelleklenmiyor (rakam bayatlamasin)', /force-dynamic/.test(sayfa));
+  check('7. insan ziyaretci oyuna yonlendiriliyor', /redirect\(/.test(sayfa));
+  check('8. kod adrese yaziliyor', /\?ref=/.test(sayfa));
+
+  const gorsel = oku('src/app/s/[code]/opengraph-image.tsx');
+  /**
+   * ⚠️ NODE CALISMA ZAMANI SART: Railway'de kendi Node sunucumuz var, edge
+   * yok. Varsayilana birakilirsa derleme gecer ama gorsel URETIMDE
+   * cizilmez ve kart bos gorunur.
+   */
+  check('9. OG gorseli nodejs calisma zamani', /runtime = 'nodejs'/.test(gorsel));
+  check('10. gorsel 1200x630', /width: 1200, height: 630/.test(gorsel));
+  // ⚠️ Veri gelmezse kart YINE cizilmeli: bos gorsel, paylasimi olu bir
+  // baglantiya cevirir.
+  check('11. veri yoksa da kart ciziliyor', /\) : \(/.test(gorsel));
+  // Depo kurali: MOR YOK
+  check('12. palette mor yok', !/#[89a-f][0-9a-f]{1,2}[0-9a-f]*(ff|f0)/i.test(gorsel)
+    && !/purple|violet/i.test(gorsel));
+
+  const ana = oku('src/app/page.tsx');
+  check('13. ana sayfa ?ref kodunu yakaliyor', /graveborn:ref/.test(ana));
+  // ⚠️ Adres temizlenmeli: kod URL'de kalirsa oyuncu kendi linkini
+  // paylasirken BASKASININ kodunu yayardi.
+  check('14. adres temizleniyor', /replaceState/.test(ana));
+
+  const panel = oku('src/components/InvitePanel.tsx');
+  check('15. panel kutuyu dolduruyor', /graveborn:ref/.test(panel));
+  // ⚠️ OTOMATIK GIRILMEMELI: geri alinamayan bir bag oyuncunun karari olmali
+  check('16. otomatik GIRILMIYOR', !/enterReferral\([\s\S]{0,60}localStorage/.test(panel));
+  check('17. X paylasim baglantisi var', /x\.com\/intent\/tweet/.test(panel));
+  check('18. yeni sekme guvenli (noopener)', /noopener/.test(panel));
+  check("19. navbarda INVITE var", /'invite'/.test(oku('src/components/BuildingDock.tsx')));
+
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/referralZZZ/.test(sayfa + gorsel + panel));
+}
+
 console.log(`\n${FAIL.length === 0 ? 'CODEX SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

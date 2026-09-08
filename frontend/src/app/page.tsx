@@ -44,6 +44,30 @@ export default function Home() {
   useEffect(() => { fetchStats().then(setStats); }, []);
 
   /**
+   * ⭐ DAVET KODUNU YAKALA — `/s/<kod>` buraya `?ref=` ile yolluyor.
+   *
+   * 🔴 NİYE ŞART: kod adres çubuğunda kalırsa kimse onu görmez ve elle
+   * yazmaz. Paylaşımın bütün zinciri (kart → tıklama → giriş) tam burada
+   * kopardı.
+   *
+   * ⚠️ OTOMATİK GİRİLMİYOR, SAKLANIYOR. Oyuncu adına bir bağ kurmak —
+   * hele geri alınamayan bir bağ — onun kararı olmaktan çıkar. Panel
+   * kutuyu ONUN İÇİN DOLDURUYOR; basma işi oyuncunun.
+   */
+  useEffect(() => {
+    try {
+      const kod = new URLSearchParams(window.location.search).get('ref');
+      if (kod && /^[A-Za-z0-9]{6}$/.test(kod)) {
+        localStorage.setItem('graveborn:ref', kod.toUpperCase());
+        // ⚠️ Adres temizleniyor: kodun URL'de kalması, oyuncunun kendi
+        // linkini paylaşırken yanlışlıkla BAŞKASININ kodunu yaymasına
+        // yol açardı.
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    } catch { /* yoksay */ }
+  }, []);
+
+  /**
    * ⚠️ CÜZDAN LİSTESİ TEK SEFERLİK OKUNAMAZ. Eklentiler sayfayla aynı anda
    * yüklenmiyor; ilk karede liste boş olup 200 ms sonra dolabiliyor. Tek
    * bir okuma yapsaydık oyuncu kurulu cüzdanını görmez, "cüzdan yok"

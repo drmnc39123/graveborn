@@ -57,7 +57,7 @@ export const GROUPS: readonly DockGroup[] = [
   { id: 'fight', label: 'FIGHT', color: C.blood, members: ['quests', 'boss', 'duel', 'pit'] },
   { id: 'power', label: 'POWER', color: C.candle, members: ['upgrade', 'paths', 'gear', 'pets', 'shop'] },
   { id: 'spend', label: 'SPEND', color: C.ok, members: ['market', 'exchange', 'reliquary'] },
-  { id: 'people', label: 'PEOPLE', color: C.ice, members: ['daily', 'watch', 'guild', 'tavern'] },
+  { id: 'people', label: 'PEOPLE', color: C.ice, members: ['daily', 'watch', 'guild', 'tavern', 'invite'] },
 ] as const;
 
 /** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */
@@ -116,6 +116,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // yanına konsaydı bir araç gibi görünürdü; profilin yanında bir AİDİYET
   // gibi okunuyor — sekmenin işi tam olarak bu.
   { id: 'guild', label: 'GUILD', sub: 'The Guilds — stand with others, share experience' },
+  // ⚠️ PEOPLE grubunda ve bu kasitli: davet bir BUYUME araci degil, bir
+  // INSAN baglantisi. Oyuncu birini cagirirken lonca ve takip listesiyle
+  // ayni yerde durmali.
+  { id: 'invite', label: 'INVITE', sub: 'The Invitation — bring someone down with you' },
   // ⚠️ Bir BİNA değil ama buraya konuldu: ayarlar ulaşılabilir olmalı ve
   // köyde onu barındıracak bir kapı yok. Ayrı bir dişli ikonu eklemek
   // rıhtımın dilini bozardı.

@@ -20,7 +20,7 @@ import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from '
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
-import { ReferralError, kodGir, odulKontrol, referralDurum } from './referral.js';
+import { ReferralError, kodGir, kodTemizle, odulKontrol, referralDurum } from './referral.js';
 import { ossuarySolPrice, solPrice } from '@game/solPrice';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
@@ -923,6 +923,47 @@ app.get('/me/card', wrap(async (req, res) => {
 // ⚠️ ÖDÜL KAYIT ANINDA VERİLMİYOR (bkz. referral.ts başlığı): bir cüzdan
 // üretmek bedava, bin cüzdan da bedava. Ödül davet edilenin OYNAMASINA
 // bağlı — botun ödemesi gereken şey cüzdan değil zaman.
+/**
+ * PAYLASIM KARTI VERISI — HERKESE ACIK, oturum YOK.
+ *
+ * ⚠️ NIYE ACIK: karti X'in ve Telegram'in sunuculari cizecek; onlarin
+ * oturumu yok. Kimlik dogrulamasi isteyen bir uc, kartin hic
+ * gorunmemesi demekti.
+ *
+ * ⚠️ NE DONUYOR: yalniz ZATEN SIRALAMADA gorunen seyler — kisaltilmis
+ * cuzdan, en derin inis, temizlenen bolum, anit rutbesi. Gold, toz,
+ * envanter ve e-posta gibi hicbir sey YOK. Herkese acik bir uc, ancak
+ * zaten herkese acik olani verebilir.
+ */
+app.get('/referral/card/:code', wrap(async (req, res) => {
+  const kod = kodTemizle(req.params.code);
+  if (!kod) { res.status(400).json({ error: 'gecersiz_kod' }); return; }
+
+  const p = await prisma.player.findFirst({
+    where: { refCode: kod, banned: false },
+    select: {
+      wallet: true, hero: true, bestDepth: true, bestStage: true,
+      ossuary: true, cleared: true, equipped: true,
+    },
+  });
+  if (!p) { res.status(404).json({ error: 'kod_bulunamadi' }); return; }
+
+  const temizlenen = Object.values(
+    (p.cleared && typeof p.cleared === 'object' ? p.cleared : {}) as Record<string, unknown>,
+  ).filter(Boolean).length;
+
+  res.json({
+    // ⚠️ TAM CUZDAN DEGIL: kart bir davettir, bir kimlik fisi degil.
+    name: `${p.wallet.slice(0, 4)}…${p.wallet.slice(-4)}`,
+    hero: p.hero,
+    depth: p.bestDepth,
+    stage: p.bestStage,
+    cleared: temizlenen,
+    ossuary: p.ossuary,
+    title: (p.equipped as { title?: string } | null)?.title ?? null,
+  });
+}));
+
 app.get('/referral', wrap(async (req, res) => {
   const wallet = auth(req);
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }

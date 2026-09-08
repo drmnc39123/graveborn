@@ -525,6 +525,30 @@ export async function fetchCardSummary(): Promise<CardSummary> {
   return api<CardSummary>('/me/card');
 }
 
+// ── DAVET ────────────────────────────────────────────────────────────
+// ⚠️ Odul KAYIT aninda degil, davet edilen OYNAYINCA veriliyor (bkz.
+// backend/referral.ts). Istemcinin bu konuda yapabilecegi bir sey yok —
+// burasi yalniz gosteriyor.
+
+export interface ReferralState {
+  code: string;
+  invited: number;
+  rewarded: number;
+  joinedWith: string | null;
+  canEnter: boolean;
+  rewardDust: number;
+  rewardDepth: number;
+  cap: number;
+}
+
+export async function fetchReferral(): Promise<ReferralState> {
+  return api<ReferralState>('/referral');
+}
+
+export async function enterReferral(code: string): Promise<ReferralState> {
+  return api<ReferralState>('/referral/enter', { method: 'POST', body: { code } });
+}
+
 /** Anit seviyesi — SOL ile. Fiyat SUNUCUDA, oyuncunun mevcut seviyesinden. */
 export async function raiseOssuarySol(sig: string): Promise<Progress> {
   const { progress } = await api<{ progress: Progress }>('/ossuary/raise-sol', {

@@ -24,7 +24,17 @@
 // ⚠️ KOD BİR KİMLİK: `refCode @unique`. İki oyuncuya aynı kod düşerse
 // ödül yanlış kişiye gider ve bunu geri almanın yolu yoktur.
 
+import {
+  KOD_ALFABE as ALFABE, KOD_PENCERESI_GUN, KOD_UZUNLUK, ODUL_DERINLIGI,
+  ODUL_TAVANI, ODUL_TOZ, kodTemizle,
+} from '@game/referral';
 import { prisma } from './db.js';
+
+// ⚠️ Sabitler `@game/referral`de: sunucu · arayuz · Codex ucu de ayni
+// sayiyi okumali. Yeniden disa aktariliyor ki cagiranlar tek yerden alsin.
+export {
+  KOD_PENCERESI_GUN, ODUL_DERINLIGI, ODUL_TAVANI, ODUL_TOZ, kodTemizle,
+};
 
 export class ReferralError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
@@ -38,26 +48,6 @@ export class ReferralError extends Error {
  * kaybolması demek — ve kimse "yanlış harf yazdım" diye şikâyet etmez,
  * sadece bir daha denemez.
  */
-const ALFABE = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-const KOD_UZUNLUK = 6;
-
-/** Ödülün açıldığı derinlik — botun ödemesi gereken ZAMAN */
-export const ODUL_DERINLIGI = 10;
-
-/** İki tarafın da aldığı toz */
-export const ODUL_TOZ = 150;
-
-/**
- * Bir oyuncunun ödül kazanabileceği en fazla davet.
- *
- * ⚠️ TAVAN ŞART. Tozun kendisi küçük ama tavansız bir musluk, ölçeklendiği
- * an ölçülemez hale gelir. 25 davet = 3.750 toz ≈ iki legendary'nin altı.
- */
-export const ODUL_TAVANI = 25;
-
-/** Yeni hesabın kod girebileceği süre (gün) */
-export const KOD_PENCERESI_GUN = 7;
-
 function kodUret(): string {
   let out = '';
   for (let i = 0; i < KOD_UZUNLUK; i++) {
@@ -66,16 +56,6 @@ function kodUret(): string {
   return out;
 }
 
-/** Girilen kodu normalleştir — küçük harf ve boşluk kabul edilir */
-export function kodTemizle(ham: unknown): string | null {
-  if (typeof ham !== 'string') return null;
-  const t = ham.trim().toUpperCase().replace(/\s+/g, '');
-  if (t.length !== KOD_UZUNLUK) return null;
-  // ⚠️ Alfabede olmayan bir harf = yazım hatası; sessizce "bulunamadı"
-  // demek yerine burada eleniyor.
-  if (![...t].every((c) => ALFABE.includes(c))) return null;
-  return t;
-}
 
 /**
  * Oyuncunun kodu — yoksa üret.
