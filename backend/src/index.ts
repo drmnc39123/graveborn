@@ -20,6 +20,7 @@ import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from '
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
+import { ReferralError, kodGir, odulKontrol, referralDurum } from './referral.js';
 import { ossuarySolPrice, solPrice } from '@game/solPrice';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
@@ -128,7 +129,7 @@ for (const yol of [
   // ⚠️ SOL uçları da BURADA olmak zorunda: her deneme bir zincir okuması
   // (RPC) tetikliyor ve sınırsız bırakılırsa özel sağlayıcı kotasını
   // yakmanın en ucuz yolu olurdu.
-  '/me/card',
+  '/me/card', '/referral', '/referral/enter',
   '/sol/quote', '/sol/blockhash', '/reliquary/pull-sol', '/ossuary/raise-sol',
   '/guild/create-sol', '/guild/upgrade-sol', '/vigil/buy-sol', '/vigil/claim',
 ]) app.use(yol, paraLimiti);
@@ -917,6 +918,29 @@ app.get('/me/card', wrap(async (req, res) => {
   });
 }));
 
+// ── DAVET ──
+//
+// ⚠️ ÖDÜL KAYIT ANINDA VERİLMİYOR (bkz. referral.ts başlığı): bir cüzdan
+// üretmek bedava, bin cüzdan da bedava. Ödül davet edilenin OYNAMASINA
+// bağlı — botun ödemesi gereken şey cüzdan değil zaman.
+app.get('/referral', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  res.json(await referralDurum(wallet));
+}));
+
+app.post('/referral/enter', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    await kodGir(wallet, (req.body as { code?: unknown } | null)?.code);
+    res.json(await referralDurum(wallet));
+  } catch (e) {
+    if (e instanceof ReferralError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
 app.get('/worldboss', wrap(async (req, res) => {
   /**
    * ⚠️ KAPANMIŞ HAFTALARIN ÖDÜLÜ BURADA DAĞITILIYOR (`settleBarrow`) —
@@ -1631,6 +1655,20 @@ app.post('/run/finish', wrap(async (req, res) => {
     await trackQuest(wallet, 'run', 1);
     if (run.mode === 'descent') await trackQuest(wallet, 'depth', ulasilan);
   }
+
+  /**
+   * ⭐ DAVET ÖDÜL KAPISI — sunucunun KABUL ETTİĞİ derinlikten.
+   *
+   * ⚠️ `ulasilan` kullanılıyor, istemcinin iddiası değil: `settleRun` onu
+   * zaten kırpıyor. İddiaya baksaydık bir bot "derinlik 10'a indim" deyip
+   * ödülü alırdı ve sistemin bütün bot direnci o tek satırda çökerdi.
+   *
+   * ⚠️ Ucuz: ödül ödendiyse ya da davetçi yoksa tek alan okumasıyla çıkar.
+   * ⚠️ Hata koşuyu DÜŞÜRMEMELİ — oyuncunun gold'u davet ödülünden önemli.
+   */
+  void odulKontrol(wallet, ulasilan).catch((e) => {
+    console.error('[davet-odul]', wallet, String(e).slice(0, 80));
+  });
 
   res.json({
     progress: toProgress(saved),

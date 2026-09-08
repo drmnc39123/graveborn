@@ -32,20 +32,29 @@ model Player {
   depthPaid  Json @default("{}")
   /// Forge yükseltmeleri: id → seviye
   upgrades   Json @default("{}")
+
+  // ── DAVET ────────────────────────────────────────────────────────
+  /// Bu oyuncunun paylastigi kod. Ilk istendiginde uretilir.
+  /// ⚠️ @unique: iki oyuncuya ayni kod dusemez — kod bir KIMLIK.
+  refCode     String? @unique
+  /// Kimin koduyla geldi (cuzdan). BIR KEZ yazilir, sonra degismez.
+  referredBy  String?
+  /// Davet odulu odendi mi — cift odemeyi VERITABANI seviyesinde engeller
+  refRewarded Boolean @default(false)
   /// Pedlar's Stall'dan alınmış, koşuya taşınan tılsımlar (charms.ts id'leri)
   /// ⚠️ Koşu AÇILDIĞINDA tüketilir — koşuyu başlatıp çıkmak tılsımı kurtarmaz
-  charms     Json @default("[]")
+  charms      Json    @default("[]")
 
   /// The Reliquary'den çıkmış kozmetikler (cosmetics.ts id'leri)
   /// ⚠️ SADECE GÖRÜNÜR — hiçbiri stat/güç vermez. Gold'un sonsuz talebi bu
   /// koldan geliyor; güç satan ikinci bir sink P2W sarmalını ikiye katlardı.
-  cosmetics    Json  @default("[]")
+  cosmetics    Json    @default("[]")
   /// yuva → takılı kozmetik id'si
-  equipped     Json  @default("{}")
+  equipped     Json    @default("{}")
   /// tekrar çıkan kozmetiklerden biriken toz
-  dust         Int   @default(0)
+  dust         Int     @default(0)
   /// anıt seviyesi — TAVANI YOK, ekonominin dipsiz kovası (bkz. ossuary.ts)
-  ossuary      Int   @default(0)
+  ossuary      Int     @default(0)
   /// THE LONG VIGIL karti alindi mi (SOL, tek seferlik ve kalici)
   /// ⚠️ Kart GUC VERMEZ — actigi yolun her odulu kozmetik ve toz.
   /// ⚠️ Bu alani yazan TEK yer `/vigil/buy-sol`; `fromProgress` bilerek
@@ -56,7 +65,7 @@ model Player {
   /// KURULMUŞ bahis (henüz yanmadı). Koşu AÇILIRKEN Run satırına taşınır.
   wager        Json?
   /// alınmış başarımlar (achievements.ts id'leri)
-  achievements Json  @default("[]")
+  achievements Json    @default("[]")
 
   /// Beceri ağacı dağılımı (skills.ts düğüm id'leri).
   /// ⚠️ Puan BU ALANDA TUTULMUYOR — `depthPaid`'ten türetiliyor (bkz.
@@ -173,6 +182,9 @@ model Player {
   @@index([bestRating])
   @@index([guildId])
   @@index([seasonWeek, seasonRating])
+  /// ⚠️ Davet sayimi icin: "kac kisi benim kodumla geldi" sorgusu bu
+  /// indeks olmadan tam tarama yapardi.
+  @@index([referredBy])
 }
 
 // Bir koşu. POST /run/start ile AÇILIR, /run/finish ile KAPANIR.
