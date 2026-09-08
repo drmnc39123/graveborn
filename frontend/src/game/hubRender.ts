@@ -8,6 +8,7 @@
 // PERFORMANS: sadece kameraya girenler çiziliyor.
 
 import { C, FONT } from '@/lib/theme';
+import { minimapIc, minimapKutusu } from './hudLayout';
 import { cosmeticById } from './cosmetics';
 import { drawActor, drawFrame, playerArt, villagerArt } from './sprites';
 import { DOOR_RADIUS, HUB_PLAYER, PORTAL_RADIUS, type HubState, type Villager } from './hub';
@@ -282,6 +283,14 @@ export function renderHub(
    * aynısı (bkz. `render.ts` `drawGhosts`).
    */
   oyuncular: readonly KoyOyuncu[] = [],
+  /**
+   * Rıhtımın ÖLÇÜLEN yüksekliği ve sol kenarı (`BuildingDock` bildiriyor).
+   * ⚠️ Minimap bunları görmek ZORUNDA: rıhtım satır sarınca hem uzuyor hem
+   * yükseliyor ve sabit `y = 14`'te çizilen minimapın üstüne biniyordu —
+   * tablet ve dizüstü genişliklerinde kullanıcının bildirdiği hata buydu.
+   * ⚠️ Varsayılan 0: `hub.test` gibi çağıranlar bunu vermek zorunda kalmasın.
+   */
+  navbarH = 0, navbarSol = 0,
 ) {
   const world = s.world;
 
@@ -363,7 +372,7 @@ export function renderHub(
   ctx.restore();
 
   drawVignette(ctx, w, h);
-  drawMinimap(ctx, s, w);
+  drawMinimap(ctx, s, w, navbarH, navbarSol);
 }
 
 /** Bu nesne oyuncunun üstünü örtüyor mu (gövdesi oyuncuyu kapsıyor mu)? */
@@ -661,7 +670,7 @@ function drawTerrain(
 // ── MİNİ HARİTA ───────────────────────────────────────────────────────
 let miniBase: HTMLCanvasElement | null = null;
 let miniFor: MapWorld | null = null;
-const MINI_W = 172, MINI_H = 116;
+
 
 function buildMiniBase(world: MapWorld) {
   const c = document.createElement('canvas');
@@ -685,30 +694,31 @@ function buildMiniBase(world: MapWorld) {
   return c;
 }
 
-function drawMinimap(ctx: CanvasRenderingContext2D, s: HubState, w: number) {
+function drawMinimap(
+  ctx: CanvasRenderingContext2D, s: HubState, w: number,
+  navbarH: number, navbarSol: number,
+) {
   const world = s.world;
   if (miniFor !== world) { miniBase = buildMiniBase(world); miniFor = world; }
   if (!miniBase) return;
   /**
-   * ⚠️ DAR EKRANDA KÜÇÜLÜYOR — telefonda navbar ile aynı bandı paylaşıyor.
-   * ⚠️ ORAN ÖLÇÜMLE SEÇİLDİ, TAHMİNLE DEĞİL (375 px):
-   *   1,0 → minimap x 189..361, çubuk 10..312 → 123 px çakışma
-   *   0,8 → minimap x 223..361, çubuk 10..232 →   9 px çakışma
-   *   0,7 → minimap x 241..361, çubuk 10..232 →   9 px BOŞLUK ✅
-   * Çubuk kısaltıldıktan (GOLD kelimesi ve $GRAVE düştükten) SONRA bile
-   * 0,8 yetmiyordu; sayı burada duruyor ki bir daha tahminle oynanmasın.
+   * ⚠️ KUTU ARTIK `game/hudLayout.ts`TEN GELİYOR, burada hesaplanmıyor.
+   * Aynı dikdörtgeni sağ kolon da (etkinlik · duyuru · hazır olan) okuyor;
+   * iki yere yazıldığında dar ekranda 47 px havada duran bir boşluk ve
+   * 52 px'lik bir hizasızlık üretiyordu (bkz. o dosyanın başlığı).
+   * ⚠️ Rıhtımın altına inme kararı da orada — minimap eskiden navbarı hiç
+   * görmüyordu ve ara genişliklerde üstüne biniyordu.
    */
-  const dar = w < 640;
-  const mw = dar ? Math.round(MINI_W * 0.7) : MINI_W;
-  const mh = dar ? Math.round(MINI_H * 0.7) : MINI_H;
-  const x = w - mw - 14, y = 14;
+  const kutu = minimapKutusu(w, navbarH, navbarSol);
+  const ic = minimapIc(kutu);
+  const mw = ic.w, mh = ic.h, x = ic.x, y = ic.y;
 
   ctx.save();
   ctx.fillStyle = 'rgba(10,8,6,0.82)';
-  ctx.fillRect(x - 4, y - 4, mw + 8, mh + 8);
+  ctx.fillRect(kutu.x, kutu.y, kutu.w, kutu.h);
   ctx.strokeStyle = 'rgba(227,216,192,0.28)';
   ctx.lineWidth = 2;
-  ctx.strokeRect(x - 4, y - 4, mw + 8, mh + 8);
+  ctx.strokeRect(kutu.x, kutu.y, kutu.w, kutu.h);
 
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha = 0.92;

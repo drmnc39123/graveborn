@@ -3,9 +3,10 @@
 // Hub'da gezersin, Warden's Post'tan bölüm seçersin, bölüm biter/ölürsün,
 // gold TAVANA GÖRE cüzdana yazılır ve hub'a dönersin.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
+import { sagKolon } from '@/game/hudLayout';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
@@ -362,6 +363,19 @@ export default function PlayPage() {
   /** rıhtımın ölçülen yüksekliği — panel boşluğu buna göre (bkz. BuildingDock) */
   const [dockH, setDockH] = useState(78);
   /**
+   * Görünür genişlik — sağ kolonun konumu buna bağlı.
+   * ⚠️ Sunucuda `window` yok; ilk değer 0 ve ilk karede ölçülüyor.
+   * ⚠️ `resize` dinleniyor: pencere daraltıldığında minimap küçülüyor ve
+   * kolonun onunla birlikte kayması gerekiyor.
+   */
+  const [ekranW, setEkranW] = useState(0);
+  useEffect(() => {
+    const olc = () => setEkranW(window.innerWidth);
+    olc();
+    window.addEventListener('resize', olc);
+    return () => window.removeEventListener('resize', olc);
+  }, []);
+  /**
    * İlk koşu çağrısı kapatıldı mı — SADECE bu oturum için.
    *
    * ⚠️ Kalıcı olarak saklanmıyor: koşuyu bitiren oyuncuda `isNewcomer`
@@ -409,6 +423,9 @@ export default function PlayPage() {
   }, []);
 
   const onEnter = useCallback((id: BuildingId) => hedefiAc(id), [hedefiAc]);
+
+  /** Minimapın altındaki kart sütunu — kutuyla AYNI kaynaktan (bkz. `hudLayout`) */
+  const kolon = useMemo(() => sagKolon(ekranW, dockH, dockLeft), [ekranW, dockH, dockLeft]);
 
   /**
    * ⚠️ SON KAHRAMAN KAYDI UÇUŞTA MI — düello brifingi bunu BEKLEMEK ZORUNDA.
@@ -697,6 +714,11 @@ export default function PlayPage() {
       <MotionStyles />
       <HubCanvas
         hero={(progress ?? loadProgress()).hero}
+        // ⚠️ Minimap rıhtımı GÖRMEK ZORUNDA: sabit `y = 14`'te çiziliyordu
+        // ve rıhtım satır sarınca üstüne biniyordu (kullanıcı bildirimi:
+        // tablet/mobil/dizüstü). Bu iki değer zaten ölçülüyor.
+        navbarH={dockH}
+        navbarSol={dockLeft}
         onEnterBuilding={onEnter}
         // Dövüş portalı doğrudan bölüm BAŞLATMAZ, seçim panelini açar.
         // (HubCanvas burada os(0) çağırıyordu; stageById(0) undefined olduğu
@@ -800,7 +822,18 @@ export default function PlayPage() {
           kapatmıyor. */}
       {!panel && progress && (
         <div style={{
-          position: 'absolute', top: 146, right: 10, zIndex: 6, width: 180,
+          /**
+           * ⚠️ KONUM VE GENİŞLİK MİNİMAPIN KUTUSUNDAN TÜRÜYOR, sabit
+           * yazılmıyor. `top: 146` · `width: 180` yazılıydı ve o sayılar
+           * YALNIZ tam boy minimap için doğruydu: dar ekranda minimap %70'e
+           * düşüyor, kutu y 99'da bitiyor — kart 146'da başlayınca 47 px
+           * havada duran bir boşluk kalıyor ve 180 px'lik kart 128 px'lik
+           * minimaptan soldan 52 px taşıyordu. Ölçüldü (375 px).
+           * ⚠️ `sagKolon` rıhtımı da hesaba katıyor; minimap aşağı inerse
+           * kart da onunla iniyor.
+           */
+          position: 'absolute', zIndex: 6,
+          top: kolon.y, right: kolon.right, width: kolon.w,
           display: 'flex', flexDirection: 'column', gap: 8,
         }}>
           <EventBanner />

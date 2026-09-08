@@ -20,10 +20,21 @@ type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
 // Cüzdan ve bina rıhtımı artık play/page.tsx'te (BuildingDock) — bu bileşen
 // sadece sahneyi ve sahneye ait istemleri yönetir.
 export function HubCanvas({
-  onEnterBuilding, onEnterStage, hero,
+  onEnterBuilding, onEnterStage, hero, navbarH = 0, navbarSol = 0,
 }: {
   onEnterBuilding: (id: string) => void;
   onEnterStage: (stageId: number) => void;
+  /**
+   * Rıhtımın ÖLÇÜLEN yüksekliği ve sol kenarı.
+   *
+   * ⚠️ MİNİMAP BUNLARI GÖRMEK ZORUNDA. Canvas'ın içinde sabit `y = 14`'te
+   * çiziliyordu ve rıhtım satır sarınca üstüne biniyordu — kullanıcının
+   * tablet/dizüstü şikâyeti buydu. Sayfa bu iki değeri zaten ölçüyor
+   * (`BuildingDock` `onHeight`/`onLeft`); ölçülmüş bir sayıyı kullanmamak
+   * yerine buradan geçiriyoruz.
+   */
+  navbarH?: number;
+  navbarSol?: number;
   /**
    * Köyde yürüyecek karakter.
    *
@@ -38,6 +49,14 @@ export function HubCanvas({
   const stickRef = useRef({ active: false, dx: 0, dy: 0 });
   const cbRef = useRef({ onEnterBuilding, onEnterStage });
   cbRef.current = { onEnterBuilding, onEnterStage };
+  /**
+   * ⚠️ REF, EFEKT BAĞIMLILIĞI DEĞİL. Rıhtım yüksekliği pencere her
+   * boyutlandığında değişiyor; bağımlılık listesine konsaydı çizim döngüsü
+   * yeniden kurulur, `hub` durumu sıfırlanır ve oyuncu köyün ortasına
+   * ışınlanırdı. Döngü her karede ref'ten okuyor.
+   */
+  const navbarRef = useRef({ h: navbarH, sol: navbarSol });
+  navbarRef.current = { h: navbarH, sol: navbarSol };
   /**
    * ⚠️ `hero` EFEKT BAĞIMLILIĞINA KONMUYOR. Konsaydı karakter değişince
    * bütün köy yeniden kurulur (`createHub`) ve oyuncunun konumu spawn'a
@@ -226,7 +245,8 @@ export function HubCanvas({
           // oyunun kendisi olmaz.
           const s = koyTutamagi();
           if (s) s.push(hub.x, hub.y, hub.facingRight);
-          renderHub(ctx, hub, cssW, cssH, dpr, t, s?.ghosts ?? []);
+          renderHub(ctx, hub, cssW, cssH, dpr, t, s?.ghosts ?? [],
+            navbarRef.current.h, navbarRef.current.sol);
           return {
             x: hub.x, y: hub.y, cssW, cssH, dpr,
             // Ölçüm için: kaç hayalet geldi, nerede, balonu var mı
@@ -261,7 +281,8 @@ export function HubCanvas({
         const sohbet = koyTutamagi();
         if (sohbet) sohbet.push(hub.x, hub.y, hub.facingRight);
 
-        renderHub(ctx, hub, cssW, cssH, dpr, t, sohbet?.ghosts ?? []);
+        renderHub(ctx, hub, cssW, cssH, dpr, t, sohbet?.ghosts ?? [],
+          navbarRef.current.h, navbarRef.current.sol);
         cubukCiz(ctx, stickRef.current, dpr);
 
         // React state ~10Hz — her frame güncellemek re-render fırtınası olur
