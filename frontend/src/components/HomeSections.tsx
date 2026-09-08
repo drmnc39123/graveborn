@@ -10,8 +10,19 @@
 // yazmak en kolay güven kaybı olurdu ve $GRAVE henüz yokken zaten şüphe
 // uyandıran bir sayfa.
 //
-// ⚠️ SSS'te olmayan şeye "var" DEMİYORUZ: token çıkmadı, canlı çok oyunculu
-// boss odası yapılıyor. İkisi de açıkça öyle yazılı.
+// ⚠️ SSS'te olmayan şeye "var" DEMİYORUZ: token çıkmadı ve öyle yazılı.
+//
+// 🔴 AMA "VAR OLANA YOK DEMEK" DE AYNI HATA — VE BU SAYFA ONU YAPTI.
+// "Being built" bölümü *"Still coming: seeing each other in the boss room"*
+// diyordu; oysa canlı boss odası ÇOKTAN geldi (`joinBossRoom`) ve SSS'in
+// kendisi aynı sayfada "Yes, in real time" diye cevaplıyordu. İki cümle
+// birbirini yalanlıyordu. Bir özellik gönderildiğinde SSS güncellendi,
+// durum satırı unutuldu.
+//
+// ⚠️ DERS: bu dosyada bir özellik adı geçiyorsa, o özellik değiştiğinde
+// BURASI DA değişmeli. Sayılabilir olan her şey (bölüm sayısı, kozmetik
+// sayısı, Forge maliyeti, kapı sayısı) canlı hesaplanıyor ki elle yazılan
+// sayı bayatlamasın; anlatı cümleleri o korumaya sahip değil.
 
 import { useEffect, useState } from 'react';
 import { STAGES } from '@/game/config';
@@ -96,6 +107,17 @@ const FEATURES: { title: string; body: string; tag: string }[] = [
     body: 'Stake gold that your next run goes deeper than you ever have. Win and the dead pay you in dust. Lose and it stays down there.',
   },
   {
+    /**
+     * 🔴 EKSİKTİ. THE PIT canlı (`play/page.tsx` → `setScreen({kind:'arena'})`,
+     * gerçek zamanlı 1v1, lockstep) ve ana sayfada TEK KELİMEYLE bile
+     * geçmiyordu. Oyunun en çok anlatılası özelliklerinden biri, tanıtım
+     * sayfasında yoktu.
+     */
+    tag: 'THE PIT',
+    title: 'Same arena, same waves',
+    body: 'Live 1v1 against another player: identical spawns, identical drops, no advantage either way. Last one standing takes it. If nobody is around, you can answer a recorded run instead.',
+  },
+  {
     tag: 'THE SHARED BARROW',
     title: 'One grave, everyone',
     body: 'A world boss every week with a single pool of health. Nobody takes it down alone — every hit anyone lands comes off the same wound.',
@@ -119,7 +141,24 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: 'Is this pay-to-win?',
-    a: 'Gold buys permanent power at the Forge — that is a real trade-off and we are not hiding it. Everything else gold buys is appearance only. Depth is gated by survival, not by spending.',
+    /**
+     * 🔴 CEVAP EKSİKTİ VE ANA SAYFAYI CODEX'TEN DAHA AZ DÜRÜST YAPIYORDU.
+     *
+     * Eski hâli yalnız GOLD'dan bahsediyordu: "Gold buys permanent power at
+     * the Forge… Everything else gold buys is appearance only." Bunu okuyan
+     * ziyaretçi "gerçek parayla önemli bir şey alınmıyor" sonucuna varır.
+     * Starter Pack geldiğinden beri bu DOĞRU DEĞİL: paket 1.000 gold ve
+     * OYNAYARAK AÇILAMAYAN bir kahraman taşıyor.
+     *
+     * Codex bunu zaten açıkça yazıyor (`codex.ts`, "What SOL can and cannot
+     * buy"): *"The season card is the one place where real money buys
+     * something that changes a run."* İki metin ayrışmıştı — ve ayrışan
+     * taraf, ziyaretçinin İLK okuduğu taraftı.
+     *
+     * ⚠️ Cevap yumuşatılmadı, GENİŞLETİLDİ. Bir istisnayı saklamak, onu
+     * kabul etmekten pahalıdır: oyuncu paketi görünce zaten öğreniyor.
+     */
+    a: 'Partly, and we will not dance around it. Gold buys permanent power at the Forge, and the Starter Pack is the one place real money buys something that changes a run — it carries gold and a hero that cannot be unlocked by playing. Everything else that decides a fight (the Forge, the Stall, gear, paths, pets) takes gold and play only, and none of them has a payment button. Depth itself cannot be bought at any price.',
   },
   {
     q: 'Do I need a wallet to try it?',
@@ -219,7 +258,7 @@ export function HomeSections() {
       )}
 
       {/* ── ÖZELLİKLER ── */}
-      <Section kicker="WHAT IS IN THERE" title="Six doors off the square">
+      <Section kicker="WHAT IS IN THERE" title={`${FEATURES.length} doors off the square`}>
         <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(min(250px, 100%), 1fr))' }}>
           {FEATURES.map((f) => (
             <div key={f.tag} style={{ ...box(), padding: '15px 14px' }}>
@@ -314,9 +353,9 @@ export function HomeSections() {
       <Section kicker="WHERE THIS IS" title="Being built, in the open">
         <div style={{ ...box(), padding: '15px 14px', fontSize: 12, color: C.boneDim, lineHeight: 1.65 }}>
           The game is playable end to end: {STAGES.length} stages, the endless Descent,
-          the Forge ({treeTotalCost().toLocaleString('en-US')} gold of upgrades), the Reliquary,
-          the monument, wagers, deeds and a weekly world boss. Still coming: seeing each other
-          in the boss room, and the token side of the marketplace.
+          the Forge ({treeTotalCost().toLocaleString('en-US')} gold of upgrades), gear and the
+          Wilderness, pets, live 1v1 in the Pit, guilds, the Reliquary, the monument, wagers,
+          deeds and a weekly world boss. Still coming: the token side of the marketplace.
         </div>
       </Section>
     </div>

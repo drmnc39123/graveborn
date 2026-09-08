@@ -381,5 +381,75 @@ console.log('\n[9] ** WHITEPAPER SAYFASI (/codex)');
   check('uydurma desen bulunmuyor (kontrol grubu)', !/codexZZZ/.test(sayfa + nav));
 }
 
+console.log('\n[9] ** ANA SAYFA KENDI KENDISIYLE CELISMIYOR');
+{
+  /**
+   * 🔴 ANA SAYFA BIR SURE BOYUNCA IKI SEY BIRDEN SOYLEDI.
+   *
+   * "Being built" bolumu *"Still coming: seeing each other in the boss
+   * room"* diyordu; oysa canli boss odasi COKTAN gelmisti (`joinBossRoom`)
+   * ve AYNI SAYFADAKI SSS *"Yes. You see everyone else moving in the room
+   * with you, in real time."* diye cevapliyordu. Ozellik gonderildiginde
+   * SSS guncellendi, durum satiri unutuldu.
+   *
+   * Bu, uydurma bir iddiadan farkli ama ayni derecede pahali: var olani
+   * yok gostermek, ziyaretciye oyunu OLDUGUNDAN EKSIK tanitir.
+   */
+  /**
+   * ⚠️ YORUMLAR SOYULUYOR — VE BUNU ILK SURUM UNUTTU.
+   *
+   * Mühür 3 kontrolde kirmizi yandi ve sebep KODDA DEGIL, kendi
+   * belgelendirmemdeydi: dosyanin basina "eskiden *Still coming: seeing
+   * each other in the boss room* yaziyordu" diye bir aciklama koymustum ve
+   * tarama o cumleyi YAYINDAKI METIN sandi.
+   *
+   * Bir mühür GONDERILEN metni olcmeli; gecmisi anlatan bir yorumu ihlal
+   * saymak, dogru olan belgelendirmeyi cezalandirmak olurdu.
+   */
+  const ana = yorumsuz(oku('src/components/HomeSections.tsx'));
+  const canliOda = oku('src/components/GameCanvas.tsx').includes('joinBossRoom()');
+  check('canli boss odasi GERCEKTEN var (kontrol grubu)', canliOda);
+  check('SSS canli odayi "evet" diye cevapliyor',
+    /Can I see other players in the boss room[\s\S]{0,400}Yes\./.test(ana));
+  check('durum satiri onu "yakinda" DEMIYOR',
+    !/Still coming:[\s\S]{0,160}boss room/.test(ana));
+
+  /**
+   * 🔴 ODEME DURUSTLUGU: ana sayfa CODEX'TEN DAHA AZ DURUST OLAMAZ.
+   *
+   * "Is this pay-to-win?" cevabi yalniz GOLD'dan bahsediyordu. Starter Pack
+   * geldiginden beri gercek para 1.000 gold ve OYNAYARAK ACILAMAYAN bir
+   * kahraman satiyor. Codex bunu acikca yaziyor; ana sayfa yazmiyordu — ve
+   * ayrisan taraf ziyaretcinin ILK okudugu taraftı.
+   */
+  const cdx = oku('src/game/codex.ts');
+  check('codex SOL istisnasini yaziyor (kontrol grubu)',
+    cdx.includes('real money buys something that changes a run'));
+  check('ana sayfa da SOL istisnasini yaziyor',
+    /Is this pay-to-win[\s\S]{0,400}real money buys something that changes a run/.test(ana));
+  check('ana sayfa paketin kahraman kilidini soyluyor',
+    /Is this pay-to-win[\s\S]{0,500}cannot be unlocked by playing/.test(ana));
+
+  /**
+   * ⚠️ CANLI OZELLIK ANA SAYFADA GECIYOR MU. THE PIT (gercek zamanli 1v1)
+   * canliydi ve tanitim sayfasinda TEK KELIMEYLE bile gecmiyordu.
+   */
+  const pit = oku('src/app/play/page.tsx').includes("id === 'pit'");
+  check('THE PIT gercekten canli (kontrol grubu)', pit);
+  check('ana sayfa THE PIT"ten bahsediyor', ana.includes('THE PIT'));
+
+  /**
+   * ⚠️ SAYILABILIR HER SEY CANLI HESAPLANMALI — elle yazilan sayi bayatlar.
+   * Bolum basligi "Six doors off the square" idi ve yedinci kapi eklenince
+   * yanlis oldu; artik listeden turuyor.
+   */
+  check('kapi sayisi listeden turuyor (elle yazilmiyor)',
+    ana.includes('${FEATURES.length} doors off the square'));
+  check('bolum sayisi canli', ana.includes('{STAGES.length} stages'));
+  check('kozmetik sayisi canli', ana.includes('{COSMETICS.length} relics'));
+  check('forge maliyeti canli', ana.includes('treeTotalCost()'));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !ana.includes('anaZZZ'));
+}
+
 console.log(`\n${FAIL.length === 0 ? 'CODEX SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);
