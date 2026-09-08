@@ -222,7 +222,24 @@ export function drawStageGround(
   // görünmesin (yükleme sırasında ekran atlıyordu).
   const [r, g, b] = art.tint;
   ctx.fillStyle = `rgb(${Math.round(r * 1.6)},${Math.round(g * 1.6)},${Math.round(b * 1.6)})`;
-  ctx.fillRect(px - w, py - h, w * 2, h * 2);
+  /**
+   * 🔴 TABAN DOLGUSU 4 EKRAN BOYUYORDU, GÖRÜNEN ALAN 1 EKRAN.
+   *
+   * Eski hâli `fillRect(px - w, py - h, w * 2, h * 2)` idi — yani genişliğin
+   * ve yüksekliğin İKİ KATI. Hemen aşağıdaki chunk döngüsü ise görünür
+   * dikdörtgeni doğru biliyor: `px ± w/2, py ± h/2`. Aradaki fark kare
+   * başına **3 ekran alanı** boşa giden düz dolgu — her cihazda, her
+   * kademede, oyunun ilk gününden beri.
+   *
+   * ⚠️ ÖLÇÜLDÜ, TAHMİN DEĞİL: `graphics.probe.mts`e `fillArea` ekseni
+   * eklendi (çağrı saymak dolgu hızını görmüyor — iki `fillRect` de tek
+   * çağrı, biri 4 ekran boyuyor). Ölçülen taban kare başına 8-9 ekran
+   * alanıydı; bunun 4'ü bu tek satırdı.
+   *
+   * ⚠️ 2 px TAŞMA BIRAKILDI: dpr ve kamera yuvarlamasında kenarda bir
+   * piksellik boşluk açılmasın. Maliyeti yok denecek kadar az.
+   */
+  ctx.fillRect(px - w / 2 - 2, py - h / 2 - 2, w + 4, h + 4);
 
   const c0x = Math.floor((px - w / 2) / CHUNK);
   const c0y = Math.floor((py - h / 2) / CHUNK);
