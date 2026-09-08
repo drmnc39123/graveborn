@@ -15,7 +15,9 @@
 //   cd frontend && npx tsx src/game/checkpointDraft.test.mts
 
 import fs from 'node:fs';
-import { DESCENT, checkpointFor, startLevelFor } from './config.js';
+import { DESCENT, STAGES, checkpointFor, startLevelFor } from './config.js';
+import { DEFAULT_HERO } from './heroes.js';
+import { Game } from './engine.js';
 import { allowedStartDepth, emptyProgress, type Progress } from './progress.js';
 
 const FAIL: string[] = [];
@@ -89,6 +91,55 @@ console.log('\n[4] ⭐ AÇIKLAMA EKRANDA DURUYOR MU');
   check('devam ipucu checkpoint aralığını söylüyor', /bossEvery/.test(play));
   // ⚠️ KONTROL GRUBU: tarama her şeye "evet" diyor olabilirdi
   check('uydurma metin bulunmuyor (kontrol grubu)', !/ZZZ_OLMAYAN_METIN/.test(canvas + play));
+}
+
+console.log('\n[5] 🔴 HAVUZ TÜKENİNCE OYUN KİLİTLENMİYOR');
+{
+  /**
+   * 🔴 GERÇEK KİLİTLENME (kullanıcı bildirdi, ultra modda ölçüldü):
+   *   *"tüm skill kartlarını seçtiğimde oyunu açmıyor, oyun donuyor."*
+   *
+   * SEBEP: 4 silahın ve 6 pasifin hepsi tavana ulaşınca `rollOffers` boş
+   * havuz döndürüyordu, ama `levelUp` yine de `phase = 'levelup'`
+   * yazıyordu. Ekranda sıfır kart; `choose()` hiçbir zaman çağrılamaz;
+   * faz asla 'running'e dönmez. Oyun donmuş DEĞİL — SEÇİLEMEYECEK bir
+   * seçimi bekliyor.
+   *
+   * ⚠️ ULTRA MODA ÖZEL DEĞİL. Orada derinlik 201 yüzünden 192 kart
+   * çekildiği için GARANTİ oluyordu; yeterince uzun her koşu aynı duvara
+   * çarpar. Bu yüzden mühür motoru SÜRÜYOR, bir sabiti okumuyor.
+   *
+   * ⚠️ ÖLÇÜM GERÇEK: `Game` kuruluyor ve `step()` ile sürülüyor. Kaynakta
+   * bir `if` aramak, kuralın ÇALIŞTIĞINI değil YAZILDIĞINI kanıtlardı.
+   */
+  const g = new Game(20260908, STAGES[0], {}, 'descent', DEFAULT_HERO, 90);
+  const beklenen = Math.max(0, startLevelFor(90) - 1);
+  check('yüksek derinlik çok sayıda draft üretiyor', beklenen > 60, beklenen + ' kart');
+
+  let secim = 0, bosEkran = 0, adim = 0;
+  // ⚠️ Sayaç testin KENDİSİ donmasın diye; tavan draft sayısının kat kat üstünde.
+  while (g.pendingLevels > 0 && adim++ < 20000) {
+    g.step();
+    if (g.phase === 'levelup') {
+      if (g.offers.length === 0) { bosEkran++; break; }
+      g.choose(g.offers[0].id);
+      secim++;
+    }
+  }
+  check('boş kart ekranı HİÇ açılmadı', bosEkran === 0, bosEkran + ' kez');
+  check('birikmiş seviyeler tükendi (kilit yok)', g.pendingLevels === 0, 'kalan ' + g.pendingLevels);
+  check('koşu oynanır durumda', g.phase === 'running', g.phase);
+  /**
+   * ⚠️ ÇİFT TARAFLI VE ASIL KANIT: havuz GERÇEKTEN tükendi mi? Tükenmediyse
+   * bu bölüm hiçbir şey ölçmemiş olurdu — eski kod da geçerdi. Seçim sayısı
+   * seviye sayısından AZ olmalı: aradaki fark, kart sunulamadığı için
+   * sessizce atlanan seviyelerdir.
+   */
+  check('havuz gerçekten tükendi (kontrol grubu)', secim < beklenen,
+    secim + ' seçim / ' + beklenen + ' seviye');
+  const src = fs.readFileSync('src/game/engine.ts', 'utf8');
+  check('rollOffers KOŞULSUZ çağrılıyor (RNG akışı korunuyor)',
+    src.indexOf('this.rollOffers(h);') < src.indexOf('if (h.offers.length === 0) return;'));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ CHECKPOINT + DRAFT SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

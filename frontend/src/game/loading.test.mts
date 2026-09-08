@@ -36,6 +36,8 @@ const check = (n: string, ok: boolean, d = '') => {
   if (!ok) FAIL.push(n);
 };
 const oku = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+import { zeminHazirMi } from './sprites.js';
+
 const yorumsuz = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
 
 const mw = yorumsuz(oku('src/game/mapWorld.ts'));
@@ -91,6 +93,47 @@ console.log('\n[3] EKSIK GORSELLE CHUNK PISMIYOR (dokunulmadi)');
   const hr = yorumsuz(oku('src/game/hubRender.ts'));
   check('eksik gorselde chunk onbellege ALINMIYOR', /if \(eksik\) return null;/.test(hr));
   check('yedek yol hala var (oyun bos ekran vermez)', /ctx\.fillStyle = '#1e2622'/.test(hr));
+}
+
+console.log('\n[4] ** PERDE ZEMIN CIZILEBILINCE KALKIYOR (ikinci bildirim)');
+{
+  /**
+   * 🔴 KULLANICI IKINCI KEZ BILDIRDI: *"zemin, bina ve bu tarz ne varsa
+   * hala yuklenme ekranindan sonra siyah goruntulerle duzeliyor. Homepage'te
+   * de ayni sekilde."*
+   *
+   * ILK TUR EKSIK KALMISTI: gorselleri onden istemek (bolum [2]) indirmeyi
+   * baslatiyordu ama PERDEYI ERKEN KALDIRMAYI durdurmuyordu. Iki ekran da
+   * "harita geldi" anini "hazir" saniyordu.
+   *
+   * OLCULDU (tarayici, gercek zaman cizelgesi):
+   *     harita JSON'u    : 1604 ms
+   *     ilk zemin gorseli: 2172 ms  <-- perde 1604'te kalkiyordu
+   *     son gorsel       : 2813 ms
+   * Aradaki ~600 ms'de `drawTerrain` eksik karoyu duz koyu dikdortgenle
+   * dolduruyor. "Siyah goruntuler" tam olarak o pencere.
+   *
+   * ⚠️ AG SUCLU DEGIL — olculdu: harita gzip'li 46150 bayt, indirme 17 ms.
+   * Bu yuzden duzeltme indirme sirasinda degil, PERDENIN KALKMA ANINDA.
+   */
+  check('zeminHazirMi disa aciliyor', sp.includes('export function zeminHazirMi('));
+  // ⚠️ ORAN ESIGI: tek bir yavas karo yuzunden sahneyi sonsuza kadar
+  // gizlemek, sorunu daha kotusuyle degistirmek olurdu.
+  check('esik oran ile veriliyor (hepsi degil, cogu)', sp.includes('oran = 0.9'));
+  check('bos palet hazir sayiliyor (sifira bolme yok)', zeminHazirMi([]) === true);
+  // 🔴 ZINCIRIN SON ADIMI IKI EKRANDA DA BAGLI OLMALI
+  const menu = yorumsuz(oku('src/components/MenuBackground.tsx'));
+  check('ana sayfa perdesi zemine bagli', menu.includes('zeminHazirMi(world.palette)'));
+  check('ana sayfa dunyanin gorsellerini de istiyor', menu.includes('preloadWorld(w.palette'));
+  check('koy perdesi zemine bagli', hub.includes('zeminHazirMi(world.palette)'));
+  /**
+   * ⚠️ TAVAN SART VE IKI EKRANDA DA OLMALI. Bozuk tek bir karo yuzunden
+   * koyu ya da ana sayfayi HIC acmamak kabul edilemez; bekleme suresi
+   * sinirli.
+   */
+  check('ana sayfada bekleme tavani var', menu.includes('2500'));
+  check('koyde bekleme tavani var', hub.includes('2500'));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !menu.includes('zeminZZZ'));
 }
 
 console.log(`\n${FAIL.length === 0 ? 'YUKLEME SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);

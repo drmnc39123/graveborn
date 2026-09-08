@@ -144,3 +144,22 @@ export const candleGradientText = {
   WebkitTextFillColor: 'transparent',
   backgroundClip: 'text',
 } as const;
+
+/**
+ * BEKLEME ZEMİNİ — tuval çizmeden önce ekranda duran şey.
+ *
+ * 🔴 NİYE VAR (kullanıcı, iki kez): *"siteye ilk girişte her yer siyah
+ * görünüp sonradan düzeliyor."*
+ *
+ * ÖLÇÜLDÜ: siyahlığın ana bileşeni ağ değil, JS paketinin yüklenip
+ * hidrasyonun bitmesi (~1,6 sn). O süreyi buradan kısaltamayız — ama
+ * DÜZ SİYAH ile TASARLANMIŞ BİR ZEMİN arasındaki fark tamamen bizde.
+ * Düz siyah "bozuk" okunuyor; mezarlık toprağına açan bir gradyan
+ * "yükleniyor" okunuyor.
+ *
+ * ⚠️ TEK KAYNAK: ana sayfa ve köy AYNI zemini kullanıyor. İki yere ayrı
+ * yazılsaydı bir gün ayrışır ve iki ekran farklı renkte beklerdi.
+ * ⚠️ MOR YOK. ⚠️ Saf CSS — JS'siz de boyanır, zaten bütün mesele o.
+ */
+export const BEKLEME_ZEMINI =
+  `radial-gradient(120% 85% at 50% 38%, ${C.soil} 0%, #120d09 45%, ${C.void} 100%)`;

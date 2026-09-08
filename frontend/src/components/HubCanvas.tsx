@@ -7,12 +7,12 @@ import { isLockedBuilding } from '@/game/locked';
 import { createHub, stepHub, warp, type HubState } from '@/game/hub';
 import { renderHub, DEBUG } from '@/game/hubRender';
 import { loadMapWorld } from '@/game/mapWorld';
-import { preloadAll, preloadWorld } from '@/game/sprites';
+import { preloadAll, preloadWorld, zeminHazirMi } from '@/game/sprites';
 import { preloadKit } from '@/components/ui/kit';
 import { isTestMode } from '@/lib/testMode';
 import { koyTutamagi } from '@/lib/chat';
 import { unlockAudio, play } from '@/game/sfx';
-import { C, thinGlass } from '@/lib/theme';
+import { BEKLEME_ZEMINI, C, thinGlass } from '@/lib/theme';
 import { cubukCiz, cubukTak } from '@/lib/stick';
 
 type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
@@ -150,6 +150,37 @@ export function HubCanvas({
        */
       if (world) preloadWorld(world.palette, world.objects.map((o) => o.src));
       if (!world) { setStatus('error'); return; }
+      /**
+       * 🔴 "HAZIR" ARTIK HARİTA GELİNCE DEĞİL, ZEMİN ÇİZİLEBİLİNCE.
+       *
+       * İkinci kullanıcı bildirimi: *"zemin, bina ve bu tarz ne varsa hâlâ
+       * yüklenme ekranından sonra siyah görüntülerle düzeliyor."*
+       *
+       * ÖLÇÜLDÜ (yerel zaman çizelgesi): harita 1604 ms'de hazır, ilk zemin
+       * görseli 2172 ms'de BAŞLIYOR, sonuncusu 2813 ms'de bitiyor. Eski kod
+       * bayrağı 1604'te kaldırıyordu: yükleme perdesi kalkıyor, tuval
+       * açılıyor ve zemin daha YOK — `drawTerrain` eksik karoyu düz koyu
+       * dikdörtgenle dolduruyor. "Siyah görüntüler" tam olarak o 600 ms.
+       *
+       * ⚠️ AĞ SUÇLU DEĞİL: harita gzip'li 46 KB ve 17 ms'de iniyor. Bu
+       * yüzden indirme sırasını değil, PERDENİN NE ZAMAN KALKTIĞINI
+       * düzeltiyoruz.
+       *
+       * ⚠️ SONSUZA KADAR BEKLEMİYOR: 2,5 sn'lik tavan var. Tek bozuk karo
+       * yüzünden köyü hiç açmamak, sorunu daha kötüsüyle değiştirmek olurdu.
+       */
+      await new Promise<void>((coz) => {
+        const basla = performance.now();
+        const bak = () => {
+          if (disposed || zeminHazirMi(world.palette) || performance.now() - basla > 2500) {
+            coz();
+            return;
+          }
+          requestAnimationFrame(bak);
+        };
+        bak();
+      });
+      if (disposed) return;
       setStatus('ready');
       // ⚠️ SEÇİLİ KARAKTERLE. Argümansız çağrı `DEFAULT_HERO`u önden
       // yüklüyordu — yani köy Fire Knight'ın karelerini indirip ekranda
@@ -325,7 +356,7 @@ export function HubCanvas({
   }, []);
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: C.void }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: BEKLEME_ZEMINI }}>
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
 
       {status !== 'ready' && (

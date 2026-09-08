@@ -2453,6 +2453,27 @@ export class Game {
     h.level += 1;
     h.xpNext = xpForLevel(h.level);
     this.rollOffers(h);
+    /**
+     * KART EKRANI YALNIZ KART VARSA ACILIR.
+     *
+     * 🔴 GERCEK KILITLENME (kullanici bildirdi): *"tum skill kartlarini
+     * sectigimde oyunu acmiyor, oyun donuyor."*
+     *
+     * SEBEP: 4 silahin ve 6 pasifin HEPSI tavana ulasinca `rollOffers`
+     * havuzu bos donuyordu. Kod yine de `phase = 'levelup'` yaziyordu:
+     * ekranda sifir kart, `choose()` hicbir zaman cagrilamiyor, faz asla
+     * 'running'e donmuyor. Oyun donmus DEGIL — SECILEMEYECEK bir secimi
+     * bekliyor. Cikis yok, koşu olu.
+     *
+     * ⚠️ ULTRA MODA OZEL DEGIL: derinlik 201'de 192 kart cekildigi icin
+     * orada GARANTI oluyordu, ama yeterince uzun her kosu ayni duvara
+     * carpar. Bu yuzden duzeltme ultra tarafinda degil MOTORDA.
+     *
+     * ⚠️ `rollOffers()` YINE DE CAGRILIYOR (yukarida, kosulsuz): RNG
+     * tuketiyor. Kosula almak seed akisini kaydirir ve gecmis tum
+     * kosularin tekrari bozulurdu.
+     */
+    if (h.offers.length === 0) return;
     this.events.add('levelup');
     this.phase = 'levelup';
   }

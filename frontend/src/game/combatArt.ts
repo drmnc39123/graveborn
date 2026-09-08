@@ -244,7 +244,21 @@ export const PASSIVE_ART: Record<string, { icon: string }> = {
   crown: { icon: `${ICO}/exp_boost.png` },
   coinmask: { icon: `${ICO}/Golden Coin.png` },
   skull: { icon: `${ICO}/Skull.png` },
-  burial: { icon: `${ICO}/ghost_form_(physical_damage_immunity).png` },
+  /**
+   * ⚠️ IKON DEGISTI (kullanici bildirdi): *"Charms tarafinda bir skill
+   * sectigim kutuda resmen Facebook isareti var."*
+   *
+   * Eskisi `ghost_form_(physical_damage_immunity).png` idi: mavi zemin
+   * uzerine beyaz bir hayalet lekesi. 16 px'lik kaynak 26 px'e cizilince
+   * leke bir HARF gibi okunuyor ve mavi kare ile birlesince taniidik bir
+   * sosyal ag simgesine benziyor. Oyunun icinde bir marka gormek, oyunun
+   * icinde olmayan bir sey gormektir.
+   *
+   * Yenisi `negative_status_resistance.png`: altin alevin icinde ayaga
+   * kalkan siluet — "Second Burial" (+1 dirilis) icin birebir ve baska
+   * hicbir pasif tarafindan KULLANILMIYOR (cakisma yok).
+   */
+  burial: { icon: `${ICO}/negative_status_resistance.png` },
   // ── kritik arketipi (SIM_VERSION 2 ile geldi) ──
   edge: { icon: `${ICO}/critical_boost.png` },
   frenzy: { icon: `${ICO}/frenzy_spell_(critical_booster).png` },

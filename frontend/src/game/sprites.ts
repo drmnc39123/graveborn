@@ -670,6 +670,38 @@ export function preload(art: ActorArt, only?: string[]) {
  * ⚠️ `get()` ZATEN ÖNBELLEKLİ VE İDEMPOTENT: ikinci çağrı yeni istek
  * açmıyor. Bu yüzden her dünya yüklemesinde çağrılması güvenli.
  */
+/**
+ * DÜNYANIN ZEMİNİ ÇİZİLEBİLİR DURUMDA MI?
+ *
+ * 🔴 NİYE VAR (kullanıcı bildirimi, ikinci tur): *"zemin, bina ve bu tarz
+ * ne varsa hâlâ yüklenme ekranında siyah görüntülerden sonra düzeliyor.
+ * Homepage'te de aynı şekilde sorun devam ediyor."*
+ *
+ * SEBEP ÖLÇÜLDÜ (yerel, gerçek zaman çizelgesi):
+ *     harita JSON'u   : 1604 ms'de hazır  (gzip'li 46 KB, indirme 17 ms)
+ *     ilk zemin görseli: 2172 ms'de BAŞLIYOR
+ *     son görsel       : 2813 ms
+ * `MenuBackground` "hazır" bayrağını HARİTA gelince kaldırıyordu — yani
+ * yükleme göstergesi 1,6 sn'de kayboluyor, tuval açılıyor ve zemin daha
+ * YOK. O 600 ms'lik pencerede `drawTerrain` eksik karo için düz koyu
+ * dikdörtgen dolduruyor; ekranda gördüğümüz "siyah" tam olarak o.
+ *
+ * ⚠️ AĞ SUÇLU DEĞİL: harita 17 ms'de iniyor. Siyahlığın asıl süresi JS
+ * paketinin yüklenip hidrasyonun bitmesi (0–1587 ms) — onu buradan
+ * hızlandıramayız. Yapabileceğimiz şey, hazır OLMADAN hazır GÖRÜNMEMEK.
+ *
+ * ⚠️ TAMAMI DEĞİL, ÇOĞU: tek bir bozuk/yavaş karo yüzünden sahneyi
+ * sonsuza kadar gizlemek, bir sorunu daha kötüsüyle değiştirmek olurdu.
+ * Eşik `oran` ile veriliyor.
+ */
+export function zeminHazirMi(palette: readonly string[], oran = 0.9): boolean {
+  const liste = palette.filter(Boolean);
+  if (liste.length === 0) return true;
+  let hazir = 0;
+  for (const src of liste) if (get(src)) hazir += 1;
+  return hazir / liste.length >= oran;
+}
+
 export function preloadWorld(palette: readonly string[], objectSrcs: readonly string[]) {
   for (const src of palette) if (src) get(src);
   // ⚠️ Aynı sprite birçok nesnede tekrarlanıyor (ağaç, çit, taş); `Set`

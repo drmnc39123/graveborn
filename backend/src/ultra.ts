@@ -54,6 +54,29 @@ import { hazineAdresi } from './solPay.js';
  */
 export const ULTRA_GOLD = 100_000_000;
 
+/**
+ * ULTRA DERINLIK — her bolumde odenmis sayilan derinlik.
+ *
+ * 🔴 200'DEN 15'E INDI, VE SEBEBI BIR HATA (kullanici bildirdi):
+ * *"Treasury wallet'ta depth 201'e kadar full gozukuyor, tum bolumler ve
+ * tum skill kartlarini sectigimde oyunu acmiyor, oyun donuyor."*
+ *
+ * OLCULDU: checkpoint'ten baslarken verilen seviye
+ * `startLevelFor(d) = 3 + 0,95·(d−2)`. d=201 icin 192 — yani kosu
+ * baslamadan once 192 KART secmek gerekiyordu. Ekran goruntusunde tam
+ * olarak `STARTING DRAFT 76 / 192` yaziyor.
+ *
+ * ⚠️ IKI AYRI HATA VARDI, IKISI DE DUZELDI:
+ *   1. 192 secim (bu sabit) — oynanamaz uzunluk.
+ *   2. Havuz tukenince oyunun kilitlenmesi — o MOTORDA duzeltildi
+ *      (`engine.levelUp`), cunku yeterince uzun HER kosuda olurdu.
+ *
+ * d=15 → 15 kart. Kullanicinin istegi: *"tum derinlikleri 15'e getirelim,
+ * tum bolumleri tek tek deneyerek oynamam lazim."* Test icin dogru sayi
+ * "en yuksek" degil, "her bolumu acan en dusuk"tur.
+ */
+export const ULTRA_DERINLIK = 15;
+
 /** Ultra modda açık sayılan bölüm sayısı — `STAGES.length` çağıran tarafça verilir */
 export function ultraMi(wallet: string | null | undefined): boolean {
   const hazine = hazineAdresi();
@@ -109,14 +132,40 @@ export interface UltraIlerleme {
  * @returns eklenen gold (0 = dokunulmadı) — çağıran deftere yazsın diye
  */
 export function ultraDolumGerekli(gold: number, unlockedStage: number,
-  stageSayisi: number): { gold: number; stage: boolean } {
+  stageSayisi: number, depthPaid?: unknown): { gold: number; stage: boolean; derinlik: boolean } {
   // ⚠️ Yarıya düşünce dolduruluyor: "sınırsız" hissi harcadıkça korunmalı,
   // ama her kuruşta yazma tetiklenmemeli.
   const eksikGold = gold < ULTRA_GOLD / 2 ? ULTRA_GOLD - gold : 0;
-  return { gold: eksikGold, stage: unlockedStage < stageSayisi };
+  return {
+    gold: eksikGold,
+    stage: unlockedStage < stageSayisi,
+    derinlik: derinlikYanlis(depthPaid, stageSayisi),
+  };
 }
 
-export function ultraIlerleme(stageSayisi: number, derinlik = 200): UltraIlerleme {
+/**
+ * Kayittaki derinlik ULTRA_DERINLIK'ten FARKLI mi?
+ *
+ * 🔴 NIYE `<` DEGIL `!==`: dolum sarti "eksikse doldur" olsaydi, 200 yazili
+ * bir hesap 15'e ASLA inmezdi — kullanicinin sikayet ettigi 201 derinlik
+ * tam olarak boyle sikisip kalmisti. Ilk surumde yazma sarti yalniz
+ * `gold > 0 || stage` idi; gold dolu ve bolumler acik oldugu icin
+ * `depthPaid` bir daha HIC guncellenmiyordu. Sabiti degistirmek tek
+ * basina hicbir sey yapmazdi.
+ *
+ * ⚠️ EKSIK BOLUM DE YANLIS SAYILIYOR: yalniz degerlere baksaydim, hic
+ * girilmemis bir bolum (anahtar yok) fark edilmezdi.
+ */
+function derinlikYanlis(depthPaid: unknown, stageSayisi: number): boolean {
+  if (!depthPaid || typeof depthPaid !== 'object') return true;
+  const m = depthPaid as Record<string, unknown>;
+  for (let id = 1; id <= stageSayisi; id++) {
+    if (m[String(id)] !== ULTRA_DERINLIK) return true;
+  }
+  return false;
+}
+
+export function ultraIlerleme(stageSayisi: number, derinlik = ULTRA_DERINLIK): UltraIlerleme {
   const cleared: Record<number, boolean> = {};
   const firstClear: Record<number, boolean> = {};
   const depthPaid: Record<number, number> = {};

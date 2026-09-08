@@ -315,8 +315,11 @@ app.get('/progress', wrap(async (req, res) => {
    * olmasin diye.
    */
   if (ultraMi(wallet)) {
-    const gerek = ultraDolumGerekli(player.gold, player.unlockedStage, STAGES.length);
-    if (gerek.gold > 0 || gerek.stage) {
+    const gerek = ultraDolumGerekli(player.gold, player.unlockedStage, STAGES.length,
+      player.depthPaid);
+    // ⚠️ `gerek.derinlik` DE SART: eskiden yalnız gold/bölüm bakılıyordu ve
+    // kayıttaki 200 derinlik bir daha hiç güncellenmiyordu (bkz. `ultra.ts`).
+    if (gerek.gold > 0 || gerek.stage || gerek.derinlik) {
       const u = ultraIlerleme(STAGES.length);
       await prisma.player.update({
         where: { wallet },

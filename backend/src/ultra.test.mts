@@ -14,7 +14,7 @@
 //   cd backend && npx tsx src/ultra.test.mts
 
 import fs from 'node:fs';
-import { ULTRA_GOLD, ultraDolumGerekli, ultraIlerleme, ultraMi } from './ultra.js';
+import { ULTRA_DERINLIK, ULTRA_GOLD, ultraDolumGerekli, ultraIlerleme, ultraMi } from './ultra.js';
 import { hazineAdresi } from './solPay.js';
 
 const FAIL: string[] = [];
@@ -68,7 +68,21 @@ console.log('\n[2] HER SEY ACIK');
    * puanlari ve Vigil kademelerinin HEPSI ondan turuyor. Yalniz gold
    * vermek "her sey acik" olmazdi.
    */
-  check('derinlik de odenmis sayiliyor', Object.values(u.depthPaid).every((d) => d >= 100));
+  /**
+   * 🔴 DERINLIK 15 — VE BU BIR HATA DUZELTMESI, TERCIH DEGIL.
+   *
+   * Eskiden 200 yaziliyordu. Checkpoint'ten baslarken verilen seviye
+   * `3 + 0,95·(d−2)`; d=201 icin 192 — kosu baslamadan 192 KART secmek
+   * gerekiyordu. Kullanici bildirdi: *"tum skill kartlarini sectigimde
+   * oyunu acmiyor, oyun donuyor."* Ekranda `STARTING DRAFT 76 / 192`.
+   *
+   * ⚠️ UST SINIR DA OLCULUYOR: yalniz `>= 1` deseydim 200'e geri donus
+   * muhrun altindan gecerdi ve tam olarak duzelttigimiz sey geri gelirdi.
+   */
+  check('derinlik ULTRA_DERINLIK (15)',
+    Object.values(u.depthPaid).every((d) => d === ULTRA_DERINLIK) && ULTRA_DERINLIK === 15,
+    String(ULTRA_DERINLIK));
+  check('derinlik oynanamaz yuksekligte DEGIL (cift tarafli)', ULTRA_DERINLIK < 40);
   /**
    * 🔴 KART VERILMIYOR — VE BU BILINCLI. Ilk surum `vigil: true` yaziyordu
    * ve SATIN ALMA EKRANINI GIZLIYORDU: hazine paneli acinca "YOURS"
@@ -126,11 +140,31 @@ console.log('\n[4] ** KAYDA GERCEKTEN YAZIYOR (ilk surum kirikti)');
    * durup duran bir oyuncuda saniyede bir DB yazmasi demekti.
    */
   check('dolum esikli', ultra.includes('gold < ULTRA_GOLD / 2'));
-  check('gerek yoksa yazilmiyor', idx.includes('if (gerek.gold > 0 || gerek.stage)'));
   const g1 = ultraDolumGerekli(0, 1, 25);
   check('bos hesapta dolum GEREKIYOR', g1.gold > 0 && g1.stage);
-  const g2 = ultraDolumGerekli(ULTRA_GOLD, 25, 25);
-  check('dolu hesapta dolum GEREKMIYOR (cift tarafli)', g2.gold === 0 && !g2.stage);
+  const tamDerinlik: Record<string, number> = {};
+  for (let i = 1; i <= 25; i++) tamDerinlik[String(i)] = ULTRA_DERINLIK;
+  const g2 = ultraDolumGerekli(ULTRA_GOLD, 25, 25, tamDerinlik);
+  check('dolu hesapta dolum GEREKMIYOR (cift tarafli)',
+    g2.gold === 0 && !g2.stage && !g2.derinlik);
+
+  /**
+   * 🔴 DERINLIK SAPMASI DA DOLUM SEBEBI.
+   *
+   * Ilk surumde yazma sarti yalniz `gold > 0 || stage` idi. Hesabin gold'u
+   * dolu ve bolumleri acik oldugu icin `depthPaid` BIR DAHA HIC
+   * yazilmiyordu: sabiti 200'den 15'e cekmek kayitta duran 200'u
+   * degistirmiyordu. Sabiti duzeltip yazma sartini duzeltmemek, hicbir
+   * sey duzeltmemekle aynidir.
+   */
+  const eski: Record<string, number> = {};
+  for (let i = 1; i <= 25; i++) eski[String(i)] = 200;
+  check('kayitta 200 duruyorsa dolum GEREKIYOR', ultraDolumGerekli(ULTRA_GOLD, 25, 25, eski).derinlik);
+  check('eksik bolum de dolum gerektiriyor',
+    ultraDolumGerekli(ULTRA_GOLD, 25, 25, { '1': ULTRA_DERINLIK }).derinlik);
+  check('derinlik hic yoksa dolum gerekiyor', ultraDolumGerekli(ULTRA_GOLD, 25, 25, undefined).derinlik);
+  check('yazma sarti derinligi de goruyor',
+    idx.includes('gerek.gold > 0 || gerek.stage || gerek.derinlik'));
 
   /**
    * 🔴 DEFTERE YAZILIYOR: kaynagi gorunmeyen milyonlarca gold,
