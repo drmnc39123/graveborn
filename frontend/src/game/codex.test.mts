@@ -234,7 +234,26 @@ console.log('\n[8] ** PAYLASIM ZINCIRI');
   check('5. sayfa SUNUCU bileseni (X javascript calistirmaz)',
     !/'use client'/.test(sayfa));
   check('6. onbelleklenmiyor (rakam bayatlamasin)', /force-dynamic/.test(sayfa));
-  check('7. insan ziyaretci oyuna yonlendiriliyor', /redirect\(/.test(sayfa));
+  /**
+   * 🔴 SUNUCU YONLENDIRMESI OLMAMALI — URETIMDE OLCULDU (2026-09-09).
+   * `redirect()` kullanan surum HTTP 307 donuyordu; govdede etiketler
+   * vardi ama tarayicilar yonlendirmeyi TAKIP EDER ve hedefin (ana
+   * sayfanin) GENEL kartini gosterir. Paylasimin kisisel tarafi tam da
+   * onu kurdugumuz yerde kaybolurdu.
+   */
+  /**
+   * ⚠️ YORUMLAR SOYULUYOR. Ilk surum HAM metne bakiyordu ve dosyanin
+   * kendi TARIHCE yorumu ("Ilk surum `redirect()` kullaniyordu…") kontrolu
+   * dusuruyordu. Bu depoda ayni alet hatasi marketGuard ve ossuary
+   * taramalarinda da cikti: bir seyden YORUMDA bahsetmek onu YAPMAK degil.
+   */
+  const sayfaKod = yorumsuz(sayfa);
+  check('7a. sunucu yonlendirmesi YOK (tarayici 200 gormeli)',
+    !/redirect\(/.test(sayfaKod) && !/from 'next\/navigation'/.test(sayfaKod));
+  const yon = oku('src/app/s/[code]/Yonlendir.tsx');
+  check('7b. insan ISTEMCIDE yonlendiriliyor', /location\.replace/.test(yon));
+  // ⚠️ JS calismasa da davetiye olu olmamali
+  check("7c. JS calismasa da gecilebilir baglanti var", /<a href=\{`\/\?ref=/.test(sayfa));
   check('8. kod adrese yaziliyor', /\?ref=/.test(sayfa));
 
   const gorsel = oku('src/app/s/[code]/opengraph-image.tsx');

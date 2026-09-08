@@ -9,7 +9,7 @@
 // uretilen bir baslik, paylasimda hic gorunmezdi.
 
 import type { Metadata } from 'next';
-import { redirect } from 'next/navigation';
+import { Yonlendir } from './Yonlendir';
 import { BRAND } from '@/lib/theme';
 
 /**
@@ -67,10 +67,43 @@ export async function generateMetadata(
 }
 
 /**
- * ⚠️ INSAN ZIYARETCI OYUNA GIDER, kartta oyalanmaz. Kart X icin var;
- * tiklayan kisi icin degerli olan sey oyunun kendisi. Kod adrese
- * yaziliyor ki giris ekraninda hazir dursun.
+ * 🔴 SUNUCU YONLENDIRMESI YAPILMIYOR — OLCUMLE KARAR VERILDI.
+ *
+ * Ilk surum `redirect()` kullaniyordu ve uretimde olculdu: yanit
+ * **HTTP 307** donuyordu. Govdede OG etiketleri vardi ama tarayicilar
+ * yonlendirmeyi TAKIP EDER ve o zaman hedefin (ana sayfanin) genel
+ * kartini gosterirler — yani paylasimin KISISEL olan tarafi, tam da onu
+ * kurdugumuz yerde kaybolurdu. "Belki calisir" buyumenin en onemli
+ * yuzeyinde kabul edilebilir bir cevap degil.
+ *
+ * Simdi: sayfa 200 doner ve etiketleri servis eder (tarayicinin gordugu),
+ * insan ziyaretci ise istemci tarafinda oyuna gonderilir (tarayici
+ * JavaScript CALISTIRMAZ, o yuzden karti gorur ve orada kalir).
  */
 export default function PaylasimSayfasi({ params }: { params: { code: string } }) {
-  redirect(`/?ref=${encodeURIComponent(params.code.toUpperCase())}`);
+  const kod = params.code.toUpperCase();
+  return (
+    <main style={{
+      minHeight: '100dvh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24,
+      background: '#14100f', color: '#e3d8c0', textAlign: 'center',
+      fontFamily: 'system-ui, sans-serif',
+    }}>
+      <div style={{ fontSize: 13, letterSpacing: 8, color: '#8a97a3' }}>GRAVEBORN</div>
+      <div style={{ fontSize: 22, color: '#e3d8c0' }}>You were invited.</div>
+      <div style={{ fontSize: 14, color: '#6f6558' }}>
+        Code <strong style={{ color: '#efa72e', letterSpacing: 3 }}>{kod}</strong>
+      </div>
+      {/* ⚠️ Baglanti JS calismasa da isliyor — yonlendirme bir kolaylik,
+          tek yol degil. Betigi engelleyen bir tarayici davetiyeyi olu bir
+          sayfaya cevirmemeli. */}
+      <a href={`/?ref=${encodeURIComponent(kod)}`}
+        style={{
+          marginTop: 6, padding: '10px 22px', borderRadius: 8,
+          border: '1px solid rgba(239,167,46,0.45)', color: '#efa72e',
+          textDecoration: 'none', fontSize: 15, fontWeight: 700,
+        }}>Enter the village</a>
+      <Yonlendir kod={kod} />
+    </main>
+  );
 }
