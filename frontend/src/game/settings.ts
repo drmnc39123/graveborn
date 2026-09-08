@@ -62,6 +62,19 @@ export interface Settings {
    * ya paniğe kapılıp ya da "düzelteyim" diye simülasyona sokabilir.
    */
   quality: QualityTier;
+
+  /**
+   * Oyuncu kademeyi ELLE seçti mi?
+   *
+   * 🔴 NİYE AYRI BİR ALAN: kasma ölçeri "grafiği düşürmek ister misin?"
+   * diye SORMADAN önce bunu soruyor. Seçimini yapmış bir oyuncuya her
+   * oturumda aynı soruyu sormak, cevabını dinlememek demektir.
+   *
+   * ⚠️ `quality !== guessTier()` diye TÜRETİLEMEZ: oyuncu tam da tahminle
+   * aynı kademeyi seçmiş olabilir ve o zaman seçimi görünmez olurdu.
+   * ⚠️ Kalıcı, oturumluk değil — soru bir kez sorulup bir kez cevaplanmalı.
+   */
+  qualityPicked: boolean;
 }
 
 export function defaultSettings(): Settings {
@@ -71,7 +84,7 @@ export function defaultSettings(): Settings {
    * ilk izlenim akıcı olsun. Node'da `guessTier()` her zaman 'normal'
    * döner, mühürler deterministik kalır.
    */
-  return { volume: 0.7, damageNumbers: true, music: true, quality: guessTier() };
+  return { volume: 0.7, damageNumbers: true, music: true, quality: guessTier(), qualityPicked: false };
 }
 
 function clamp01(v: unknown, fallback: number): number {
@@ -91,6 +104,14 @@ export function normalizeSettings(
     damageNumbers: typeof raw.damageNumbers === 'boolean' ? raw.damageNumbers : d.damageNumbers,
     music: typeof raw.music === 'boolean' ? raw.music : d.music,
     quality: kademeGocu(raw, d.quality),
+    /**
+     * ⚠️ ESKİ `lowGraphics: true` KAYDI DA "SEÇİLMİŞ" SAYILIYOR: o oyuncu
+     * zaten bilinçli olarak düşük grafiği açmış. Ona yeniden sormak,
+     * verdiği kararı görmezden gelmek olurdu.
+     */
+    qualityPicked: typeof raw.qualityPicked === 'boolean'
+      ? raw.qualityPicked
+      : raw.lowGraphics === true,
   };
 }
 

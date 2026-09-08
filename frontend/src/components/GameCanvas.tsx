@@ -30,6 +30,7 @@ import { LevelUpCard } from '@/components/LevelUpCard';
 import { BuildRail } from '@/components/BuildRail';
 import { QualityPicker } from '@/components/QualityPicker';
 import { loadSettings, saveSettings } from '@/game/settings';
+import { KasmaOlcer, kareSayilsinMi } from '@/game/autoQuality';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
@@ -241,6 +242,13 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * ve köşede, koşu oynanır kalıyor.
    */
   const [gfxAcik, setGfxAcik] = useState(false);
+  /** kasma önerisi görünür mü — oturumda EN FAZLA bir kez */
+  const [gfxOneri, setGfxOneri] = useState(false);
+  const [gfxRapor, setGfxRapor] = useState({ ortanca: 0, p95: 0, enKotu: 0, kare: 0 });
+  const olcerRef = useRef(new KasmaOlcer());
+  // ⚠️ REF: oyun döngüsü efekt içinde bir kez kuruluyor ve React state'inin
+  // sonraki değerini göremez (`pausedRef` ile aynı gerekçe).
+  const ayarRef = useRef({ qualityPicked: false });
   const [kademe, setKademe] = useState<QualityTier>('normal');
   /**
    * 🔴 SEÇİCİ AKTİF PROFİLİ GÖSTERİR, KAYITTAKİNİ DEĞİL.
@@ -259,8 +267,22 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    */
   useEffect(() => {
     setKademe(quality().tier);
+    ayarRef.current = loadSettings();
     return onQualityChange((p) => setKademe(p.tier));
   }, []);
+
+  /**
+   * ⚠️ RAPOR YALNIZ PANEL AÇIKKEN GÜNCELLENİYOR, ve 2 Hz'de.
+   * Her karede React state yazmak 60 Hz'de re-render fırtınası olurdu —
+   * yani ölçüm aletinin kendisi kasmaya sebep olurdu. HUD zaten aynı
+   * sebeple 12 Hz'de örnekleniyor.
+   */
+  useEffect(() => {
+    if (!gfxAcik) return;
+    const t = setInterval(() => setGfxRapor(olcerRef.current.rapor()), 500);
+    setGfxRapor(olcerRef.current.rapor());
+    return () => clearInterval(t);
+  }, [gfxAcik]);
   const pausedRef = useRef(false);
   // ⚠️ REF ŞART: klavye dinleyicisi efekt içinde BİR KEZ kuruluyor ve
   // kapanışı React state'inin sonraki değerini göremez (`pausedRef` ile
@@ -602,6 +624,30 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
         game.events.clear();
       }
 
+      /**
+       * ⭐ KASMA ÖLÇÜMÜ — ÖLÇER, DEĞİŞTİRMEZ (kullanıcı kararı).
+       *
+       * ⚠️ Kör pencereler `kareSayilsinMi` içinde: gizli sekme, ısınma
+       * süresi, duraklama ve `dt > 100 ms` olan kareler sayılmıyor.
+       * Gizli sekmede tarayıcı `rAF`i saniyede bire düşürüyor — bu depoda
+       * defalarca yanlış teşhise yol açmış bir tuzak; ölçmezsek HERKESE
+       * "oyunun yavaş" derdik.
+       */
+      if (kareSayilsinMi({
+        dtMs: rawDt * 1000,
+        gizli: typeof document !== 'undefined' && document.hidden,
+        kosuSuresiSn: game.time,
+        oynaniyor: game.phase === 'running',
+      })) {
+        olcerRef.current.ekle(rawDt * 1000);
+        // ⚠️ En düşük kademedeyse önerecek bir şey yok — orada takılan
+        // oyuncuya "daha da düşür" demek boş bir dürtme olurdu.
+        if (olcerRef.current.onerMi(ayarRef.current.qualityPicked,
+          quality().tier === 'ultraLow')) {
+          setGfxOneri(true);
+        }
+      }
+
       // fps ölçümü
       frames++;
       fpsTimer += rawDt;
@@ -885,6 +931,48 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
               ve joystick alanını kapatmıyor.
               ⚠️ Genişlik `min(...)` ile: dar ekranda 260 px sert taban
               olsaydı taşardı — bu depoda ölçülmüş bir tuzak. */}
+          {/* ── KASMA ÖNERİSİ ──
+              🔴 OYUN HİÇBİR ŞEYİ KENDİ DEĞİŞTİRMİYOR (kullanıcı kararı:
+              *"sadece öner, oyuncu karar versin"*). Bu şerit yalnız
+              ölçümü bildiriyor ve seçiciyi açmayı teklif ediyor.
+              ⚠️ Oturumda EN FAZLA BİR KEZ (`KasmaOlcer.onerMi`), ve oyuncu
+              daha önce elle kademe seçtiyse HİÇ.
+              ⚠️ Koşuyu engellemiyor: üstte, dar, kapatılabilir. Savaşın
+              ortasında modal açmak, kasmadan daha kötü bir deneyimdir. */}
+          {gfxOneri && !gfxAcik && hud.phase === 'running' && (
+            <div style={{
+              position: 'absolute', zIndex: 8, top: 52, right: 8,
+              width: 'min(250px, calc(100vw - 24px))', pointerEvents: 'auto',
+              padding: '8px 10px', borderRadius: 10,
+              border: `1px solid ${C.candle}66`, background: 'rgba(10,8,6,0.94)',
+            }}>
+              <div style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
+                color: C.candle, letterSpacing: 0.6 }}>
+                RUNNING BELOW 30 FPS
+              </div>
+              <div style={{ marginTop: 3, fontFamily: FONT.ui, fontSize: 9,
+                lineHeight: 1.45, color: C.boneFaint }}>
+                Lower graphics to smooth it out? Nothing about the run changes.
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 7 }}>
+                <button
+                  onClick={() => { setGfxOneri(false); setGfxAcik(true); }}
+                  style={{ all: 'unset', cursor: 'pointer', padding: '4px 9px', borderRadius: 6,
+                    border: `1px solid ${C.candle}`, color: C.candle,
+                    fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 900 }}>
+                  OPEN SETTINGS
+                </button>
+                <button
+                  onClick={() => setGfxOneri(false)}
+                  style={{ all: 'unset', cursor: 'pointer', padding: '4px 9px', borderRadius: 6,
+                    border: `1px solid ${C.border}`, color: C.boneFaint,
+                    fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 900 }}>
+                  DISMISS
+                </button>
+              </div>
+            </div>
+          )}
+
           {gfxAcik && (
             <div style={{
               position: 'absolute', zIndex: 8, top: 52, right: 8,
@@ -907,6 +995,21 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                   {hud.fps} fps
                 </span>
               </div>
+              {/* ── KARE SÜRESİ RAPORU ──
+                  🔴 NİYE VAR: fps sayacı ORTALAMAYI gösteriyor ve kasmayı
+                  GİZLİYOR. Ölçüldü (derinlik 30, 54 düşman): ortanca 1,4 ms
+                  ama p95 16,5 ms, en kötü 22 ms. Yani oyun ortalama hızlı,
+                  karelerin %5'i bütçenin üstünde — oyuncunun "kasma donma"
+                  dediği şey tam olarak bu. Yalnız fps'e bakan biri "sorun
+                  yok" der ve oyuncuyu haksız çıkarır.
+                  ⚠️ Kasmanın gerçek ölçüsü OYUNCUNUN makinesinde alınmalı:
+                  geliştirme sunucusu kuyruğu şişiriyor. Bu satır o ölçümü
+                  oyuncunun eline veriyor. */}
+              <div style={{ marginBottom: 7, fontFamily: FONT.ui, fontSize: 8.5,
+                fontVariantNumeric: 'tabular-nums', color: C.boneFaint }}>
+                frame {gfxRapor.ortanca} ms · slowest 5% {gfxRapor.p95} ms · worst {gfxRapor.enKotu} ms
+                {gfxRapor.kare < 120 && ' (measuring…)'}
+              </div>
               <QualityPicker
                 value={kademe}
                 compact
@@ -919,7 +1022,16 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                    * (`resize`). Biri eksik kalsaydı ayar "çalışıyor gibi"
                    * görünüp en büyük kolu hiç çekmezdi.
                    */
-                  saveSettings({ ...loadSettings(), quality: t });
+                  /**
+                   * ⚠️ `qualityPicked` İŞARETLENİYOR: oyuncu seçimini yaptı,
+                   * kasma ölçeri bir daha "düşürmek ister misin?" diye
+                   * sormayacak. Cevabını dinlemeyen bir soru, sorunun
+                   * kendisinden kötüdür.
+                   */
+                  const y = { ...loadSettings(), quality: t, qualityPicked: true };
+                  saveSettings(y);
+                  ayarRef.current = y;
+                  setGfxOneri(false);
                   applyQuality(t);
                 }}
               />

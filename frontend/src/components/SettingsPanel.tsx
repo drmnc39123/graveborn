@@ -185,7 +185,14 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
           </div>
           <QualityPicker
             value={s.quality}
-            onChange={(t) => patch({ quality: t })}
+            /**
+             * ⚠️ `qualityPicked` DE İŞARETLENİYOR — koşu içi panelle AYNI
+             * kural. Yalnız orada işaretleseydik, köyden kademe seçen
+             * oyuncuya koşuda "düşürmek ister misin?" diye sorulurdu:
+             * aynı kuralın iki yere yazılıp ayrışması, bu depoda tekrar
+             * eden hata.
+             */
+            onChange={(t) => patch({ quality: t, qualityPicked: true })}
           />
           <div style={{ marginTop: 6, fontFamily: FONT.ui, fontSize: 9,
             lineHeight: 1.5, color: C.boneFaint }}>

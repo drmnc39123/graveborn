@@ -19,6 +19,7 @@ import { render } from './render.js';
 import { resetFx } from './fx.js';
 import { normalizeSettings } from './settings.js';
 import { TIER_IDS, applyQuality, guessTier, normalizeTier, profileOf, quality } from './quality.js';
+import { KasmaOlcer, ONERI_ESIGI_MS, kareSayilsinMi } from './autoQuality.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -284,7 +285,17 @@ console.log('\n[5] AYAR GOCU — eski tercih kaybolmuyor');
     guessTier() === 'low' || guessTier() === 'normal', guessTier());
   check('normalizeTier bilinmeyeni yedege dusuruyor', normalizeTier('zzz', 'hd') === 'hd');
   // ⚠️ Alan sayisi degismedi — `settings.test`teki mevcut muhur bunu da olcuyor
-  check('ayar alani sayisi 4 kaldi', Object.keys(normalizeSettings({})).length === 4);
+  check('ayar alanlari: volume · damageNumbers · music · quality · qualityPicked',
+    Object.keys(normalizeSettings({})).length === 5);
+  /**
+   * ⚠️ ESKI `lowGraphics:true` KAYDI "SECILMIS" SAYILIYOR: o oyuncu zaten
+   * bilincli olarak dusuk grafigi acmis. Ona yeniden sormak, verdigi karari
+   * gormezden gelmek olurdu.
+   */
+  check('lowGraphics:true -> secilmis sayiliyor',
+    normalizeSettings({ lowGraphics: true } as never).qualityPicked === true);
+  check('taze oyuncu secmemis sayiliyor (kontrol grubu)',
+    normalizeSettings({}).qualityPicked === false);
 }
 
 console.log('\n[6] TEK KAYNAK — secici iki yerde de AYNI bilesen');
@@ -326,6 +337,79 @@ console.log('\n[6] TEK KAYNAK — secici iki yerde de AYNI bilesen');
     const src = fs.readFileSync(`src/components/${f}`, 'utf8');
     check(`${f} kademeyi uyguluyor`, src.includes('quality().pixelCap'));
   }
+}
+
+console.log('\n[7] ** KASMA OLCERI — olcer, DEGISTIRMEZ');
+{
+  /**
+   * 🔴 KULLANICI KARARI: *"Sadece oner, oyuncu karar versin."* Otomatik
+   * dusurme masadaydi ve REDDEDILDI. Bu bolum onerinin ne zaman
+   * cikacagini — ve daha onemlisi NE ZAMAN CIKMAYACAGINI — kilitliyor.
+   */
+  const o = new KasmaOlcer();
+  // ⚠️ Pencere dolmadan karar YOK: 5 kareye bakip hukum vermek gurultudur.
+  for (let i = 0; i < 50; i++) o.ekle(40);
+  check('pencere dolmadan oneri YOK', !o.onerMi(false, false));
+  for (let i = 0; i < 200; i++) o.ekle(40);
+  check('surekli 40 ms -> ONERIYOR', o.onerMi(false, false));
+  check('oneri oturumda BIR KEZ (ikinci cagri sessiz)', !o.onerMi(false, false));
+
+  /**
+   * ⚠️ ORTANCA, ORTALAMA DEGIL. Tek bir cop toplama sicramasi ortalamayi
+   * ucurur ve OLMAYAN bir kasma bildirir. Ortanca ona kor.
+   */
+  const o2 = new KasmaOlcer();
+  for (let i = 0; i < 130; i++) o2.ekle(10);
+  o2.ekle(3000);   // tek devasa sicrama
+  check('tek sicrama oneri URETMIYOR (ortanca)', !o2.onerMi(false, false),
+    `ortanca ${o2.ortanca()} ms`);
+
+  // ⚠️ Oyuncu elle sectiyse ASLA sorma — cevabini dinlemeyen bir soru,
+  // sorunun kendisinden kotudur.
+  const o3 = new KasmaOlcer();
+  for (let i = 0; i < 130; i++) o3.ekle(60);
+  check('elle secmis oyuncuya SORULMUYOR', !o3.onerMi(true, false));
+  check('en dusuk kademede SORULMUYOR', !o3.onerMi(false, true));
+  // CIFT TARAFLI: ayni olcer, kosullar kalkinca oneriyor
+  check('kosullar kalkinca ONERIYOR (cift tarafli)', o3.onerMi(false, false));
+
+  /**
+   * 🔴 GIZLI SEKME TUZAGI. Arka plandaki sekmede tarayici `rAF`i saniyede
+   * bire dusuruyor — bu depoda 7 kez yanlis teshise yol acmis bir tuzak.
+   * Olcmezsek sekmesini degistiren HERKESE "oyunun yavas" derdik.
+   */
+  const taban = { dtMs: 16, gizli: false, kosuSuresiSn: 10, oynaniyor: true };
+  check('normal kare SAYILIYOR', kareSayilsinMi(taban));
+  check('gizli sekme SAYILMIYOR', !kareSayilsinMi({ ...taban, gizli: true }));
+  check('isinma (ilk 3 sn) SAYILMIYOR', !kareSayilsinMi({ ...taban, kosuSuresiSn: 1 }));
+  check('duraklamis kare SAYILMIYOR', !kareSayilsinMi({ ...taban, oynaniyor: false }));
+  // ⚠️ Sekme uyanmasi / varlik cozme: oyunun yavasligi degil, olcumun gurultusu
+  check('dev sicrama (>100 ms) SAYILMIYOR', !kareSayilsinMi({ ...taban, dtMs: 250 }));
+  check('bozuk dt SAYILMIYOR', !kareSayilsinMi({ ...taban, dtMs: NaN }));
+
+  /**
+   * ⚠️ ESIK YUVARLAK BIR FPS DEGIL. `MAX_CATCHUP = 2` dt'yi 33,3 ms'e
+   * kirpiyor: 30 fps altinda simulasyon kare basina en fazla 2 tick
+   * ilerliyor, yani oyun gorunur bicimde AGIR CEKIME giriyor. Esik o
+   * ucurumun hemen ustunde durmali — altinda kalirsa oyuncu uyariyi
+   * ancak is isten gectikten sonra gorur.
+   */
+  check('esik agir cekim ucurumunun (33,3 ms) ALTINDA', ONERI_ESIGI_MS < 1000 / 30);
+  check('esik 60 fps"i kasma saymiyor', ONERI_ESIGI_MS > 1000 / 60);
+
+  // 🔴 ZINCIRIN SON ADIMI: olcer kosu dongusune GERCEKTEN bagli mi?
+  const gc2 = fs.readFileSync('src/components/GameCanvas.tsx', 'utf8');
+  check('olcer kosu dongusunde besleniyor', gc2.includes('olcerRef.current.ekle('));
+  check('kor pencereler uygulaniyor', gc2.includes('kareSayilsinMi({'));
+  check('oneri seridi ciziliyor', gc2.includes('RUNNING BELOW 30 FPS'));
+  /**
+   * 🔴 OYUN HICBIR SEYI KENDI DEGISTIRMIYOR. `onerMi` yalnizca bir bayrak
+   * kaldiriyor; `applyQuality` cagrisi SADECE oyuncunun tikladigi yerde.
+   */
+  const oneriGovde = gc2.slice(gc2.indexOf('olcerRef.current.onerMi('),
+    gc2.indexOf('// fps ölçümü'));
+  check('oneri dali kademeyi KENDI DEGISTIRMIYOR', !oneriGovde.includes('applyQuality('),
+    oneriGovde.length + ' karakter');
 }
 
 console.log(`\n${FAIL.length === 0 ? 'GRAFIK KADEMESI SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
