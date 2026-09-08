@@ -109,15 +109,52 @@ export function buildMapWorld(doc: MapDoc): MapWorld {
   };
 }
 
-/** Haritayı sunucudan çek (public/map/village.json) */
-export async function loadMapWorld(url = '/map/village.json'): Promise<MapWorld | null> {
-  try {
-    const r = await fetch(url, { cache: 'no-store' });
-    if (!r.ok) return null;
-    const doc = (await r.json()) as MapDoc;
-    if (!doc?.terrain?.data) return null;
-    return buildMapWorld(doc);
-  } catch {
-    return null;
-  }
+/**
+ * OTURUM ÖNBELLEĞİ — harita bir kez çekilir, bir kez işlenir.
+ *
+ * 🔴 KULLANICI BİLDİRİMİ: *"savaşa girip çıktıktan sonra da her seferinde
+ * her yer siyah gözüküp sonradan düzeliyor."*
+ *
+ * SEBEP ÖLÇÜLDÜ: `loadMapWorld` `cache: 'no-store'` ile çağrılıyordu ve
+ * `HubCanvas` köye her girişte onu YENİDEN çağırıyordu. Yani koşudan her
+ * dönüşte **628 KB** yeniden indiriliyor, JSON yeniden ayrıştırılıyor ve
+ * `buildMapWorld` çarpışma kutularını, köprüleri, ışıkları baştan
+ * kuruyordu. O iş bitene kadar `world` YOK — çizilecek bir şey olmadığı
+ * için tuval siyah kalıyordu.
+ *
+ * ⚠️ `no-store` KALDIRILMADI ve bu kasıtlı: sayfa YENİLENDİĞİNDE harita
+ * taze gelmeli, yoksa editörde harita düzenleyip yenileyen kişi eski
+ * haritayı görür ve "kaydetmemiş miyim" diye arar. Önbellek OTURUM
+ * içinde: yenileme = taze, oyun içi gezinme = anında.
+ *
+ * ⚠️ SÖZ SAKLANIYOR, SONUÇ DEĞİL. İki bileşen aynı anda isterse (köy +
+ * minimap) iki istek açılırdı; `Promise` saklayınca ikinci çağıran
+ * birincinin sonucunu bekliyor.
+ * ⚠️ BAŞARISIZLIK SAKLANMIYOR: `null` dönen bir yükleme önbelleğe
+ * alınsaydı geçici bir ağ hatası oturum boyunca köyü kapatırdı.
+ */
+const dunyaSozu = new Map<string, Promise<MapWorld | null>>();
+
+/** Haritayı sunucudan çek (public/map/village.json) — oturum içinde bir kez */
+export function loadMapWorld(url = '/map/village.json'): Promise<MapWorld | null> {
+  const hit = dunyaSozu.get(url);
+  if (hit) return hit;
+
+  const soz = (async (): Promise<MapWorld | null> => {
+    try {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok) return null;
+      const doc = (await r.json()) as MapDoc;
+      if (!doc?.terrain?.data) return null;
+      return buildMapWorld(doc);
+    } catch {
+      return null;
+    }
+  })();
+
+  dunyaSozu.set(url, soz);
+  // ⚠️ Başarısızsa önbellekten DÜŞ — geçici bir ağ hatası oturumu
+  // kilitlememeli.
+  void soz.then((w) => { if (!w) dunyaSozu.delete(url); }).catch(() => dunyaSozu.delete(url));
+  return soz;
 }

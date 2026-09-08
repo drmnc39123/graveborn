@@ -645,6 +645,39 @@ export function preload(art: ActorArt, only?: string[]) {
   }
 }
 
+/**
+ * DÜNYA GÖRSELLERİNİ ÖNDEN İSTE — zemin karoları ve nesneler.
+ *
+ * 🔴 KULLANICI BİLDİRİMİ: *"siteye ilk girişte köye girdiğimizde ilk başta
+ * her yer siyah gözüküp sonradan düzeliyor. Savaşa girip çıktıktan sonra
+ * da her seferinde bunu yapıyor."* + *"zemin önbelleği artığı her zaman
+ * karşımıza çıkıyor."*
+ *
+ * SEBEP ÖLÇÜLDÜ: `preloadAll` yalnız AKTÖRLERİ (kahraman · düşman · efekt)
+ * yüklüyordu. Köyün zemini `world.palette`ten, binaları `world.objects`ten
+ * geliyor ve hiçbiri önden istenmiyordu. `koyChunkCanvas` eksik görselle
+ * chunk PİŞİRMİYOR (doğru davranış — yarım pişen chunk sonsuza kadar bozuk
+ * kalırdı), o yüzden görseller gelene kadar zemin karo karo yedek yoldan
+ * çiziliyor ve `drawFrame` başarısız olunca düz koyu dikdörtgen kalıyor.
+ * Ekranda gördüğümüz "siyah kutular" tam olarak o.
+ *
+ * ⚠️ TARAYICI ÖNBELLEĞİ SORUNU ÇÖZMÜYOR: koşudan dönünce görseller
+ * diskte olsa bile `Image` nesneleri yeniden kuruluyor ve `complete`
+ * olana kadar birkaç kare geçiyor. Modül düzeyindeki `cache` Map'i
+ * sayfa ömrü boyunca yaşıyor — bir kez istendiğinde bir daha
+ * beklenmiyor. Asıl kazanç bu.
+ *
+ * ⚠️ `get()` ZATEN ÖNBELLEKLİ VE İDEMPOTENT: ikinci çağrı yeni istek
+ * açmıyor. Bu yüzden her dünya yüklemesinde çağrılması güvenli.
+ */
+export function preloadWorld(palette: readonly string[], objectSrcs: readonly string[]) {
+  for (const src of palette) if (src) get(src);
+  // ⚠️ Aynı sprite birçok nesnede tekrarlanıyor (ağaç, çit, taş); `Set`
+  // olmadan aynı URL onlarca kez `get`e giderdi — istek açılmaz ama
+  // Map araması boşuna tekrarlanır.
+  for (const src of new Set(objectSrcs)) if (src) get(src);
+}
+
 export function preloadAll(heroId?: string) {
   const hero = playerArt(heroId);
   // ⚠️ KADEMELİ YÜKLEME. Saldırı/hasar/ölüm animasyonları eklenince kahraman

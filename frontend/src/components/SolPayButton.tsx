@@ -76,6 +76,41 @@ const HATA_METNI: Record<string, string> = {
   yukseltilemez: 'Nothing to upgrade right now.',
 };
 
+/**
+ * SOLANA İŞARETİ — kullanıcı isteği: *"SOL ile satın alımların yapıldığı
+ * butonlara da bu SOL ikonu koyalım."*
+ *
+ * ⚠️ DOSYA DEĞİL SATIR İÇİ SVG. Bir PNG koymak fazladan bir ağ isteği ve
+ * ölçek başına bulanıklık demekti; işaret üç paralelkenardan ibaret,
+ * vektör olarak hem keskin hem bedava.
+ *
+ * ⚠️ MARKANIN KENDİ RENKLERİ (#9945FF → #14F195). Bu deponun "mor yok"
+ * kuralının istisnası ve bilinçli: bu bir tasarım tercihi değil, Solana'nın
+ * MARKA İŞARETİ. Paletimize boyamak onu tanınmaz yapardı ve zaten
+ * tanınsın diye koyuyoruz.
+ *
+ * ⚠️ `aria-hidden`: yanındaki metin zaten "PAY 0.5 SOL" diyor; ekran
+ * okuyucuya aynı bilgiyi iki kez söylemek gürültü.
+ */
+export function SolIcon({ size = 12 }: { size?: number }) {
+  const gid = 'gb-sol-g';
+  return (
+    <svg width={size} height={size} viewBox="0 0 397 311" aria-hidden="true"
+      style={{ display: 'block', flexShrink: 0 }}>
+      <defs>
+        <linearGradient id={gid} x1="360" y1="-37" x2="141" y2="383"
+          gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#00FFA3" />
+          <stop offset="1" stopColor="#DC1FFF" />
+        </linearGradient>
+      </defs>
+      <path fill={`url(#${gid})`} d="M64.6 237.9c2.4-2.4 5.7-3.8 9.2-3.8h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1l62.7-62.7z" />
+      <path fill={`url(#${gid})`} d="M64.6 3.8C67.1 1.4 70.4 0 73.8 0h317.4c5.8 0 8.7 7 4.6 11.1l-62.7 62.7c-2.4 2.4-5.7 3.8-9.2 3.8H6.5c-5.8 0-8.7-7-4.6-11.1L64.6 3.8z" />
+      <path fill={`url(#${gid})`} d="M333.1 120.1c-2.4-2.4-5.7-3.8-9.2-3.8H6.5c-5.8 0-8.7 7-4.6 11.1l62.7 62.7c2.4 2.4 5.7 3.8 9.2 3.8h317.4c5.8 0 8.7-7 4.6-11.1l-62.7-62.7z" />
+    </svg>
+  );
+}
+
 export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: {
   urun: 'reliquary10' | 'ossuary' | 'guild' | 'guild_up' | 'battlepass';
   /** gösterilecek fiyat — null ise ürün SOL rayında değil, düğme çizilmez */
@@ -155,6 +190,9 @@ export function SolPayButton({ urun, lamports, onDone, onError, ek, disabled }: 
         opacity: disabled ? 0.45 : 1,
       }}
     >
+      {/* ⚠️ İŞARET METNİN SOLUNDA: oyuncu düğmeyi okumadan ÖNCE neyle
+          ödeyeceğini görmeli — gold düğmeleriyle yan yana duruyor. */}
+      <SolIcon size={12} />
       {busy ? 'WAITING…'
         : bekleyen && tekrarDenenebilir(bekleyen) ? 'FINISH PAYMENT'
           : `PAY ${solLabel(lamports)}`}

@@ -7,7 +7,7 @@ import { isLockedBuilding } from '@/game/locked';
 import { createHub, stepHub, warp, type HubState } from '@/game/hub';
 import { renderHub, DEBUG } from '@/game/hubRender';
 import { loadMapWorld } from '@/game/mapWorld';
-import { preloadAll } from '@/game/sprites';
+import { preloadAll, preloadWorld } from '@/game/sprites';
 import { preloadKit } from '@/components/ui/kit';
 import { isTestMode } from '@/lib/testMode';
 import { koyTutamagi } from '@/lib/chat';
@@ -141,6 +141,14 @@ export function HubCanvas({
     (async () => {
       const world = await loadMapWorld();
       if (disposed) return;
+      /**
+       * ⭐ ZEMİN VE BİNALAR ÖNDEN İSTENİYOR (kullanıcı bildirimi: köy ilk
+       * açılışta ve her koşu dönüşünde siyah geliyor).
+       * ⚠️ `preloadAll` yalnız AKTÖRLERİ yüklüyordu; dünyanın kendi
+       * görselleri hiç istenmiyordu ve chunk önbelleği onlar gelmeden
+       * pişemiyordu. Ayrıntılı gerekçe `sprites.preloadWorld` başlığında.
+       */
+      if (world) preloadWorld(world.palette, world.objects.map((o) => o.src));
       if (!world) { setStatus('error'); return; }
       setStatus('ready');
       // ⚠️ SEÇİLİ KARAKTERLE. Argümansız çağrı `DEFAULT_HERO`u önden
