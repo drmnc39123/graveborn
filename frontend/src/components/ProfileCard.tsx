@@ -286,6 +286,30 @@ export function ProfileCard({ progress, wallet, onOpen }: {
               ("bugünkü ödülün hazır") ve kutuya sığdırılırsa o cümle
               kaybolur. Alınacak bir şey varken sessiz durmak, günlük ödülü
               görünmez yapmanın en kolay yolu. */}
+          {/**
+           * ⚠️ BEKLEYEN MESAJ KARTTA DA GORUNUYOR. Yalniz panele girince
+           * gorunseydi, oyuncu o panele bakmadigi surece mesaji hic
+           * ogrenmezdi — bu depoda tekrar eden "is calisiyor ama kimse
+           * gormuyor" hatasi.
+           *
+           * 🔴 DURUS SATIRINA KONMADI ve sebebi olculdu: orasi 214 px'de
+           * en fazla UC kutu tasiyor ve dorduncusu satiri okunmaz yapiyor
+           * (`profileCard.test` bunu yakaladi). Buranin ailesi zaten
+           * "seni bekleyen bir sey var" — seri odulu de burada.
+           */}
+          {!!ozet?.unreadDm && ozet.unreadDm > 0 && (
+            <div style={{
+              marginTop: 5, padding: '3px 7px', borderRadius: 5,
+              fontSize: 9, fontWeight: 900, letterSpacing: 0.6,
+              display: 'flex', alignItems: 'center', gap: 5,
+              color: C.badText, background: 'rgba(228,101,122,0.12)',
+              border: `1px solid ${C.badText}44`,
+            }}>
+              <Icon name="tome" scale={1} />
+              <span>{ozet.unreadDm} UNREAD MESSAGE{ozet.unreadDm === 1 ? '' : 'S'}</span>
+            </div>
+          )}
+
           {seri > 0 && (
             <div style={{
               marginTop: 5, padding: '3px 7px', borderRadius: 5,

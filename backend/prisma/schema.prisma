@@ -174,10 +174,12 @@ model Player {
   listings  Listing[]
   awards    SeasonAward[]
   pvpAwards PvpAward[]
-  follows   Follow[]      @relation("follower")
+  follows   Follow[]        @relation("follower")
   tickets   Ticket[]
   gear      GearItem[]
   records   DuelRecord[]
+  /// gonderdigi ozel mesajlar (hesap silinince cascade)
+  dmSent    DirectMessage[] @relation("dmFrom")
 
   @@index([bestRating])
   @@index([guildId])
@@ -716,4 +718,37 @@ model Payment {
 
   @@index([wallet, createdAt])
   @@index([createdAt])
+}
+
+/// OZEL MESAJ — yalniz KARSILIKLI takip edenler arasinda.
+///
+/// ⚠️ TEK YONLU TAKIP YETMEZ: yetseydi herkes herkese yazabilirdi ve DM
+/// bir spam kanalina donerdi. Karsilikli takip, iki tarafin da onay
+/// verdigi TEK isarettir ve fazladan bir "istek kabul et" ekrani
+/// gerektirmez.
+///
+/// ⚠️ SILINME: gonderen ya da alan hesap silinirse mesaj da gitmeli.
+/// Prisma iliskisi yalniz `from` uzerinden kuruluyor (bir mesajin iki
+/// FK'si olsaydi cascade iki yonden tetiklenir ve silme sirasi anlamsiz
+/// hale gelirdi); `to` tarafi elle temizleniyor.
+model DirectMessage {
+  id        String    @id
+  /// gonderen cuzdan
+  from      String
+  /// alan cuzdan
+  to        String
+  /// temizlenmis metin — HTML yok, uzunluk sinirli
+  body      String
+  createdAt DateTime  @default(now())
+  /// alan okudugunda damgalanir; okunmamis sayaci buna bakar
+  readAt    DateTime?
+
+  sender Player @relation("dmFrom", fields: [from], references: [wallet], onDelete: Cascade)
+
+  /// ⚠️ Konusma sorgusu iki yonlu: (a→b) VE (b→a). Iki ayri indeks sart,
+  /// yoksa her acilis tam tarama yapardi.
+  @@index([from, to, createdAt])
+  @@index([to, from, createdAt])
+  /// Okunmamis sayaci icin
+  @@index([to, readAt])
 }

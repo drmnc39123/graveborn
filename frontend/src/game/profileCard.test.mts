@@ -128,5 +128,48 @@ console.log('\n[6] KART HALA DAR EKRANA SIGIYOR');
   check('bir satirda en fazla 3 kutu', enCok <= 3, `en kalabalik satir ${enCok} kutu`);
 }
 
+console.log('\n[7] ** OZEL MESAJ ZINCIRI');
+{
+  /**
+   * 🔴 ARKADAS = KARSILIKLI TAKIP. Tek yonlu takiple DM acmak, herkesin
+   * herkese yazabilmesi demekti — bir spam kanali.
+   */
+  const dm = yorumsuz(oku('../backend/src/dm.ts'));
+  check('arkadaslik IKI YONLU takiple tanimli',
+    /satirlar\.some\(\(s\) => s\.wallet === a\) && satirlar\.some\(\(s\) => s\.wallet === b\)/.test(dm));
+  check('yazma once arkadasligi soruyor', /arkadasMi\(ben, oteki\)[\s\S]{0,80}arkadas_degil/.test(dm));
+  check('konusma da arkadasligi soruyor',
+    /export async function konusma[\s\S]{0,200}arkadas_degil/.test(dm));
+  // ⚠️ Okundu isareti konusmayi acinca — ayri bir uc olsaydi istemci
+  // unutur ve sayac sonsuza kadar kirmizi kalirdi.
+  check('okundu isareti konusma icinde', /export async function konusma[\s\S]{0,900}readAt: new Date/.test(dm));
+  check('tam cuzdan listede sizdirilmiyor', /w\.slice\(0, 4\)/.test(dm));
+
+  const idx = yorumsuz(oku('../backend/src/index.ts'));
+  check('uclar var', /'\/dm'/.test(idx) && /'\/dm\/:wallet'/.test(idx));
+  check('uclar hiz sinirinda', /'\/dm',/.test(idx.slice(idx.indexOf('paraLimiti'), idx.indexOf('app.use(yol, paraLimiti)'))));
+
+  const panel = oku('src/components/FriendsPanel.tsx');
+  /**
+   * 🔴 DM EMANET DEGILDIR ve bunu SOYLEMEK zorundayiz. Panelin var olma
+   * sebebi gold ticareti; ayni sebep en eski oyun dolandiriciligini da
+   * davet ediyor ("once sen gonder"). Uyariyi gizlemek, dolandirilan
+   * oyuncuya "bilmiyordum" dedirtir ve hakli olur.
+   */
+  check('emanet uyarisi var', /not an escrow/i.test(panel));
+  check("uyari marketplace gosteriyor", /Marketplace/.test(panel));
+  check('"once sen gonder" acikca isaretleniyor', /send first/i.test(panel));
+  // ⚠️ Bos ekran "bozuk" demektir: ne yapilacagi yazilmali
+  check('bos listede ne yapilacagi yaziyor', /watches you|add people/i.test(panel));
+
+  const kart = oku('src/components/ProfileCard.tsx');
+  check('okunmamis rozeti kartta', /unreadDm/.test(kart));
+  check('okunmamis 0 iken cizilmiyor', /ozet\.unreadDm > 0/.test(kart));
+
+  const dock = oku('src/components/BuildingDock.tsx');
+  check('navbarda FRIENDS var', /'friends'/.test(dock));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/dmZZZ/.test(panel + dm));
+}
+
 console.log(`\n${FAIL.length === 0 ? 'KIMLIK KARTI SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

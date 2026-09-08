@@ -31,6 +31,7 @@ import { NoticeBanner } from '@/components/NoticeBanner';
 import { ChatPanel } from '@/components/ChatPanel';
 import { CodexPanel } from '@/components/CodexPanel';
 import { InvitePanel } from '@/components/InvitePanel';
+import { FriendsPanel } from '@/components/FriendsPanel';
 import { ProfileCard } from '@/components/ProfileCard';
 import { ReadyCard } from '@/components/ReadyCard';
 import { Panel, PixelButton, BTN, type PanelStyle } from '@/components/ui/kit';
@@ -1173,6 +1174,8 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : acik === 'friends' ? (
+              <FriendsPanel onError={setNote} />
             ) : acik === 'invite' ? (
               <InvitePanel onError={setNote} />
             ) : acik === 'codex' ? (

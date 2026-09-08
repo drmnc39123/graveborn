@@ -57,7 +57,7 @@ export const GROUPS: readonly DockGroup[] = [
   { id: 'fight', label: 'FIGHT', color: C.blood, members: ['quests', 'boss', 'duel', 'pit'] },
   { id: 'power', label: 'POWER', color: C.candle, members: ['upgrade', 'paths', 'gear', 'pets', 'shop'] },
   { id: 'spend', label: 'SPEND', color: C.ok, members: ['market', 'exchange', 'reliquary'] },
-  { id: 'people', label: 'PEOPLE', color: C.ice, members: ['daily', 'watch', 'guild', 'tavern', 'invite'] },
+  { id: 'people', label: 'PEOPLE', color: C.ice, members: ['daily', 'watch', 'friends', 'guild', 'tavern', 'invite'] },
 ] as const;
 
 /** Sıralama kasıtlı: oyuncunun döngüsü soldan sağa okunuyor. */
@@ -111,6 +111,10 @@ export const BUILDINGS: readonly DockEntry[] = [
   // FIGHT grubuna konsaydı bir dövüş aracı gibi görünürdü; oysa asıl işi
   // kimin orada olduğunu göstermek.
   { id: 'watch', label: 'WATCH', sub: 'The Watch — people you keep an eye on' },
+  // ⚠️ WATCH'IN HEMEN YANINDA ve bu kasitli: arkadas, takip listesinin
+  // KARSILIKLI olan alt kumesi. Iki kavram yan yana durunca oyuncu
+  // farki aramadan goruyor.
+  { id: 'friends', label: 'FRIENDS', sub: 'Friends — write to people who watch you back' },
   { id: 'tavern', label: 'TAVERN', sub: 'Tavern — profile & records' },
   // ⚠️ TAVERN'in yanında: ikisi de "kim olduğun" ile ilgili. Lonca sohbetin
   // yanına konsaydı bir araç gibi görünürdü; profilin yanında bir AİDİYET

@@ -517,12 +517,41 @@ export async function claimVigil(): Promise<{
  */
 export interface CardSummary {
   guild: { tag: string; name: string; level: number } | null;
+  /** okunmamis ozel mesaj — kart rozeti */
+  unreadDm?: number;
   duelRating: number;
   quests: { done: number; total: number; claimable: number } | null;
 }
 
 export async function fetchCardSummary(): Promise<CardSummary> {
   return api<CardSummary>('/me/card');
+}
+
+// ── OZEL MESAJ ───────────────────────────────────────────────────────
+// ⚠️ ARKADAS = KARSILIKLI TAKIP. Sunucu bunu her cagride dogruluyor;
+// istemci "arkadasiz" varsayimini kendi yapmiyor.
+
+export interface DmThread {
+  wallet: string;
+  name: string;
+  online: boolean;
+  lastBody: string | null;
+  lastAt: number | null;
+  unread: number;
+}
+export interface DmMessage { id: string; mine: boolean; body: string; at: number }
+
+export async function fetchDmThreads(): Promise<{ threads: DmThread[] }> {
+  return api('/dm');
+}
+
+/** ⚠️ Konusmayi acmak OKUNDU isaretler — sunucu tarafinda, ayri bir uc yok */
+export async function fetchDmThread(wallet: string): Promise<{ messages: DmMessage[] }> {
+  return api(`/dm/${encodeURIComponent(wallet)}`);
+}
+
+export async function sendDm(wallet: string, body: string): Promise<{ message: DmMessage }> {
+  return api(`/dm/${encodeURIComponent(wallet)}`, { method: 'POST', body: { body } });
 }
 
 // ── DAVET ────────────────────────────────────────────────────────────

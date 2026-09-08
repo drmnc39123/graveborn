@@ -21,6 +21,7 @@ import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js'
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ReferralError, kodGir, kodTemizle, odulKontrol, referralDurum } from './referral.js';
+import { DmError, gonder, konusma, okunmamisSayisi, threadler } from './dm.js';
 import { ossuarySolPrice, solPrice } from '@game/solPrice';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
@@ -51,7 +52,7 @@ import { wagerPayout } from '@game/wager';
 import { PULL_COST } from '@game/cosmetics';
 import { profileOf } from './profile.js';
 import { bossState, contribute, settleBarrow } from './worldBoss.js';
-import { attachPresence, presenceCount } from './presence.js';
+import { attachPresence, presenceCount, onlineWallets } from './presence.js';
 import { arenaStats, attachArena, joinQueue, leaveQueue } from './arena.js';
 import { pvpAwards, pvpBoard, settlePvpSeasons } from './pvpSeason.js';
 import { QuestError, claimQuest, listQuests, trackQuest } from './quests.js';
@@ -129,7 +130,7 @@ for (const yol of [
   // ⚠️ SOL uçları da BURADA olmak zorunda: her deneme bir zincir okuması
   // (RPC) tetikliyor ve sınırsız bırakılırsa özel sağlayıcı kotasını
   // yakmanın en ucuz yolu olurdu.
-  '/me/card', '/referral', '/referral/enter',
+  '/me/card', '/referral', '/referral/enter', '/dm',
   '/sol/quote', '/sol/blockhash', '/reliquary/pull-sol', '/ossuary/raise-sol',
   '/guild/create-sol', '/guild/upgrade-sol', '/vigil/buy-sol', '/vigil/claim',
 ]) app.use(yol, paraLimiti);
@@ -892,16 +893,21 @@ app.get('/me/card', wrap(async (req, res) => {
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
 
   // ⚠️ Üçü PARALEL: sıralı olsaydı kartın açılması üç gidiş-dönüş sürerdi.
-  const [lonca, oyuncu, gorevler] = await Promise.all([
+  const [lonca, oyuncu, gorevler, okunmamis] = await Promise.all([
     myGuild(wallet).catch(() => null),
     prisma.player.findUnique({
       where: { wallet }, select: { duelRating: true, bestRating: true },
     }),
     listQuests(wallet).catch(() => null),
+    // ⚠️ Okunmamis DM sayisi karta da giriyor: bekleyen bir mesaj yalniz
+    // panele girince gorunseydi, oyuncu ona hic bakmadigi surece mesaji
+    // hic ogrenmezdi.
+    okunmamisSayisi(wallet).catch(() => 0),
   ]);
 
   res.json({
     guild: lonca ? { tag: lonca.tag, name: lonca.name, level: lonca.level } : null,
+    unreadDm: okunmamis,
     duelRating: oyuncu?.duelRating ?? 0,
     quests: gorevler
       ? {
@@ -962,6 +968,42 @@ app.get('/referral/card/:code', wrap(async (req, res) => {
     ossuary: p.ossuary,
     title: (p.equipped as { title?: string } | null)?.title ?? null,
   });
+}));
+
+// ── ÖZEL MESAJ ──
+//
+// ⚠️ KARŞILIKLI TAKİP = ARKADAŞ (bkz. dm.ts başlığı). Tek yönlü takiple
+// DM açmak, herkesin herkese yazabilmesi demekti.
+app.get('/dm', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  // ⚠️ Çevrimiçi bilgisi presence katmanından — ikinci bir "kim online"
+  // tanımı yazmak iki farklı cevap üretirdi.
+  const cevrimici = onlineWallets();
+  res.json({ threads: await threadler(wallet, (w) => cevrimici.has(w)) });
+}));
+
+app.get('/dm/:wallet', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    res.json({ messages: await konusma(wallet, String(req.params.wallet)) });
+  } catch (e) {
+    if (e instanceof DmError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
+}));
+
+app.post('/dm/:wallet', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+  try {
+    const m = await gonder(wallet, String(req.params.wallet), (req.body as { body?: unknown } | null)?.body);
+    res.json({ message: m });
+  } catch (e) {
+    if (e instanceof DmError) { res.status(e.status).json({ error: e.code }); return; }
+    throw e;
+  }
 }));
 
 app.get('/referral', wrap(async (req, res) => {
