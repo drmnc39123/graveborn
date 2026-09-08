@@ -725,6 +725,71 @@ function drawEnemies(ctx: CanvasRenderingContext2D, g: Game) {
     }
     ctx.fill();
   }
+
+  drawEnemyBars(ctx, g);
+}
+
+/** Can çubuğu ölçüleri — HER düşmanda aynı (kullanıcı isteği) */
+const BAR_W = 18, BAR_H = 3, BAR_UST = 7;
+
+/**
+ * DÜŞMAN CAN ÇUBUKLARI — küçük, kırmızı, sayısız.
+ *
+ * 🔴 NİYE VAR (kullanıcı isteği): *"tüm oyunumuzdaki tüm düşmanların canını
+ * göremiyoruz, fightlarda HP barları yok. Üstünde kaç canının kaldığını
+ * yazmasına gerek yok, sadece hepsinde aynı boyutta ve aynı düzende olacak
+ * kırmızı küçük bir HP bar olsa yeter."*
+ *
+ * ⚠️ İKİ ÇİZİM ÇAĞRISI, 840 DEĞİL. Ekranda `DESCENT.aliveMax` = 420 düşman
+ * olabiliyor; her birine ayrı `fillRect` atmak kare başına 840 çağrı
+ * demekti ve `perf.test` tam bu hacmi ölçüyor. Dosyanın kendi tekniği
+ * kullanıldı (bkz. `drawEnemies` renk gruplama): bütün zeminler tek path'e,
+ * bütün dolgular tek path'e toplanıp İKİ `fill()` ile bitiyor.
+ *
+ * ⚠️ BOSS HARİÇ. Boss'un zaten kendi geniş çubuğu, faz rengi ve eşik
+ * çentiği var (`drawBossBar`); ikinci bir çubuk onun üstüne binerdi.
+ *
+ * ⚠️ EKRAN DIŞI ÇİZİLMİYOR — `gorunur` kontrolü `drawEnemies`in kendi
+ * döngüsündekiyle aynı; görüş alanı kırpması bu dosyada ölçülmüş bir
+ * kazanç (400 düşman: 137 fps ekranda, 195 fps ekran dışında).
+ *
+ * ⚠️ TAM CANLI DÜŞMANDA DA ÇİZİLİYOR: kullanıcı "hepsinde" dedi. Yalnız
+ * hasar görenlerde çizmek daha sessiz olurdu ama istenen bu değil.
+ */
+function drawEnemyBars(ctx: CanvasRenderingContext2D, g: Game) {
+  const list = g.enemies;
+  if (!list.length) return;
+
+  ctx.save();
+  // ── zeminler: tek path ──
+  ctx.beginPath();
+  let cizilen = 0;
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    if (e.boss) continue;
+    if (!gorunur(e.x, e.y)) continue;
+    ctx.rect(e.x - BAR_W / 2 - 1, e.y - e.radius - BAR_UST - 1, BAR_W + 2, BAR_H + 2);
+    cizilen++;
+  }
+  if (cizilen === 0) { ctx.restore(); return; }
+  ctx.fillStyle = 'rgba(10,8,6,0.72)';
+  ctx.fill();
+
+  // ── dolgular: tek path ──
+  ctx.beginPath();
+  for (let i = 0; i < list.length; i++) {
+    const e = list[i];
+    if (e.boss) continue;
+    if (!gorunur(e.x, e.y)) continue;
+    // ⚠️ `maxHp` sıfır olamaz ama koruma ucuz; sıfıra bölüm NaN üretir ve
+    // NaN genişlikli bir dikdörtgen path'in TAMAMINI sessizce düşürür.
+    const k = e.maxHp > 0 ? Math.max(0, Math.min(1, e.hp / e.maxHp)) : 0;
+    if (k <= 0) continue;
+    ctx.rect(e.x - BAR_W / 2, e.y - e.radius - BAR_UST, BAR_W * k, BAR_H);
+  }
+  ctx.fillStyle = C.blood;
+  ctx.fill();
+  ctx.restore();
 }
 
 /** Grave Lash — kesik izi. Ömrü boyunca solar ve hafifçe genişler. */
