@@ -90,10 +90,37 @@ console.log('\n[3] ⭐ KİLİTLİ BİNANIN KAPISI KÖYDE GERÇEKTEN VAR');
    * açılmalı. İkisi de yoksa oyuncu tek bir kelime görür.
    */
   const page = oku('src/app/play/page.tsx');
-  const canli = new Set([...page.matchAll(/acik === '(\w+)'/g)].map((m) => m[1]));
+  /**
+   * ⚠️ İKİ AÇILMA BİÇİMİ VAR, TARAYICI İKİSİNİ DE GÖRMELİ.
+   *
+   * 🔴 BU MÜHÜR YANLIŞ ALARM VERİYORDU: yalnız PANEL desenini
+   * (`acik === 'x'`) arıyordu ve `pit`i "çıplak kapı" diye bildiriyordu.
+   * Oysa THE PIT panel değil TAM EKRAN açıyor (`hedefiAc` içinde
+   * `setScreen({ kind: 'arena' })`) — yani kod doğruydu, ÖLÇÜM ALETİ
+   * eksikti. Bir mührün yalan söylemesi, kırmızı kalmasından daha
+   * pahalıdır: insan gerçek kırmızıları da görmezden gelmeye başlar.
+   *
+   * ⚠️ GENİŞLETİLİRKEN BOŞALTILMADI: `hedefiAc` gövdesindeki açık
+   * `id === '...'` dalları sayılıyor, dosyanın tamamı değil. Tüm dosyada
+   * arasaydım rastgele bir karşılaştırma her hedefi "canlı" yapardı ve
+   * mühür hiçbir şey ölçmez olurdu — aşağıdaki kontrol grubu bunu
+   * kanıtlıyor.
+   */
+  const govde = page.slice(page.indexOf('const hedefiAc'),
+    page.indexOf('const onEnter'));
+  const canli = new Set([
+    ...[...page.matchAll(/acik === '(\w+)'/g)].map((m) => m[1]),
+    ...[...govde.matchAll(/id === '(\w+)'/g)].map((m) => m[1]),
+  ]);
+  check('hedefiAc gövdesi bulundu', govde.length > 0 && govde.length < 2000,
+    govde.length + ' karakter');
+  check('ekran açan hedefler de sayılıyor (pit)', canli.has('pit'));
   const cipl = kapilar.filter((t) => !canli.has(t) && !isLockedBuilding(t));
   check('çıplak kapı yok (panel de kilit metni de olmayan)', cipl.length === 0,
     cipl.join(', ') || `${kapilar.length} kapının hepsi bir şeye açılıyor`);
+  // ⚠️ KONTROL GRUBU: tarayıcı genişletildi — her şeye "canlı" demiyor mu?
+  check('olmayan hedef ÇIPLAK sayılıyor (kontrol grubu)',
+    !canli.has('zzz_olmayan_bina') && !isLockedBuilding('zzz_olmayan_bina'));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ KİLİTLİ BİNALAR SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
