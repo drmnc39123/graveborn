@@ -27,6 +27,9 @@ const check = (n: string, ok: boolean, d = '') => {
   if (!ok) FAIL.push(n);
 };
 
+/** Dosya okuyucu — eksik dosyada patlamaz, bos doner */
+const oku = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+
 const tamForge: Record<string, number> = {};
 for (const u of FORGE) tamForge[u.id] = u.maxLevel;
 
@@ -285,8 +288,8 @@ console.log('\n[5] AYAR GOCU — eski tercih kaybolmuyor');
     guessTier() === 'low' || guessTier() === 'normal', guessTier());
   check('normalizeTier bilinmeyeni yedege dusuruyor', normalizeTier('zzz', 'hd') === 'hd');
   // ⚠️ Alan sayisi degismedi — `settings.test`teki mevcut muhur bunu da olcuyor
-  check('ayar alanlari: volume · damageNumbers · music · quality · qualityPicked',
-    Object.keys(normalizeSettings({})).length === 5);
+  check('ayar alanlari: volume · damageNumbers · music · quality · qualityPicked · villageQuality',
+    Object.keys(normalizeSettings({})).length === 6);
   /**
    * ⚠️ ESKI `lowGraphics:true` KAYDI "SECILMIS" SAYILIYOR: o oyuncu zaten
    * bilincli olarak dusuk grafigi acmis. Ona yeniden sormak, verdigi karari
@@ -337,6 +340,75 @@ console.log('\n[6] TEK KAYNAK — secici iki yerde de AYNI bilesen');
     const src = fs.readFileSync(`src/components/${f}`, 'utf8');
     check(`${f} kademeyi uyguluyor`, src.includes('quality().pixelCap'));
   }
+}
+
+console.log('\n[8] ** KOY VE KOSU KADEMELERI KARISMIYOR');
+{
+  /**
+   * 🔴 KULLANICI BILDIRDI: *"Oyunda oynarken grafikleri ULTRA LOW yaptim ve
+   * oyun bittikten sonra koye dondugumde koyun goruntusu de ULTRA LOW'du.
+   * Koyun ayarlari ile stage oyun ayarlari karismamali."*
+   *
+   * HAKLIYDI VE BU BIR TASARIM HATASIYDI. Kademe koye de uygulanmisti,
+   * gerekce "ayni cihazda iki farkli butce sessiz bir tutarsizlik olur"
+   * idi. Ama IKI SAHNENIN MALIYETI AYNI DEGIL: kasma kosuda oluyor (420
+   * dusmana kadar suru, mermi bulutu, olum efektleri), koyde degil.
+   * Kosu icin odenen bedeli koye de odetmek, karsiligi olmayan bir
+   * cirkinlik.
+   */
+  const d = normalizeSettings({});
+  check('koy kademesi AYRI bir alan', typeof d.villageQuality === 'string');
+  /**
+   * 🔴 KOSU KADEMESINDEN KOPYALANMIYOR. Kopyalasaydik sikayetin kendisini
+   * "goc" adi altinda kalicilastirirdik: ULTRA LOW secmis oyuncunun koyu
+   * ULTRA LOW kalirdi.
+   */
+  const uy = normalizeSettings({ quality: 'ultraLow' } as never);
+  check('kosu ultraLow iken koy ultraLow OLMUYOR', uy.villageQuality !== 'ultraLow',
+    `${uy.quality} / ${uy.villageQuality}`);
+  check('koy varsayilani cihaz tahmini', uy.villageQuality === guessTier());
+  check('acik koy kaydi korunuyor',
+    normalizeSettings({ villageQuality: 'ultra' } as never).villageQuality === 'ultra');
+  // ⚠️ CIFT TARAFLI: ikisi BAGIMSIZ mi? Ayni degeri de alabilmeliler.
+  const ik = normalizeSettings({ quality: 'low', villageQuality: 'hd' } as never);
+  check('ikisi bagimsiz yaziliyor (cift tarafli)',
+    ik.quality === 'low' && ik.villageQuality === 'hd');
+
+  /**
+   * 🔴 ZINCIRIN SON ADIMI: her sahne KENDI kademesini uygulamali. Alan
+   * ayrilip sahneler baglanmasaydi ayar kayitta dogru durur, ekranda
+   * hicbir sey degismezdi — bu depodaki en pahali hata sinifi.
+   */
+  const sp = oku('src/components/SettingsPanel.tsx');
+  check('sahneye gore uygulama ucu var', sp.includes("export function applyStoredQuality(sahne: 'run' | 'village')"));
+  check('acilista KOY kademesi uygulaniyor', sp.includes('testKademesi() ?? s.villageQuality'));
+  check('koy panelinde IKI secici var',
+    sp.includes('value={s.villageQuality}') && sp.includes('value={s.quality}'));
+  // ⚠️ Iki ozdes seciciyi etiketsiz alt alta koymak, ayirmayi bilmeceye cevirirdi
+  check('hangisinin neyi kontrol ettigi YAZILI',
+    sp.includes('IN THE VILLAGE') && sp.includes('IN A RUN'));
+
+  for (const [f, sahne] of [
+    ['GameCanvas.tsx', 'run'], ['ArenaScreen.tsx', 'run'], ['HubCanvas.tsx', 'village'],
+  ] as const) {
+    const src = oku(`src/components/${f}`);
+    check(`${f} -> '${sahne}' kademesi`, src.includes(`applyStoredQuality('${sahne}')`));
+  }
+  /**
+   * ⚠️ ARAYUZ HAREKETI DE AKTIF PROFILDEN. `loadSettings().quality`
+   * okusaydik koydeki panel animasyonlari KOSUNUN kademesine gore
+   * kapanirdi — karismanin arayuz tarafindaki hali.
+   */
+  /**
+   * ⚠️ YORUMLAR SOYULUYOR. Ilk surum kirmizi yandi ve sebep KODDA DEGIL,
+   * kendi belgelendirmemdeydi: neyin degistigini anlatan yorum eski ifadeyi
+   * iceriyordu ve tarama onu YAYINDAKI KOD sandi. Ayni ders bugun
+   * te de cikti — bir muhur GONDERILEN seyi olcmeli.
+   */
+  const yorumsuz = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const mo = yorumsuz(oku('src/components/ui/motion.tsx'));
+  check('motionOff aktif profili okuyor', mo.includes('!quality().uiMotion'));
+  check('motionOff kayittan okumuyor (kontrol grubu)', !mo.includes('loadSettings().quality'));
 }
 
 console.log('\n[7] ** KASMA OLCERI — olcer, DEGISTIRMEZ');

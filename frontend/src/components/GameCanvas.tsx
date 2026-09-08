@@ -3,6 +3,7 @@
 // her frame güncellemek 60Hz'de re-render fırtınası yaratır, o yüzden HUD ~10Hz'de
 // ayrıca örneklenir. Oyun döngüsü React render döngüsünden BAĞIMSIZ.
 
+import { applyStoredQuality } from '@/components/SettingsPanel';
 import { applyQuality, onQualityChange, quality, type QualityTier } from '@/game/quality';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Game, type RunMode } from '@/game/engine';
@@ -265,6 +266,17 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
    * ⚠️ ABONE DE OLUYOR: kademe başka bir yerden (köy paneli) değişirse
    * bu ekran sessizce eskimesin.
    */
+  /**
+   * ⭐ BU SAHNE KOŞU KADEMESİNİ UYGULAR.
+   *
+   * 🔴 Kullanıcı bildirdi: koşuda ULTRA LOW seçince KÖY de ULTRA LOW
+   * oluyordu. İki sahnenin maliyeti aynı değil — kasma koşuda, köyde
+   * değil — ve tek kademe ikisini birden yönetiyordu. Artık her sahne
+   * mount olurken KENDİ kademesini uyguluyor; aktif profil sahneye göre
+   * değişiyor.
+   * ⚠️ `?test=1` altında sabitleme korunuyor (bkz. `testKademesi`).
+   */
+  useEffect(() => { applyStoredQuality('run'); }, []);
   useEffect(() => {
     setKademe(quality().tier);
     ayarRef.current = loadSettings();

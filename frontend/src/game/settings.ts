@@ -75,6 +75,27 @@ export interface Settings {
    * ⚠️ Kalıcı, oturumluk değil — soru bir kez sorulup bir kez cevaplanmalı.
    */
   qualityPicked: boolean;
+
+  /**
+   * KÖYÜN GRAFİK KADEMESİ — KOŞUDAN AYRI.
+   *
+   * 🔴 KULLANICI BİLDİRDİ: *"Oyunda oynarken grafikleri ULTRA LOW yaptım ve
+   * oyun bittikten sonra köye döndüğümde köyün görüntüsü de ULTRA LOW'du.
+   * Bunun olmaması gerek — köyün ayarları ile stage oyun ayarları
+   * karışmamalı."*
+   *
+   * HAKLIYDI VE BU BENİM TASARIM HATAMDI. Kademeyi köye de uyguladım,
+   * gerekçem "aynı cihazda iki farklı bütçe sessiz bir tutarsızlık olur"
+   * idi. Ama İKİ SAHNENİN MALİYETİ AYNI DEĞİL: kasma koşuda oluyor (420
+   * düşmana kadar sürü, mermi bulutu, ölüm efektleri), köyde değil (sabit
+   * sahne, sürü yok, kırpma zaten var). Koşu için ödenen bedeli köye de
+   * ödetmek, karşılığı olmayan bir çirkinlik.
+   *
+   * ⚠️ KOŞU KADEMESİNDEN KOPYALANMIYOR. Eksikse cihaz tahminine düşüyor —
+   * yani ULTRA LOW seçmiş bir oyuncunun köyü kendi varsayılanına dönüyor.
+   * Kopyalasaydık şikâyetin kendisini "göç" adı altında kalıcılaştırırdık.
+   */
+  villageQuality: QualityTier;
 }
 
 export function defaultSettings(): Settings {
@@ -84,7 +105,8 @@ export function defaultSettings(): Settings {
    * ilk izlenim akıcı olsun. Node'da `guessTier()` her zaman 'normal'
    * döner, mühürler deterministik kalır.
    */
-  return { volume: 0.7, damageNumbers: true, music: true, quality: guessTier(), qualityPicked: false };
+  return { volume: 0.7, damageNumbers: true, music: true, quality: guessTier(), qualityPicked: false,
+    villageQuality: guessTier() };
 }
 
 function clamp01(v: unknown, fallback: number): number {
@@ -104,6 +126,9 @@ export function normalizeSettings(
     damageNumbers: typeof raw.damageNumbers === 'boolean' ? raw.damageNumbers : d.damageNumbers,
     music: typeof raw.music === 'boolean' ? raw.music : d.music,
     quality: kademeGocu(raw, d.quality),
+    // ⚠️ `quality`den KOPYALANMIYOR (bkz. alan tanımı): koşu için seçilen
+    // düşük kademe köye taşınmamalı.
+    villageQuality: normalizeTier(raw.villageQuality, d.villageQuality),
     /**
      * ⚠️ ESKİ `lowGraphics: true` KAYDI DA "SEÇİLMİŞ" SAYILIYOR: o oyuncu
      * zaten bilinçli olarak düşük grafiği açmış. Ona yeniden sormak,

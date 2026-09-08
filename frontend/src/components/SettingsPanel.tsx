@@ -36,7 +36,9 @@ export function applyStoredSettings(): Settings {
    * kayıtta doğru duruyor, arayüzde doğru görünüyor, ama çizim onu HİÇ
    * görmüyor. Zincirin son adımı burası.
    */
-  applyQuality(testKademesi() ?? s.quality);
+  // ⚠️ AÇILIŞTA KÖY KADEMESİ: oyuncunun ilk gördüğü ekran ana sayfa/köy.
+  // Koşu kendi kademesini mount olurken uyguluyor (`applyStoredQuality`).
+  applyQuality(testKademesi() ?? s.villageQuality);
   return s;
 }
 
@@ -50,6 +52,27 @@ export function applyStoredSettings(): Settings {
  * ⚠️ `&q=<kademe>` ile bilerek başka bir kademe ölçülebiliyor.
  * ⚠️ Üretimde `isTestMode()` sabit false, bu dal derlenmiyor.
  */
+/**
+ * SAHNEYE GÖRE KADEME UYGULA.
+ *
+ * 🔴 NİYE İKİ KADEME (kullanıcı bildirdi): *"Oyunda oynarken grafikleri
+ * ULTRA LOW yaptım ve köye döndüğümde köyün görüntüsü de ULTRA LOW'du.
+ * Köyün ayarları ile stage oyun ayarları karışmamalı."*
+ *
+ * İKİ SAHNENİN MALİYETİ AYNI DEĞİL: kasma koşuda oluyor (420 düşmana
+ * kadar sürü, mermi bulutu, ölüm efektleri), köyde değil (sabit sahne,
+ * sürü yok). Koşu için ödenen bedeli köye de ödetmek, karşılığı olmayan
+ * bir çirkinlik.
+ *
+ * ⚠️ TEK GİRİŞ NOKTASI: her sahne kendi `useEffect`inde bunu çağırıyor.
+ * Sahnelerin `loadSettings()` okuyup kendi kararını vermesi, `?test=1`
+ * sabitlemesini üç yerde tekrarlamak demekti — ve biri unutulurdu.
+ */
+export function applyStoredQuality(sahne: 'run' | 'village') {
+  const s = loadSettings();
+  applyQuality(testKademesi() ?? (sahne === 'run' ? s.quality : s.villageQuality));
+}
+
 function testKademesi(): QualityTier | null {
   if (!isTestMode()) return null;
   try {
@@ -179,10 +202,38 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
               içindeki `kademeGocu` onu LOW'a taşıyor.
               ⚠️ Metin performans VAAT ETMİYOR, ne yaptığını söylüyor. Eski
               metnin dersi buydu ve duruyor. */}
+          {/* 🔴 İKİ AYRI KADEME (kullanıcı bildirdi): *"Oyunda oynarken
+              grafikleri ULTRA LOW yaptım ve köye döndüğümde köyün görüntüsü
+              de ULTRA LOW'du. Köyün ayarları ile stage oyun ayarları
+              karışmamalı."*
+              İki sahnenin maliyeti aynı değil: kasma koşuda oluyor (420
+              düşmana kadar sürü), köyde değil. Koşu için ödenen bedeli köye
+              de ödetmek, karşılığı olmayan bir çirkinlikti.
+              ⚠️ HANGİSİNİN NEYİ KONTROL ETTİĞİ YAZILI. İki özdeş seçiciyi
+              etiketsiz alt alta koymak, ayırmanın kendisini bir bilmeceye
+              çevirirdi. */}
           <div style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
             letterSpacing: 1, color: C.boneFaint, marginBottom: 6 }}>
-            GRAPHICS
+            GRAPHICS — IN THE VILLAGE
           </div>
+          <QualityPicker
+            value={s.villageQuality}
+            onChange={(t) => {
+              // ⚠️ ANINDA UYGULANIYOR: oyuncu şu anda köye bakıyor, etkisini
+              // görmeden seçim yapmak zorunda kalmamalı.
+              patch({ villageQuality: t, qualityPicked: true });
+              applyQuality(t);
+            }}
+          />
+
+          <div style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
+            letterSpacing: 1, color: C.boneFaint, margin: '14px 0 6px' }}>
+            GRAPHICS — IN A RUN
+          </div>
+          {/* ⚠️ BU SEÇİM ANINDA UYGULANMAZ ve uygulanmamalı: köydeyken koşu
+              kademesini uygulamak, oyuncunun BAKMADIĞI bir sahne için
+              baktığı sahneyi bozmak olurdu. Koşu başlarken kendi kademesini
+              alıyor (`applyStoredQuality('run')`). */}
           <QualityPicker
             value={s.quality}
             /**
@@ -194,8 +245,9 @@ export function SettingsPanel({ onError }: { onError: (m: string) => void }) {
              */
             onChange={(t) => patch({ quality: t, qualityPicked: true })}
           />
-          <div style={{ marginTop: 6, fontFamily: FONT.ui, fontSize: 9,
+          <div style={{ marginTop: 8, fontFamily: FONT.ui, fontSize: 9,
             lineHeight: 1.5, color: C.boneFaint }}>
+            The village and a run are set separately — a run is the crowded one.
             Lower tiers draw fewer pixels and less atmosphere. Enemies, enemy
             shots and boss warnings stay exactly the same at every tier.
           </div>

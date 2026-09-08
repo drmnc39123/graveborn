@@ -2,6 +2,7 @@
 // Hub sahnesi — editörde çizilen köy. Çizim hubRender.ts'te, mantık hub.ts'te;
 // bu bileşen köprü: harita yükleme, girdi, döngü ve React tarafı istemler.
 
+import { applyStoredQuality } from '@/components/SettingsPanel';
 import { quality } from '@/game/quality';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isLockedBuilding } from '@/game/locked';
@@ -128,6 +129,16 @@ export function HubCanvas({
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [debug, setDebug] = useState(false);
   const [warpMsg, setWarpMsg] = useState<string | null>(null);
+
+  /**
+   * ⭐ BU SAHNE KÖY KADEMESİNİ UYGULAR — koşununkini DEĞİL.
+   *
+   * 🔴 Kullanıcı bildirdi: *"koşuda ULTRA LOW yaptım, köye dönünce köy de
+   * ULTRA LOW'du; köyün ayarları ile stage ayarları karışmamalı."* Kasma
+   * koşuda oluyor (420 düşmana kadar sürü), köyde değil; koşu için ödenen
+   * bedeli köye ödetmek karşılığı olmayan bir çirkinlik.
+   */
+  useEffect(() => { applyStoredQuality('village'); }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;

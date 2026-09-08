@@ -17,7 +17,7 @@
 // VE oyunun kendi `lowGraphics` ayarı. Birincisi hiç kullanılmıyordu; oyuncu
 // sistem genelinde "hareketi azalt" dese bile oyun umursamıyordu.
 
-import { profileOf } from '@/game/quality';
+import { quality } from '@/game/quality';
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { loadSettings } from '@/game/settings';
 
@@ -32,10 +32,18 @@ export function motionOff(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return true;
-    // ⚠️ `lowGraphics` KALKTI, yerine grafik kademesi geldi. `uiMotion`
-    // yalnız NORMAL ve üstünde açık — yani eski `lowGraphics: true`
-    // davranışı (göçle `low`a düşen oyuncu) birebir korunuyor.
-    return !profileOf(loadSettings().quality).uiMotion;
+    /**
+     * ⚠️ AKTİF PROFİL OKUNUYOR, KAYIT DEĞİL.
+     *
+     * Koşu ve köy artık AYRI kademe taşıyor (`settings.villageQuality`).
+     * `loadSettings().quality` okusaydık köydeki panel animasyonları
+     * KOŞUNUN kademesine göre kapanırdı — kullanıcının bildirdiği karışmanın
+     * arayüz tarafındaki hâli. Aktif profil hangi sahnedeysek onu
+     * gösteriyor, yani ek bir kural yazmadan doğru olanı veriyor.
+     *
+     * ⚠️ Ayrıca localStorage'a HER ÇAĞRIDA gitmiyor artık — modül durumu.
+     */
+    return !quality().uiMotion;
   } catch {
     return false;
   }

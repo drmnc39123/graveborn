@@ -10,6 +10,7 @@
 // simülasyonu etkiliyor (doğum halkası) ve iki oyuncunun ekranı farklı
 // olabilir; arena sabit 1280×720 simüle edip ekrana ölçekleniyor.
 
+import { applyStoredQuality } from '@/components/SettingsPanel';
 import { quality } from '@/game/quality';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BTN, Panel, PixelButton } from '@/components/ui/kit';
@@ -41,6 +42,11 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
   // ⚠️ Sezon SÜS: gelmezse lobi eskisi gibi çalışmaya devam eder, hata
   // göstermez. Kuyruğa girmeyi bir sıralama isteğine bağlamak, sunucu
   // yavaşladığında maç bulmayı da engellerdi.
+  // ⚠️ PvP DE BİR KOŞU: aynı motor, aynı sürü, aynı bütçe. Köy kademesini
+  // uygulasaydık düello koşudan farklı çizilirdi ve oyuncu sebebini
+  // anlayamazdı.
+  useEffect(() => { applyStoredQuality('run'); }, []);
+
   const [sezon, setSezon] = useState<PvpSeasonState | null>(null);
   useEffect(() => {
     if (isTestMode()) { setSezon(TEST_PVP_SEASON as unknown as PvpSeasonState); return; }
