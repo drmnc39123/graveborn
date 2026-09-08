@@ -24,6 +24,13 @@
 // Saniyede ~6-10 nota, nota başına 2-3 düğüm.
 
 import { getVolume, isSoundEnabled, sesAyariDinle, sesBaglami } from './sfx';
+import { createRng } from './rng';
+
+/**
+ * Gürültü tamponunun sabit tohumu — ses her oturumda aynı olsun.
+ * ⚠️ Motorun tohumundan BAĞIMSIZ; iki akış birbirine değmiyor.
+ */
+const GURULTU_TOHUMU = 0x9e3779b9;
 
 export type Sahne = 'village' | 'combat' | 'boss';
 
@@ -113,12 +120,31 @@ function kur(ctx: AudioContext): Kanal {
   return kanal;
 }
 
+/**
+ * Perküsyonun ham maddesi: 0,3 sn beyaz gürültü, bir kez üretilip saklanır.
+ *
+ * 🔴 `Math.random()` DEĞİL, TOHUMLU RNG — ve bu bir üslup tercihi değil.
+ * `game/` altında `Math.random()` YASAK (projenin en eski kuralı) ve
+ * `sim.test.mts` bunu tarayarak ölçüyor. Bu dosya kuralı 2026-09-04'te
+ * çiğnedi ve mühür o günden beri KIRMIZI duruyordu; kimse çalıştırmadığı
+ * için de fark edilmedi.
+ *
+ * ⚠️ Kuralı gevşetip bu dosyayı beyaz listeye almak DOĞRU CEVAP DEĞİLDİ:
+ * "şu dosya hariç" diye başlayan bir determinizm kuralı, birkaç dosya
+ * sonra hiçbir şeyi korumaz. Kural mutlak kalıyor, kod uyuyor.
+ *
+ * ⚠️ Duyulan seste HİÇBİR fark yok — beyaz gürültü beyaz gürültüdür; tek
+ * fark artık her oturumda AYNI gürültü olması, ki hata ayıklarken iyi.
+ * ⚠️ Simülasyonun akışına dokunmuyor: `createRng` her çağrıda BAĞIMSIZ bir
+ * akış kuruyor, motorunkinden bir sayı bile tüketmiyor.
+ */
 function gurultuTamponu(ctx: AudioContext): AudioBuffer {
   if (gurultu) return gurultu;
   const n = Math.floor(ctx.sampleRate * 0.3);
   const buf = ctx.createBuffer(1, n, ctx.sampleRate);
   const d = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const rng = createRng(GURULTU_TOHUMU);
+  for (let i = 0; i < n; i++) d[i] = rng.next() * 2 - 1;
   gurultu = buf;
   return buf;
 }
