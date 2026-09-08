@@ -19,6 +19,7 @@ import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
+import { ultraIlerleme, ultraMi } from './ultra.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ReferralError, kodGir, kodTemizle, odulKontrol, referralDurum } from './referral.js';
 import { DmError, gonder, konusma, okunmamisSayisi, threadler } from './dm.js';
@@ -299,7 +300,16 @@ app.get('/progress', wrap(async (req, res) => {
   const wallet = auth(req);
   if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
   const player = await getOrCreatePlayer(wallet);
-  res.json({ progress: toProgress(player) });
+  const p = toProgress(player);
+  /**
+   * ⭐ ULTRA MOD — yalniz hazine cuzdani (kullanici istegi: bolumleri ve
+   * derinlikleri test edebilmek icin).
+   *
+   * ⚠️ KAYDA YAZMIYOR, CEVABI ZENGINLESTIRIYOR. "Hazineye 10 milyon gold
+   * ver" demek geri alinamaz bir iz birakirdi; boyle bayragi kapatmak eski
+   * hale donmek demek. Ayrintili gerekce `ultra.ts` basliginda.
+   */
+  res.json({ progress: ultraMi(wallet) ? { ...p, ...ultraIlerleme(STAGES.length) } : p });
 }));
 
 /**

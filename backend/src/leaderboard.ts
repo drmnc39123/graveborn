@@ -14,6 +14,7 @@
 
 import { challengeRating } from '@game/config';
 import { prisma } from './db.js';
+import { ultraMi } from './ultra.js';
 
 export interface Row {
   rank: number;
@@ -74,6 +75,19 @@ export async function recordDescent(
   ascension = 0,
 ): Promise<boolean> {
   if (mode !== 'descent' || depth < 1) return false;
+  /**
+   * 🔴 ULTRA HESAP TABLOYA GIRMEZ VE BU PAZARLIKSIZ.
+   *
+   * Hazine cuzdani ultra modda (sinirsiz gold, butun bolumler acik,
+   * `depthPaid` 200) test yapiyor. O hesap d200'e inip tabloya yerlesseydi:
+   *   · siralama olctugu seyi olcmez olurdu
+   *   · haftalik sezon odulunu (`season.ts` → kozmetik + toz) test hesabi
+   *     alirdi, gercek oyuncularin yerine
+   * Kapiyi YAZMA aninda kapatmak sart: okuma tarafinda filtrelemek
+   * `bestRating` satirini yine de kirletirdi ve bir gun baska bir sorgu
+   * onu gorurdu.
+   */
+  if (ultraMi(wallet)) return false;
 
   const rating = challengeRating(stageId, depth, ascension);
   if (!Number.isFinite(rating) || rating <= 0) return false;

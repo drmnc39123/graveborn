@@ -12,6 +12,7 @@ import {
   SEASON_PAYOUT_DEPTH, rewardForRank, seasonEndsAt, seasonWeek,
 } from '@game/season';
 import { prisma } from './db.js';
+import { ultraMi } from './ultra.js';
 
 export interface SeasonRow {
   rank: number;
@@ -40,6 +41,13 @@ export async function recordSeason(
   now = new Date(),
 ): Promise<boolean> {
   if (mode !== 'descent' || depth < 1) return false;
+  /**
+   * 🔴 ULTRA HESAP HAFTALIK TABLOYA DA GIRMEZ — burasi ODUL DAGITIYOR
+   * (`settleOne` → kozmetik + toz). Tum-zamanlar tablosunda kapiyi kapatip
+   * burada unutmak, test hesabinin gercek oyuncularin haftalik odulunu
+   * almasi demekti. Iki tablo, iki kapi.
+   */
+  if (ultraMi(wallet)) return false;
 
   const rating = challengeRating(stageId, depth, ascension);
   if (!Number.isFinite(rating) || rating <= 0) return false;
