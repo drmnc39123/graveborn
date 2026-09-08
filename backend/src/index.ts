@@ -2625,6 +2625,20 @@ const port = Number(process.env.PORT ?? 4100);
 // aynı sunucuda `/presence` yolu tek kapı olarak kalıyor.
 const server = app.listen(port, () => {
   console.log(`GRAVEBORN backend :${port}`);
+  /**
+   * ⚠️ HAZINE ADRESI ACILISTA YAZILIYOR ve bu asil korumamiz.
+   *
+   * Yazim hatasini kod TAM olarak yakalayamaz (tek harfi degismis bir adres
+   * de 32 bayta cozulur). Ama yanlis adres GERCEK PARANIN bizim olmayan bir
+   * cuzdana gitmesi demek — o yuzden her acilista GOZLE dogrulanabilir
+   * olmali. Ayni adres `/sol/config` ile de yayinlaniyor.
+   */
+  const hazine = hazineAdresi();
+  if (hazine) {
+    console.log(`[HAZINE] ${hazine} · SOL rayi ${solRayiAcik() ? 'ACIK' : 'KAPALI (RPC_URLS eksik)'}`);
+  } else {
+    console.log('[HAZINE] TREASURY_ADDRESS yok — SOL rayi kapali');
+  }
 });
 attachPresence(server);
 attachArena(server);

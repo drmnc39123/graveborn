@@ -16,16 +16,63 @@
 // ihtiyacımız olan tek şey bir `getTransaction` çağrısı ve iki dizi
 // karşılaştırması. Kütüphane 3 MB bağımlılık getirirdi.
 
+import bs58 from 'bs58';
 import { rpcCagir } from './rpc.js';
 
 export class OdemeHatasi extends Error {
   constructor(public code: string, public status = 400) { super(code); }
 }
 
-/** Hazine adresi — yapılandırılmadıysa SOL rayı tamamen KAPALI */
+/**
+ * Bir metin geçerli bir Solana adresi mi — base58 çözülüp TAM 32 bayt mı.
+ *
+ * 🔴 NİYE UZUNLUK YETMİYOR: eski sürüm yalnız `length >= 32` bakıyordu.
+ * Base58 alfabesinde olmayan bir karakter (0, O, I, l) ya da eksik/fazla
+ * hane o kontrolden GEÇİYORDU ve gerçek para bizim olmayan bir adrese
+ * gidiyordu — sessizce, hiçbir hata üretmeden.
+ *
+ * ⚠️ BU KONTROL YAZIM HATALARINI TAM YAKALAMAZ ve yakaladığını iddia
+ * etmiyor: tek harfi değişmiş bir adres de çoğu zaman 32 bayta çözülür.
+ * Eğri (`isOnCurve`) kontrolü onun ancak yarısını ekler ve elle yazılacak
+ * alan matematiği kazandırdığından fazla risk taşır.
+ * ASIL KORUMA GÖRÜNÜRLÜK: adres açılışta loglanıyor ve `/sol/config` ile
+ * yayınlanıyor — yanlışsa ilk gün GÖZLE yakalanır.
+ */
+export function gecerliAdres(a: unknown): a is string {
+  if (typeof a !== 'string') return false;
+  const t = a.trim();
+  if (t.length < 32 || t.length > 44) return false;
+  let bayt: Uint8Array;
+  try { bayt = bs58.decode(t); } catch { return false; }
+  if (bayt.length !== 32) return false;
+  /**
+   * ⚠️ SIFIR ADRES REDDEDILIYOR. Base58'de '1' sifir demek, yani
+   * "11111111111111111111111111111111" TAM 32 bayta cozuluyor ve bicim
+   * kontrolunden GECIYOR — ama o adres System Program'in kendisi. Yanlis
+   * yapilandirmada oraya giden SOL geri alinamaz.
+   * (Bu kontrol testte yakalandi: '1'.repeat(32) gecerli sayiliyordu.)
+   */
+  if (bayt.every((b) => b === 0)) return false;
+  return true;
+}
+
+/** ⚠️ Bir kez uyar, her istekte değil — log gürültüsü uyarıyı görünmez yapar */
+let bozukUyarildi = false;
+
+/** Hazine adresi — yapılandırılmadıysa ya da BOZUKSA SOL rayı tamamen KAPALI */
 export function hazineAdresi(): string | null {
   const a = (process.env.TREASURY_ADDRESS ?? '').trim();
-  return a.length >= 32 ? a : null;
+  if (!a) return null;
+  if (!gecerliAdres(a)) {
+    if (!bozukUyarildi) {
+      bozukUyarildi = true;
+      // ⚠️ Sessizce `null` dönmek "yapılandırılmamış" ile "yanlış girilmiş"i
+      // aynı şeye çevirirdi; ikincisi acil bir operatör hatası.
+      console.error('[HAZINE] TREASURY_ADDRESS gecersiz — SOL rayi KAPALI tutuluyor:', a);
+    }
+    return null;
+  }
+  return a;
 }
 
 /**

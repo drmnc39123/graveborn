@@ -14,15 +14,27 @@
 import crypto from 'node:crypto';
 import { prisma } from './db.js';
 
-const HAZINE = 'TreasuryTestAddr1111111111111111111111111111';
-const OYUNCU = 'PlayerTestAddr11111111111111111111111111111';
-const BASKASI = 'OtherTestAddr111111111111111111111111111111';
+/**
+ * ⚠️ FIKSTURLER GERCEK BICIMDE OLMAK ZORUNDA.
+ *
+ * Ilk surumde bunlar "TreasuryTestAddr1111..." gibi okunakli ama GECERSIZ
+ * dizelerdi ve testin tamami yesil veriyordu — cunku `hazineAdresi()` o
+ * zaman yalniz UZUNLUGA bakiyordu. Bicim dogrulamasi eklenince 14 kontrol
+ * birden dustu ve fikstlerin gercek disi oldugu ortaya cikti.
+ *
+ * Ders: sahte veri gercek SEKLE uymazsa test ya olmayan hatalar bulur ya
+ * da gercek olanlari gizler. (Bu depoda ayni alet hatasi arayuz test
+ * modunda da yasandi.)
+ */
+const HAZINE = '3mqvZ478SVFftqm6Pmh14SdUhUHufkmBAubTpgvyHscn';
+const OYUNCU = '6GqrrCLWKXF44C1sXpkzppeazo6Wvn8JjTsg9vf14uuR';
+const BASKASI = '8mqo9LZtCZESDYGefs2rzUU23dwZJeYxwfXzxtEFtLT6';
 const IMZA = '5'.repeat(88);
 
 process.env.TREASURY_ADDRESS = HAZINE;
 process.env.RPC_URLS = 'http://sahte-rpc.local';
 
-const { MAX_YAS_SN, OdemeHatasi, odemeDogrula, solRayiAcik } = await import('./solPay.js');
+const { MAX_YAS_SN, OdemeHatasi, gecerliAdres, hazineAdresi, odemeDogrula, solRayiAcik } = await import('./solPay.js');
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -184,6 +196,52 @@ console.log('\n[7] ** IMZA TEK KULLANIMLIK - veritabani seviyesinde');
   check('farkli imza geciyor (kontrol grubu)', farkli === 'gecti');
 
   await prisma.payment.deleteMany({ where: { sig: { startsWith: 'TESTSIG_' } } });
+}
+
+console.log('\n[8] ** HAZINE ADRESI BICIM DOGRULAMASI');
+{
+  /**
+   * 🔴 ESKI SURUM YALNIZ `length >= 32` BAKIYORDU. Base58 alfabesinde
+   * olmayan bir karakter (0, O, I, l) ya da eksik/fazla hane o kontrolden
+   * GECIYORDU ve gercek para bizim olmayan bir adrese gidiyordu — sessizce,
+   * hicbir hata uretmeden.
+   *
+   * ⚠️ BU KONTROL YAZIM HATASINI TAM YAKALAMAZ ve yakaladigini iddia
+   * etmiyor: tek harfi degismis bir adres de cogu zaman 32 bayta cozulur.
+   * Asil koruma GORUNURLUK — adres acilista loglaniyor ve /sol/config ile
+   * yayinlaniyor.
+   */
+  const gercek = '3STD6cr9TjgLPX28YU3KbeGMSnswtt3143eeYdL4hRD8';
+  check('gercek hazine adresi gecerli', gecerliAdres(gercek));
+  // CIFT TARAFLI: bozuk girdiler GERCEKTEN reddedilmeli
+  check('base58 disi karakter reddediliyor',
+    !gecerliAdres('3STD6cr9TjgLPX28YU3KbeGMSnswtt3143eeYdL4hR0O'));
+  check('cok kisa reddediliyor', !gecerliAdres('3STD6cr9Tjg'));
+  check('cok uzun reddediliyor', !gecerliAdres(`${gercek}${gercek}`));
+  check('bos reddediliyor', !gecerliAdres(''));
+  check('metin olmayan reddediliyor', !gecerliAdres(null) && !gecerliAdres(42));
+  /**
+   * ⚠️ 32 KARAKTERLIK GECERLI BASE58 AMA 32 BAYT DEGIL — eski uzunluk
+   * kontrolunun tam olarak gecirdigi sinif.
+   */
+  /**
+   * ⭐ BU KONTROL GERCEK BIR ACIK YAKALADI. Base58'de '1' SIFIR demek, yani
+   * "111...1" (32 hane) TAM 32 bayta cozuluyor ve bicim kontrolunden
+   * geciyordu — ama o adres System Program'in kendisi. Yanlis
+   * yapilandirmada oraya giden SOL geri alinamaz.
+   */
+  check('sifir adres (System Program) reddediliyor',
+    !gecerliAdres('1'.repeat(32)) && !gecerliAdres('1'.repeat(44)));
+
+  // Bozuk env ile ray KAPALI kalmali - "yapilandirilmamis" ile
+  // "yanlis girilmis" ayni sonuca cikmali: kapi kapali.
+  const eski = process.env.TREASURY_ADDRESS;
+  process.env.TREASURY_ADDRESS = 'bu-gecerli-bir-adres-degil-ama-uzun';
+  check('bozuk adresle hazineAdresi null', hazineAdresi() === null);
+  check('bozuk adresle ray KAPALI', !solRayiAcik());
+  process.env.TREASURY_ADDRESS = gercek;
+  check('gecerli adresle hazineAdresi doluyor (cift tarafli)', hazineAdresi() === gercek);
+  process.env.TREASURY_ADDRESS = eski;
 }
 
 console.log(`\n${FAIL.length === 0 ? 'SOL ODEME DOGRULAMA SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);
