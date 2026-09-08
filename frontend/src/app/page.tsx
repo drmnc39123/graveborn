@@ -8,17 +8,18 @@
 // istemeyen herkesi kapıda kaybeder. Demo huniyi açık tutar; kaydı olmayan
 // bir vitrin, kısa yol değil (bkz. lib/session.ts).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { MenuBackground } from '@/components/MenuBackground';
 import { HomeSections } from '@/components/HomeSections';
 import { SocialLinks } from '@/components/SocialLinks';
 import { Panel, PixelButton } from '@/components/ui/kit';
-import { Turnstile, turnstileEnabled } from '@/components/Turnstile';
+import { useCuzdanBaglan } from '@/lib/useWalletConnect';
+import { Turnstile } from '@/components/Turnstile';
 import { BRAND, C, FONT, glass } from '@/lib/theme';
-import { fetchStats, setMode, signInWithWallet } from '@/lib/session';
+import { fetchStats, setMode } from '@/lib/session';
 import {
-  type Cuzdan, KURULUM, MOBIL_CUZDANLAR, bulunanCuzdanlar, cuzdanlariIzle, kurulmayanlar, mobilMi,
+  type Cuzdan, KURULUM, MOBIL_CUZDANLAR, kurulmayanlar, mobilMi,
 } from '@/lib/wallets';
 
 /**
@@ -34,10 +35,19 @@ const SAYAC_ESIGI = 25;
 export default function Home() {
   const router = useRouter();
   const [stats, setStats] = useState<{ players: number; runs: number } | null>(null);
-  const [busy, setBusy] = useState<'wallet' | 'demo' | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [captcha, setCaptcha] = useState<string | null>(null);
-  const [cuzdanlar, setCuzdanlar] = useState<Cuzdan[]>([]);
+  /**
+   * ⚠️ CÜZDAN AKIŞI ARTIK ORTAK KANCADA (`useCuzdanBaglan`). Aynı akış köyde
+   * demo oynayanın gördüğü düğmede de çalışıyor; ikinci kez yazılsaydı
+   * kopyalardan biri Turnstile jetonunu göndermeyi unutabilir ve o kapı
+   * SESSİZCE çalışmazdı (sunucu 403 `bot_kontrolu_basarisiz` döner).
+   * ⚠️ `busy` BURADA HÂLÂ ÜÇ DEĞERLİ: kapı demo düğmesini de bekletiyor,
+   * kanca ise yalnız cüzdanı biliyor. İkisi ayrı sorular.
+   */
+  const [demoBusy, setDemoBusy] = useState(false);
+  const bagla = useCuzdanBaglan(useCallback(() => { router.push('/play'); }, [router]));
+  const { cuzdanlar, err, setErr, needCaptcha, setCaptcha } = bagla;
+  const busy: 'wallet' | 'demo' | null =
+    bagla.busy ? 'wallet' : demoBusy ? 'demo' : null;
   const [secici, setSecici] = useState(false);
   const [mobil, setMobil] = useState(false);
 
@@ -73,36 +83,19 @@ export default function Home() {
    * bir okuma yapsaydık oyuncu kurulu cüzdanını görmez, "cüzdan yok"
    * ekranıyla karşılaşırdı. Wallet Standard geç kaydolanları haber veriyor.
    */
-  useEffect(() => {
-    setMobil(mobilMi());
-    const tazele = () => setCuzdanlar(bulunanCuzdanlar());
-    tazele();
-    const birak = cuzdanlariIzle(tazele);
-    const t = setTimeout(tazele, 600);
-    return () => { birak(); clearTimeout(t); };
-  }, []);
-
-  const needCaptcha = turnstileEnabled() && !captcha;
+  // ⚠️ Cüzdan keşfi KANCADA (geç kaydolan eklentiler dahil); burada yalnız
+  // "mobil mi" ölçülüyor — o kapının kendi kararı, kancanın işi değil.
+  useEffect(() => { setMobil(mobilMi()); }, []);
 
   const onDemo = () => {
     setMode('demo');
-    setBusy('demo');
+    setDemoBusy(true);
     router.push('/play');
   };
 
   const baglan = async (c: Cuzdan) => {
-    setErr(null);
     setSecici(false);
-    setBusy('wallet');
-    try {
-      await signInWithWallet(c, captcha ?? undefined);
-      router.push('/play');
-    } catch (e) {
-      const code = e instanceof Error ? e.message : 'hata';
-      // Kullanıcı imzayı reddettiyse bu bir hata değil, bir karardır
-      setErr(/reject|denied|4001/i.test(code) ? null : 'baglanti');
-      setBusy(null);
-    }
+    await bagla.baglan(c);
   };
 
   /**

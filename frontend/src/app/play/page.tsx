@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
 import { sagKolon } from '@/game/hudLayout';
+import { PlayConnect } from '@/components/PlayConnect';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
 import { RecordsPanel } from '@/components/RecordsPanel';
@@ -836,6 +837,16 @@ export default function PlayPage() {
           top: kolon.y, right: kolon.right, width: kolon.w,
           display: 'flex', flexDirection: 'column', gap: 8,
         }}>
+          {/* ⭐ DEMO OYUNCUSUNA CÜZDAN KAPISI — kullanıcı isteği.
+              🔴 Huninin en pahalı adımı buydu: oyunu beğenen demo oyuncusu
+              hesap açmak için oyundan ÇIKIP ana sayfaya dönmek zorundaydı.
+              Geri dönmeyen her oyuncu, oyunu beğendiği hâlde kaybedilmiş
+              bir oyuncu.
+              ⚠️ Sütunun EN ÜSTÜNDE ve minimapın hemen altında: bu sütunun
+              en görünür satırı orası.
+              ⚠️ Yalnız demo modunda; cüzdanla girmiş oyuncuya "bağlan"
+              demek ona zaten yaptığı şeyi teklif etmektir. */}
+          {getMode() === 'demo' && <PlayConnect />}
           <EventBanner />
           <NoticeBanner konum="sagKolon" />
           <ReadyCard progress={progress} />
