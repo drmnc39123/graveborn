@@ -30,13 +30,17 @@
 // kefeye koymak olurdu.
 
 import { useEffect, useMemo, useState } from 'react';
+import { panelUnlocked } from '@/lib/testMode';
+import { getMode } from '@/lib/session';
+import { duelTier } from '@/game/duel';
+import { streakAvailable, fetchCardSummary, type CardSummary } from '@/lib/gameSession';
 import { STAGES } from '@/game/config';
 import { heroById } from '@/game/heroes';
 import { OSSUARY, ossuaryTier, ossuaryTierProgress } from '@/game/ossuary';
 import { paidDepth, type Progress } from '@/game/progress';
 import { nextPointAt, skillPoints } from '@/game/skills';
 import { Portrait } from '@/components/HeroPicker';
-import { Bar, Icon, Slot } from '@/components/ui/kit';
+import { Bar, Icon, Slot, type IconName } from '@/components/ui/kit';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
 import { useCountUpInt } from '@/components/ui/motion';
 import { C, FONT, thinGlass } from '@/lib/theme';
@@ -54,7 +58,7 @@ const ANAHTAR = 'graveborn:profilAcik';
 
 /** Küçük istatistik kutusu — `RecordsPanel`deki `Stat` ile aynı kalıp */
 function Kutu({ ikon, etiket, deger, baslik, vurgu = false }: {
-  ikon: 'skull' | 'star' | 'tome';
+  ikon: IconName;
   etiket: string;
   deger: string;
   baslik?: string;
@@ -131,8 +135,28 @@ export function ProfileCard({ progress, wallet, onOpen }: {
   const sonrakiRutbe = ossuaryTier(progress.ossuary + kalan);
   const derinlik = useCountUpInt(olcum.enDerin);
 
+  /**
+   * ⚠️ ÖZET SADECE KART AÇIKKEN ÇEKİLİYOR. Kapalı bir çipin maliyeti sıfır
+   * olmalı; sürekli ekranda duran bir bileşen her açılışta istek atsaydı
+   * oyunun en gürültülü istemcisi olurdu.
+   *
+   * ⚠️ TEK İSTEK: lonca · düello · günün görevleri tek uçtan (`/me/card`)
+   * geliyor. Dördü ayrı ayrı çekilseydi kart açılışı dört gidiş-dönüş
+   * sürerdi.
+   */
+  const [ozet, setOzet] = useState<CardSummary | null>(null);
+  useEffect(() => {
+    if (!acik || !panelUnlocked(getMode())) return;
+    let iptal = false;
+    fetchCardSummary().then((o) => { if (!iptal) setOzet(o); }).catch(() => { /* sessiz */ });
+    return () => { iptal = true; };
+  }, [acik]);
+
   const ad = wallet ? short(wallet) : 'You';
   const kimlik = identityOf(progress, ad);
+  const seri = Math.max(0, Math.floor(progress.streak?.days ?? 0));
+  const seriHazir = streakAvailable(progress);
+  const tier = ozet ? duelTier(ozet.duelRating) : null;
 
   return (
     // ⚠️ İNCE CAM, TAM PANEL ÇERÇEVESİ DEĞİL — ChatPanel ile aynı köşe dili.
@@ -204,7 +228,19 @@ export function ProfileCard({ progress, wallet, onOpen }: {
             </span>
           </div>
 
+          {/* ⚠️ PARA SATIRI EN ÜSTTE. Oyuncunun köyde en sık sorduğu soru
+              "neyim var" — gold ve toz her panelde ayrı ayrı aranıyordu.
+              İkisi de `Progress`te zaten duruyor, sunucuya sormuyoruz. */}
           <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+            <Kutu ikon="gold" etiket="GOLD"
+              deger={Math.floor(progress.gold).toLocaleString('en-US')} vurgu
+              baslik="Gold — spent at the Forge, the Stall and the Reliquary" />
+            <Kutu ikon="magic" etiket="DUST"
+              deger={Math.floor(progress.dust ?? 0).toLocaleString('en-US')}
+              baslik="Dust — buys relics outright when luck will not" />
+          </div>
+
+          <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
             <Kutu ikon="skull" etiket="DEPTH" deger={String(derinlik)} vurgu
               baslik="Deepest descent the server has paid for" />
             <Kutu ikon="star" etiket="STAGES"
@@ -218,6 +254,52 @@ export function ProfileCard({ progress, wallet, onOpen }: {
                 baslik={olcum.sonraki ? `Next point at depth ${olcum.sonraki}` : 'All points earned'} />
             )}
           </div>
+
+          {/* ⚠️ DURUŞ SATIRI — kim olduğunun BAŞKALARINA göre hâli.
+              Yukarısı "ne kazandım", burası "nerede duruyorum". Sunucudan
+              geliyor ve gelene kadar HİÇ ÇİZİLMİYOR: yarım dolu bir satır,
+              boş bir satırdan daha kafa karıştırıcı. */}
+          {ozet && (
+            <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+              {ozet.guild && (
+                <Kutu ikon="star" etiket="GUILD" deger={`[${ozet.guild.tag}]`}
+                  baslik={`${ozet.guild.name} — level ${ozet.guild.level}`} />
+              )}
+              {tier && (
+                <Kutu ikon="damage" etiket="PIT" deger={tier.name.toUpperCase()}
+                  baslik={`Duel rating ${Math.round(ozet.duelRating)}`} />
+              )}
+              {ozet.quests && (
+                /* ⚠️ ALINACAK ÖDÜL VARSA VURGULANIYOR. Günlük ödülün fark
+                   edilmemesinin en kolay yolu, kartın sessiz durmasıdır. */
+                <Kutu ikon="tome" etiket="TODAY"
+                  deger={`${ozet.quests.done}/${ozet.quests.total}`}
+                  vurgu={ozet.quests.claimable > 0}
+                  baslik={ozet.quests.claimable > 0
+                    ? `${ozet.quests.claimable} reward${ozet.quests.claimable === 1 ? '' : 's'} waiting`
+                    : "Today's work — resets at midnight UTC"} />
+              )}
+            </div>
+          )}
+
+          {/* ⚠️ SERİ AYRI BİR SATIR, KUTU DEĞİL: bir sayı değil bir DURUM
+              ("bugünkü ödülün hazır") ve kutuya sığdırılırsa o cümle
+              kaybolur. Alınacak bir şey varken sessiz durmak, günlük ödülü
+              görünmez yapmanın en kolay yolu. */}
+          {seri > 0 && (
+            <div style={{
+              marginTop: 5, padding: '3px 7px', borderRadius: 5,
+              fontSize: 9, fontWeight: 900, letterSpacing: 0.6,
+              display: 'flex', alignItems: 'center', gap: 5,
+              color: seriHazir ? C.candle : C.boneFaint,
+              background: seriHazir ? 'rgba(239,167,46,0.12)' : 'rgba(0,0,0,0.28)',
+              border: `1px solid ${seriHazir ? `${C.candle}44` : 'rgba(255,255,255,0.08)'}`,
+            }}>
+              <Icon name="sound" scale={1} dim={!seriHazir} />
+              <span>{seri} NIGHT{seri === 1 ? '' : 'S'} RUNNING</span>
+              {seriHazir && <span style={{ marginLeft: 'auto' }}>CLAIM READY</span>}
+            </div>
+          )}
 
           {onOpen && (
             <button

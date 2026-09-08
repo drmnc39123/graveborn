@@ -128,6 +128,7 @@ for (const yol of [
   // ⚠️ SOL uçları da BURADA olmak zorunda: her deneme bir zincir okuması
   // (RPC) tetikliyor ve sınırsız bırakılırsa özel sağlayıcı kotasını
   // yakmanın en ucuz yolu olurdu.
+  '/me/card',
   '/sol/quote', '/sol/blockhash', '/reliquary/pull-sol', '/ossuary/raise-sol',
   '/guild/create-sol', '/guild/upgrade-sol', '/vigil/buy-sol', '/vigil/claim',
 ]) app.use(yol, paraLimiti);
@@ -868,6 +869,51 @@ app.post('/vigil/claim', wrap(async (req, res) => {
   res.json({
     progress: toProgress(saved), dust: toz, cosmetics: kozmetik,
     tiers: alinabilir.map(vigilKey),
+  });
+}));
+
+/**
+ * KİMLİK KARTI ÖZETİ — köyün sol üstündeki kartın tek isteği.
+ *
+ * ⚠️ NİYE AYRI VE TEK UÇ: kart dört ayrı şey gösteriyor (lonca · düello ·
+ * günün görevleri · haftalık sıra) ve bunlar dört ayrı uçta yaşıyor. Kart
+ * her açılışta dört istek atsaydı, sürekli ekranda duran bir çip oyunun en
+ * gürültülü istemcisi olurdu.
+ *
+ * ⚠️ KART KAPALIYKEN HİÇ ÇAĞRILMIYOR (istemci tarafında). Kapalı bir çipin
+ * maliyeti sıfır olmalı.
+ *
+ * ⚠️ HEPSİ ZATEN VAR OLAN FONKSİYONLARDAN. Yeni bir hesap yazılmadı; ikinci
+ * bir "kaç görev bitti" tanımı paneldekiyle ayrışırdı.
+ */
+app.get('/me/card', wrap(async (req, res) => {
+  const wallet = auth(req);
+  if (!wallet) { res.status(401).json({ error: 'oturum_yok' }); return; }
+
+  // ⚠️ Üçü PARALEL: sıralı olsaydı kartın açılması üç gidiş-dönüş sürerdi.
+  const [lonca, oyuncu, gorevler] = await Promise.all([
+    myGuild(wallet).catch(() => null),
+    prisma.player.findUnique({
+      where: { wallet }, select: { duelRating: true, bestRating: true },
+    }),
+    listQuests(wallet).catch(() => null),
+  ]);
+
+  res.json({
+    guild: lonca ? { tag: lonca.tag, name: lonca.name, level: lonca.level } : null,
+    duelRating: oyuncu?.duelRating ?? 0,
+    quests: gorevler
+      ? {
+          // ⚠️ "Bitti" = ALINDI değil, TAMAMLANDI. Oyuncu ödülünü almamış
+          // olabilir ve kart ona "bugün işin bitti" dememeli.
+          done: gorevler.quests.filter((q) => q.done).length,
+          total: gorevler.quests.length,
+          // Alınacak bir şey varsa kart bunu VURGULAMALI — günlük ödülün
+          // fark edilmemesinin en kolay yolu sessiz durmaktır.
+          claimable: gorevler.quests.filter((q) => q.done && !q.claimed).length
+            + (gorevler.bonus.ready && !gorevler.bonus.claimed ? 1 : 0),
+        }
+      : null,
   });
 }));
 

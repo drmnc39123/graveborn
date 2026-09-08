@@ -509,6 +509,22 @@ export async function claimVigil(): Promise<{
   return api('/vigil/claim', { method: 'POST', body: {} });
 }
 
+/**
+ * KIMLIK KARTI OZETI — koyun sol ustundeki kart icin TEK istek.
+ *
+ * ⚠️ Kart KAPALIYKEN cagrilmiyor: surekli ekranda duran bir cipin maliyeti
+ * sifir olmali.
+ */
+export interface CardSummary {
+  guild: { tag: string; name: string; level: number } | null;
+  duelRating: number;
+  quests: { done: number; total: number; claimable: number } | null;
+}
+
+export async function fetchCardSummary(): Promise<CardSummary> {
+  return api<CardSummary>('/me/card');
+}
+
 /** Anit seviyesi — SOL ile. Fiyat SUNUCUDA, oyuncunun mevcut seviyesinden. */
 export async function raiseOssuarySol(sig: string): Promise<Progress> {
   const { progress } = await api<{ progress: Progress }>('/ossuary/raise-sol', {

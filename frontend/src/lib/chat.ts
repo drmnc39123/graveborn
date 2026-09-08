@@ -21,6 +21,18 @@ export interface ChatMessage {
   n: string;
   /** lonca etiketi (yoksa yok) — sohbette [ETİKET] olarak basılır */
   g?: string;
+  /**
+   * TAM cüzdan — sohbetten arkadaş ekleyebilmek için.
+   *
+   * ⚠️ NİYE VAR: `n` KISALTILMIŞ (`7dau…HBo4`) ve o hâliyle takip listesine
+   * kimse eklenemiyordu. Sohbet oyuncuların birbiriyle karşılaştığı asıl
+   * yer; oradan birini ekleyememek sosyal katmanın girişini kapatmaktı.
+   *
+   * ⚠️ İSTEĞE BAĞLI: eski sunucu bu alanı göndermiyor ve o mesajlarda
+   * "ekle" düğmesi ÇİZİLMİYOR. Zorunlu yapmak, sürüm atlarken geçmiş
+   * mesajları bozardı.
+   */
+  w?: string;
   /** metin */
   m: string;
   /** sunucu zaman damgası (ms) */

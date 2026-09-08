@@ -11,9 +11,10 @@
 //
 // Çalıştır:  npx tsx src/chat.test.mts
 
+import fs from 'node:fs';
 import http from 'node:http';
 import { WebSocket } from 'ws';
-import { MAX_UZUNLUK, konusabilir, temizle, temizleHepsi } from './chat.js';
+import { MAX_UZUNLUK, kaydet, konusabilir, temizle, temizleHepsi } from './chat.js';
 import { attachPresence, stopPresence } from './presence.js';
 import { issueToken } from './auth.js';
 
@@ -165,6 +166,45 @@ console.log('\n[3] ⭐ Uçtan uca: mesaj diğer oyuncuya ulaşıyor mu');
   stopPresence();
   await new Promise<void>((r) => server.close(() => r()));
   temizleHepsi();
+}
+
+console.log('\n[G] ** SOHBETTEN ARKADAS EKLENEBILIYOR');
+{
+  /**
+   * 🔴 NIYE VAR: sohbet mesaji yalniz KISALTILMIS ad tasiyordu (`7dau…HBo4`)
+   * ve `short()` geri cevrilemez. Yani oyuncularin birbiriyle KARSILASTIGI
+   * asil yerden takip listesine kimse eklenemiyordu; tek yol 44 karakterlik
+   * adresi elle yapistirmakti ve kopyalanacak metin bile yoktu.
+   *
+   * ⚠️ YENI BIR ACIGA CIKARMA DEGIL: siralama satiri zaten tam cuzdani
+   * yayinliyor ve adresler zincirde herkese acik.
+   */
+  temizleHepsi();
+  const tam = 'ChatFullWalletTest1111111111111111111111111';
+  const msg = kaydet('Chat…test', 'selam', Date.now(), null, 'world', null, tam);
+  check('kaydet tam cuzdani tasiyor', msg?.w === tam, String(msg?.w));
+  // ISTEGE BAGLI: eski surum bu alani gondermiyor ve o mesajlar bozulmamali
+  const eski = kaydet('Eski…surum', 'merhaba', Date.now());
+  check('tam cuzdan verilmezse alan HIC yok', eski !== null && !('w' in eski));
+  temizleHepsi();
+
+  const oku2 = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
+  const pres = oku2('src/presence.ts');
+  check('presence tam cuzdani gonderiyor', /kaydet\([^)]*p\.wallet\)/.test(pres));
+
+  const panel = oku2('../frontend/src/components/ChatPanel.tsx');
+  check('sohbet satirinda ekle dugmesi var', /<EkleDugmesi wallet=\{m\.w\}/.test(panel));
+  check('dugme addFollow cagiriyor', /addFollow\(wallet\)/.test(panel));
+  // ⚠️ KENDI mesajinda cizilmemeli: sunucu kendini takibi reddediyor,
+  // dugme her tiklamada hata verirdi.
+  check('kendi mesajinda cizilmiyor', /wallet === benim/.test(panel));
+  // ⚠️ Tam cuzdan yoksa (eski sunucu) cizilmemeli: tiklaninca hicbir sey
+  // yapamayacak bir dugme, bozuk bir dugmedir.
+  check('tam cuzdan yoksa cizilmiyor', /!wallet \|\| !benim/.test(panel));
+
+  const tip = oku2('../frontend/src/lib/chat.ts');
+  check('istemci tipi alani taniyor', /w\?: string/.test(tip));
+  check('uydurma desen bulunmuyor (kontrol grubu)', !/walletZZZ/.test(panel + pres));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ SOHBET SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

@@ -367,7 +367,9 @@ export function attachPresence(server: Server) {
           // kişi dünyaya 8, loncaya 8 mesaj atardı.
           if (!konusabilir(p.wallet)) return;
           p.lastSeen = Date.now();   // konuşmak da canlılık işareti
-          const msg = kaydet(short(p.wallet), metin, Date.now(), p.tag, kanal, p.guildId);
+          // ⚠️ TAM CUZDAN DA GONDERILIYOR: `short()` ciktisi geri cevrilemez ve
+          // o hâliyle sohbetten kimse takip listesine eklenemiyordu.
+          const msg = kaydet(short(p.wallet), metin, Date.now(), p.tag, kanal, p.guildId, p.wallet);
           // Loncasız biri lonca kanalına yazdıysa mesaj hiç doğmaz.
           if (!msg) return;
           // ⚠️ BALON İÇİN SON MESAJ. Metin SUNUCUNUN temizlediği hâli

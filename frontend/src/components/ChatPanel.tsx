@@ -11,6 +11,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { joinChat, type ChatHandle, type ChatMessage, type Kanal } from '@/lib/chat';
+import { addFollow } from '@/lib/gameSession';
+import { getWallet } from '@/lib/session';
 import { getMode } from '@/lib/session';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { C, FONT, thinGlass } from '@/lib/theme';
@@ -175,6 +177,12 @@ export function ChatPanel() {
                     için katılır — etiket, loncanın reklamıdır. */}
                 {m.g && <span style={{ color: C.ice, fontWeight: 900 }}>[{m.g}] </span>}
                 <span style={{ color: C.candle, fontWeight: 900 }}>{m.n}</span>
+                {/* ⚠️ SOHBETTEN TAKİBE EKLEME. Oyuncuların birbiriyle
+                    KARŞILAŞTIĞI yer burası; takip listesine eklemenin tek
+                    yolu 44 karakterlik adresi elle yapıştırmaktı ve sohbet
+                    adı zaten `7dau…HBo4` diye kısaltılmış gösteriyordu —
+                    kopyalanacak metin bile yoktu. */}
+                <EkleDugmesi wallet={m.w} />
                 <span style={{ color: C.boneFaint }}>: </span>
                 <span style={{ color: C.bone, wordBreak: 'break-word' }}>{m.m}</span>
               </div>
@@ -213,5 +221,42 @@ export function ChatPanel() {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * SOHBET SATIRINDAN TAKİBE EKLE.
+ *
+ * ⚠️ ÜÇ DURUMDA HİÇ ÇİZİLMEZ ve üçü de kasıtlı:
+ *   · mesajda tam cüzdan yoksa (eski sunucu sürümü) — tıklanınca hiçbir
+ *     şey yapamayacak bir düğme göstermek, bozuk göstermektir
+ *   · KENDİ mesajınsa — sunucu kendini takibi reddediyor, düğme her
+ *     tıklamada hata verirdi
+ *   · demo modunda — sunucu yok
+ *
+ * ⚠️ Zaten takiptekini yeniden eklemek sunucuda HATA DEĞİL (sessizce
+ * geçiliyor); düğme yine "watching" der, çünkü oyuncu için sonuç aynı.
+ */
+function EkleDugmesi({ wallet }: { wallet?: string }) {
+  const [durum, setDurum] = useState<'idle' | 'busy' | 'ok' | 'err'>('idle');
+  const benim = getWallet();
+  if (!wallet || !benim || wallet === benim) return null;
+  return (
+    <button
+      disabled={durum !== 'idle'}
+      title={durum === 'ok' ? 'Added to your watch list' : 'Add to your watch list'}
+      onClick={() => {
+        setDurum('busy');
+        addFollow(wallet).then(() => setDurum('ok')).catch(() => setDurum('err'));
+      }}
+      style={{
+        all: 'unset', cursor: durum === 'idle' ? 'pointer' : 'default',
+        marginLeft: 4, padding: '0 4px', borderRadius: 3,
+        fontSize: 9.5, fontWeight: 900, lineHeight: '13px',
+        color: durum === 'ok' ? C.ok : durum === 'err' ? C.badText : C.boneFaint,
+        border: `1px solid ${durum === 'ok' ? C.ok : C.border}55`,
+        verticalAlign: 'middle',
+      }}
+    >{durum === 'ok' ? '✓' : '+'}</button>
   );
 }

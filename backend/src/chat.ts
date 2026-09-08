@@ -51,8 +51,27 @@ export const MAX_UZUNLUK = 180;
 export type Kanal = 'world' | 'guild';
 
 export interface ChatMessage {
-  /** kısa cüzdan — tam adres yayınlanmaz */
+  /** ekranda basılan kısa ad (`7dau…HBo4`) */
   n: string;
+  /**
+   * TAM cüzdan — sohbetten arkadaş ekleyebilmek için.
+   *
+   * 🔴 BU ALAN ESKİ BİR KARARI DEĞİŞTİRİYOR ve gerekçesi yazılmalı: burada
+   * önce "tam adres yayınlanmaz" yazıyordu. O kural bir gizlilik kaygısıydı
+   * ama dayanağı yoktu — `leaderboard.ts` ZATEN her satırda tam cüzdanı
+   * yayınlıyor ve adresler zincirde herkese açık. Yani kısaltma kimseyi
+   * korumuyor, yalnızca `short()` geri çevrilemez olduğu için sohbetten
+   * arkadaş eklemeyi İMKÂNSIZ kılıyordu.
+   *
+   * Ölçüldü: oyuncuların birbiriyle karşılaştığı asıl yer sohbet, ve takip
+   * listesine eklemenin tek yolu 44 karakterlik adresi elle yapıştırmaktı —
+   * kopyalanacak metin bile yoktu.
+   *
+   * ⚠️ İSTEĞE BAĞLI: eski sunucu sürümünün ürettiği geçmiş mesajlarda yok
+   * ve orada "ekle" düğmesi çizilmiyor. Zorunlu yapmak sürüm atlarken
+   * geçmişi bozardı.
+   */
+  w?: string;
   /** temizlenmiş metin */
   m: string;
   /** SUNUCU zaman damgası (ms) — istemciden gelen zaman kabul edilmez */
@@ -136,9 +155,13 @@ export function konusabilir(wallet: string, now = Date.now()): boolean {
 export function kaydet(
   kisaAd: string, metin: string, now = Date.now(), etiket?: string | null,
   kanal: Kanal = 'world', guildId?: string | null,
+  /** TAM cuzdan — sohbetten arkadas eklemek icin (bkz. ChatMessage.w) */
+  tamCuzdan?: string | null,
 ): ChatMessage | null {
   const msg: ChatMessage = {
-    n: kisaAd, m: metin, at: now, c: kanal, ...(etiket ? { g: etiket } : {}),
+    n: kisaAd, m: metin, at: now, c: kanal,
+    ...(etiket ? { g: etiket } : {}),
+    ...(tamCuzdan ? { w: tamCuzdan } : {}),
   };
   if (kanal === 'guild') {
     if (!guildId) return null;
