@@ -30,7 +30,18 @@ export function rpcYapilandirildi(): boolean {
   return (process.env.RPC_URLS ?? '').trim().length > 0;
 }
 
-export class RpcHatasi extends Error {}
+export class RpcHatasi extends Error {
+  /**
+   * ⚠️ ISTEGIN kendi hatasi mi (bozuk parametre) yoksa UCUN sorunu mu
+   * (kota, kesinti)? Ilki her ucta ayni cevabi verir; digerlerini denemek
+   * kotalari bos yere yakar.
+   */
+  istekHatasi: boolean;
+  constructor(mesaj: string, opt?: { istekHatasi?: boolean }) {
+    super(mesaj);
+    this.istekHatasi = opt?.istekHatasi === true;
+  }
+}
 
 const ZAMAN_ASIMI_MS = 6000;
 
@@ -45,8 +56,75 @@ const ZAMAN_ASIMI_MS = 6000;
  * ⚠️ Zaman aşımı ŞART: yanıt vermeyen bir uç, `fetch`in kendi varsayılanı
  * olmadığı için isteği süresiz asardı ve oyuncunun isteği de onunla asılırdı.
  */
+/**
+ * ⭐ DUSMUS UCU BIR SURE ATLA — "sirali dene"nin eksik yarisi.
+ *
+ * 🔴 NIYE VAR: eski surum HER istekte 1. uctan basliyordu. Birincil uc
+ * olduyse her odeme dogrulamasi once 6 saniyelik zaman asimini odemek
+ * zorundaydi — ve bu tam olarak beklemenin en pahali oldugu an: oyuncu
+ * parayi ZINCIRE GONDERMIS, urununu bekliyor.
+ *
+ * Ceza suresi boyunca o uc siranin disinda kalir; sure dolunca YENIDEN
+ * DENENIR — kalici olarak dislamak, gecici bir kesintiden sonra ucret
+ * odedigimiz saglayiciya bir daha hic donmemek olurdu.
+ */
+const CEZA_MS = 60_000;
+const cezali = new Map<string, number>();
+
+/** Denenecek uclar — cezalilar sona degil, DISARI atilir */
+function siraliUclar(now = Date.now()): string[] {
+  const hepsi = rpcUclari();
+  const temiz = hepsi.filter((u) => (cezali.get(u) ?? 0) <= now);
+  /**
+   * ⚠️ HEPSI CEZALIYSA YINE DE DENE. Cezanin amaci beklemek degil SIRA
+   * ATLAMAK; hicbir uc kalmayinca "hic deneme" demek, gecici bir toplu
+   * kesintide kapiyi gereksiz yere kapali tutardi.
+   */
+  return temiz.length > 0 ? temiz : hepsi;
+}
+
+/** Bir ucu cezalandir — kesinti/kota/zaman asimi */
+function cezalandir(url: string, now = Date.now()): void {
+  cezali.set(url, now + CEZA_MS);
+}
+
+/** Uc calisti — cezasi varsa kalksin */
+function affet(url: string): void {
+  if (cezali.has(url)) cezali.delete(url);
+}
+
+/**
+ * Bu JSON-RPC hatasi UCUN sorunu mu, ISTEGIN sorunu mu?
+ *
+ * ⚠️ AYRIM SART. Bozuk bir parametre ("Invalid param") her ucta AYNI cevabi
+ * verir; onu ucun sucu sayarsak tek bir istemci hatasi butun uclari
+ * cezalandirir ve saglam bir altyapiyi kendi elimizle devre disi
+ * birakiriz. Kota/kapasite hatalari ise gercekten o uca ait.
+ */
+function ucunSucuMu(mesaj: string): boolean {
+  return /rate|limit|quota|capacity|too many|429|busy|unavailable|timeout|exceeded/i.test(mesaj);
+}
+
+/** Uclarin o anki durumu — operatör gorunurlugu icin */
+export function rpcSaglik(now = Date.now()): { url: string; cezali: boolean; kalanSn: number }[] {
+  return rpcUclari().map((url) => {
+    const bitis = cezali.get(url) ?? 0;
+    return {
+      // ⚠️ ANAHTAR SIZDIRILMIYOR: Helius gibi saglayicilarda API anahtari
+      // URL'nin icinde. Operator panelinde tam URL gostermek onu ekrana
+      // basmak olurdu.
+      url: url.replace(/([?&](api-key|apikey|key)=)[^&]+/i, '$1***'),
+      cezali: bitis > now,
+      kalanSn: bitis > now ? Math.ceil((bitis - now) / 1000) : 0,
+    };
+  });
+}
+
+/** ⚠️ Yalniz test icin — cezalari sifirla */
+export function rpcCezalariSifirla(): void { cezali.clear(); }
+
 export async function rpcCagir<T>(method: string, params: unknown[]): Promise<T> {
-  const uclar = rpcUclari();
+  const uclar = siraliUclar();
   let sonHata: unknown = null;
 
   for (const url of uclar) {
@@ -59,16 +137,37 @@ export async function rpcCagir<T>(method: string, params: unknown[]): Promise<T>
         body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
         signal: iptal.signal,
       });
-      if (!res.ok) throw new RpcHatasi(`${url} → HTTP ${res.status}`);
+      // ⚠️ HTTP hatasi UCUN sorunu: kota, kapali, yanlis yol. Cezalandir.
+      if (!res.ok) { cezalandir(url); throw new RpcHatasi(`${url} → HTTP ${res.status}`); }
       const gelen = (await res.json()) as { result?: T; error?: { message?: string } };
       // ⚠️ HTTP 200 + gövdede `error` MÜMKÜN — JSON-RPC hatayı 200 ile döner.
       // Yalnız `res.ok`a bakmak, hata gövdesini geçerli sonuç sayardı.
-      if (gelen.error) throw new RpcHatasi(`${url} → ${gelen.error.message ?? 'rpc hatası'}`);
-      if (gelen.result === undefined) throw new RpcHatasi(`${url} → boş sonuç`);
+      if (gelen.error) {
+        const mesaj = gelen.error.message ?? 'rpc hatası';
+        if (ucunSucuMu(mesaj)) {
+          cezalandir(url);
+          throw new RpcHatasi(`${url} → ${mesaj}`);
+        }
+        /**
+         * 🔴 ISTEGIN SUCU — SIRADAKI UCU DENEME.
+         *
+         * Bozuk bir parametre her ucta ayni cevabi verir. Eski surum yine de
+         * hepsini deniyordu: tek bir istemci hatasi butun uclara birer istek
+         * atiyor, kotalari bos yere yakiyor ve hata mesajini SONUNCU ucun
+         * mesajiyla degistiriyordu. Uc saglam, cevap kesin — burada bitir.
+         */
+        affet(url);
+        throw new RpcHatasi(`${url} → ${mesaj}`, { istekHatasi: true });
+      }
+      if (gelen.result === undefined) { cezalandir(url); throw new RpcHatasi(`${url} → boş sonuç`); }
+      affet(url);
       return gelen.result;
     } catch (e) {
+      // ⚠️ Istek hatasi ZINCIRI KESER; ucun sucu olan hatada sirdaki uca gec.
+      if (e instanceof RpcHatasi && e.istekHatasi) throw e;
+      // ⚠️ `fetch` firlattiysa (ag hatasi / zaman asimi) uc sucludur.
+      if (!(e instanceof RpcHatasi)) cezalandir(url);
       sonHata = e;
-      // sıradaki uca geç — bu uç düşmüş, kotası dolmuş ya da yavaş
     } finally {
       clearTimeout(saat);
     }

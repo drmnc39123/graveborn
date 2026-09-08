@@ -19,7 +19,7 @@ import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
-import { rpcCagir } from './rpc.js';
+import { rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ossuarySolPrice, solPrice } from '@game/solPrice';
 import {
   GuildError, createGuild, donate, growthOf, joinGuild, leaveGuild, listGuilds, myGuild,
@@ -2386,6 +2386,26 @@ app.post('/admin/errors/clear', adminOnly, wrap(async (_req, res) => {
 
 app.get('/admin/overview', adminOnly, wrap(async (_req, res) => {
   res.json(await overview());
+}));
+
+/**
+ * RPC SAGLIGI — hangi uc ayakta, hangisi cezada.
+ *
+ * ⚠️ NIYE VAR: yedekleme SESSIZ calisiyor. Birincil uc dustugunde oyun
+ * calismaya devam ediyor ve kimse fark etmiyor — ta ki YEDEK de dusene
+ * kadar. Operator "su an hangi uctan okuyoruz" sorusunu sorabilmeli.
+ *
+ * ⚠️ API ANAHTARI MASKELENIYOR (`rpcSaglik` icinde): Helius gibi
+ * saglayicilarda anahtar URL'nin ICINDE ve panele basmak onu ekrana
+ * yazmak olurdu.
+ */
+app.get('/admin/rpc', adminOnly, wrap(async (_req, res) => {
+  res.json({
+    ozel: rpcYapilandirildi(),
+    hazine: hazineAdresi(),
+    solRayi: solRayiAcik(),
+    uclar: rpcSaglik(),
+  });
 }));
 
 app.get('/admin/players', adminOnly, wrap(async (req, res) => {
