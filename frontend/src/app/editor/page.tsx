@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { C, glass } from '@/lib/theme';
 import { importCodeWorld } from '@/game/importWorld';
+import { BUILDINGS } from '@/components/BuildingDock';
 import { GROUND_Z, autoFps, autoSolid, autoSolidW, isBridge, isGround } from '@/game/autoProps';
 import {
   MAP_TILE, emptyMap, loadMapLocal, paletteIndex, saveMapLocal,
@@ -18,16 +19,30 @@ import {
 interface Asset { src: string; cat: string; name: string; w: number; h: number; frames: number }
 type Tool = 'object' | 'tile' | 'marker';
 
-/** Oyunun tanıdığı bina rolleri. Kapı işaretçisi bunlardan BİRİNE bağlanmalı,
- *  yoksa bina dekor kalır. Serbest metin kutusuydu — kimse doğru id'yi bilemezdi. */
-const DOOR_ROLES = [
-  { id: 'quests', name: "The Warden's Post — bölüm seçimi" },
-  { id: 'upgrade', name: 'The Forge — kalıcı yükseltme' },
-  { id: 'shop', name: "Pedlar's Stall — tılsım satın alma" },
-  { id: 'market', name: 'Market Hall — oyuncu ticareti' },
-  { id: 'exchange', name: 'The Exchange — alış emirleri' },
-  { id: 'tavern', name: 'The Rest — profil / kayıtlar' },
-] as const;
+/**
+ * Kapı işaretçisinin bağlanabileceği hedefler.
+ *
+ * 🔴 NAVBARDAN TÜRÜYOR, ELLE YAZILMIYOR. Burada 6 satırlık sabit bir liste
+ * vardı ve navbar 21 panele çıkmıştı: `boss` ile `reliquary` YAYINDAKİ
+ * KÖYDE kapısı olduğu hâlde bu listede YOKTU, geri kalan 13 panel ise
+ * hiçbir binaya bağlanamıyordu. Yani editör oyunun bir kısmını
+ * göremiyordu — ve bunu hiçbir yerde söylemiyordu.
+ *
+ * ⚠️ `BUILDINGS` navbarın da okuduğu tek kaynak (`BuildingDock`). Yeni bir
+ * panel eklenince burası kendiliğinden doğru kalıyor.
+ */
+const DOOR_ROLES = BUILDINGS.map((b) => ({ id: b.id, name: `${b.label} — ${b.sub}` }));
+
+/**
+ * ⚠️ KÖYDE KAPISI OLMASI BEKLENEN roller — denetim uyarısı bunlara bakar.
+ *
+ * Hepsini beklemek YANLIŞ olurdu: `settings` bir bina değil (navbara
+ * bilerek konuldu), `pit` bir panel değil bir EKRAN, `invite`/`friends`
+ * gibi sosyal sekmeler için köyde bir yapı yok. Denetimin işi eksik kapıyı
+ * göstermek; olmayacak bir kapıyı istemek uyarıyı gürültüye çevirir.
+ */
+const KAPI_BEKLENEN = ['quests', 'upgrade', 'shop', 'market', 'exchange', 'tavern',
+  'boss', 'reliquary'] as const;
 
 export default function EditorPage() {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -57,6 +72,8 @@ export default function EditorPage() {
   /** silgi modu — açıkken tıklama/sürükleme siler */
   const [erase, setErase] = useState(false);
   const [autoAt, setAutoAt] = useState<string>('');
+  /** yayındaki köy okunamadıysa sebebi — sessiz kalmak yanlış haritayla çalıştırır */
+  const [yukleme, setYukleme] = useState<string | null>(null);
   /** çizim gerekiyor mu — boştayken kare harcamamak için */
   const dirtyRef = useRef(true);
   const markDirty = useCallback(() => { dirtyRef.current = true; }, []);
@@ -106,17 +123,52 @@ export default function EditorPage() {
   const imgCache = useRef(new Map<string, HTMLImageElement>());
   const nextId = useRef(1);
 
+  /**
+   * Yayındaki köyü (`public/map/village.json`) editöre getir.
+   *
+   * ⚠️ ÜSTÜNE YAZMADAN ÖNCE SORAR: elde bir taslak varsa oyuncunun emeği
+   * bir tıkla gitmemeli.
+   */
+  const yayindakiniYukle = useCallback(async (sessiz = false) => {
+    try {
+      const r = await fetch('/map/village.json', { cache: 'no-store' });
+      if (!r.ok) throw new Error(String(r.status));
+      const gelen = (await r.json()) as MapDoc;
+      if (!gelen?.terrain?.data) throw new Error('bozuk dosya');
+      if (!sessiz && docRef.current.objects.length > 0
+        && !confirm('Yayındaki köy yüklenecek ve şu anki harita gidecek. Devam?')) return;
+      pushUndo();
+      setDoc(gelen);
+      nextId.current = Math.max(1, ...gelen.objects.map((o) => o.id),
+        ...gelen.markers.map((m) => m.id)) + 1;
+      setYukleme(null);
+    } catch (e) {
+      setYukleme(`Yayındaki köy okunamadı (${String(e)}). public/map/village.json duruyor mu?`);
+    }
+  }, [pushUndo]);
+
+
   // manifest + kayıtlı harita
   useEffect(() => {
     fetch('/art/manifest.json').then((r) => r.json()).then((m) => {
       setAssets(m.items); setCats(m.cats); setCat(m.cats[0] ?? '');
     }).catch(() => {});
     const saved = loadMapLocal();
-    if (saved) {
+    if (saved && saved.objects.length > 0) {
       setDoc(saved);
       nextId.current = Math.max(1, ...saved.objects.map((o) => o.id), ...saved.markers.map((m) => m.id)) + 1;
+    } else {
+      /**
+       * 🔴 TASLAK YOKSA (ya da BOŞSA) YAYINDAKİ KÖY GELİR — boş ekran DEĞİL.
+       * Boş açılış bu editörün en pahalı tuzağıydı: "0 nesne" yazan bir
+       * harita indirilip `village.json` üstüne yazılırsa 2.085 nesnelik köy
+       * tek tıkla silinir ve kayıp ancak oyuna girince fark edilir.
+       * ⚠️ `objects.length > 0` şartı önemli: eski, kazara boşaltılmış bir
+       * taslak da boş sayılıyor.
+       */
+      void yayindakiniYukle(true);
     }
-  }, []);
+  }, [yayindakiniYukle]);
 
   useEffect(() => { docRef.current = doc; }, [doc]);
 
@@ -986,7 +1038,12 @@ export default function EditorPage() {
           const badDoors = doors.filter((m) => !m.target);
           const badTravel = travels.filter((m) => !m.toX && !m.toY);
           const roles = new Set(doors.map((m) => m.target).filter(Boolean));
-          const missing = DOOR_ROLES.filter((r) => !roles.has(r.id));
+          // ⚠️ TÜM roller değil, KÖYDE KAPISI BEKLENENLER: navbar 21 panel
+          // taşıyor ama `settings` bina değil, `pit` bir ekran, sosyal
+          // sekmelerin köyde karşılığı yok. Hepsini istemek uyarıyı
+          // gürültüye çevirir ve gürültülü uyarı okunmaz.
+          const missing = KAPI_BEKLENEN.filter((id) => !roles.has(id))
+            .map((id) => DOOR_ROLES.find((r) => r.id === id) ?? { id, name: id });
           const problems = badDoors.length + badTravel.length + (fights.length === 1 ? 0 : 1) + missing.length;
           return (
             <div style={{ ...glass(9), padding: 9, marginBottom: 8,
@@ -1005,10 +1062,27 @@ export default function EditorPage() {
           );
         })()}
 
-        {/* MEVCUT DÜNYAYI İÇE AKTAR — koddaki köyü editöre getirir,
-            sıfırdan başlamak yerine üstünde çalışılır. */}
+        {/* ⭐ YAYINDAKİ KÖYÜ YÜKLE — oyunun GERÇEKTEN okuduğu dosya.
+            🔴 NİYE EKLENDİ: editör açılışta YALNIZ localStorage taslağına
+            bakıyordu. Tarayıcı verisi silinmiş ya da başka bir makinede
+            açılmışsa boş harita geliyordu — ve o boş haritayı "İndir" ile
+            indirip `public/map/village.json` üstüne yazmak, 2.085 nesnelik
+            köyü tek tıkla siler. Kayıp sessiz olurdu: editör "0 nesne"
+            yazıyor ama bunun bir UYARI mı yoksa yeni bir harita mı olduğunu
+            söylemiyordu.
+            ⚠️ Oyun `/map/village.json` OKUR (`mapWorld.loadMapWorld`);
+            `importCodeWorld` ise `world.ts`teki ŞABLONU getirir — ikisi
+            aynı şey değil ve şablonda köy yok. */}
+        <button onClick={() => { void yayindakiniYukle(); }}
+          style={{ width: '100%', padding: '9px 0', marginBottom: 8, borderRadius: 8, cursor: 'pointer',
+            border: `1px solid ${C.candle}66`, background: 'rgba(239,167,46,0.14)', color: C.bone, fontWeight: 800, fontSize: 12 }}>
+          ⬇ Yayındaki köyü yükle (village.json)
+        </button>
+
+        {/* MEVCUT DÜNYAYI İÇE AKTAR — koddaki ŞABLONU editöre getirir.
+            ⚠️ Bu köy DEĞİL, boş bir başlangıç şablonu. */}
         <button onClick={() => {
-          if (doc.objects.length && !confirm('Mevcut haritanın üstüne kodda tanımlı dünya yüklenecek. Devam?')) return;
+          if (doc.objects.length && !confirm('Mevcut haritanın üstüne kodda tanımlı ŞABLON yüklenecek (köy DEĞİL). Devam?')) return;
           pushUndo();
           setDoc(importCodeWorld());
         }}

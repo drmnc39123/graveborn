@@ -393,7 +393,22 @@ export default function PlayPage() {
       });
   }, [router]);
 
-  const onEnter = useCallback((id: BuildingId) => setPanel(id), []);
+/**
+ * Bir hedefi AÇ — rıhtımdan tıklandığında da köyde kapıdan girildiğinde de
+ * aynı yol.
+ *
+ * 🔴 İKİ YOL AYRIŞMIŞTI. Rıhtım `pit`i özel olarak ele alıyordu (panel
+ * değil EKRAN), köy kapısı ise düz `setPanel(id)` çağırıyordu. Editörde
+ * kapı hedefleri navbarın tamamına açılınca bu sessiz bir hataya dönüşürdü:
+ * THE PIT'e bağlanmış bir binaya girmek HİÇBİR ŞEY açmaz, oyuncu da
+ * binanın bozuk olduğunu sanardı. Tek fonksiyon, iki çağıran.
+ */
+  const hedefiAc = useCallback((id: string) => {
+    if (id === 'pit') { setPanel(null); setScreen({ kind: 'arena' }); return; }
+    setPanel(id);
+  }, []);
+
+  const onEnter = useCallback((id: BuildingId) => hedefiAc(id), [hedefiAc]);
 
   /**
    * ⚠️ SON KAHRAMAN KAYDI UÇUŞTA MI — düello brifingi bunu BEKLEMEK ZORUNDA.
@@ -690,11 +705,9 @@ export default function PlayPage() {
       />
 
       {/* Cüzdan + bina rıhtımı — yürümek seçenek, zorunluluk değil */}
-      <BuildingDock open={panel} onOpen={(id) => {
-        // ⚠️ Pit bir panel değil, ekran: rıhtımdan doğrudan maça giriliyor.
-        if (id === 'pit') { setPanel(null); setScreen({ kind: 'arena' }); return; }
-        setPanel(id);
-      }} onClose={() => setPanel(null)}
+      {/* ⚠️ Rıhtım ve köy kapısı AYNI fonksiyonu çağırıyor (`hedefiAc`) —
+          ikisi ayrı yazıldığında `pit` yalnız rıhtımdan çalışıyordu. */}
+      <BuildingDock open={panel} onOpen={hedefiAc} onClose={() => setPanel(null)}
         gold={progress?.gold ?? 0} wallet={wallet}
         onHeight={setDockH}
         onLeft={setDockLeft}
