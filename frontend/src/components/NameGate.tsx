@@ -16,9 +16,21 @@
 // kapatılabilir yapmak, "sonra hallederim" diyen herkesi kalıcı olarak
 // adresine mahkûm etmek olurdu. İstisna bilinçli ve tek.
 //
-// ⚠️ DEMO'DA ASLA AÇILMAZ. Demo'nun kuralı: cüzdan yokken SIFIR backend
-// çağrısı. Çağıran taraf `wallet` verdiği için burada ikinci bir kapı
-// gerekmiyor, ama gerekçe burada yazılı.
+// 🔴 DEMO'DA ASLA AÇILMAZ — VE ARTIK BURADA DA KONTROL EDİLİYOR.
+//
+// Bu başlık önce şöyle diyordu: *"Çağıran taraf `wallet` verdiği için
+// burada ikinci bir kapı gerekmiyor."* O cümle YANLIŞ ÇIKTI ve bedelini
+// kullanıcı bildirdi: kabuk "cüzdanlı mıyım?" sorusunu `getWallet()`in
+// dolu olmasıyla cevaplıyordu, `setMode('demo')` ise o anahtarı silmiyordu.
+// Bir kez cüzdan bağlamış oyuncu demoya geçince kapı açılıyor, ad ucu doğru
+// davranıp "Connect a wallet first." diyor ve pencere KAPATILAMADIĞI için
+// oyuncu oyuna hiç giremiyordu.
+//
+// ⚠️ BU İKİNCİ BİR GERÇEK DEĞİL, AYNI GERÇEĞİN İKİNCİ KATMANI: burada da
+// `getMode()` soruluyor — `gameSession.isWallet()`in sorduğunun aynısı.
+// Kural tek yerde yazılı, yalnız iki yerde uygulanıyor. Kapatılamayan bir
+// pencerede yanlış çağrının bedeli "çirkin görünmek" değil "oyuna
+// girememek" olduğu için bu katman hak edilmiş.
 //
 // ⚠️ Tüm stiller INLINE · MOR YOK · oyuncu metni İngilizce.
 
@@ -26,6 +38,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AD_MAX, AD_MIN, renameCost, validatePlayerName } from '@/game/playerName';
 import { checkPlayerName, setPlayerName } from '@/lib/gameSession';
 import { BTN, Panel, PixelButton } from '@/components/ui/kit';
+import { getMode } from '@/lib/session';
 import { C, FONT } from '@/lib/theme';
 import type { Progress } from '@/game/progress';
 
@@ -90,6 +103,16 @@ export function NameGate({ onDone }: { onDone: (p: Progress) => void }) {
   }, [ad, gonderiliyor, onDone]);
 
   const hazir = durum === 'musait' && !gonderiliyor;
+
+  /**
+   * 🔴 SON KAPI — yukarıdaki başlıkta yazan sebeple.
+   *
+   * ⚠️ KANCALARDAN SONRA: React kancaları koşulsuz çağrılmalı, yoksa
+   * bileşen bir render'da 4, diğerinde 0 kanca çalıştırır ve React
+   * "rendered fewer hooks than expected" ile düşer. Erken dönüş bu yüzden
+   * `useEffect`/`useCallback` bloklarının ALTINDA.
+   */
+  if (getMode() !== 'wallet') return null;
 
   return (
     <div style={{

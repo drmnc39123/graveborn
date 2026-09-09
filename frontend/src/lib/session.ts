@@ -43,7 +43,45 @@ export function getMode(): SessionMode | null {
 }
 export function setMode(m: SessionMode) { ls()?.setItem(K_MODE, m); }
 export function getToken(): string | null { return ls()?.getItem(K_TOKEN) ?? null; }
-export function getWallet(): string | null { return ls()?.getItem(K_WALLET) ?? null; }
+
+/**
+ * OTURUMUN CÜZDANI — demo'da HER ZAMAN `null`.
+ *
+ * 🔴 KULLANICI BİLDİRİMİ: *"Oyunda demo moduna girip tıkladığımda nickname
+ * koymamı istiyor, fakat nick seçerken 'cüzdan bağlayın' diyor. Cüzdan
+ * bağlamak isteseydim zaten bağlardım, demoda bu olmamalı."*
+ *
+ * SEBEP ÖLÇÜLDÜ (tarayıcıda birebir üretildi): "cüzdanlı oturum mu?"
+ * sorusunun İKİ AYRI CEVABI vardı ve ayrışmışlardı —
+ *   · `gameSession.isWallet()` → `getMode() === 'wallet'`   (doğru)
+ *   · `app/play/page.tsx`      → `getWallet()` dolu mu      (yanlış)
+ * `setMode('demo')` bu anahtarı SİLMİYOR. Yani bir kez cüzdan bağlamış
+ * oyuncu sonra "PLAY DEMO" derse `graveborn:wallet` yerinde kalıyor:
+ * kabuk "cüzdan var" sanıp AD KAPISINI açıyor, ad ucu ise doğru davranıp
+ * "Connect a wallet first." diyor. Kapı KAPATILAMADIĞI için oyuncu orada
+ * KİLİTLENİYOR — bu depodaki en pahalı hata biçimi.
+ *
+ * Aynı ayrışmanın ikinci belirtisi de aynı ekranda görüldü: demo
+ * oyuncusunun rozetinde "DEMO" yerine `3STD…hRD8` yazıyordu.
+ *
+ * ⚠️ ÇÖZÜM ÇAĞIRANLARA KOŞUL EKLEMEK DEĞİL, TEK BOĞAZ. Beş çağıranın her
+ * birine `getMode() === 'wallet' && …` yazmak, altıncı ayrışmayı beklemek
+ * demekti. Cevap tek yerde veriliyor.
+ *
+ * ⚠️ GİRİŞ AKIŞI ETKİLENMİYOR: `signInWithWallet` adresi zaten elinde
+ * taşıyor (`/auth/nonce` ve `/auth/verify` gövdede gönderiyor), `api()` ise
+ * kimliği `getToken()`dan alıyor. Mod yazılmadan önce bu fonksiyona ihtiyaç
+ * duyan tek bir çağrı yok.
+ *
+ * ⚠️ ANAHTAR SİLİNMİYOR, GÖRMEZDEN GELİNİYOR: demodan cüzdana dönen
+ * oyuncunun `walletId`si (SOL ödemesinde cüzdanı yeniden bulmak için)
+ * yerinde kalsın. Okunması engellendiği sürece bayat değerin zararı yok.
+ */
+export function getWallet(): string | null {
+  if (getMode() !== 'wallet') return null;
+  return ls()?.getItem(K_WALLET) ?? null;
+}
+
 /** Giriste kullanilan cuzdanin kimligi — odeme aninda yeniden bulmak icin */
 export function getWalletId(): string | null { return ls()?.getItem(K_WALLET_ID) ?? null; }
 
