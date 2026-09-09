@@ -143,7 +143,12 @@ console.log('\n[7] ** OZEL MESAJ ZINCIRI');
   // ⚠️ Okundu isareti konusmayi acinca — ayri bir uc olsaydi istemci
   // unutur ve sayac sonsuza kadar kirmizi kalirdi.
   check('okundu isareti konusma icinde', /export async function konusma[\s\S]{0,900}readAt: new Date/.test(dm));
-  check('tam cuzdan listede sizdirilmiyor', /w\.slice\(0, 4\)/.test(dm));
+  /**
+   * ⚠️ NIYET, YAZIM BICIMI DEGIL. Eski hali `/w\.slice\(0, 4\)/` ariyordu;
+   * kisaltma tek cozucuye tasininca kirmizi yandi ama sizinti YOKTU.
+   */
+  check('DM listesi adi kisalticidan geciriyor',
+    /w\.slice\(0, 4\)/.test(dm) || /oyuncuAdi\(/.test(dm));
 
   const idx = yorumsuz(oku('../backend/src/index.ts'));
   check('uclar var', /'\/dm'/.test(idx) && /'\/dm\/:wallet'/.test(idx));

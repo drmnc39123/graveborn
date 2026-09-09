@@ -254,7 +254,21 @@ console.log('\n[8] ** PAYLASIM ZINCIRI');
    */
   const kartBlok = idx.slice(idx.indexOf("'/referral/card/:code'"));
   const kb = kartBlok.slice(0, kartBlok.indexOf('}));') + 4);
-  check('2. kart TAM CUZDAN sizdirmiyor', /wallet\.slice/.test(kb));
+  /**
+   * ⚠️ MUHUR NIYETI OLCUYOR, YAZIM BICIMINI DEGIL.
+   *
+   * Eski hali `/wallet\.slice/` ariyordu — yani kisaltmanin TAM OLARAK
+   * o satirda, elle yazilmis olmasini sart kosuyordu. Kisaltma tek bir
+   * cozucuye (`@game/playerName oyuncuAdi`) tasininca muhur kirmizi yandi;
+   * oysa sizinti YOKTU, yalnizca kisaltmayi yapan yer degismisti.
+   *
+   * Dogru iddia: kart bloğu ham cuzdani DONDURMUYOR ve adi bir
+   * kisaltici/cozucuden geciriyor.
+   */
+  const kisaltiliyor = /wallet\.slice/.test(kb) || /oyuncuAdi\(/.test(kb);
+  check('2. kart adi kisalticidan geciriyor', kisaltiliyor);
+  // 🔴 ASIL IDDIA: ham cuzdan alani dondurulmuyor
+  check('2b. kart TAM CUZDAN sizdirmiyor', !/wallet: p\.wallet/.test(kb));
   check('3. kart gold/toz DONDURMUYOR', !/gold|dust/.test(kb), 'sizinti yok');
 
   const sayfa = oku('src/app/s/[code]/page.tsx');

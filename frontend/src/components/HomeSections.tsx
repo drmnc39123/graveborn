@@ -159,7 +159,7 @@ const FAQ: { q: string; a: string }[] = [
      * ⚠️ Cevap yumuşatılmadı, GENİŞLETİLDİ. Bir istisnayı saklamak, onu
      * kabul etmekten pahalıdır: oyuncu paketi görünce zaten öğreniyor.
      */
-    a: 'Partly, and we will not dance around it. Gold buys permanent power at the Forge, and the Starter Pack is the one place real money buys something that changes a run — it carries gold and a hero that cannot be unlocked by playing. Everything else that decides a fight (the Forge, the Stall, gear, paths, pets) takes gold and play only, and none of them has a payment button. Depth itself cannot be bought at any price.',
+    a: 'Partly, and we will not dance around it. Gold buys permanent power at the Forge, and the Starter Pack is the one place real money buys something that changes a run — it carries gold and a hero that cannot be unlocked by playing. Everything else that decides a fight (the Forge, the Stall, gear, paths, pets) takes gold and play only, and none of them has a payment button. Depth is gated by survival, not by spending.',
   },
   {
     q: 'Do I need a wallet to try it?',
