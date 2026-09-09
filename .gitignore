@@ -24,3 +24,10 @@ Thumbs.db
 
 # geçici
 .tmp/
+
+# tanitim videosu — kod versiyonlu, agir ciktilar degil (bkz. promo/README.md)
+promo/node_modules/
+promo/out/
+promo/public/frames/
+promo/public/shots/
+promo/public/audio/

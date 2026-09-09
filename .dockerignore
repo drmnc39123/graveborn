@@ -11,3 +11,6 @@ node_modules
 .env
 **/.env
 *.log
+
+# tanıtım videosu — imaja girmez (kareler + node_modules yüzlerce MB)
+promo
