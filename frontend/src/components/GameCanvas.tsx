@@ -1001,10 +1001,34 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 {/* ⚠️ CANLI FPS BURADA: oyuncu kademeyi değiştirince etkisini
                     ANINDA görmeli. Yoksa "değiştirdim ama bir şey oldu mu?"
                     sorusu kalır ve ayar bir inanç meselesine döner. */}
-                <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
-                  fontVariantNumeric: 'tabular-nums',
-                  color: hud.fps >= 50 ? C.ok : hud.fps >= 30 ? C.candle : C.bloodSoft }}>
-                  {hud.fps} fps
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: FONT.ui, fontSize: 10, fontWeight: 900,
+                    fontVariantNumeric: 'tabular-nums',
+                    color: hud.fps >= 50 ? C.ok : hud.fps >= 30 ? C.candle : C.bloodSoft }}>
+                    {hud.fps} fps
+                  </span>
+                  {/* ── KAPAT ──
+                      🔴 KULLANICI BİLDİRDİ: *"Grafik penceresinde seçtikten
+                      sonra kapatma tuşu yok, pencereyi kapatamıyorum."*
+                      HAKLIYDI. Kapatmanın iki yolu VARDI — dişliye tekrar
+                      basmak ve Escape — ama İKİSİ DE GÖRÜNMÜYORDU. Var olan
+                      ama görünmeyen bir çıkış, olmayan bir çıkıştır; oyuncu
+                      koşunun ortasında panelin arkasında kalıyor.
+                      ⚠️ Dokunma hedefi 22×22: 10 px'lik bir "×" telefonda
+                      ıskalanır. Görsel olarak küçük, hedef olarak değil. */}
+                  <button
+                    onClick={() => setGfxAcik(false)}
+                    aria-label="Close graphics settings"
+                    style={{
+                      all: 'unset', cursor: 'pointer',
+                      width: 22, height: 22, borderRadius: 5,
+                      display: 'grid', placeItems: 'center',
+                      color: C.boneFaint, fontSize: 13, lineHeight: 1,
+                      border: `1px solid ${C.border}`,
+                    }}
+                  >
+                    ×
+                  </button>
                 </span>
               </div>
               {/* ── KARE SÜRESİ RAPORU ──
