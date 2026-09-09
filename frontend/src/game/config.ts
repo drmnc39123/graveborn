@@ -344,7 +344,39 @@ export const STAGES: readonly StageDef[] = [
   },
   {
     id: 22, name: 'The Ossuary Deep', enemyCount: 1620, firstClearGold: 14400,
-    spawnRate: 8.0, maxAlive: 420, enemies: ['bone_thrall', 'skeleton', 'grave_knight', 'bone_archer', 'hulk'],
+    /**
+     * ⭐ `grave_knight` → `warrior` — ÖLÇÜLDÜ (2026-09-09, 6 varyant × 7 seed).
+     *
+     * SORUN: b22 kampanyanın TEK aykırısıydı — hem akranlarından sivriliyor
+     * (12,2 dk, eşik 12,0) hem de komşularının EN DÜŞÜK bitirme oranına
+     * sahipti (5/7; b20/b21/b23 7/7). `campaign.test` bu yüzden kırmızıydı.
+     *
+     * VARYANT DENEYİ (her biri tam kampanya turu, aynı seed'ler):
+     *     şu anki (grave_knight)      5/7 · 12,2 dk   ← sivri
+     *     skeleton → warrior          5/7 · 14,0 dk   (KÖTÜLEŞTİ)
+     *     skeleton → wretch           6/7 · 13,3 dk   (bitirme iyi, süre kötü)
+     *     hulk     → crab             5/7 · 12,4 dk   (fark yok)
+     *     hulk     → warrior          3/7 ·  7,3 dk   (hızlı ama ÖLDÜRÜCÜ)
+     *     hulk     → wretch           2/7 ·  9,5 dk   (çöktü)
+     *     grave_knight → warrior      7/7 ·  9,5 dk   ← seçilen
+     *
+     * ⚠️ İLK TEŞHİSİM YANLIŞTI. "Düşük XP'li `skeleton` bölümü yavaşlatıyor"
+     * dedim; ölçüm çürüttü — onu `warrior` ile değiştirmek süreyi UZATTI
+     * (14,0 dk). Asıl sorun XP değil TOPLAM CAN'dı: `grave_knight` 320 HP
+     * ile kadronun en büyük can yığını ve hızı 34, yani kaçan oyuncuya
+     * yetişemiyor. 110 HP'lik `warrior` (hız 45, charger) hem üçte bir can
+     * hem gerçekten ulaşıyor.
+     *
+     * ⚠️ ÇARPANLARA DOKUNULMADI. `hpMul` ile kampanya ayarı bu depoda İKİ
+     * KEZ denendi ve İKİ KEZ başarısız oldu (kontrollü deneyde hpMul ×5,5
+     * süreyi yalnız %3 değiştirdi). Çözüm her seferinde ROSTER oldu — b21'de
+     * de öyleydi (`fiend` → `bone_thrall`).
+     * ⚠️ KAMPANYA TOPLAMI KORUNDU: 183 → 180 dk. Bölüm hızlandı ama oyunun
+     * uzunluğu düşmedi.
+     * ⚠️ Bölümün kemik kimliği duruyor: `bone_thrall` + `skeleton` +
+     * `bone_archer` üçlüsü yerinde, yalnız tank değişti.
+     */
+    spawnRate: 8.0, maxAlive: 420, enemies: ['bone_thrall', 'skeleton', 'warrior', 'bone_archer', 'hulk'],
     hpMul: 10.95, speedMul: 1.60, damageMul: 6.2,
     boss: { hp: 209_000, speed: 66, damage: 220, radius: 76, art: 'boss_nightmare', label: 'Marrowmind' },
   },
