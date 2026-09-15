@@ -69,10 +69,12 @@ import { installAudioUnlock, installUiClickSound, play } from '@/game/sfx';
 import { muzikAcik, muzikBaslat, muzikDurdur, muzikSahne } from '@/game/music';
 import { ApiError, getMode, getWallet } from '@/lib/session';
 import {
-  buyUpgrade, engineModeOf, finishBossRun, finishRun as settleRun, loadSessionProgress,
+  buyUpgrade, engineModeOf, fetchCardSummary, finishBossRun, finishRun as settleRun, loadSessionProgress,
   setHero as saveHero, startBossRun, startDuel, startRun,
-  type RunKind, type RunTicket, type Settled,
+  type BoardId, type CardSummary, type RunKind, type RunTicket, type Settled,
 } from '@/lib/gameSession';
+import { panelUnlocked } from '@/lib/testMode';
+import { BossKarti, TrialsKarti } from '@/components/HudKartlari';
 
 type Screen =
   | { kind: 'hub' }
@@ -442,6 +444,34 @@ export default function PlayPage() {
 
   const onEnter = useCallback((id: BuildingId) => hedefiAc(id), [hedefiAc]);
 
+  /**
+   * Sıralama paneli hangi panoda açılsın. ⚠️ `hedefiAc` BÜYÜTÜLMEDİ (locked/
+   * hudKisayol mühürleri boyunu ölçüyor): Trials kartı kendi başlangıcını
+   * burada koyuyor, panel kapanınca varsayılana dönüyor — yoksa profil
+   * düğmesi bir sonraki açılışta da Trials'ta açılırdı.
+   */
+  const [lbBaslangic, setLbBaslangic] = useState<BoardId>('descent');
+  useEffect(() => { if (panel !== 'leaderboard') setLbBaslangic('descent'); }, [panel]);
+  const trialsAc = useCallback(() => { setLbBaslangic('season'); hedefiAc('leaderboard'); }, [hedefiAc]);
+
+  /**
+   * ⭐ BİLDİRİM NOKTALARI — okunmamış DM (friends ikonu) ve alınabilir görev
+   * ödülü (profil kartı). Kaynak `/me/card`, `fetchCardSummary`nin 30 sn
+   * PAYLAŞILAN önbelleğinden: kart da aynı sözü okuyor, ikinci istek yok.
+   * ⚠️ Yalnız cüzdan/test modunda (demo sunucuda yok). Panel kapanınca yeniden
+   * okunuyor: DM okuyup dönen oyuncunun noktası hemen sönmeli.
+   * ⚠️ Gizli sekmede sorulmuyor — `setInterval` arka planda da çalışır.
+   */
+  const [ozet, setOzet] = useState<CardSummary | null>(null);
+  useEffect(() => {
+    if (!panelUnlocked(getMode()) || panel) return;
+    let iptal = false;
+    const oku = () => fetchCardSummary().then((o) => { if (!iptal) setOzet(o); }).catch(() => { /* sessiz */ });
+    oku();
+    const t = setInterval(() => { if (!document.hidden) oku(); }, 60_000);
+    return () => { iptal = true; clearInterval(t); };
+  }, [panel]);
+
   /** Minimapın altındaki kart sütunu — kutuyla AYNI kaynaktan (bkz. `hudLayout`) */
   const kolon = useMemo(() => sagKolon(ekranW, dockH, dockLeft), [ekranW, dockH, dockLeft]);
   /** Profil kartı ve altındaki kısayolların sütunu — sağ kolonun sol eşi */
@@ -809,7 +839,7 @@ export default function PlayPage() {
           // altında kart gizleniyor ve telefonda sıralamaya giden tek yol bu.
           kisayollar={[
             { id: 'guild', glif: 'guild', etiket: 'Guilds — apply or found one', renk: C.candle },
-            { id: 'friends', glif: 'friends', etiket: 'Friends', renk: C.ice },
+            { id: 'friends', glif: 'friends', etiket: 'Friends', renk: C.ice, nokta: ozet?.unreadDm ?? 0 },
             ...(lbProfilde ? [] : [
               { id: 'leaderboard', glif: 'leaderboard' as const, etiket: 'Leaderboards', renk: C.candle },
             ]),
@@ -866,6 +896,7 @@ export default function PlayPage() {
             progress={progress}
             wallet={wallet}
             onOpen={() => setPanel('tavern')}
+            bekleyen={ozet?.quests?.claimable ?? 0}
           />
           {/* 🔴 Kullanıcı isteği: "profil kartının tam altına bir leaderboards
               butonunun aynısından". Köyde ayrı bir sıralama düğmesi YOKTU;
@@ -883,6 +914,9 @@ export default function PlayPage() {
               {lbDugme.etiket}
             </PixelButton>
           )}
+          {/* ⭐ Haftalık turnuvanın bitişi köyde görünür (kullanıcı: "daha dolu
+              bir ekran"). İstek atmıyor; tıklanınca sıralama Trials'ta açılır. */}
+          <TrialsKarti onOpen={trialsAc} />
         </div>
       )}
 
@@ -941,6 +975,8 @@ export default function PlayPage() {
               demek ona zaten yaptığı şeyi teklif etmektir. */}
           {getMode() === 'demo' && <PlayConnect />}
           <EventBanner />
+          {/* Ortak boss'un canı — etkinliğin altında: ikisi de "bu hafta ne oluyor" */}
+          <BossKarti onOpen={() => hedefiAc('boss')} />
           <NoticeBanner konum="sagKolon" />
           <ReadyCard progress={progress} />
         </div>
@@ -1373,7 +1409,7 @@ export default function PlayPage() {
               /* ⚠️ Tavern'deki LEADERBOARD sekmesinin AYNI bileşeni — ikinci bir
                  sıralama tablosu yazılmadı; profil kartının altındaki kısayol
                  ve sohbetteki kupa ikonu buraya açılıyor. */
-              <LeaderboardsPanel />
+              <LeaderboardsPanel baslangic={lbBaslangic} />
             ) : acik === 'tavern' ? (
               <RecordsPanel progress={progress ?? loadProgress()} onChange={setProgress} onError={setNote} />
             ) : acik === 'market' ? (

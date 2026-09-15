@@ -599,8 +599,30 @@ export interface CardSummary {
   quests: { done: number; total: number; claimable: number } | null;
 }
 
-export async function fetchCardSummary(): Promise<CardSummary> {
-  return api<CardSummary>('/me/card');
+/**
+ * ⚠️ 30 SN PAYLAŞILAN SÖZ — köydeki bildirim noktaları ve kart AYNI isteği
+ * kullanıyor. Önbelleksiz her biri ayrı çekerdi, ve `/me/card` `/run/finish`
+ * ile AYNI `paraLimiti` kovasında (30/dk): gürültülü bir HUD, koşu kapanışını
+ * 429'a düşürebilirdi.
+ * ⚠️ HATA ÖNBELLEĞE GİRMEZ: düşen istek 30 sn boyunca "yok" dedirtmesin.
+ * ⚠️ Durumu değiştiren her yol `kartOzetiniTazele()` çağırır (görev al, DM
+ * oku/gönder, koşu bitir) — yoksa okunmuş mesajın noktası 30 sn yanardı.
+ */
+const OZET_TTL_MS = 30_000;
+let ozetOnbellek: { at: number; soz: Promise<CardSummary> } | null = null;
+
+export function fetchCardSummary(): Promise<CardSummary> {
+  const simdi = Date.now();
+  if (ozetOnbellek && simdi - ozetOnbellek.at < OZET_TTL_MS) return ozetOnbellek.soz;
+  const soz = api<CardSummary>('/me/card');
+  ozetOnbellek = { at: simdi, soz };
+  soz.catch(() => { if (ozetOnbellek?.soz === soz) ozetOnbellek = null; });
+  return soz;
+}
+
+/** Özeti değiştiren bir işlemden sonra: bir sonraki okuma sunucuya gitsin */
+export function kartOzetiniTazele(): void {
+  ozetOnbellek = null;
 }
 
 // ── OZEL MESAJ ───────────────────────────────────────────────────────
@@ -623,11 +645,15 @@ export async function fetchDmThreads(): Promise<{ threads: DmThread[] }> {
 
 /** ⚠️ Konusmayi acmak OKUNDU isaretler — sunucu tarafinda, ayri bir uc yok */
 export async function fetchDmThread(wallet: string): Promise<{ messages: DmMessage[] }> {
-  return api(`/dm/${encodeURIComponent(wallet)}`);
+  const out = await api<{ messages: DmMessage[] }>(`/dm/${encodeURIComponent(wallet)}`);
+  kartOzetiniTazele();   // okundu işaretlendi → okunmamış noktası sönmeli
+  return out;
 }
 
 export async function sendDm(wallet: string, body: string): Promise<{ message: DmMessage }> {
-  return api(`/dm/${encodeURIComponent(wallet)}`, { method: 'POST', body: { body } });
+  const out = await api<{ message: DmMessage }>(`/dm/${encodeURIComponent(wallet)}`, { method: 'POST', body: { body } });
+  kartOzetiniTazele();
+  return out;
 }
 
 // ── DAVET ────────────────────────────────────────────────────────────
@@ -882,6 +908,8 @@ export async function finishRun(
       killsByType: run.killsByType ?? {},
     },
   });
+  // Koşu görev ilerletiyor — köydeki "alınabilir ödül" noktası bayat kalmasın.
+  kartOzetiniTazele();
 
   // Sunucu aralık döndürmüyor (ödül için gerekmiyor); arayüzün "hangi
   // derinlikler ödedi" satırı için önce/sonra farkından türetiyoruz.
@@ -1195,7 +1223,9 @@ export async function fetchQuests(): Promise<QuestState> {
 }
 
 export async function claimQuest(id: string): Promise<{ view: QuestState; dust: number; progress: Progress }> {
-  return api('/quests/claim', { method: 'POST', body: { id } });
+  const out = await api<{ view: QuestState; dust: number; progress: Progress }>('/quests/claim', { method: 'POST', body: { id } });
+  kartOzetiniTazele();   // alınabilir ödül sayısı değişti
+  return out;
 }
 
 // ── PvP SEZONU ──

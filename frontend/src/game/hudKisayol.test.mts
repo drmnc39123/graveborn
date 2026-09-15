@@ -55,6 +55,14 @@ console.log('\n── [1] ikonlar aç/kapa düğmesinin İÇİNDE değil ──'
   const sb = sahte.indexOf('aria-expanded={acik}');
   const sd = sahte.slice(sahte.lastIndexOf('<button', sb), sahte.indexOf('</button>', sb));
   check('kesici sahte iç içe düğmeyi YAKALIYOR', /kisayollar\.map/.test(sd));
+
+  // 🔴 HİDRASYON — ölçüldü (2026-09-15): `const kilitli = getMode() !== 'wallet'`
+  // render sırasında okunuyordu; sunucuda localStorage yok → sekmesiz kutu,
+  // cüzdanlı istemcide sekmeli kutu → React tüm belgeyi yeniden kuruyordu.
+  check('sohbet kilidi render sırasında localStorage okumuyor',
+    !/const kilitli = getMode\(\)/.test(sohbet)
+    && /useState\(true\)/.test(sohbet)
+    && /useEffect\(\(\) => \{ setKilitli\(getMode\(\) !== 'wallet'\); \}, \[\]\)/.test(sohbet));
 }
 
 console.log('\n── [2] glif verisi ──');
@@ -91,7 +99,7 @@ console.log('\n── [4] kapılar ──');
   check('profil düğmesi sıralama panelini açıyor', /hedefiAc\('leaderboard'\)/.test(sayfa));
   check('sıralamanın kendi panel dalı var', /acik === 'leaderboard'/.test(sayfa));
   check('sıralama paneli genişliği tanımlı', /leaderboard: 720/.test(sayfa));
-  check('Tavern ile AYNI bileşen (ikinci tablo yazılmadı)', /<LeaderboardsPanel \/>/.test(sayfa)
+  check('Tavern ile AYNI bileşen (ikinci tablo yazılmadı)', /<LeaderboardsPanel baslangic=\{lbBaslangic\} \/>/.test(sayfa)
     && /<LeaderboardsPanel gomulu \/>/.test(yorumsuz(oku('../components/RecordsPanel.tsx'))));
   // ⚠️ hedefiAc BÜYÜTÜLMEDİ: locked.test onu 2000 karakter sınırında ölçüyor
   const hBas = sayfa.indexOf('const hedefiAc'), hSon = sayfa.indexOf('const onEnter');

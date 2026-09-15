@@ -103,7 +103,16 @@ export function ChatPanel({ kisayollar = [], onOpen, onHeight }: {
    * "Demo gold cannot be sold" kutusuyla aynı desen. Sahte mesaj YOK,
    * bağlantı YOK (efekt hâlâ erken çıkıyor), sadece kapı görünür.
    */
-  const kilitli = getMode() !== 'wallet';
+  const [kilitli, setKilitli] = useState(true);
+  /**
+   * 🔴 MOD RENDER SIRASINDA OKUNMUYOR — ölçüldü (2026-09-15, cüzdan modu):
+   * `getMode()` localStorage'dan okuyor ve sunucuda `null`. Sunucu kilitli
+   * kutuyu (sekmesiz) çiziyor, istemci ilk çizimde WORLD/GUILD sekmelerini
+   * — "Expected server HTML to contain a matching <button>" ve React TÜM
+   * belgeyi atıp istemcide yeniden kuruyordu. Her cüzdanlı `/play` açılışında.
+   * Kilitli başlayıp montajdan sonra açılmak iki tarafı eşitliyor.
+   */
+  useEffect(() => { setKilitli(getMode() !== 'wallet'); }, []);
 
   /**
    * Seçili kanalın mesajları.
@@ -311,7 +320,8 @@ function EkleDugmesi({ wallet }: { wallet?: string }) {
         marginLeft: 4, padding: '0 4px', borderRadius: 3,
         fontSize: 9.5, fontWeight: 900, lineHeight: '13px',
         color: durum === 'ok' ? C.ok : durum === 'err' ? C.badText : C.boneFaint,
-        border: `1px solid ${durum === 'ok' ? C.ok : C.border}55`,
+        // ⚠️ `C.border` zaten rgba() — sonuna `55` eklemek geçersiz renk (bildirim atılıyordu)
+        border: `1px solid ${durum === 'ok' ? `${C.ok}55` : C.border}`,
         verticalAlign: 'middle',
       }}
     >{durum === 'ok' ? '✓' : '+'}</button>

@@ -27,6 +27,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { BAR_DOLGU, BTN } from '../components/ui/kit.js';
 import { ICON, STAT_ICON } from '../lib/icons.js';
+import { C } from '../lib/theme.js';
 import { Game } from './engine.js';
 import { ARENA } from './arena.js';
 
@@ -426,6 +427,36 @@ console.log('\n── [8] marka logosu ikon olarak kullanılamaz ──');
 
   const rail = readFileSync(join(kok, 'components', 'BuildRail.tsx'), 'utf8');
   check('koşu içi diriliş sayacı stat haritasından okuyor', /statIcon\('revival'\)/.test(rail));
+}
+
+// ── [9] rgba PALET RENGİNE SAYDAMLIK EKLENMEZ ──
+//
+// 🔴 NİYE VAR — ölçüldü (2026-09-15): `C.border` hex DEĞİL, `rgba(...)`.
+// `${C.border}66` yazmak `rgba(227,216,192,0.14)66` üretiyor; tarayıcı geçersiz
+// bildirimi TÜMDEN atıyor ve kenarlık hiç çizilmiyor. Dört yerde vardı
+// (WATCH düğmesi · sohbet takip düğmesi · Vigil ×2) ve hiçbiri görünür bir
+// hata vermediği için aylarca fark edilmedi.
+// ⚠️ Liste paletten TÜRETİLİYOR: yarın başka bir rgba jeton eklenirse o da korunur.
+console.log('\n── [9] rgba palet rengine hex saydamlık eklenmez ──');
+{
+  const rgbaJetonlar = Object.entries(C).filter(([, v]) => typeof v === 'string' && /^(rgba?|hsla?)\(/.test(v)).map(([k]) => k);
+  check('palette en az bir rgba jeton var (kontrol: liste boş değil)', rgbaJetonlar.includes('border'), rgbaJetonlar.join(','));
+  const desen = new RegExp(`\\$\\{C\\.(${rgbaJetonlar.join('|')})\\}[0-9a-fA-F]{2}\\b`);
+  const kok9 = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+  const bozuk: string[] = [];
+  const gez9 = (d: string) => {
+    for (const ad of readdirSync(d)) {
+      const p = join(d, ad);
+      if (statSync(p).isDirectory()) { gez9(p); continue; }
+      if (!/\.(tsx?|mts)$/.test(ad) || /\.test\.mts$/.test(ad)) continue;
+      const temiz = readFileSync(p, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      if (desen.test(temiz)) bozuk.push(p.slice(kok9.length));
+    }
+  };
+  gez9(kok9);
+  check('hiçbir dosya rgba jetona hex saydamlık eklemiyor', bozuk.length === 0, bozuk.join(', '));
+  check('desen sahte örneği YAKALIYOR', desen.test('border: `1px solid ${C.border}66`'));
+  check('desen hex jetonu yakalaMIYOR (C.candle66 geçerli)', !desen.test('border: `1px solid ${C.candle}66`'));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ BEKÇİLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

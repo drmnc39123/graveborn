@@ -343,7 +343,7 @@ export function VigilSection({ progress, onChange, onError }: {
             ) : (
               <span style={{
                 fontFamily: FONT.ui, fontSize: 9.5, fontWeight: 900, letterSpacing: 1,
-                color: C.boneFaint, border: `1px solid ${C.border}66`,
+                color: C.boneFaint, border: `1px solid ${C.border}`,
                 padding: '5px 10px', borderRadius: 5, whiteSpace: 'nowrap',
               }}>{ray === 'bilinmiyor' ? '…' : 'NOT OPEN YET'}</span>
             )}
@@ -354,7 +354,7 @@ export function VigilSection({ progress, onChange, onError }: {
           {ray === 'kapali' && (
             <div style={{
               flexBasis: '100%', padding: '7px 9px', borderRadius: 5,
-              border: `1px solid ${C.border}66`, background: 'rgba(0,0,0,0.22)',
+              border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.22)',
               fontFamily: FONT.ui, fontSize: 10.5, color: C.boneFaint, lineHeight: 1.5,
             }}>
               The card cannot be bought yet — payments are not switched on. Everything

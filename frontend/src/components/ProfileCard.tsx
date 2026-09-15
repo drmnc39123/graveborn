@@ -90,12 +90,18 @@ function Kutu({ ikon, etiket, deger, baslik, vurgu = false }: {
   );
 }
 
-export function ProfileCard({ progress, wallet, onOpen }: {
+export function ProfileCard({ progress, wallet, onOpen, bekleyen = 0 }: {
   progress: Progress;
   /** cüzdan adresi — demo modunda boş */
   wallet?: string | null;
   /** genişletilmiş kısımdaki bağlantı — kayıtlar paneli */
   onOpen?: () => void;
+  /**
+   * Alınabilir görev ödülü sayısı — KAPALI şeritte nokta.
+   * ⚠️ Kart bunu KENDİ ÇEKMİYOR (kapalıyken maliyet sıfır, [1]); sayı
+   * sayfanın paylaşılan özetinden geliyor. ⚠️ Sıfırsa nokta YOK.
+   */
+  bekleyen?: number;
 }) {
   const hero = heroById(progress.hero);
   const [acik, setAcik] = useState(false);
@@ -207,6 +213,7 @@ export function ProfileCard({ progress, wallet, onOpen }: {
             Kartın açılabildiğini söyleyen TEK şey bu; görünmezse özellik de
             yok demektir. Büyütüldü ve kendi kutusuna alındı. */}
         <span style={{
+          position: 'relative',
           flexShrink: 0, width: 16, height: 16, borderRadius: 4,
           display: 'grid', placeItems: 'center',
           fontSize: 8, color: C.candle, background: 'rgba(239,167,46,0.12)',
@@ -215,6 +222,13 @@ export function ProfileCard({ progress, wallet, onOpen }: {
           transition: 'transform 140ms ease-out',
         }}>
           ▼
+          {/* `HudKisayol` ile aynı nokta deseni — kart açılınca "rewards waiting" yazıyor */}
+          {!acik && bekleyen > 0 && (
+            <span title={`${bekleyen} reward${bekleyen === 1 ? '' : 's'} waiting`} style={{
+              position: 'absolute', right: -4, top: -4, width: 8, height: 8, borderRadius: '50%',
+              background: C.candle, boxShadow: `0 0 6px ${C.candle}`, border: `1px solid ${C.void}`,
+            }} />
+          )}
         </span>
       </button>
 

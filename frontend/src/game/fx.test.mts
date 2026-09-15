@@ -496,6 +496,7 @@ console.log('\n[G] YÜZEY DİLİ — canvas üstünde `glass` kullanılamaz');
     // önce ikisinde de `glass(` OLMADIĞI doğrulandı.
     'VigilBeacon.tsx',    // minimapın solundaki sandık
     'PlayConnect.tsx',    // demo'da sağ kolonun başı
+    'HudKartlari.tsx',    // Trials geri sayımı (sol) + haftalık boss canı (sağ)
   ];
 
   const kokDizin = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'components');
