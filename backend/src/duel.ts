@@ -27,7 +27,7 @@ import crypto from 'node:crypto';
 import { DUEL, duelBlocker, duelWon, nextRatings, STALE_ENGINE } from '@game/duel';
 import { challengeRating, SIM_VERSION } from '@game/config';
 import { utcDay } from '@game/progress';
-import { herkeseAcikMi, herkeseAcikOyuncu } from './boards.js';
+import { herkeseAcikMi, herkeseAcikOyuncu } from './kamuSuzgec.js';
 import { prisma } from './db.js';
 import { markPvpMatch } from './pvpSeason.js';
 import { trackQuest } from './quests.js';

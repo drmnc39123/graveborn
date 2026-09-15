@@ -36,18 +36,28 @@ const yorumsuzSql = (s: string) => s.replace(/--.*$/gm, '');
 
 const sezon = yorumsuz(oku('../../../backend/src/season.ts'));
 const panolar = yorumsuz(oku('../../../backend/src/boards.ts'));
+const kamu = yorumsuz(oku('../../../backend/src/kamuSuzgec.ts'));
 const pvp = yorumsuz(oku('../../../backend/src/pvpSeason.ts'));
 const duello = yorumsuz(oku('../../../backend/src/duel.ts'));
 const sunucu = yorumsuz(oku('../../../backend/src/index.ts'));
 const duelPanel = yorumsuz(oku('../components/DuelPanel.tsx'));
 const gunlukKart = yorumsuz(oku('../components/DailyCard.tsx'));
 
-/** Bir fonksiyonun gövdesi — bir sonraki üst düzey `export`a kadar */
+/**
+ * Bir fonksiyonun gövdesi — bir sonraki ÜST DÜZEY bildirime kadar.
+ *
+ * ⚠️ İlk sürüm yalnız `\nexport `ta duruyordu ve dışa aktarılmayan
+ * yardımcıları da gövdeye katıyordu: `sutunPanosu`ndan süzgeç silindiğinde
+ * sayım, ARKADAKİ `gunlukPano`nun süzgecini sayıp YEŞİL kaldı (hata
+ * enjeksiyonu yakaladı).
+ */
 const govde = (kaynak: string, ad: string) => {
   const i = kaynak.indexOf(`function ${ad}(`);
   if (i < 0) return '';
-  const j = kaynak.indexOf('\nexport ', i + 1);
-  return kaynak.slice(i, j < 0 ? undefined : j);
+  const sonraki = /\r?\n(export |async function |function |const |interface |type )/g;
+  sonraki.lastIndex = i + 1;
+  const m = sonraki.exec(kaynak);
+  return kaynak.slice(i, m ? m.index : undefined);
 };
 
 console.log('\n── [1] ezmeden önce kapat ──');
@@ -67,10 +77,10 @@ console.log('\n── [1] ezmeden önce kapat ──');
 
 console.log('\n── [2] kamu süzgeci ──');
 {
-  const suzgec = govde(panolar, 'herkeseAcikOyuncu');
+  const suzgec = govde(kamu, 'herkeseAcikOyuncu');
   check('hazine koşulu şartlı yayılıyor', /\.\.\.\(\s*h\s*\?\s*\{\s*wallet:\s*\{\s*not:\s*h\s*\}\s*\}\s*:\s*\{\}\s*\)/.test(suzgec));
   // ⚠️ Yalnız WALLET için: `claimedAt: { not: null }` null olabilen sütunda geçerli.
-  check('`wallet: { not: null }` yazılmamış', !/wallet:\s*\{\s*not:\s*null/.test(panolar));
+  check('`wallet: { not: null }` yazılmamış', !/wallet:\s*\{\s*not:\s*null/.test(panolar + kamu));
   check('günlük tablo süzgeci kullanıyor', /player:\s*herkeseAcikOyuncu\(\)/.test(govde(panolar, 'gunlukTablo')));
   check('/daily sorguyu KOPYALAMIYOR, gunlukTablo okuyor',
     sunucu.includes('gunlukTablo(') && !/mode:\s*'daily',\s*startedAt:\s*\{\s*gte:\s*bas\s*\},\s*claimedAt/.test(sunucu));
@@ -126,6 +136,33 @@ console.log('\n── [4] pano sütunları (goldEarned · forgeLevels) ──');
     /goldEarned:\s*player\?\.goldEarned/.test(profil) && !/_sum:\s*\{\s*awarded/.test(profil));
   check('Tavern kartı panoyla aynı forge fonksiyonu',
     /forgeLevelsOf\(progress\.upgrades\)/.test(yorumsuz(oku('../components/RecordsPanel.tsx'))));
+}
+
+console.log('\n── [5] GET /boards/:id ──');
+{
+  check('uç var ve kimliği doğruluyor', /app\.get\('\/boards\/:id'[\s\S]{0,200}panoIdMi\(/.test(sunucu));
+  // ⚠️ `paraLimiti` kovası `/run/finish` ile ORTAK (30/dk)
+  const kova = sunucu.slice(sunucu.indexOf('const paraLimiti'), sunucu.indexOf(']) app.use(yol, paraLimiti)'));
+  check('/boards para kovasında DEĞİL', kova.length > 0 && !kova.includes("'/boards"));
+  const sutun = govde(panolar, 'sutunPanosu');
+  check('sütun panoları kamu süzgecini kullanıyor (liste + sayım)',
+    (sutun.match(/herkeseAcikOyuncu\(\)/g) ?? []).length >= 2 && /herkeseAcikMi\(/.test(sutun));
+  check('boss panosu süzüyor (ilişki yok, bellekte)', /herkeseAcikMi\(/.test(govde(panolar, 'bossPanosu')));
+  check('günlük `me` sayımı da süzülüyor', /herkeseAcikOyuncu\(\)/.test(govde(panolar, 'gunlukPano')));
+  const oku_ = govde(panolar, 'panoOku');
+  const sezonDali = oku_.slice(oku_.indexOf("case 'season'"), oku_.indexOf("case 'daily'"));
+  check('season okumadan ÖNCE kapatıyor', sezonDali.indexOf('settleSeasons(') >= 0
+    && sezonDali.indexOf('settleSeasons(') < sezonDali.indexOf('topSeason('));
+  const pitDali = oku_.slice(oku_.indexOf("case 'pit'"), oku_.indexOf("case 'answering'"));
+  check('pit okumadan ÖNCE kapatıyor', pitDali.indexOf('settlePvpSeasons(') >= 0
+    && pitDali.indexOf('settlePvpSeasons(') < pitDali.indexOf('pvpBoard('));
+  // ⚠️ `bossState` her okumada upsert yapıyor — pano yazma yan etkisi taşımaz
+  check('pano `bossState` çağırmıyor', !/bossState\(/.test(panolar));
+  // ⚠️ Önbellek BİLEREK yok (ad ücretli değişiyor; `me` taze, liste bayat çelişkisi)
+  check('önbellek yok (Map/TTL)', !/new Map<string,\s*\{[^}]*rows/.test(panolar) && !/TTL|setTimeout/.test(panolar));
+  check('tüm-zamanlar ve sezon da kamu süzgecinde',
+    /herkeseAcikOyuncu\(\)/.test(govde(yorumsuz(oku('../../../backend/src/leaderboard.ts')), 'top'))
+    && /herkeseAcikOyuncu\(\)/.test(govde(sezon, 'topSeason')));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ PANOLAR MÜHÜRLÜ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

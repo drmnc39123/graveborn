@@ -19,7 +19,8 @@ import { FORGE, costOf, forgeLevelsOf } from '@game/forge';
 import { PVP_PLACEMENT } from '@game/pvpSeason';
 import { seasonWeek } from '@game/season';
 import { gunBaslangici } from '@game/daily';
-import { gunlukTablo, herkeseAcikOyuncu, panoSutunlariniKur } from './boards.js';
+import { bossWeek } from '@game/worldBoss';
+import { PANO_IDLERI, gunlukTablo, herkeseAcikOyuncu, panoIdMi, panoOku, panoSutunlariniKur } from './boards.js';
 import { prisma } from './db.js';
 import { withLedger } from './ledger.js';
 import { TIME_SAFETY } from './reward.js';
@@ -143,7 +144,55 @@ try {
     check('İDEMPOTENT: ikinci çalıştırma aynı sonucu veriyor',
       n2.goldEarned === 325 && n2.forgeLevels === beklenenForge && r2.forge === 0, JSON.stringify(r2));
   }
+
+  console.log('\n[7] Her pano — hazine ve banlı TEPEDE, pano onları göstermiyor');
+  {
+    // Hazine ve banlı her sütunda devasa; normal oyuncu küçük ama pozitif.
+    const dev = { goldEarned: 2_000_000_000, forgeLevels: 9_999, dust: 2_000_000_000, ossuary: 999_999, bestRating: 9e15, bestStage: 25, bestDepth: 999 };
+    await prisma.player.update({ where: { wallet: HAZINE }, data: dev });
+    await prisma.player.update({ where: { wallet: banli }, data: dev });
+    await prisma.player.update({
+      where: { wallet: normal },
+      data: { goldEarned: 1_900_000_000, forgeLevels: 9_998, dust: 1_900_000_000, ossuary: 999_998, bestRating: 8e15, bestStage: 24, bestDepth: 21 },
+    });
+    const bw = bossWeek(NOW);
+    await prisma.bossDamage.createMany({
+      data: [
+        { id: crypto.randomUUID(), week: bw, wallet: HAZINE, damage: 2_000_000_000 },
+        { id: crypto.randomUUID(), week: bw, wallet: banli, damage: 1_999_999_999 },
+        { id: crypto.randomUUID(), week: bw, wallet: normal, damage: 1_999_999_998 },
+      ],
+    });
+
+    for (const id of ['descent', 'daily', 'gold', 'forge', 'dust', 'ossuary', 'pit', 'answering', 'boss'] as const) {
+      const p = await panoOku(id, normal, NOW);
+      const gizli = p.rows.filter((r) => r.wallet === HAZINE || r.wallet === banli).length;
+      check(`${id}: tepede normal oyuncu, gizliler yok, ad var`,
+        p.rows[0]?.wallet === normal && gizli === 0 && p.rows[0]?.name === AD_N,
+        `1. ${p.rows[0]?.name ?? p.rows[0]?.wallet?.slice(0, 12)} · gizli ${gizli}`);
+      check(`${id}: benim satırım #1`, p.me?.rank === 1 && p.me.wallet === normal, `#${p.me?.rank}`);
+      const hz = await panoOku(id, HAZINE, NOW);
+      check(`${id}: hazinenin kendi sırası YOK`, hz.me === null);
+    }
+    // Kontrol grubu: hazine süzgeci kalkınca hazine gerçekten 1. sıraya çıkıyor
+    process.env.TREASURY_ADDRESS = '';
+    const suzgecsiz = await panoOku('gold', normal, NOW);
+    check('KONTROL: süzgeç yokken hazine tepede (test ölçüyor)', suzgecsiz.rows[0]?.wallet === HAZINE);
+    process.env.TREASURY_ADDRESS = HAZINE;
+
+    const d = await panoOku('descent', null, NOW);
+    check('descent satırı bölüm + derinlik taşıyor', d.rows[0]?.stage === 24 && d.rows[0]?.depth === 21);
+    check('oturumsuz okumada `me` yok', d.me === null);
+    const g = await panoOku('guilds', null, NOW);
+    check('loncalar satırı cüzdan taşımıyor, lonca bilgisi taşıyor',
+      g.rows.every((r) => r.wallet === null && !!r.guild?.tag), `${g.rows.length} lonca`);
+    const s = await panoOku('season', normal, NOW);
+    check('season haftayı ve bitişi taşıyor', typeof s.week === 'number' && (s.endsAt ?? 0) > NOW.getTime());
+    check('bilinmeyen pano kimliği reddediliyor', !panoIdMi('balance') && panoIdMi('gold'));
+    await prisma.bossDamage.deleteMany({ where: { wallet: { in: [HAZINE, banli, normal] } } });
+  }
 } finally {
+  await prisma.bossDamage.deleteMany({ where: { wallet: { in: [HAZINE, banli, normal] } } });
   await prisma.ledger.deleteMany({ where: { wallet: { in: [HAZINE, banli, normal] } } });
   await prisma.run.deleteMany({ where: { wallet: { in: [HAZINE, banli, normal] } } });
   await prisma.player.deleteMany({ where: { wallet: { in: [HAZINE, banli, normal] } } });
@@ -207,6 +256,28 @@ console.log('\n[6] Canlı yol (sunucu)');
     check('Forge alımı forgeLevels\'i yazdı', al.status === 200 && p2.forgeLevels === p1.forgeLevels + 1,
       `${al.status} · ${p1.forgeLevels} → ${p2.forgeLevels}`);
     check('Forge harcaması goldEarned\'i DÜŞÜRMEDİ', p2.goldEarned === p1.goldEarned);
+    // ── [8] Uç: şekil + süre ──
+    // ⚠️ SÜRE ÖLÇÜLÜYOR çünkü plan 60 sn önbellek diyordu ve UYGULANMADI
+    // (bkz. boards.ts başlığı). Karar bir sayıya dayanmalı, bu o sayı.
+    console.log('\n[8] GET /boards/:id');
+    const sureler: string[] = [];
+    let enYavas = 0;
+    for (const id of PANO_IDLERI) {
+      await api(`/boards/${id}`, { token });   // ısınma (bağlantı + sorgu planı)
+      const t0 = performance.now();
+      const r = await api(`/boards/${id}`, { token });
+      const ms = performance.now() - t0;
+      enYavas = Math.max(enYavas, ms);
+      sureler.push(`${id} ${ms.toFixed(0)}ms`);
+      check(`/boards/${id} 200 + satır dizisi`, r.status === 200 && Array.isArray(r.json?.rows) && r.json?.id === id, `${r.status}`);
+    }
+    console.log(`     ${sureler.join(' · ')}`);
+    check('en yavaş pano 250 ms altında (önbelleksiz)', enYavas < 250, `${enYavas.toFixed(0)} ms`);
+    check('bilinmeyen pano 404', (await api('/boards/balance')).status === 404);
+    const gold = await api('/boards/gold', { token });
+    check('oturumlu okumada `me` benim satırım', gold.json?.me?.wallet === cuzdan && gold.json.me.value === p1.goldEarned,
+      `${gold.json?.me?.rank} · ${gold.json?.me?.value}`);
+    check('oturumsuz okuma çalışıyor (demo)', (await api('/boards/forge')).status === 200);
   } catch (e) {
     check('sunucuya ulaşıldı', false, `${API} — ${(e as Error).message}`);
   } finally {

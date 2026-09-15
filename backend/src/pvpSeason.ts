@@ -17,7 +17,7 @@ import {
 } from '@game/pvpSeason';
 import { seasonWeek } from '@game/season';
 import { Prisma } from '@prisma/client';
-import { herkeseAcikMi, herkeseAcikOyuncu } from './boards.js';
+import { herkeseAcikMi, herkeseAcikOyuncu } from './kamuSuzgec.js';
 import { prisma } from './db.js';
 
 export interface PvpRow {

@@ -12,6 +12,7 @@ import {
   SEASON_PAYOUT_DEPTH, rewardForRank, seasonEndsAt, seasonWeek,
 } from '@game/season';
 import { prisma } from './db.js';
+import { herkeseAcikMi, herkeseAcikOyuncu } from './kamuSuzgec.js';
 import { wornOf, type Row } from './leaderboard.js';
 import { ultraMi } from './ultra.js';
 
@@ -101,7 +102,7 @@ export async function topSeason(limit = 50, now = new Date()): Promise<{
 }> {
   const week = seasonWeek(now);
   const rows = await prisma.player.findMany({
-    where: { banned: false, seasonWeek: week, seasonRating: { gt: 0 } },
+    where: { ...herkeseAcikOyuncu(), seasonWeek: week, seasonRating: { gt: 0 } },
     orderBy: [{ seasonRating: 'desc' }, { lastSeen: 'asc' }],
     take: Math.min(Math.max(limit, 1), 100),
     select: SATIR_SEC,
@@ -132,10 +133,10 @@ export async function seasonRankOf(
     where: { wallet },
     select: { ...SATIR_SEC, seasonWeek: true, banned: true },
   });
-  if (!me || me.banned || me.seasonWeek !== week || me.seasonRating <= 0) return null;
+  if (!me || !herkeseAcikMi(wallet, me.banned) || me.seasonWeek !== week || me.seasonRating <= 0) return null;
 
   const ahead = await prisma.player.count({
-    where: { banned: false, seasonWeek: week, seasonRating: { gt: me.seasonRating } },
+    where: { ...herkeseAcikOyuncu(), seasonWeek: week, seasonRating: { gt: me.seasonRating } },
   });
   return {
     rank: ahead + 1,

@@ -20,7 +20,7 @@ import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
-import { gunlukTablo, panoSutunlariniKur } from './boards.js';
+import { gunlukTablo, panoIdMi, panoOku, panoSutunlariniKur } from './boards.js';
 import { ultraDolumGerekli, ultraIlerleme, ultraMi } from './ultra.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ReferralError, kodGir, kodTemizle, odulKontrol, referralDurum } from './referral.js';
@@ -1844,6 +1844,19 @@ app.get('/leaderboard', wrap(async (req, res) => {
     wallet ? rankOf(wallet) : Promise.resolve(null),
   ]);
   res.json({ rows, me });
+}));
+
+/**
+ * ⭐ LEADERBOARDS MERKEZİ — tek uç, on bir pano (bkz. boards.ts).
+ *
+ * ⚠️ `paraLimiti`nde DEĞİL: o kova `/run/finish` ile paylaşılıyor (30/dk).
+ * Pano çipleri arasında gezen oyuncu koşu kapanışını 429'a düşürmemeli.
+ * ⚠️ Oturum İSTEĞE BAĞLI: demo oyuncusu da tabloyu görür, sırası yok.
+ */
+app.get('/boards/:id', wrap(async (req, res) => {
+  const id = String(req.params.id ?? '');
+  if (!panoIdMi(id)) { res.status(404).json({ error: 'bilinmeyen_pano' }); return; }
+  res.json(await panoOku(id, auth(req)));
 }));
 
 /**

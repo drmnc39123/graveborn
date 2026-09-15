@@ -14,6 +14,7 @@
 
 import { challengeRating } from '@game/config';
 import { prisma } from './db.js';
+import { herkeseAcikMi, herkeseAcikOyuncu } from './kamuSuzgec.js';
 import { ultraMi } from './ultra.js';
 
 export interface Row {
@@ -126,7 +127,7 @@ const RATING_EPS = 1e-12;
 /** Top N — banlılar dışarıda, hiç inmemişler dışarıda */
 export async function top(limit = 50): Promise<Row[]> {
   const rows = await prisma.player.findMany({
-    where: { banned: false, bestRating: { gt: 0 } },
+    where: { ...herkeseAcikOyuncu(), bestRating: { gt: 0 } },
     orderBy: [{ bestRating: 'desc' }, { lastSeen: 'asc' }],
     take: Math.min(Math.max(limit, 1), 100),
     // ⚠️ `equipped` de çekiliyor: kozmetik prestij ANCAK BAŞKALARI GÖRÜRSE
@@ -173,10 +174,10 @@ export async function rankOf(wallet: string): Promise<{ rank: number; row: Row }
       banned: true, equipped: true, ossuary: true,
     },
   });
-  if (!me || me.banned || me.bestRating <= 0) return null;
+  if (!me || !herkeseAcikMi(wallet, me.banned) || me.bestRating <= 0) return null;
 
   const ahead = await prisma.player.count({
-    where: { banned: false, bestRating: { gt: me.bestRating } },
+    where: { ...herkeseAcikOyuncu(), bestRating: { gt: me.bestRating } },
   });
   const rank = ahead + 1;
   return {
