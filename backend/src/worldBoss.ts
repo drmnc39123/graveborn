@@ -21,6 +21,7 @@ import { permanentBonus } from '@game/forge';
 import { heroById } from '@game/heroes';
 import { mergeStats } from '@game/heroes';
 import { prisma } from './db.js';
+import { ultraMi } from './ultra.js';
 import type { Progress } from '@game/progress';
 
 /** Bu haftanın boss durumu — yoksa açılır */
@@ -135,7 +136,15 @@ export async function contribute(
   // sonu her koşunun "şüpheli" işaretlenmesi, admin panelini kullanılamaz
   // hâle getirirdi.
   const mul = Number.isFinite(eventMul) ? Math.max(1, eventMul) : 1;
-  const accepted = Math.floor(Math.min(ham, tavan) * mul);
+  /**
+   * 🔴 ULTRA HESAP ORTAK BOSS'A VURMAZ (2026-09-16, `worldBoss.test` [1]).
+   * Hazine test için 100M gold + tüm bölümlerle oynuyor; hasarı yazılsaydı
+   * haftanın boss'unu HERKES için bitirebilir ve hasar tablosuna (dolayısıyla
+   * ödüle) girerdi. Descent ve The Pit'teki kuralın aynısı: kapı YAZMADA.
+   * ⚠️ `accepted: 0` dönüyor — "400 hasar verdin" deyip canı düşürmemek,
+   * test hesabına bile yalan söylemek olurdu.
+   */
+  const accepted = ultraMi(wallet) ? 0 : Math.floor(Math.min(ham, tavan) * mul);
 
   if (accepted > 0) {
     await prisma.$transaction([
@@ -235,8 +244,11 @@ async function kapatBir(week: number): Promise<{ week: number; winners: number }
    * yazılamayacak bir cüzdana sıra ayırmak, ilk 5'i dörde düşürürdü.
    */
   const kayitli = new Set(oyuncular.map((p) => p.wallet));
+  // ⚠️ İKİNCİ KAPI (ödül): yazma kapısından önce tabloya girmiş bir hazine
+  // satırı kalmış olabilir. Süzgeç burada, bellekte — `BossDamage`in
+  // `Player` ilişkisi yok, `ultraDisi()` sorguya giremiyor.
   const satirlar = aday
-    .filter((r) => kayitli.has(r.wallet) && !banli.has(r.wallet))
+    .filter((r) => kayitli.has(r.wallet) && !banli.has(r.wallet) && !ultraMi(r.wallet))
     .slice(0, BARROW_PAYOUT_DEPTH);
   const sahipOlunan = new Map(oyuncular.map((p) => [
     p.wallet,

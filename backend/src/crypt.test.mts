@@ -72,9 +72,9 @@ console.log('\n[1] Hangi harcama kasaya katkı yapar');
 console.log('\n[2] Kasa doluyor');
 {
   await prisma.$transaction(async (tx) => {
-    await contributeToVault(tx, 'forge', -10_000);
-    await contributeToVault(tx, 'reliquary', -450);
-    await contributeToVault(tx, 'market_list', -5_000);  // sayılmamalı
+    await contributeToVault(tx, 'forge', -10_000, w(0));
+    await contributeToVault(tx, 'reliquary', -450, w(0));
+    await contributeToVault(tx, 'market_list', -5_000, w(0));  // sayılmamalı
   });
   const st = await vaultState();
   const giren = st.filled - once.filled;
@@ -238,6 +238,56 @@ console.log('\n[8] ⭐ `rev`SİZ DAL DA KASAYI BESLİYOR (çalışma anı)');
     `+${v1.filled - v0.filled} (beklenen ${Math.floor(1_000 * CRYPT_CUT)})`);
   const defter = await prisma.ledger.count({ where: { wallet: w(3), kind: 'forge' } });
   check('defter kaydı da yazıldı (dal bozulmadı)', defter === 1, `${defter} satır`);
+}
+
+console.log('\n[9] ⭐ HAZİNE (ULTRA) HESAP KASAYA NE KATKI YAPAR NE PAY ALIR');
+{
+  /**
+   * 🔴 NİYE VAR — ölçüldü (2026-09-16), İKİ YÖNLÜ SIZINTI:
+   *  (a) KATKI: ultra hesabın gold'u ADMIN DOLUMU (100M, `admin_grant`). Onu
+   *      Forge'a harcadığında %10'u kasaya düşüyordu → basılmış gold GERÇEK
+   *      deed sahiplerinin cebine akıyordu. Musluk kasadan geçip kılık
+   *      değiştiriyordu.
+   *  (b) PAY: hazine 100M ile deed alıp kasadan çekebiliyor, çekmese bile
+   *      ağırlığı gerçek sahiplerin payını SULANDIRIYORDU.
+   * Descent/Pit/Boss ödüllerindeki kapının aynısı.
+   */
+  const { default: bs58 } = await import('bs58');
+  const cr = await import('node:crypto');
+  const HAZINE = bs58.encode(cr.randomBytes(32));
+  const eskiH = process.env.TREASURY_ADDRESS;
+  process.env.TREASURY_ADDRESS = HAZINE;
+  try {
+    await prisma.player.create({ data: { wallet: HAZINE, gold: 50_000 } });
+
+    // (a) katkı
+    const v0 = await vaultState();
+    await withLedger(HAZINE, { gold: 40_000 }, { kind: 'forge', gold: -10_000, detail: 'ultra harcama' });
+    const v1 = await vaultState();
+    check('hazinenin harcaması kasaya GİRMEDİ', v1.filled === v0.filled, `+${v1.filled - v0.filled}`);
+    // KONTROL: aynı harcama gerçek oyuncudan kasaya giriyor
+    await prisma.player.update({ where: { wallet: w(2) }, data: { gold: 50_000 } });
+    await withLedger(w(2), { gold: 40_000 }, { kind: 'forge', gold: -10_000, detail: 'normal harcama' });
+    const v2 = await vaultState();
+    check('gerçek oyuncunun aynı harcaması kasaya girdi (kontrol)',
+      v2.filled - v1.filled === Math.floor(10_000 * CRYPT_CUT), `+${v2.filled - v1.filled}`);
+
+    // (b) pay
+    const agirlikOnce = (await vaultState()).totalWeight;
+    await prisma.player.update({ where: { wallet: HAZINE }, data: { cryptTier: 3, cryptClaimedWeek: 0 } });
+    const agirlikSonra = (await vaultState()).totalWeight;
+    check('hazinenin deed\'i ağırlığa SAYILMIYOR', agirlikSonra === agirlikOnce, `${agirlikOnce} → ${agirlikSonra}`);
+    // ⚠️ KASA DOLU OLMALI ve SEBEP TAM OLMALI — ölçüldü: [6] kasayı boşalttığı
+    // için kapı silinse bile çekim "kasa_bos" ile düşüyor ve test YEŞİL
+    // kalıyordu (hata enjeksiyonu yakaladı). Temizlik kasayı zaten geri yüklüyor.
+    await prisma.cryptVault.update({ where: { id: 1 }, data: { balance: { increment: 1_000_000 }, filled: { increment: 1_000_000 } } });
+    const cek = await claimCrypt(HAZINE);
+    check('hazine kasadan ÇEKEMİYOR (sebep: deed yok)', !cek.ok && cek.reason === 'deed_yok', JSON.stringify(cek));
+  } finally {
+    await prisma.ledger.deleteMany({ where: { wallet: HAZINE } });
+    await prisma.player.deleteMany({ where: { wallet: HAZINE } });
+    if (eskiH === undefined) delete process.env.TREASURY_ADDRESS; else process.env.TREASURY_ADDRESS = eskiH;
+  }
 }
 
 // ── temizlik ──

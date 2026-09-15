@@ -138,7 +138,7 @@ export async function withLedger(
      */
     return prisma.$transaction(async (tx) => {
       const saved = await tx.player.update({ where: { wallet }, data });
-      await contributeToVault(tx, entry.kind, entry.gold);
+      await contributeToVault(tx, entry.kind, entry.gold, wallet);
       if (entry.gold < 0) void trackQuest(wallet, 'spend', -entry.gold);
       await tx.ledger.create({
         data: {
@@ -167,7 +167,7 @@ export async function withLedger(
     // geçiyor. Uçlara tek tek eklemek denenmedi ve denenmemeli: yeni bir sink
     // açan kişi eklemeyi unutur, kasa sessizce eksik dolar. Aynı transaction
     // içinde olması da şart, yoksa kasa ile defter ayrışır.
-    await contributeToVault(tx, entry.kind, entry.gold);
+    await contributeToVault(tx, entry.kind, entry.gold, wallet);
   // ⚠️ "GOLD HARCA" GÖREVİ BURADAN SAYILIYOR — defter zaten HER gold
   // çıkışının tek geçidi. Harcama noktalarına tek tek `trackQuest` serpmek
   // denenmedi ve denenmemeli: yeni bir sink eklendiğinde biri unutulur ve

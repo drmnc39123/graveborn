@@ -153,6 +153,55 @@ console.log('\n[5] Yeni sezon temiz başlıyor');
   check('geçmiş ödüller duruyor', (await pvpAwards(w(0))).length > 0);
 }
 
+// ── [6] HAZİNE (ULTRA) HESAP ÖDÜL ALMIYOR ──
+//
+// 🔴 NİYE VAR — ölçüldü (2026-09-16): `markPvpMatch` hazinenin maçını da
+// sezona işliyordu ve kapanış kazananları yalnız `banned:false` ile süzüyordu.
+// Ultra hesap 100M gold ile Forge'u doldurup The Pit'e girdiğinde haftanın
+// kozmetiğini ve tozunu GERÇEK bir oyuncunun yerine alırdı. Descent sezonu
+// bu kapıyı zaten kapatmıştı (`season.ts` "iki tablo, iki kapı").
+console.log('\n[6] Hazine hesabı ödül almıyor');
+{
+  const { default: bs58 } = await import('bs58');
+  const crypto = await import('node:crypto');
+  const { markPvpMatch } = await import('./pvpSeason.js');
+  const HAZINE = bs58.encode(crypto.randomBytes(32));
+  const eski = process.env.TREASURY_ADDRESS;
+  process.env.TREASURY_ADDRESS = HAZINE;
+  const ESKI_HAFTA = BU - 600;   // gerçek haftalardan uzak: paylaşılan veritabanı
+  const normal = w(60);
+  try {
+    await prisma.player.createMany({
+      data: [
+        { wallet: HAZINE, gold: 0, duelWeek: ESKI_HAFTA, duelMatches: PVP_PLACEMENT + 3, duelRating: 5000, duelWins: 40 },
+        { wallet: normal, gold: 0, duelWeek: ESKI_HAFTA, duelMatches: PVP_PLACEMENT + 3, duelRating: 1400, duelWins: 10 },
+      ],
+    });
+
+    await settlePvpSeasons();
+    const hz = await prisma.pvpAward.findMany({ where: { wallet: HAZINE } });
+    check('hazine haftanın ödülünü ALMADI', hz.length === 0, `${hz.length} ödül`);
+    const nr = await prisma.pvpAward.findFirst({ where: { wallet: normal, week: ESKI_HAFTA } });
+    check('birincilik gerçek oyuncuya gitti (kontrol)', nr?.rank === 1, `sıra ${nr?.rank}`);
+
+    // Yazma kapısı: hazinenin maçı sezona hiç işlenmemeli
+    await prisma.player.update({ where: { wallet: HAZINE }, data: { duelWeek: 0, duelMatches: 0 } });
+    await prisma.player.update({ where: { wallet: normal }, data: { duelWeek: 0, duelMatches: 0 } });
+    await prisma.$transaction((tx) => markPvpMatch(tx, [HAZINE, normal]));
+    const hzP = await prisma.player.findUniqueOrThrow({ where: { wallet: HAZINE } });
+    const nP = await prisma.player.findUniqueOrThrow({ where: { wallet: normal } });
+    check('hazinenin maçı sezona İŞLENMEDİ', hzP.duelWeek === 0 && hzP.duelMatches === 0,
+      `hafta ${hzP.duelWeek}, maç ${hzP.duelMatches}`);
+    check('rakibin maçı yine işlendi (kontrol)', nP.duelWeek === BU && nP.duelMatches === 1,
+      `hafta ${nP.duelWeek}, maç ${nP.duelMatches}`);
+  } finally {
+    await prisma.pvpAward.deleteMany({ where: { wallet: { in: [HAZINE, normal] } } });
+    await prisma.pvpClose.deleteMany({ where: { week: ESKI_HAFTA } });
+    await prisma.player.deleteMany({ where: { wallet: HAZINE } });
+    if (eski === undefined) delete process.env.TREASURY_ADDRESS; else process.env.TREASURY_ADDRESS = eski;
+  }
+}
+
 await prisma.pvpAward.deleteMany({ where: { wallet: { startsWith: P } } });
 await prisma.pvpClose.deleteMany({ where: { week: GECEN } });
 await prisma.player.deleteMany({ where: { wallet: { startsWith: P } } });

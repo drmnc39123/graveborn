@@ -14,6 +14,7 @@ import { seasonWeek } from '@game/season';
 import type { Prisma } from '@prisma/client';
 import { prisma } from './db.js';
 import type { LedgerKind } from './ledger.js';
+import { ultraDisi, ultraMi } from './ultra.js';
 
 /**
  * Hangi harcamalar kasaya katkı yapar.
@@ -81,8 +82,17 @@ export function isCryptSink(kind: string, gold: number): boolean {
  */
 export async function contributeToVault(
   tx: Prisma.TransactionClient, kind: string, gold: number,
+  /**
+   * Harcayan cüzdan — ZORUNLU, isteğe bağlı değil.
+   * 🔴 ULTRA HESAP KASAYA KATKI YAPMAZ (2026-09-16, `crypt.test` [9]): onun
+   * gold'u yönetici dolumu; harcamasının %10'u kasaya düşünce basılmış gold
+   * gerçek deed sahiplerinin cebine akıyordu. İsteğe bağlı olsaydı yeni bir
+   * çağıran onu unutur ve kapı sessizce açılırdı — tip sistemi hatırlatsın.
+   */
+  wallet: string,
 ): Promise<number> {
   if (!isCryptSink(kind, gold)) return 0;
+  if (ultraMi(wallet)) return 0;
   const pay = cryptContribution(Math.abs(gold));
   if (pay <= 0) return 0;
   await tx.cryptVault.upsert({
@@ -108,7 +118,9 @@ export async function vaultState(): Promise<VaultState> {
     prisma.cryptVault.findUnique({ where: { id: 1 } }),
     prisma.player.groupBy({
       by: ['cryptTier'],
-      where: { cryptTier: { gt: 0 }, banned: false },
+      // ⚠️ Hazinenin deed'i AĞIRLIĞA girmez: çekmese bile gerçek sahiplerin
+      // payını sulandırırdı (`crypt.test` [9]).
+      where: { cryptTier: { gt: 0 }, banned: false, ...ultraDisi() },
       _count: { _all: true },
     }),
   ]);
@@ -144,7 +156,9 @@ export async function claimCrypt(wallet: string, now = new Date()): Promise<Clai
     where: { wallet },
     select: { cryptTier: true, cryptClaimedWeek: true, banned: true },
   });
-  if (!p || p.banned || p.cryptTier <= 0) return { ok: false, reason: 'deed_yok' };
+  // 🔴 Ultra hesap kasadan ÇEKEMEZ — 100M dolum gold'uyla aldığı deed, gerçek
+  // oyuncuların harcamasından birikmiş kasayı boşaltmanın yolu olurdu.
+  if (!p || p.banned || ultraMi(wallet) || p.cryptTier <= 0) return { ok: false, reason: 'deed_yok' };
   if (p.cryptClaimedWeek >= week) return { ok: false, reason: 'bu_hafta_alindi' };
 
   const t = cryptTier(p.cryptTier);

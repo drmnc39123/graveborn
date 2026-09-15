@@ -86,6 +86,25 @@ export function ultraMi(wallet: string | null | undefined): boolean {
   return wallet === hazine;
 }
 
+/**
+ * ÖDÜL SORGUSU KAPISI — ödül dağıtan `Player` sorgularına eklenecek süzgeç.
+ *
+ * 🔴 NİYE VAR (2026-09-16, ölçüldü): The Pit haftalık kapanışı kazananları
+ * yalnız `banned:false` ile seçiyordu; hazine 5000 puanla birinciliği ve
+ * ödülünü aldı (`pvpSeason.test` [6]). Tek tek `ultraMi` ile listeden atmak
+ * `take: PVP_PAYOUT_DEPTH` sınırını bozardı (10 kişi çekip 1'ini atmak = 9
+ * ödül); süzgeç SORGUDA olmalı.
+ *
+ * ⚠️ `kamuSuzgec.herkeseAcikOyuncu` BİLEREK kullanılmıyor: o GÖSTERİM süzgeci
+ * ve başlığı ödül yolunda kullanılmamasını söylüyor. Ödül kapısı ultra
+ * modun kendi dosyasında.
+ * ⚠️ Hazine tanımsızsa koşul HİÇ yayılmaz (`{ not: null }` Prisma'da patlar).
+ */
+export function ultraDisi(): { wallet?: { not: string } } {
+  const hazine = hazineAdresi();
+  return hazine ? { wallet: { not: hazine } } : {};
+}
+
 export interface UltraIlerleme {
   gold: number;
   unlockedStage: number;

@@ -19,6 +19,7 @@ import { seasonWeek } from '@game/season';
 import { Prisma } from '@prisma/client';
 import { herkeseAcikMi, herkeseAcikOyuncu } from './kamuSuzgec.js';
 import { prisma } from './db.js';
+import { ultraDisi, ultraMi } from './ultra.js';
 
 export interface PvpRow {
   rank: number; wallet: string; name: string | null; rating: number;
@@ -121,7 +122,9 @@ export async function settlePvpSeasons(now = new Date()): Promise<{ week: number
 
 async function kapatOne(week: number): Promise<{ week: number; winners: number }> {
   const kazananlar = await prisma.player.findMany({
-    where: { banned: false, duelWeek: week, duelMatches: { gte: PVP_PLACEMENT } },
+    // ⚠️ İKİNCİ KAPI: yazma kapısından ÖNCE sezona girmiş bir hazine kaydı
+    // kalmış olabilir — ödül sorgusu da onu dışarıda bırakıyor.
+    where: { banned: false, ...ultraDisi(), duelWeek: week, duelMatches: { gte: PVP_PLACEMENT } },
     orderBy: [{ duelRating: 'desc' }, { duelWins: 'desc' }],
     take: PVP_PAYOUT_DEPTH,
     select: { wallet: true, duelRating: true, cosmetics: true },
@@ -206,8 +209,12 @@ export async function markPvpMatch(
   wallets: string[], now = new Date(),
 ) {
   const week = seasonWeek(now);
+  // 🔴 ULTRA HESAP SEZONA GİRMEZ — `recordSeason`/`recordDescent` ile aynı
+  // kural: kapı YAZMADA. Rakibin maçı yine sayılıyor; o gerçek bir maç oynadı.
+  const sayilan = wallets.filter((w) => !ultraMi(w));
+  if (sayilan.length === 0) return;
   await tx.player.updateMany({
-    where: { wallet: { in: wallets } },
+    where: { wallet: { in: sayilan } },
     data: { duelWeek: week, duelMatches: { increment: 1 } },
   });
 }

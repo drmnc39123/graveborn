@@ -1392,7 +1392,7 @@ app.post('/run/start', wrap(async (req, res) => {
        */
       await prisma.$transaction(async (tx) => {
         await tx.player.update({ where: { wallet }, data: temizlik });
-        await contributeToVault(tx, 'wager', -stake);
+        await contributeToVault(tx, 'wager', -stake, wallet);
         await tx.ledger.create({
           data: {
             id: crypto.randomUUID(), wallet, kind: 'wager', gold: -stake,
