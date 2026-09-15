@@ -17,6 +17,7 @@ import { Panel, PixelButton } from '@/components/ui/kit';
 import { useCuzdanBaglan } from '@/lib/useWalletConnect';
 import { Turnstile } from '@/components/Turnstile';
 import { BRAND, C, FONT, glass } from '@/lib/theme';
+import { ONAY_SIFIRLA_OLAYI } from '@/lib/analytics';
 import { fetchStats, setMode } from '@/lib/session';
 import {
   type Cuzdan, KURULUM, MOBIL_CUZDANLAR, kurulmayanlar, mobilMi,
@@ -325,6 +326,16 @@ export default function Home() {
             <b style={{ color: C.bone }}> wiped when ${BRAND.ticker} launches</b>.
             <br />
             <b style={{ color: C.candle }}>${BRAND.ticker}</b> has not launched yet — there is no contract address.
+          </div>
+          {/* ⚠️ ONAYI GERİ ALMA YOLU — GDPR onayın verildiği kadar kolay geri
+              alınabilmesini istiyor. Bant bu olayı dinleyip yeniden açılıyor. */}
+          <div style={{ marginTop: 6 }}>
+            <button
+              onClick={() => window.dispatchEvent(new Event(ONAY_SIFIRLA_OLAYI))}
+              style={{ all: 'unset', cursor: 'pointer', fontSize: 10.5, color: C.boneFaint, textDecoration: 'underline' }}
+            >
+              Cookie settings
+            </button>
           </div>
           {/* ⚠️ SANAT KREDİ SATIRLARI KULLANICI KARARIYLA KALDIRILDI.
               Franuka 5 Ağu 2026'da, MutterPixel 11 Ağu 2026'da.
