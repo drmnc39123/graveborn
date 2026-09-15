@@ -103,3 +103,82 @@ export function sagKolon(ekranW: number, navbarH: number, navbarSol: number): Ku
   const k = minimapKutusu(ekranW, navbarH, navbarSol);
   return { x: k.x, y: k.y + k.h + KOLON_ARA, w: k.w, h: 0, right: MINI_SAG };
 }
+
+// ── SOL KOLON ─────────────────────────────────────────────────────────
+//
+// 🔴 NİYE VAR (kullanıcı): *"Profil kartının tam altına bir leaderboards
+// butonu yapalım."* Kartın konumu `play/page.tsx`te ELLE yazılıydı
+// (`top:10 left:12 width:min(214, dockLeft-24)`) — sağ kolonun bir zamanlar
+// `top: 146 · width: 180` diye elle yazılıp dar ekranda kaydığı hatanın
+// sol taraftaki ikizi. Kartın altına bir şey eklenince bu elle yazılmış
+// sayılar ikinci bir yere kopyalanacaktı.
+//
+// ⚠️ SOHBETİ GÖRÜYOR: sol sütun yukarıdan aşağı büyüyor, sohbet aşağıdan
+// yukarı. Kart açılıp sohbet de açıkken (~270 px) ikisi üst üste binebilirdi.
+// `maxH`, sohbetin ÖLÇÜLEN yüksekliğinden türüyor; sayfa sütunu bununla
+// sınırlayıp taşanı kaydırıyor.
+
+/** Ekranın sol kenarından sütuna kalan boşluk — sohbetle aynı dikey hat */
+export const SOL_KENAR = 12;
+/** Rıhtımla aynı hizada: navbar da `top: 10` */
+export const SOL_UST = 10;
+/** Kimlik kartının en geniş hâli */
+export const SOL_KART_MAX = 214;
+/**
+ * Sütunun görünmesi için rıhtımın solunda kalması gereken en az boşluk.
+ * ⚠️ 640 px altında rıhtım sola yaslanıyor (`dockLeft ≈ 10`) ve kart için
+ * yer kalmıyor — o durumda sütun gizleniyor, kısayollar sohbet başlığına iner.
+ */
+export const SOL_GORUNUR_ESIK = 60;
+/** Sütundaki öğeler arası ve sohbetle arasındaki boşluk */
+export const SOL_ARA = 8;
+/** Sohbetin ekranın altından mesafesi (`ChatPanel` `bottom: 12`) */
+export const SOHBET_ALT = 12;
+
+/**
+ * Profil kartı + altındaki öğelerin sütunu.
+ *
+ * @param ekranH  görünür yükseklik (CSS px)
+ * @param navbarSol rıhtımın ölçülen sol kenarı
+ * @param sohbetH sohbet kutusunun ÖLÇÜLEN yüksekliği (açık/kapalı değişir)
+ */
+/**
+ * LEADERBOARDS DÜĞMESİNİN ETİKETİ — sütun genişliğine göre.
+ *
+ * 🔴 NİYE VAR — ölçüldü (2026-09-15, 1134 px): sütun `navbarSol`dan türüyor
+ * ve orta genişliklerde 123 px'e iniyor. `PixelButton` scale 2'nin dokuz-
+ * dilim kenarları iki yandan 40'ar px yiyor → metne 43 px kalıyor, ama
+ * "LEADERBOARDS" 88 px. Yazı "LEAD…" diye KESİLİYORDU. Bu, hafızadaki
+ * "PixelButton kenarlık maliyeti metni kırpar" dersinin aynısı.
+ *
+ * Metin genişlikleri tarayıcıda, düğmenin kendi fontuyla ölçüldü
+ * (`900 10.5px GBText`, letter-spacing 0.8 px):
+ *   LEADERBOARDS 88 · RANKS 38 · BOARDS 46
+ * BOARDS 43 px'e sığmadığı için kısa ad RANKS.
+ *
+ * ⚠️ Düğme hiç sığmıyorsa GİZLENİR ve kupa ikonu sohbet başlığına iner —
+ * kesik bir düğme göstermek, hiç göstermemekten kötü.
+ */
+export const PIXEL_DUGME_KENAR = 80;
+export const LB_METIN_TAM = 88;
+export const LB_METIN_KISA = 38;
+
+export function leaderboardDugmesi(sutunW: number): { goster: boolean; etiket: 'LEADERBOARDS' | 'RANKS' } {
+  const metinAlani = sutunW - PIXEL_DUGME_KENAR;
+  if (metinAlani >= LB_METIN_TAM) return { goster: true, etiket: 'LEADERBOARDS' };
+  if (metinAlani >= LB_METIN_KISA) return { goster: true, etiket: 'RANKS' };
+  return { goster: false, etiket: 'RANKS' };
+}
+
+export function solKolon(ekranH: number, navbarSol: number, sohbetH: number):
+  Kutu & { gorunur: boolean; maxH: number } {
+  const w = Math.max(0, Math.min(SOL_KART_MAX, navbarSol - 2 * SOL_KENAR));
+  return {
+    x: SOL_KENAR,
+    y: SOL_UST,
+    w,
+    h: 0,
+    gorunur: navbarSol > SOL_GORUNUR_ESIK,
+    maxH: Math.max(0, ekranH - SOL_UST - SOHBET_ALT - sohbetH - SOL_ARA),
+  };
+}

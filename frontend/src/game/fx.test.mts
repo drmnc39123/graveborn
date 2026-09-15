@@ -490,6 +490,12 @@ console.log('\n[G] YÜZEY DİLİ — canvas üstünde `glass` kullanılamaz');
     'FirstRun.tsx',       // ilk koşu kartı
     'HubCanvas.tsx',      // portal ipucu
     'GameCanvas.tsx',     // koşu HUD'u
+    'HudKisayol.tsx',     // sohbetin yanındaki guild/friends/kupa ikonları
+    // ⚠️ LİSTE BAYATTI (2026-09-15): aşağıdaki ikisi köyün üstünde yıllardır
+    // duruyordu ama listede yoktu — kural onları hiç ölçmüyordu. Eklenmeden
+    // önce ikisinde de `glass(` OLMADIĞI doğrulandı.
+    'VigilBeacon.tsx',    // minimapın solundaki sandık
+    'PlayConnect.tsx',    // demo'da sağ kolonun başı
   ];
 
   const kokDizin = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'components');

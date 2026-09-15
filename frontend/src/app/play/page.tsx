@@ -7,13 +7,13 @@ import { NameGate } from '@/components/NameGate';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
-import { sagKolon } from '@/game/hudLayout';
+import { leaderboardDugmesi, sagKolon, solKolon, SOL_ARA } from '@/game/hudLayout';
 import { KOLAY_TABAN, tabanDurum, tabanZorluk } from '@/game/descentBase';
 import { PlayConnect } from '@/components/PlayConnect';
 import { VigilBeacon } from '@/components/VigilBeacon';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
-import { RecordsPanel } from '@/components/RecordsPanel';
+import { Leaderboard, RecordsPanel } from '@/components/RecordsPanel';
 import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
 import { PetPanel } from '@/components/PetPanel';
@@ -214,6 +214,10 @@ const PANEL_GENISLIK: Record<string, number> = {
   pets: 900,
   upgrade: 900,   // Forge — 16 yükseltme, iki sütun
   paths: 780,     // beceri ağacı — dört dal, iki sütun
+  // Profil kartının altındaki kısayolla açılan sıralama — Tavern sekmesiyle
+  // aynı bileşen, kendi kapısı. `duel` ile aynı genişlik: iki sıralama
+  // tablosu orada ölçülüp sığmıştı.
+  leaderboard: 720,
 };
 
 export default function PlayPage() {
@@ -374,12 +378,20 @@ export default function PlayPage() {
    * kolonun onunla birlikte kayması gerekiyor.
    */
   const [ekranW, setEkranW] = useState(0);
+  /** Görünür yükseklik — sol sütunun sohbete kadar kalan alanı buna bağlı */
+  const [ekranH, setEkranH] = useState(0);
   useEffect(() => {
-    const olc = () => setEkranW(window.innerWidth);
+    const olc = () => { setEkranW(window.innerWidth); setEkranH(window.innerHeight); };
     olc();
     window.addEventListener('resize', olc);
     return () => window.removeEventListener('resize', olc);
   }, []);
+  /**
+   * Sohbet kutusunun ÖLÇÜLEN yüksekliği (`ChatPanel onHeight`).
+   * ⚠️ İlk değer 0: ölçülmeden sütun sınırsız kalır, bir kare sonra düzelir —
+   * sohbet henüz çizilmemişken sınırlamak için bir sebep yok.
+   */
+  const [sohbetH, setSohbetH] = useState(0);
   /**
    * İlk koşu çağrısı kapatıldı mı — SADECE bu oturum için.
    *
@@ -431,6 +443,12 @@ export default function PlayPage() {
 
   /** Minimapın altındaki kart sütunu — kutuyla AYNI kaynaktan (bkz. `hudLayout`) */
   const kolon = useMemo(() => sagKolon(ekranW, dockH, dockLeft), [ekranW, dockH, dockLeft]);
+  /** Profil kartı ve altındaki kısayolların sütunu — sağ kolonun sol eşi */
+  const sol = useMemo(() => solKolon(ekranH, dockLeft, sohbetH), [ekranH, dockLeft, sohbetH]);
+  /** Profil altındaki düğme sığıyor mu, hangi etiketle (bkz. `hudLayout.leaderboardDugmesi`) */
+  const lbDugme = useMemo(() => leaderboardDugmesi(sol.w), [sol.w]);
+  /** Düğme görünmüyorsa kupa ikonu sohbet başlığına iner — sıralamaya her genişlikte bir yol kalsın */
+  const lbProfilde = sol.gorunur && lbDugme.goster;
 
   /**
    * ⚠️ SON KAHRAMAN KAYDI UÇUŞTA MI — düello brifingi bunu BEKLEMEK ZORUNDA.
@@ -782,7 +800,23 @@ export default function PlayPage() {
           bakılan bir yer" yapardı; insanların orada olduğunu görmeyen oyuncu
           sohbet olduğunu da bilmez. Panel açıkken gizleniyor — üst üste
           binmesin ve panelin içindeki alanları kapatmasın. */}
-      {!panel && <ChatPanel />}
+      {!panel && (
+        <ChatPanel
+          // 🔴 Kullanıcı isteği: guild ve friends "chatin yanına", küçük ikon.
+          // ⚠️ Kupa (leaderboard) YALNIZ dar ekranda: geniş ekranda aynı kısayol
+          // profil kartının altında duruyor, iki kez göstermek gereksiz. 640 px
+          // altında kart gizleniyor ve telefonda sıralamaya giden tek yol bu.
+          kisayollar={[
+            { id: 'guild', glif: 'guild', etiket: 'Guilds — apply or found one', renk: C.candle },
+            { id: 'friends', glif: 'friends', etiket: 'Friends', renk: C.ice },
+            ...(lbProfilde ? [] : [
+              { id: 'leaderboard', glif: 'leaderboard' as const, etiket: 'Leaderboards', renk: C.candle },
+            ]),
+          ]}
+          onOpen={hedefiAc}
+          onHeight={setSohbetH}
+        />
+      )}
 
       {/* ⚠️ KİMLİK KARTI SOL ÜSTTE — ölçüldü, ekranın tek gerçekten boş
           köşesi orası: rıhtım üstte ORTALI ve sarmalayıcısı `pointerEvents:
@@ -809,16 +843,45 @@ export default function PlayPage() {
         //
         // ⚠️ `dockLeft` 0 gelirse (ilk kare, henüz ölçülmedi) kart çizilmez —
         // yanlış genişlikle bir kare çizip zıplamasındansa bir kare beklesin.
+        //
+        // ⚠️ Konum ve genişlik artık `hudLayout.solKolon`dan — elle yazılmış
+        // `top:10 left:12 width:min(214…)` sağ kolonun eski `top: 146` hatasının
+        // sol ikiziydi (bkz. hudLayout.ts başlığı).
         <div style={{
-          position: 'absolute', top: 10, left: 12, zIndex: 6,
-          width: Math.max(0, Math.min(214, dockLeft - 24)),
-          visibility: dockLeft > 60 ? 'visible' : 'hidden',
+          position: 'absolute', top: sol.y, left: sol.x, zIndex: 6,
+          width: sol.w,
+          visibility: sol.gorunur ? 'visible' : 'hidden',
+          // ⚠️ AKIŞ İÇİNDE, mutlak konum DEĞİL: kart açılıp kapanınca altındaki
+          // düğme onunla birlikte kayar. Sütun sohbete değmesin diye sınırlı;
+          // taşarsa kendi içinde kayar (`maxH` sohbetin ölçülen boyundan).
+          display: 'flex', flexDirection: 'column', gap: SOL_ARA,
+          // ⚠️ `overflowX` AÇIKÇA gizli: yalnız `overflowY: 'auto'` yazılınca CSS
+          // yatay ekseni de `auto` yapıyor ve 1-2 px'lik bir taşma bile köyün
+          // üstüne yatay kaydırma çubuğu çizdiriyordu (ölçüldü, ProfileCard 216 px).
+          maxHeight: sol.maxH || undefined, overflowY: 'auto', overflowX: 'hidden',
+          scrollbarWidth: 'thin',
         }}>
           <ProfileCard
             progress={progress}
             wallet={wallet}
             onOpen={() => setPanel('tavern')}
           />
+          {/* 🔴 Kullanıcı isteği: "profil kartının tam altına bir leaderboards
+              butonunun aynısından". Köyde ayrı bir sıralama düğmesi YOKTU;
+              "aynısı" Tavern'deki LEADERBOARD sekmesi (`RecordsPanel.tsx`) —
+              stil birebir oradan: BTN.strong, scale 2, 10.5 / 900 / 0.8. */}
+          {/* ⚠️ Etiket genişliğe göre: 1134 px'de "LEADERBOARDS" kesiliyordu
+              (ölçüldü). Sığmıyorsa düğme gizlenir, kupa sohbete iner. */}
+          {lbDugme.goster && (
+            <PixelButton
+              variant={BTN.strong} scale={2}
+              onClick={() => hedefiAc('leaderboard')}
+              title="Leaderboards"
+              style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 8px', width: '100%', flexShrink: 0 }}
+            >
+              {lbDugme.etiket}
+            </PixelButton>
+          )}
         </div>
       )}
 
@@ -1305,6 +1368,11 @@ export default function PlayPage() {
                 onChange={setProgress}
                 onError={setNote}
               />
+            ) : acik === 'leaderboard' ? (
+              /* ⚠️ Tavern'deki LEADERBOARD sekmesinin AYNI bileşeni — ikinci bir
+                 sıralama tablosu yazılmadı; profil kartının altındaki kısayol
+                 ve sohbetteki kupa ikonu buraya açılıyor. */
+              <Leaderboard />
             ) : acik === 'tavern' ? (
               <RecordsPanel progress={progress ?? loadProgress()} onChange={setProgress} onError={setNote} />
             ) : acik === 'market' ? (

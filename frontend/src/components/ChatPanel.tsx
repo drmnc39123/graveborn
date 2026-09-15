@@ -15,10 +15,34 @@ import { addFollow } from '@/lib/gameSession';
 import { getWallet } from '@/lib/session';
 import { getMode } from '@/lib/session';
 import { PixelButton, BTN } from '@/components/ui/kit';
+import { HudKisayol } from '@/components/HudKisayol';
+import type { GlifAdi } from '@/lib/hudGlif';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
-export function ChatPanel() {
+/** Sohbet başlığındaki bir kısayol — hangi paneli açacağını sayfa belirler */
+export type SohbetKisayolu = {
+  id: string; glif: GlifAdi; etiket: string; renk?: string; nokta?: number;
+};
+
+export function ChatPanel({ kisayollar = [], onOpen, onHeight }: {
+  /**
+   * Başlığın sağındaki küçük ikonlar (kullanıcı isteği: guild ve friends
+   * "chatin yanına").
+   * ⚠️ Sohbet hangi paneli açacağını BİLMİYOR: `onOpen` sayfanın `hedefiAc`ı.
+   * Kapı mantığını buraya kopyalamak, rıhtım ve köy kapısının bir zamanlar
+   * ayrışması hatasının üçüncü kopyası olurdu (bkz. page.tsx `hedefiAc`).
+   */
+  kisayollar?: SohbetKisayolu[];
+  onOpen?: (id: string) => void;
+  /**
+   * Kutunun ÖLÇÜLEN yüksekliği — sol sütun (`hudLayout.solKolon`) buna göre
+   * sınırlanıyor. ⚠️ Açık/kapalı ve demo/cüzdan hâlinde yükseklik değişiyor;
+   * sabit bir sayı her birinde yanlış olurdu. `BuildingDock onHeight` deseni.
+   */
+  onHeight?: (h: number) => void;
+} = {}) {
   const handleRef = useRef<ChatHandle | null>(null);
+  const kutuRef = useRef<HTMLDivElement>(null);
   // ⚠️ DURUM REACT STATE'İNDE, ref'te DEĞİL. İlk sürüm handle'ı ref'te tutup
   // zorla yeniden çizdiriyordu; React'in çift-montajında bayat handle okunup
   // arayüz "bağlı değil" gösteriyordu — soket gayet açıkken. Ölçüldü.
@@ -46,6 +70,18 @@ export function ChatPanel() {
       handleRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const el = kutuRef.current;
+    if (!el || !onHeight) return;
+    // ⚠️ `ResizeObserver`, pencere `resize`ı DEĞİL: sohbet açılıp kapanınca
+    // pencere boyutu değişmiyor ama kutunun yüksekliği ~31 → ~270 px oluyor.
+    const bildir = () => onHeight(el.offsetHeight);
+    bildir();
+    const ro = new ResizeObserver(bildir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [onHeight]);
 
   // Yeni mesaj gelince en alta kaydır — ama SADECE zaten en alttaysa.
   // Yukarı kaydırıp okuyan oyuncuyu zorla aşağı atmak sinir bozucu olurdu.
@@ -87,7 +123,7 @@ export function ChatPanel() {
   };
 
   return (
-    <div style={{
+    <div ref={kutuRef} style={{
       position: 'absolute', left: 12, bottom: 12, zIndex: 6,
       width: 300, maxWidth: 'calc(100vw - 24px)',
       // ⚠️ İNCE CAM: sohbet kutusu köyün ÜSTÜNDE duruyor, arkasındaki
@@ -98,23 +134,44 @@ export function ChatPanel() {
       // yoksa sohbetin bulunduğu köşede karakter hareket ettirilemez.
       pointerEvents: 'auto',
     }}>
-      <button
-        onClick={() => setAcik((v) => !v)}
-        style={{
-          all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center',
-          gap: 7, width: '100%', boxSizing: 'border-box', padding: '7px 10px',
-        }}>
-        <span style={{
-          width: 7, height: 7, borderRadius: 4,
-          background: kilitli ? C.boneFaint : bagli ? C.ok : C.boneFaint,
-        }} />
-        <span style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 1.6, color: C.ice }}>
-          THE SQUARE
-        </span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: C.boneFaint }}>
-          {acik ? '▾' : '▴'}
-        </span>
-      </button>
+      {/*
+        🔴 BAŞLIK İKİYE BÖLÜNDÜ. Eskiden başlığın TAMAMI tek bir <button>
+        idi (aç/kapa). Kısayol ikonları onun içine konsaydı düğme içinde düğme
+        olurdu — geçersiz HTML, React uyarısı, ve her ikon tıklaması sohbeti
+        de açıp kapatırdı. Aç/kapa düğmesi artık `flex: 1` kardeş, ikonlar
+        onun YANINDA. Mühür: `hudKisayol.test`.
+      */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, paddingRight: kisayollar.length ? 6 : 0 }}>
+        <button
+          onClick={() => setAcik((v) => !v)}
+          aria-expanded={acik}
+          style={{
+            all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center',
+            gap: 7, flex: 1, minWidth: 0, boxSizing: 'border-box', padding: '7px 10px',
+          }}>
+          <span style={{
+            width: 7, height: 7, borderRadius: 4,
+            background: kilitli ? C.boneFaint : bagli ? C.ok : C.boneFaint,
+          }} />
+          <span style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 1.6, color: C.ice }}>
+            THE SQUARE
+          </span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, color: C.boneFaint }}>
+            {acik ? '▾' : '▴'}
+          </span>
+        </button>
+        {kisayollar.map((k) => (
+          <HudKisayol
+            key={k.id}
+            glif={k.glif}
+            etiket={k.etiket}
+            renk={k.renk}
+            nokta={k.nokta}
+            boyut={24}
+            onClick={() => onOpen?.(k.id)}
+          />
+        ))}
+      </div>
 
       {/* ⚠️ SEKMELER, AYRI PENCERE DEĞİL. İki ayrı sohbet kutusu köyün
           köşesini kaplardı; sekme, aynı yerde iki kanal demek. */}

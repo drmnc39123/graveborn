@@ -274,7 +274,7 @@ function MyRecord({ progress }: { progress: Progress }) {
  * bölümü de yazmak ZORUNLU: yoksa "depth 40" ile "depth 12" yan yana durur ve
  * 12'nin neden üstte olduğu anlaşılmaz.
  */
-function Leaderboard() {
+export function Leaderboard() {
   // ⚠️ BEŞİNCİ BİR ÜST SEKME DEĞİL. İkisi de aynı soruyu soruyor ("kim en
   // derine indi"), sadece pencere farklı. Üstte ayrı bir düğme olsaydı oyuncu
   // ikisini rakip iki tablo sanardı.

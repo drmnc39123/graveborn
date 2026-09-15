@@ -21,7 +21,8 @@
 import fs from 'node:fs';
 import {
   KOLON_ARA, MINI_DAR_ESIK, MINI_SAG, NAVBAR_ARA,
-  minimapIc, minimapKutusu, sagKolon,
+  LB_METIN_KISA, LB_METIN_TAM, PIXEL_DUGME_KENAR, SOL_KART_MAX,
+  leaderboardDugmesi, minimapIc, minimapKutusu, sagKolon, solKolon,
 } from './hudLayout.js';
 
 const FAIL: string[] = [];
@@ -153,6 +154,46 @@ console.log('\n[5] ** SABIT SAYILAR KAYNAKTAN SILINDI');
    */
   check('navbar olcusu REF ile tasiniyor', /const navbarRef = useRef\(/.test(canvas));
   check('uydurma desen bulunmuyor (kontrol grubu)', !/navbarZZZ/.test(play + hub + canvas));
+}
+
+// ── [6] SOL KOLON + LEADERBOARDS DÜĞMESİ ──
+//
+// 🔴 NİYE VAR (kullanıcı): *"Profil kartının tam altına bir leaderboards
+// butonu."* Kartın konumu sayfada elle yazılıydı — sağ kolonun eski
+// `top: 146` hatasının sol ikizi. Değerler tarayıcıda ölçüldü (sayfa
+// YENİDEN YÜKLENEREK — yeniden boyutlandırmada `dockLeft` güncellenmiyor,
+// yüklemesiz ölçüm üç genişlikte de 123 px diye yalan söyledi):
+//   1366 → LEADERBOARDS 214 px · 1134 → RANKS 123 px · 900 / 700 → gizli, kupa sohbette
+console.log('\n[6] sol kolon + leaderboards dugmesi');
+{
+  const genis = solKolon(768, 400, 90);
+  check('genis ekran: kart tam genislik', genis.w === SOL_KART_MAX, `${genis.w}`);
+  check('genis ekran: sutun gorunur', genis.gorunur);
+  check('dar ekran (dock sola yasli): sutun GIZLI', !solKolon(812, 10, 90).gorunur);
+  check('sohbet buyudukce sutun kisaliyor',
+    solKolon(768, 400, 270).maxH < solKolon(768, 400, 31).maxH,
+    `${solKolon(768, 400, 270).maxH} < ${solKolon(768, 400, 31).maxH}`);
+  check('maxH hic negatif olmuyor', solKolon(200, 400, 400).maxH === 0);
+
+  // Etiket katmanlari — olculen metin genislikleri
+  check('214 px: LEADERBOARDS', leaderboardDugmesi(214).etiket === 'LEADERBOARDS' && leaderboardDugmesi(214).goster);
+  check('123 px: RANKS (1134 px ekranin olculen sutunu)',
+    leaderboardDugmesi(123).etiket === 'RANKS' && leaderboardDugmesi(123).goster);
+  check('dugme kucukse GIZLI (kesik dugme yok)', !leaderboardDugmesi(100).goster);
+  // ⚠️ SINIRLAR: tam esikte sigmali, bir piksel altinda kisa ada dusmeli
+  check('esik: tam metin tam sigdiginda gosteriliyor',
+    leaderboardDugmesi(LB_METIN_TAM + PIXEL_DUGME_KENAR).etiket === 'LEADERBOARDS');
+  check('esik: bir piksel eksikte kisa ad',
+    leaderboardDugmesi(LB_METIN_TAM + PIXEL_DUGME_KENAR - 1).etiket === 'RANKS');
+  check('esik: kisa ad da sigmiyorsa gizli',
+    !leaderboardDugmesi(LB_METIN_KISA + PIXEL_DUGME_KENAR - 1).goster);
+
+  // Zincirin son adimi: sayfa gercekten bunlari kullaniyor mu
+  check('sayfa sol kolonu hudLayout\'tan aliyor', /solKolon\(ekranH, dockLeft, sohbetH\)/.test(play));
+  check('sayfada elle yazilmis "Math.min(214" KALMADI', !/Math\.min\(214/.test(play));
+  check('etiket leaderboardDugmesi\'nden', /leaderboardDugmesi\(sol\.w\)/.test(play) && /\{lbDugme\.etiket\}/.test(play));
+  check('sohbet yuksekligi olculuyor', /onHeight=\{setSohbetH\}/.test(play));
+  check('sutun yatay kaydirma cizmiyor', /overflowX: 'hidden'/.test(play));
 }
 
 console.log(`\n${FAIL.length === 0 ? 'HUD YERLESIMI SAGLAM' : `${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`}\n`);

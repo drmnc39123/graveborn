@@ -169,7 +169,13 @@ export function ProfileCard({ progress, wallet, onOpen }: {
     // kartın kullanabileceği boşluk her ekranda farklı. Kart sabit 214 px
     // olduğunda 1134 px'de navbar'ın üstüne biniyordu. Boşluk orada ölçülüp
     // buraya genişlik olarak veriliyor; kart ona uyuyor.
-    <div style={{ ...thinGlass(9), width: '100%', overflow: 'hidden', fontFamily: FONT.ui }}>
+    // ⚠️ `boxSizing: 'border-box'` ŞART — ölçüldü (2026-09-15): `thinGlass`in
+    // 1 px kenarlığı `width: '100%'`ün ÜSTÜNE ekleniyordu ve kart kolonunu
+    // 214 → 216 px aşıyordu. Kart tek başınayken taşma görünmezdi; altına
+    // LEADERBOARDS düğmesi gelip sütun `overflowY:auto` olunca CSS gereği
+    // yatay eksen de `auto` oldu ve o 2 px bir KAYDIRMA ÇUBUĞU çizdirdi.
+    // `dock.test`in `border-box` dersinin aynısı.
+    <div style={{ ...thinGlass(9), width: '100%', boxSizing: 'border-box', overflow: 'hidden', fontFamily: FONT.ui }}>
       {/* ── ŞERİT: her zaman görünür ── */}
       <button
         onClick={degistir}
