@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { ErrorReporter } from '@/components/ErrorReporter';
+import { Analytics } from '@/components/Analytics';
 import { BRAND, C } from '@/lib/theme';
 
 /** Kart metni — OpenGraph ve X kartında AYNI cümle dursun diye tek yerde. */
@@ -188,6 +189,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* ⚠️ EN ÜSTTE: hata yakalayıcıları çocuklardan ÖNCE kurulmalı,
             yoksa ilk render sırasında patlayan bir hata hiç bildirilmez. */}
         <ErrorReporter />
+        {/* Google Analytics — yalnız kanonik alan adında ve izinli sayfalarda
+            (kural `lib/analytics.ts`). Çocuklardan sonra değil önce: sayfa
+            bileşeni hata verse bile ölçüm kurulmuş olsun. */}
+        <Analytics />
         {children}
       </body>
     </html>
