@@ -91,7 +91,8 @@ console.log('\n── [4] kapılar ──');
   check('profil düğmesi sıralama panelini açıyor', /hedefiAc\('leaderboard'\)/.test(sayfa));
   check('sıralamanın kendi panel dalı var', /acik === 'leaderboard'/.test(sayfa));
   check('sıralama paneli genişliği tanımlı', /leaderboard: 720/.test(sayfa));
-  check('Tavern ile AYNI bileşen (ikinci tablo yazılmadı)', /<Leaderboard \/>/.test(sayfa));
+  check('Tavern ile AYNI bileşen (ikinci tablo yazılmadı)', /<LeaderboardsPanel \/>/.test(sayfa)
+    && /<LeaderboardsPanel gomulu \/>/.test(yorumsuz(oku('../components/RecordsPanel.tsx'))));
   // ⚠️ hedefiAc BÜYÜTÜLMEDİ: locked.test onu 2000 karakter sınırında ölçüyor
   const hBas = sayfa.indexOf('const hedefiAc'), hSon = sayfa.indexOf('const onEnter');
   check('hedefiAc kısa kaldı', hSon - hBas < 400, `${hSon - hBas} karakter`);

@@ -165,5 +165,41 @@ console.log('\n── [5] GET /boards/:id ──');
     && /herkeseAcikOyuncu\(\)/.test(govde(sezon, 'topSeason')));
 }
 
+console.log('\n── [6] LeaderboardsPanel ──');
+{
+  const panel = yorumsuz(oku('../components/LeaderboardsPanel.tsx'));
+  const oturum = yorumsuz(oku('../lib/gameSession.ts'));
+  const idler = (kaynak: string, ad: string) => {
+    const m = kaynak.match(new RegExp(`${ad}\\s*=\\s*\\[([\\s\\S]*?)\\]`));
+    return m ? [...m[1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]) : [];
+  };
+  const sunucuIdleri = idler(panolar, 'PANO_IDLERI');
+  const istemciIdleri = idler(oturum, 'BOARD_IDS');
+  check('istemci ve sunucu pano kimlikleri AYNI', sunucuIdleri.length === 11
+    && JSON.stringify(sunucuIdleri) === JSON.stringify(istemciIdleri), `${sunucuIdleri.length} / ${istemciIdleri.length}`);
+  const cipIdleri = [...panel.matchAll(/\bid:\s*'([a-z]+)',\s*grup:/g)].map((x) => x[1]);
+  check('her pano kimliğinin bir çipi var (fazlası yok)',
+    JSON.stringify([...cipIdleri].sort()) === JSON.stringify([...istemciIdleri].sort()), cipIdleri.join(','));
+  check('panel tek uçtan okuyor', /fetchBoard\(id\)/.test(panel) && !/fetchLeaderboard|fetchSeasonBoard/.test(panel));
+  check('geç dönen istek yeni panoyu ezmiyor (iptal bayrağı)', /if \(!iptal\) setPano/.test(panel));
+  check('kendi satırım listede yoksa altta sabit', /pano\.me && !listede/.test(panel));
+  check('WATCH yalnız cüzdanlı başkasının satırında', /!mine && row\.wallet && <WatchButton/.test(panel));
+  // ⚠️ Kullanıcı kararı: yeni panolar ÖDÜL VERMİYOR — ödül tablosu yalnız TRIALS'ta
+  check('ödül tablosu yalnız DESCENT TRIALS\'ta', (panel.match(/<SeasonRewards \/>/g) ?? []).length === 1
+    && /pano\.id === 'season' && \(/.test(panel));
+  check('eski iki sekmeli tablo kalmadı', !/export function Leaderboard\(/.test(yorumsuz(oku('../components/RecordsPanel.tsx'))));
+  // ⚠️ `C.border` zaten rgba(): sonuna saydamlık eklemek geçersiz renk üretir
+  check('`${C.border}XX` geçersiz renk yazılmamış', !/\$\{C\.border\}[0-9a-fA-F]{2}/.test(panel));
+  // 🔴 375 px'de kademe yazısı adın ÜSTÜNE biniyordu (ölçüldü): ad sütunu
+  // kırpıyor ve sağda tek değer etiketi kalıyor — ikincil bilgi adın altında.
+  const satir = govde(panel, 'Line');
+  check('ad sütunu taşanı kırpıyor', /flex:\s*1,\s*minWidth:\s*0,\s*overflow:\s*'hidden'/.test(satir));
+  check('satırın sağında TEK değer etiketi (ikincil bilgi alt satırda)',
+    /\{etiket\}/.test(satir) && /\{alt\}/.test(satir) && !/<Deger\b/.test(panel));
+  // 🔴 375 px'de üç PixelButton grubu ÜÇ SATIRA düşüyordu (120 px × 3 > 227 px)
+  check('grup seçici üç eşit sütun (PixelButton değil)',
+    /gridTemplateColumns:\s*'repeat\(3, minmax\(0, 1fr\)\)'/.test(govde(panel, 'Secici')) && !/PixelButton/.test(panel));
+}
+
 console.log(`\n${FAIL.length === 0 ? '✅ PANOLAR MÜHÜRLÜ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
 process.exit(FAIL.length === 0 ? 0 : 1);

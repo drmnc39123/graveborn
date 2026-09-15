@@ -260,6 +260,53 @@ export async function fetchSeasonBoard(): Promise<{
   return api('/leaderboard/season');
 }
 
+// ── LEADERBOARDS MERKEZİ ──────────────────────────────────────────────
+// ⚠️ Kimlik listesi SUNUCUDAKİ `PANO_IDLERI` ile AYNI (`boards.test` iki
+// dosyayı karşılaştırıyor). Biri eklenip öteki unutulursa çip 404 alırdı.
+
+export const BOARD_IDS = [
+  'descent', 'season', 'daily',
+  'gold', 'forge', 'dust', 'ossuary',
+  'pit', 'answering', 'guilds', 'boss',
+] as const;
+export type BoardId = (typeof BOARD_IDS)[number];
+
+/** `value` sıralama anahtarı — gösterilen metni panel türetir */
+export interface BoardRow {
+  rank: number;
+  wallet: string | null;
+  name: string | null;
+  value: number;
+  hero?: string;
+  equipped?: { title?: string; plate?: string; trophy?: string };
+  ossuary?: number;
+  stage?: number;
+  depth?: number;
+  wins?: number;
+  losses?: number;
+  matches?: number;
+  guild?: { id: string; tag: string; level: number; members: number; cap: number };
+}
+
+export interface Board {
+  id: BoardId;
+  rows: BoardRow[];
+  me: BoardRow | null;
+  week?: number;
+  endsAt?: number;
+  day?: string;
+  placement?: number;
+  awards?: SeasonAwardRow[];
+}
+
+/**
+ * ⚠️ `season` ve `pit` okumaları YAN ETKİLİ: sunucu kapanmış haftaları
+ * burada ödüllendiriyor (bkz. `fetchSeasonBoard`). Tekrarlanabilir, zararsız.
+ */
+export async function fetchBoard(id: BoardId): Promise<Board> {
+  return api<Board>(`/boards/${id}`);
+}
+
 // ── OYUNCU DOSYASI ────────────────────────────────────────────────────
 // ⚠️ Bu veri SADECE sunucuda var (Run tablosu). Demo modunda koşu geçmişi
 // tutulmuyor — orada `fetchProfile` hata verir ve Tavern açıklayıcı bir

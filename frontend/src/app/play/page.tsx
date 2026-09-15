@@ -13,7 +13,8 @@ import { PlayConnect } from '@/components/PlayConnect';
 import { VigilBeacon } from '@/components/VigilBeacon';
 import { GameCanvas } from '@/components/GameCanvas';
 import { ForgePanel } from '@/components/ForgePanel';
-import { Leaderboard, RecordsPanel } from '@/components/RecordsPanel';
+import { RecordsPanel } from '@/components/RecordsPanel';
+import { LeaderboardsPanel } from '@/components/LeaderboardsPanel';
 import { MarketPanel } from '@/components/MarketPanel';
 import { StallPanel } from '@/components/StallPanel';
 import { PetPanel } from '@/components/PetPanel';
@@ -1372,7 +1373,7 @@ export default function PlayPage() {
               /* ⚠️ Tavern'deki LEADERBOARD sekmesinin AYNI bileşeni — ikinci bir
                  sıralama tablosu yazılmadı; profil kartının altındaki kısayol
                  ve sohbetteki kupa ikonu buraya açılıyor. */
-              <Leaderboard />
+              <LeaderboardsPanel />
             ) : acik === 'tavern' ? (
               <RecordsPanel progress={progress ?? loadProgress()} onChange={setProgress} onError={setNote} />
             ) : acik === 'market' ? (

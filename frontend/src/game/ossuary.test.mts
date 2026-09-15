@@ -208,7 +208,8 @@ console.log('\n[G] * RUTBE BASKALARINA GORUNUYOR - zincir');
   const sess = oku2('src/lib/gameSession.ts');
   check('4. istemci tipi alani taniyor', /ossuary\?:\s*number/.test(sess));
 
-  const rec = oku2('src/components/RecordsPanel.tsx');
+  // Satir bileseni Leaderboards merkeziyle LeaderboardsPanel'e tasindi.
+  const rec = oku2('src/components/LeaderboardsPanel.tsx');
   check('5. leaderboard satiri kimlige geciriyor', /ossuary:\s*row\.ossuary/.test(rec));
 
   const ident = oku2('src/components/ui/Identity.tsx');

@@ -5,7 +5,6 @@
 // backend beklemesine gerek yok. Market/Exchange'in aksine burada uydurma bir
 // "yakında" ekranı göstermek gereksiz olurdu.
 
-import { oyuncuAdi } from '@/game/playerName';
 import { useEffect, useMemo, useState } from 'react';
 import { STAGES, depthGold, MAX_WEAPONS } from '@/game/config';
 import { FORGE, costOf, forgeLevelsOf, spentOn } from '@/game/forge';
@@ -14,15 +13,12 @@ import { PixelButton, BTN } from '@/components/ui/kit';
 import { Fade } from '@/components/ui/motion';
 import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import {
-  addFollow, fetchLeaderboard, fetchProfile, fetchSeasonBoard,
-  type LeaderRow, type ProfileData, type ProfileRun, type SeasonAwardRow,
+  fetchProfile,
+  type ProfileData, type ProfileRun,
 } from '@/lib/gameSession';
-import { panelUnlocked } from '@/lib/testMode';
-import { getMode } from '@/lib/session';
-import { SEASON_COSMETIC_DEPTH, SEASON_REWARDS, rewardForRank } from '@/game/season';
-import { cosmeticById } from '@/game/cosmetics';
 import { IdentityLine, identityOf } from '@/components/ui/Identity';
 import { AchievementsTab } from '@/components/AchievementsTab';
+import { LeaderboardsPanel } from '@/components/LeaderboardsPanel';
 import { achievementStates } from '@/game/achievements';
 import { armoury } from '@/game/unlocks';
 import { weaponArt } from '@/game/combatArt';
@@ -56,7 +52,7 @@ export function RecordsPanel({ progress, onChange, onError }: {
         title={tab === 'record' ? 'Your record'
           : tab === 'deeds' ? 'Deeds and vigil'
           : tab === 'armoury' ? 'What you may carry'
-          : tab === 'history' ? 'Every road walked' : 'Deepest descents'}
+          : tab === 'history' ? 'Every road walked' : 'The hall of records'}
       />
 
       {/* 🔴 SEKMELER KESİLİYORDU: "MY …", "DEE…", "ARM…". Sebep `flex: 1` ile
@@ -102,7 +98,7 @@ export function RecordsPanel({ progress, onChange, onError }: {
         : tab === 'deeds' ? <AchievementsTab progress={progress} onChange={onChange} onError={onError} />
         : tab === 'armoury' ? <Armoury progress={progress} />
         : tab === 'history' ? <History />
-        : <Leaderboard />}
+        : <LeaderboardsPanel gomulu />}
       </Fade>
 
     </>
@@ -269,220 +265,6 @@ function MyRecord({ progress }: { progress: Progress }) {
 }
 
 /**
- * LEADERBOARD — "en derine kim indi".
- *
- * ⚠️ Sıralama derinliğe DEĞİL zorluğa göre. Tabloda derinliği yazıyoruz ama
- * bölümü de yazmak ZORUNLU: yoksa "depth 40" ile "depth 12" yan yana durur ve
- * 12'nin neden üstte olduğu anlaşılmaz.
- */
-export function Leaderboard() {
-  // ⚠️ BEŞİNCİ BİR ÜST SEKME DEĞİL. İkisi de aynı soruyu soruyor ("kim en
-  // derine indi"), sadece pencere farklı. Üstte ayrı bir düğme olsaydı oyuncu
-  // ikisini rakip iki tablo sanardı.
-  const [scope, setScope] = useState<'all' | 'season'>('all');
-  const [rows, setRows] = useState<LeaderRow[] | null>(null);
-  const [me, setMe] = useState<{ rank: number; row: LeaderRow } | null>(null);
-  const [season, setSeason] = useState<{ endsAt: number; awards: SeasonAwardRow[] } | null>(null);
-  const [err, setErr] = useState(false);
-
-  useEffect(() => {
-    let iptal = false;
-    setRows(null); setErr(false);
-    const istek = scope === 'season'
-      ? fetchSeasonBoard().then((r) => {
-        if (iptal) return;
-        setRows(r.rows); setMe(r.me); setSeason({ endsAt: r.endsAt, awards: r.awards });
-      })
-      : fetchLeaderboard().then((r) => {
-        if (iptal) return;
-        setRows(r.rows); setMe(r.me); setSeason(null);
-      });
-    istek.catch(() => { if (!iptal) setErr(true); });
-    // ⚠️ İPTAL BAYRAĞI ŞART: sekmeler arasında hızlı geçişte geç dönen istek
-    // yeni sekmenin satırlarını ezerdi.
-    return () => { iptal = true; };
-  }, [scope]);
-
-  const secici = (
-    <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-      <PixelButton variant={BTN.strong} scale={2} active={scope === 'all'} onClick={() => setScope('all')}
-        style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 10px' }}>
-        ALL-TIME
-      </PixelButton>
-      <PixelButton variant={BTN.strong} scale={2} active={scope === 'season'} onClick={() => setScope('season')}
-        style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 0.8, minWidth: 0, padding: '0 10px' }}>
-        THIS WEEK
-      </PixelButton>
-    </div>
-  );
-
-  if (err) {
-    return <>{secici}<Note>Could not reach the hall of records.</Note></>;
-  }
-  if (rows === null) {
-    return <>{secici}<Note>Reading the ledger…</Note></>;
-  }
-  if (rows.length === 0) {
-    return (
-      <>
-        {secici}
-        <Note>
-          {scope === 'season'
-            ? 'No one has taken the stairs this week. The board is empty, and the first name on it can be yours.'
-            : 'No one has descended yet. Clear a stage, take the stairs down, and the first name on this board is yours.'}
-        </Note>
-        {scope === 'season' && <SeasonRewards />}
-      </>
-    );
-  }
-
-  // Kendi satırım listede yoksa altta ayrıca göster — 50. sıranın dışındaki
-  // oyuncuya tablo hiçbir şey söylemezdi.
-  const inList = me !== null && rows.some((r) => r.wallet === me.row.wallet);
-
-  return (
-    <>
-      {secici}
-      <p style={{ margin: '0 0 12px', fontSize: 12, color: C.boneDim, lineHeight: 1.55 }}>
-        Ranked by how hard the descent was, not how deep it counted. Depth 12 on
-        a late road beats depth 40 on the first one.
-        {scope === 'season' && season && (
-          <>
-            {' '}This board clears every Monday.{' '}
-            <b style={{ color: C.candle }}>{kalanSure(season.endsAt)}</b> left.
-          </>
-        )}
-      </p>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {rows.map((r) => (
-          <Line key={r.wallet} row={r} mine={me?.row.wallet === r.wallet} />
-        ))}
-      </div>
-
-      {me && !inList && (
-        <>
-          <div style={{ margin: '10px 0 6px', textAlign: 'center', fontSize: 11, color: C.boneFaint, letterSpacing: 2 }}>· · ·</div>
-          <Line row={me.row} mine />
-        </>
-      )}
-
-      {/* Sırası olmayan oyuncuya tablo tek başına hiçbir şey söylemiyordu —
-          ne yapması gerektiği yazmalı. */}
-      {!me && (
-        <div style={{ marginTop: 10, padding: '9px 11px', borderRadius: 9,
-          border: `1px solid ${C.candle}44`, fontSize: 11.5, color: C.boneDim,
-          textAlign: 'center', lineHeight: 1.5, fontFamily: FONT.ui }}>
-          You have no place here yet. Clear a road, then take the stairs down.
-        </div>
-      )}
-
-      {scope === 'season' && (
-        <>
-          <SeasonRewards />
-          {season && season.awards.length > 0 && <PastAwards awards={season.awards} />}
-        </>
-      )}
-    </>
-  );
-}
-
-/**
- * "3d 4h" — hafta bitişine kalan süre.
- * Saniye GÖSTERMİYORUZ: geri sayan bir saat oyuncuya yapacak bir şey vermiyor,
- * sadece her saniye yeniden çizim maliyeti getiriyordu.
- */
-function kalanSure(endsAt: number): string {
-  const ms = Math.max(0, endsAt - Date.now());
-  const sa = Math.floor(ms / 3_600_000);
-  const g = Math.floor(sa / 24);
-  return g > 0 ? `${g}d ${sa % 24}h` : `${sa}h ${Math.floor((ms % 3_600_000) / 60_000)}m`;
-}
-
-/**
- * ÖDÜL TABLOSU — oyuncunun neden tırmanacağını görmesi için.
- *
- * ⚠️ ÖDÜLLER KOZMETİK + TOZ, GOLD DEĞİL. Sıralama ödülü gold verseydi en iyi
- * oyuncu aynı zamanda en çok gold basan olurdu (bkz. game/season.ts).
- */
-function SeasonRewards() {
-  return (
-    <div style={{ ...glass(10), marginTop: 12, padding: '10px 12px', fontFamily: FONT.ui }}>
-      <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2, color: C.candle, marginBottom: 8 }}>
-        WHAT THE WEEK PAYS
-      </div>
-      {SEASON_REWARDS.map((r, i) => {
-        const kozmetik = r.cosmetic ? cosmeticById(r.cosmetic) : undefined;
-        // ⚠️ KOZMETİK ÇİZGİSİ GÖRÜNÜR OLMALI. Tablo 100 sıraya genişledi ama
-        // ödülün iki farklı CİNSİ var: taşınan bir şey (ilk 10) ve bir toz
-        // teşekkürü (11-100). Aynı listede ayrımsız dizmek, 40. sıradaki
-        // oyuncuya "ben de kalıntı alacağım" dedirtirdi — sonra almayınca da
-        // haklı olarak kandırıldığını düşünürdü.
-        const oncekiKozmetikli = i > 0 && !!SEASON_REWARDS[i - 1].cosmetic;
-        const ayrac = oncekiKozmetikli && !r.cosmetic;
-        return (
-          <div key={`${r.from}-${r.to}`}>
-            {ayrac && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 7,
-                margin: '7px 0 5px', fontSize: 9, fontWeight: 900,
-                letterSpacing: 1.4, color: C.boneFaint,
-              }}>
-                <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.10)' }} />
-                DUST ONLY
-                <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.10)' }} />
-              </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-              <span style={{ width: 52, flexShrink: 0, fontSize: 11.5, fontWeight: 900,
-                color: r.from === 1 ? C.candle : C.boneDim }}>
-                {r.from === r.to ? `#${r.from}` : `#${r.from}-${r.to}`}
-              </span>
-              <span style={{ flex: 1, minWidth: 0, fontSize: 11.5,
-                color: r.cosmetic ? C.bone : C.boneDim,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {kozmetik?.name ?? r.label}
-              </span>
-              <Tag tone="gold">{r.dust} DUST</Tag>
-            </div>
-          </div>
-        );
-      })}
-      <div style={{ marginTop: 7, fontSize: 10.5, color: C.boneFaint, lineHeight: 1.5 }}>
-        These relics cannot be bought or pulled — only a week&apos;s top{' '}
-        {SEASON_COSMETIC_DEPTH} ever wears one. Everyone else who set a mark
-        this week is still counted, and paid in dust.
-      </div>
-    </div>
-  );
-}
-
-/** Oyuncunun geçmiş sezon ödülleri — kazandığını görmezse ödül yok gibidir */
-function PastAwards({ awards }: { awards: SeasonAwardRow[] }) {
-  return (
-    <div style={{ ...glass(10), marginTop: 10, padding: '10px 12px', fontFamily: FONT.ui }}>
-      <div style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 2, color: C.bone, marginBottom: 8 }}>
-        YOUR PAST WEEKS
-      </div>
-      {awards.map((a) => {
-        const kozmetik = a.cosmetic ? cosmeticById(a.cosmetic) : undefined;
-        return (
-          <div key={a.week} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', fontSize: 11.5 }}>
-            <span style={{ width: 46, flexShrink: 0, fontWeight: 900,
-              color: a.rank === 1 ? C.candle : C.boneDim }}>#{a.rank}</span>
-            <span style={{ flex: 1, minWidth: 0, color: C.boneDim,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {kozmetik?.name ?? rewardForRank(a.rank)?.label ?? '-'}
-            </span>
-            <Tag tone="gold">+{a.dust}</Tag>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
  * KOŞU GEÇMİŞİ — Run tablosunda biriken ama bugüne kadar hiç gösterilmeyen veri.
  *
  * ⚠️ Buradaki HİÇBİR sayı istemciden gelmiyor (bkz. backend/profile.ts):
@@ -574,80 +356,6 @@ function RunLine({ run }: { run: ProfileRun }) {
           color: run.awarded ? C.candle : C.boneFaint }}>
           {run.durationSec === null ? 'open' : `+${(run.awarded ?? 0).toLocaleString('en-US')}`}
         </span>
-      </div>
-    </Card>
-  );
-}
-
-/**
- * SIRALAMA SATIRINDAN TAKİBE EKLE.
- *
- * 🔴 NİYE VAR: 2026-09-07'de ölçüldü — takip listesine birini eklemenin TEK
- * yolu 44 karakterlik bir cüzdan adresini ELLE YAPIŞTIRMAKTI. Oyuncunun
- * başkalarıyla karşılaştığı her yer (sıralama, tavern) adresi zaten
- * `7dau…HBo4` diye KISALTARAK gösteriyor, yani kopyalanacak bir metin bile
- * yok. Sistem çalışıyordu; girişi yoktu. WATCH paneli bu yüzden pratikte
- * herkeste boş kalıyordu.
- *
- * ⚠️ Kendi satırında ÇIKMAZ ve demo modunda çıkmaz (sunucu yok).
- */
-function WatchButton({ wallet }: { wallet: string }) {
-  const [durum, setDurum] = useState<'idle' | 'busy' | 'ok' | 'err'>('idle');
-  if (!panelUnlocked(getMode())) return null;
-  const metin = durum === 'ok' ? 'WATCHING' : durum === 'err' ? 'FAILED' : 'WATCH';
-  return (
-    <button
-      disabled={durum !== 'idle'}
-      title={durum === 'ok' ? 'Added to your watch list' : 'Add to your watch list'}
-      onClick={() => {
-        setDurum('busy');
-        // ⚠️ Zaten takiptekini yeniden eklemek sunucuda hata DEĞİL (upsert);
-        // buton yine de "WATCHING" der, çünkü oyuncu için sonuç aynı.
-        addFollow(wallet).then(() => setDurum('ok')).catch(() => setDurum('err'));
-      }}
-      style={{
-        all: 'unset', flexShrink: 0, cursor: durum === 'idle' ? 'pointer' : 'default',
-        padding: '2px 7px', borderRadius: 4, fontSize: 8.5, fontWeight: 900,
-        letterSpacing: 1, fontFamily: FONT.ui,
-        color: durum === 'ok' ? C.ok : durum === 'err' ? C.badText : C.boneFaint,
-        border: `1px solid ${durum === 'ok' ? C.ok : C.border}66`,
-        background: durum === 'ok' ? `${C.ok}12` : 'transparent',
-        opacity: durum === 'busy' ? 0.5 : 1,
-      }}
-    >{metin}</button>
-  );
-}
-
-function Line({ row, mine }: { row: LeaderRow; mine: boolean }) {
-  const stage = STAGES.find((s) => s.id === row.stage);
-  const medal = row.rank === 1 ? C.candle : row.rank <= 3 ? C.bone : C.boneFaint;
-  return (
-    <Card accent={mine}>
-      <div style={{ padding: '8px 11px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={{ width: 30, flexShrink: 0, fontSize: 13, fontWeight: 900, color: medal }}>
-          #{row.rank}
-        </span>
-        {/* ⚠️ Kimlik satırı: kozmetik prestij ANCAK BURADA görüldüğü için
-            değerli. Sadece Reliquary panelinde görünen bir unvana kimse gold
-            vermez ve sink işlevini kaybeder. */}
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <IdentityLine compact size={12} id={{
-            // ⚠️ TEK ÇÖZÜCÜ — "You" kararı da orada (bkz. `oyuncuAdi`).
-            name: oyuncuAdi(row, mine),
-            title: row.equipped?.title,
-            plate: row.equipped?.plate,
-            trophy: row.equipped?.trophy,
-            ossuary: row.ossuary,
-          }} />
-        </span>
-        <Tag tone="gold">DEPTH {row.depth}</Tag>
-        <span style={{ flexShrink: 0, fontSize: 10, color: C.boneFaint, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {stage?.name ?? `Stage ${row.stage}`}
-        </span>
-        {/* ⚠️ TAKİP GİRİŞİ TAM BURADA OLMALI: oyuncunun başka birini ilk kez
-            gördüğü yer bu satır. Girişi WATCH paneline saklamak, oradaki
-            tek yolu (adres yapıştırmak) zorunlu kılıyordu. */}
-        {!mine && <WatchButton wallet={row.wallet} />}
       </div>
     </Card>
   );
