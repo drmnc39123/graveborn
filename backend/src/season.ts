@@ -12,16 +12,24 @@ import {
   SEASON_PAYOUT_DEPTH, rewardForRank, seasonEndsAt, seasonWeek,
 } from '@game/season';
 import { prisma } from './db.js';
+import { wornOf, type Row } from './leaderboard.js';
 import { ultraMi } from './ultra.js';
 
-export interface SeasonRow {
-  rank: number;
-  wallet: string;
-  stage: number;
-  depth: number;
-  rating: number;
-  hero: string;
-}
+/**
+ * ⚠️ TÜM-ZAMANLAR SATIRIYLA AYNI TİP — ayrı bir arayüz değil.
+ *
+ * 🔴 Ölçüldü (2026-09-15): burada ayrı bir `SeasonRow` vardı ve `name`,
+ * `equipped`, `ossuary` İÇERMİYORDU. İstemci iki tabloyu aynı `LeaderRow`
+ * ile çiziyor, alanlar isteğe bağlı olduğu için hiçbir şey kırılmadı —
+ * "THIS WEEK" sekmesi sessizce ad yerine kısa cüzdan gösterdi. Aynı ekranı
+ * besleyen iki satır tipi, bu depoda her seferinde ayrıştı.
+ */
+export type SeasonRow = Row;
+
+const SATIR_SEC = {
+  wallet: true, name: true, seasonStage: true, seasonDepth: true, seasonRating: true,
+  hero: true, equipped: true, ossuary: true,
+} as const;
 
 /**
  * Koşu kapanışında haftalık puanı güncelle.
@@ -55,6 +63,24 @@ export async function recordSeason(
   const week = seasonWeek(now);
   const data = { seasonWeek: week, seasonStage: stageId, seasonDepth: depth, seasonRating: rating };
 
+  /**
+   * 🔴 EZMEDEN ÖNCE KAPAT. Aşağıdaki "yeni hafta" yolu geçen haftanın puanını
+   * siliyor; kapanış ise o puanı okuyarak ödül dağıtıyor. Kapanış yalnız tablo
+   * okununca tetiklenseydi, tabloyu kimse açmadan yeniden oynayan oyuncu
+   * geçen haftanın ödülünü KAYBEDERDİ (`season.test` [6] ölçtü).
+   *
+   * ⚠️ Oyuncu başına haftada EN FAZLA BİR KEZ çalışır: puan bu haftaya
+   * geçince koşul bir daha tutmuyor. Kapanış kendi içinde yarışa dayanıklı
+   * (`SeasonClose` birincil anahtarı), o yüzden eşzamanlı çağrı zararsız.
+   */
+  const onceki = await prisma.player.findUnique({
+    where: { wallet },
+    select: { seasonWeek: true, seasonRating: true },
+  });
+  if (onceki && onceki.seasonWeek > 0 && onceki.seasonWeek < week && onceki.seasonRating > 0) {
+    await settleSeasons(now).catch((e) => console.warn('[sezon-kapanis]', e));
+  }
+
   // Önce "yeni hafta" yolu: kayıtlı hafta bu haftadan ESKİYSE koşulsuz yaz.
   const fresh = await prisma.player.updateMany({
     where: { wallet, seasonWeek: { lt: week } },
@@ -78,9 +104,7 @@ export async function topSeason(limit = 50, now = new Date()): Promise<{
     where: { banned: false, seasonWeek: week, seasonRating: { gt: 0 } },
     orderBy: [{ seasonRating: 'desc' }, { lastSeen: 'asc' }],
     take: Math.min(Math.max(limit, 1), 100),
-    select: {
-      wallet: true, seasonStage: true, seasonDepth: true, seasonRating: true, hero: true,
-    },
+    select: SATIR_SEC,
   });
   return {
     week,
@@ -88,10 +112,13 @@ export async function topSeason(limit = 50, now = new Date()): Promise<{
     rows: rows.map((r, i) => ({
       rank: i + 1,
       wallet: r.wallet,
+      name: r.name,
       stage: r.seasonStage,
       depth: r.seasonDepth,
       rating: r.seasonRating,
       hero: r.hero,
+      equipped: wornOf(r.equipped),
+      ossuary: r.ossuary,
     })),
   };
 }
@@ -103,7 +130,7 @@ export async function seasonRankOf(
   const week = seasonWeek(now);
   const me = await prisma.player.findUnique({
     where: { wallet },
-    select: { seasonWeek: true, seasonStage: true, seasonDepth: true, seasonRating: true, hero: true, banned: true },
+    select: { ...SATIR_SEC, seasonWeek: true, banned: true },
   });
   if (!me || me.banned || me.seasonWeek !== week || me.seasonRating <= 0) return null;
 
@@ -113,8 +140,8 @@ export async function seasonRankOf(
   return {
     rank: ahead + 1,
     row: {
-      rank: ahead + 1, wallet, stage: me.seasonStage, depth: me.seasonDepth,
-      rating: me.seasonRating, hero: me.hero,
+      rank: ahead + 1, wallet, name: me.name, stage: me.seasonStage, depth: me.seasonDepth,
+      rating: me.seasonRating, hero: me.hero, equipped: wornOf(me.equipped), ossuary: me.ossuary,
     },
   };
 }

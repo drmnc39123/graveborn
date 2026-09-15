@@ -57,7 +57,7 @@ export interface Row {
  * `normalize` okurken tekrar süzüyor. Üçüncü bir kopya, üçüncü bir ayrışma
  * noktası olurdu.
  */
-function wornOf(raw: unknown): Row['equipped'] {
+export function wornOf(raw: unknown): Row['equipped'] {
   if (!raw || typeof raw !== 'object') return {};
   const e = raw as Record<string, unknown>;
   const pick = (k: string) => (typeof e[k] === 'string' ? (e[k] as string) : undefined);

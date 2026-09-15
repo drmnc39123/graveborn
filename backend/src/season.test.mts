@@ -144,9 +144,12 @@ console.log('\n[3] Puan yazımı');
   // ⭐ SEZON MANTIĞI: geçen haftaya ait puan, bu haftanın KÖTÜ koşusuyla EZİLİR.
   // Bu `best*` ile arasındaki tek gerçek fark; kaybolursa sezon "ikinci bir
   // tüm-zamanlar tablosu"na dönüşür ve varlık sebebi kalmaz.
+  // ⚠️ `WEEK - 1` DEĞİL: `recordSeason` artık ezmeden önce eski haftayı
+  // kapatıyor (bkz. [6]). Gerçek geçen haftayı kullanmak, bu testin paylaşılan
+  // veritabanında GERÇEK bir haftayı kapatıp gerçek oyunculara toz dağıtması olurdu.
   await prisma.player.update({
     where: { wallet: w(2) },
-    data: { seasonWeek: WEEK - 1, seasonStage: 10, seasonDepth: 60, seasonRating: 9e12 },
+    data: { seasonWeek: ESKI - 1, seasonStage: 10, seasonDepth: 60, seasonRating: 9e12 },
   });
   await recordSeason(w(2), 'descent', 1, 3, 0, NOW);
   const p2 = await get(2);
@@ -224,9 +227,42 @@ console.log('\n[5] Kapanış');
   check('AÇIK hafta kapatılmadı', (await prisma.seasonClose.findUnique({ where: { week: WEEK } })) === null);
 }
 
+// ── 6) Hafta dönümünde ödül KAYBOLMUYOR ──
+//
+// 🔴 NİYE VAR — ölçüldü (2026-09-15): kapanış YALNIZ sezon tablosu okununca
+// tetikleniyordu (`GET /leaderboard/season`), `recordSeason` ise yeni haftada
+// geçen haftanın puanının üstüne KOŞULSUZ yazıyordu. Hafta biter, oyuncu
+// kimse tabloyu açmadan yeni bir descent oynar → puanı ezilir → kapanış onu
+// hiç görmez → ÖDÜLÜNÜ KAYBEDER. O haftayı oynayan HERKES yeniden oynarsa
+// `settleSeasons` bekleyen haftayı bile bulamaz: hafta HİÇ kapanmaz.
+console.log('\n[6] Hafta dönümü');
+{
+  const ESKI2 = ESKI - 2;
+  const kul = `${P}_devir`;
+  await prisma.player.create({
+    data: { wallet: kul, gold: 0, seasonWeek: ESKI2, seasonRating: 700, seasonStage: 6, seasonDepth: 22 },
+  });
+
+  // ⚠️ ARADA HİÇ TABLO OKUMASI YOK — gerçek hayattaki sıra bu.
+  const yazildi = await recordSeason(kul, 'descent', 3, 10, 0, NOW);
+
+  const odul = await prisma.seasonAward.findFirst({ where: { week: ESKI2, wallet: kul } });
+  check('geçen haftanın ödülü puan ezilmeden ÖNCE verildi', odul !== null && odul.rank === 1,
+    odul ? `sıra ${odul.rank}` : 'ÖDÜL YOK — puan ezildi');
+  check('geçen hafta kapatıldı', (await prisma.seasonClose.findUnique({ where: { week: ESKI2 } })) !== null);
+  const sonra = await prisma.player.findUniqueOrThrow({ where: { wallet: kul } });
+  check('yeni haftanın puanı yine de yazıldı (kontrol grubu)', yazildi && sonra.seasonWeek === WEEK,
+    `hafta ${sonra.seasonWeek}`);
+
+  // Kontrol grubu: aynı hafta içindeki ikinci koşu kapanış TETİKLEMEMELİ
+  const kapanisOnce = await prisma.seasonClose.count();
+  await recordSeason(kul, 'descent', 5, 30, 0, NOW);
+  check('aynı hafta içindeki koşu yeni kapanış açmıyor', (await prisma.seasonClose.count()) === kapanisOnce);
+}
+
 // ── temizlik ──
 await prisma.seasonAward.deleteMany({ where: { wallet: { startsWith: P } } });
-await prisma.seasonClose.deleteMany({ where: { week: ESKI } });
+await prisma.seasonClose.deleteMany({ where: { week: { in: [ESKI, ESKI - 1, ESKI - 2] } } });
 await prisma.player.deleteMany({ where: { wallet: { startsWith: P } } });
 
 console.log(`\n${FAIL.length === 0 ? '✅ SEZON SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

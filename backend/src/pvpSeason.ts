@@ -17,10 +17,11 @@ import {
 } from '@game/pvpSeason';
 import { seasonWeek } from '@game/season';
 import { Prisma } from '@prisma/client';
+import { herkeseAcikMi, herkeseAcikOyuncu } from './boards.js';
 import { prisma } from './db.js';
 
 export interface PvpRow {
-  rank: number; wallet: string; rating: number;
+  rank: number; wallet: string; name: string | null; rating: number;
   wins: number; losses: number; matches: number; hero: string;
 }
 
@@ -43,15 +44,16 @@ export async function pvpBoard(wallet: string | null, now = new Date(), limit = 
   placement: number;
 }> {
   const week = seasonWeek(now);
-  const kosul = { banned: false, duelWeek: week, duelMatches: { gte: PVP_PLACEMENT } };
+  const kosul = { ...herkeseAcikOyuncu(), duelWeek: week, duelMatches: { gte: PVP_PLACEMENT } };
   const rows = await prisma.player.findMany({
     where: kosul,
     orderBy: [{ duelRating: 'desc' }, { duelWins: 'desc' }],
     take: Math.min(Math.max(limit, 1), 50),
-    select: { wallet: true, duelRating: true, duelWins: true, duelLosses: true, duelMatches: true, hero: true },
+    select: { wallet: true, name: true, duelRating: true, duelWins: true, duelLosses: true, duelMatches: true, hero: true },
   });
+  // 🔴 AD YOKTU (2026-09-15): The Pit tablosu yalnız kısa cüzdan gösteriyordu.
   const list: PvpRow[] = rows.map((r, i) => ({
-    rank: i + 1, wallet: r.wallet, rating: r.duelRating,
+    rank: i + 1, wallet: r.wallet, name: r.name, rating: r.duelRating,
     wins: r.duelWins, losses: r.duelLosses, matches: r.duelMatches, hero: r.hero,
   }));
 
@@ -59,9 +61,9 @@ export async function pvpBoard(wallet: string | null, now = new Date(), limit = 
   if (wallet) {
     const p = await prisma.player.findUnique({
       where: { wallet },
-      select: { duelRating: true, duelWins: true, duelLosses: true, duelMatches: true, hero: true, banned: true, duelWeek: true },
+      select: { name: true, duelRating: true, duelWins: true, duelLosses: true, duelMatches: true, hero: true, banned: true, duelWeek: true },
     });
-    if (p && !p.banned && p.duelWeek === week) {
+    if (p && herkeseAcikMi(wallet, p.banned) && p.duelWeek === week) {
       const icinde = list.find((r) => r.wallet === wallet);
       if (icinde) me = icinde;
       else {
@@ -73,7 +75,7 @@ export async function pvpBoard(wallet: string | null, now = new Date(), limit = 
           : -1;
         me = {
           rank: yerlesti ? ustum + 1 : 0,
-          wallet, rating: p.duelRating, wins: p.duelWins, losses: p.duelLosses,
+          wallet, name: p.name, rating: p.duelRating, wins: p.duelWins, losses: p.duelLosses,
           matches: p.duelMatches, hero: p.hero,
         };
       }

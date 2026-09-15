@@ -17,9 +17,6 @@ import { Card } from '@/components/ui/cards';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { C } from '@/lib/theme';
 
-// ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
-const kisa = (w: string) => oyuncuAdi({ wallet: w });
-
 /** 00:00 UTC'ye kalan süre — hakkın ne zaman yenileneceği */
 function kalanSure(): string {
   const n = new Date();
@@ -111,7 +108,8 @@ export function DailyCard({ onEnter, benim }: {
                   <span style={{ width: 22, textAlign: 'right', color: r.rank <= 3 ? C.candle : C.boneFaint, fontWeight: 900 }}>
                     {r.rank}
                   </span>
-                  <span style={{ fontFamily: 'ui-monospace, monospace' }}>{kisa(r.wallet)}</span>
+                  {/* ⚠️ Eş aralıklı yazı yalnız KISA CÜZDAN için — ad düz yazıyla çizilir */}
+                  <span style={{ fontFamily: r.name ? undefined : 'ui-monospace, monospace' }}>{oyuncuAdi({ wallet: r.wallet, name: r.name })}</span>
                   <span style={{ marginLeft: 'auto', fontWeight: 900 }}>d{r.depth}</span>
                 </div>
               ))}

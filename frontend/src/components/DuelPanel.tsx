@@ -313,7 +313,7 @@ function Row({ row, onChallenge, onError }: {
 function Ladder({ row, me, odul = true }: {
   // ⚠️ `DuelLadderRow` bu şeklin alt kümesi (matches yok) — tek satır
   // bileşeni ikisine de yetiyor, ikinci bir kopya yazmaya gerek yok.
-  row: { rank: number; wallet: string; rating: number; wins: number; losses: number };
+  row: { rank: number; wallet: string; name?: string | null; rating: number; wins: number; losses: number };
   me: boolean;
   /** ⚠️ Ödül noktası SADECE sezon tablosunda. Tüm-zamanlar tablosu ödül
    *  ödemiyor; noktayı orada da çizmek olmayan bir ödül vaat ederdi. */
@@ -336,7 +336,7 @@ function Ladder({ row, me, odul = true }: {
       )}
       <span style={{ minWidth: 0, flex: 1, fontSize: 11.5, fontWeight: me ? 900 : 700,
         color: me ? C.candle : C.bone, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {me ? 'You' : kisa(row.wallet)}
+        {me ? 'You' : oyuncuAdi({ wallet: row.wallet, name: row.name })}
       </span>
       <span style={{ fontSize: 10.5, color: t.color, fontWeight: 900 }}>{t.name}</span>
       <span style={{ fontSize: 10.5, color: C.boneFaint, minWidth: 52, textAlign: 'right' }}>

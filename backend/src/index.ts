@@ -20,6 +20,7 @@ import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
+import { gunlukTablo } from './boards.js';
 import { ultraDolumGerekli, ultraIlerleme, ultraMi } from './ultra.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ReferralError, kodGir, kodTemizle, odulKontrol, referralDurum } from './referral.js';
@@ -2565,14 +2566,7 @@ app.get('/daily', wrap(async (req, res) => {
   const stage = STAGES.find((s) => s.id === stageId);
 
   const [tablo, benim] = await Promise.all([
-    prisma.run.findMany({
-      where: { mode: 'daily', startedAt: { gte: bas }, claimedAt: { not: null }, capped: false },
-      // ⚠️ Beraberlikte ÖNCE BİTİREN üstte: aynı derinliğe önce ulaşan
-      // daha iyi oynamıştır ve sıralama kararlı olmalı.
-      orderBy: [{ awardedDepth: 'desc' }, { claimedAt: 'asc' }],
-      take: GUNLUK_TABLO,
-      select: { wallet: true, awardedDepth: true, hero: true },
-    }),
+    gunlukTablo(bas),
     wallet
       ? prisma.run.findFirst({
           where: { wallet, mode: 'daily', startedAt: { gte: bas } },
@@ -2585,9 +2579,7 @@ app.get('/daily', wrap(async (req, res) => {
     day: gun,
     stageId,
     stageName: stage?.name ?? `Stage ${stageId}`,
-    board: tablo.map((r, i) => ({
-      rank: i + 1, wallet: r.wallet, depth: r.awardedDepth ?? 0, hero: r.hero,
-    })),
+    board: tablo,
     // `mine.done` = bugünkü hak kullanıldı mı (başlatmak yakar)
     mine: benim
       ? { done: true, finished: !!benim.claimedAt, depth: benim.awardedDepth ?? 0, capped: benim.capped }

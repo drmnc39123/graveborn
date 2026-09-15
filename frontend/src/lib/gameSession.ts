@@ -1051,7 +1051,7 @@ export interface DuelRow {
 }
 
 export interface DuelLadderRow {
-  rank: number; wallet: string; rating: number;
+  rank: number; wallet: string; name?: string | null; rating: number;
   wins: number; losses: number; hero: string;
 }
 
@@ -1157,7 +1157,7 @@ export async function claimQuest(id: string): Promise<{ view: QuestState; dust: 
 // demek — tekrarlanabilir ve zararsız.
 
 export interface PvpSeasonRow {
-  rank: number; wallet: string; rating: number;
+  rank: number; wallet: string; name?: string | null; rating: number;
   wins: number; losses: number; matches: number; hero: string;
 }
 
@@ -1309,7 +1309,7 @@ export async function buyPetSlot(): Promise<Progress> {
 
 // ── GÜNLÜK İNİŞ ───────────────────────────────────────────────────────
 
-export interface DailySatir { rank: number; wallet: string; depth: number; hero: string }
+export interface DailySatir { rank: number; wallet: string; name?: string | null; depth: number; hero: string }
 export interface DailyDurum {
   day: string;
   stageId: number;

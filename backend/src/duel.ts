@@ -27,6 +27,7 @@ import crypto from 'node:crypto';
 import { DUEL, duelBlocker, duelWon, nextRatings, STALE_ENGINE } from '@game/duel';
 import { challengeRating, SIM_VERSION } from '@game/config';
 import { utcDay } from '@game/progress';
+import { herkeseAcikMi, herkeseAcikOyuncu } from './boards.js';
 import { prisma } from './db.js';
 import { markPvpMatch } from './pvpSeason.js';
 import { trackQuest } from './quests.js';
@@ -286,7 +287,7 @@ export async function ladder(wallet: string, limit = 10): Promise<{
 }> {
   const oynamis = { OR: [{ duelWins: { gt: 0 } }, { duelLosses: { gt: 0 } }] };
   const rows = await prisma.player.findMany({
-    where: { banned: false, ...oynamis },
+    where: { ...herkeseAcikOyuncu(), ...oynamis },
     orderBy: [{ duelRating: 'desc' }, { duelWins: 'desc' }],
     take: Math.min(Math.max(limit, 1), 50),
     select: { wallet: true, name: true, duelRating: true, duelWins: true, duelLosses: true, hero: true },
@@ -300,7 +301,7 @@ export async function ladder(wallet: string, limit = 10): Promise<{
     where: { wallet },
     select: { name: true, duelRating: true, duelWins: true, duelLosses: true, hero: true, banned: true },
   });
-  if (!ben || ben.banned || (ben.duelWins === 0 && ben.duelLosses === 0)) {
+  if (!ben || !herkeseAcikMi(wallet, ben.banned) || (ben.duelWins === 0 && ben.duelLosses === 0)) {
     return { rows: list, me: null };
   }
   const icinde = list.find((r) => r.wallet === wallet);
@@ -309,7 +310,7 @@ export async function ladder(wallet: string, limit = 10): Promise<{
   // ⚠️ Tablonun dışındaysam SIRAM YİNE GÖRÜNMELİ — "listede yoksun" demek,
   // tırmanmak için sebep bırakmaz.
   const ustum = await prisma.player.count({
-    where: { banned: false, ...oynamis, duelRating: { gt: ben.duelRating } },
+    where: { ...herkeseAcikOyuncu(), ...oynamis, duelRating: { gt: ben.duelRating } },
   });
   return {
     rows: list,
