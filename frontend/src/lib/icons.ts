@@ -14,6 +14,29 @@
 
 export const ICON_DIR = '/art/ui/kit/Mini-icons';
 
+/**
+ * 🔴 `Icon_30` HARİTADAN BİLEREK ÇIKARILDI — ve bu bir marka logosu yüzünden.
+ *
+ * KULLANICI BİLDİRİMİ (ilk tur): *"Charms tarafında bir skill seçtiğim kutuda
+ * resmen Facebook işareti var… tekrar doğma, yani revival işareti olabilir."*
+ * O turda yalnız koşu içindeki taslak kartının ikonu (`combatArt.ts` burial)
+ * değiştirilmişti ve "düzeldi" denmişti — EKSİKTİ. Kontakt sayfası 32 ikonun
+ * tamamıyla yeniden üretilip GÖZLE okununca (2026-09-15) asıl kaynak çıktı:
+ * `Icon_30` "sigil" adıyla eşlenmişti ama çizimi mavi bir dairede beyaz
+ * **"f" — düpedüz Facebook logosu.** `revival` stat'ı ona bağlıydı ve logo
+ * BEŞ yerde görünüyordu: Forge "Second Burial", Pedlar's Stall "Grave
+ * Offering" tılsımı (kullanıcının gördüğü yer), beceri ağacı, kahraman
+ * seçimi, koşu içi diriliş sayacı.
+ *
+ * ⚠️ YENİDEN ADLANDIRILMADI, SİLİNDİ: ad ne olursa olsun çizim bir logo.
+ * Anahtar yokken `<Icon name="sigil">` yazmak TİP HATASI veriyor — yani bir
+ * dahaki dosya bu logoyu derlemeden geçiremez. Mühür: `guards.test` [8].
+ *
+ * ⚠️ AYNI SAYFADA DİKKAT İSTEYEN ÜÇ İKON DAHA VAR (değiştirilmedi, kullanıcıya
+ * bildirildi): `target` (31) pembe iç içe kareler, `voidMark` (32) koyu
+ * dairede X, `tome` (22) disket gibi. Bu kit bir "uygulama" ikon paketi; adı
+ * değil çizimi yargıla.
+ */
 export const ICON = {
   star: '01', starOff: '02', health: '03', healthOff: '04',
   gold: '05', skull: '06', alert: '07', unknown: '08',
@@ -22,7 +45,7 @@ export const ICON = {
   potion: '17', magnet: '18', rosette: '19', note: '20',
   sound: '21', tome: '22', feather: '23', mallet: '24',
   keySilver: '25', keyGold: '26', flaskGreen: '27', flaskTeal: '28',
-  flaskRed: '29', sigil: '30', target: '31', voidMark: '32',
+  flaskRed: '29', target: '31', voidMark: '32',
 } as const;
 
 export type IconName = keyof typeof ICON;
@@ -61,7 +84,9 @@ export const STAT_ICON: Record<string, IconName> = {
   greed: 'gold',
   growth: 'tome',
   curse: 'voidMark',
-  revival: 'sigil',
+  // ⚠️ URN (cenaze urnası), sigil DEĞİL — bkz. `ICON` başlığı: 30 numara bir
+  // Facebook logosu. Urn "Second Burial" ve "Grave Offering" adlarının ta kendisi.
+  revival: 'urn',
   crit: 'star',
   critMul: 'star',
 };

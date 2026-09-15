@@ -26,6 +26,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { BAR_DOLGU, BTN } from '../components/ui/kit.js';
+import { ICON, STAT_ICON } from '../lib/icons.js';
 import { Game } from './engine.js';
 import { ARENA } from './arena.js';
 
@@ -369,6 +370,62 @@ console.log('\n[7] Oyuncu metni İNGİLİZCE — Türkçe sızıntısı yok');
     trDize(`.catch(() => setNote('Koşu başlatılamadı.'));`).length === 1);
   check('bekçi İNGİLİZCE mesajı yakalaMIYOR (yanlış alarm yok)',
     trDize(`.catch(() => setNote('The run could not be started.'));`).length === 0);
+}
+
+// ── [8] MARKA LOGOSU İKON OLARAK KULLANILAMAZ ──
+//
+// 🔴 NİYE VAR (kullanıcı bildirimi, İKİ TUR): *"Charms tarafında bir skill
+// seçtiğim kutuda resmen Facebook işareti var."* İlk turda yalnız koşu
+// içindeki taslak kartı düzeltildi ve "düzeldi" denildi — eksikti. Mini ikon
+// kontakt sayfası 32 ikonun tamamıyla GÖZLE okununca asıl kaynak çıktı:
+// `Icon_30` "sigil" adıyla eşlenmişti ama çizimi mavi dairede beyaz "f",
+// yani Facebook logosu; `revival` ona bağlıydı ve logo BEŞ ekranda
+// görünüyordu (Forge · Pedlar's Stall · beceri ağacı · kahraman seçimi ·
+// koşu içi diriliş sayacı).
+//
+// ⚠️ ÖLÇÜM BİR KEZ (Pillow ile kontakt sayfası), BEKÇİLİK SÜREKLİ: bu test
+// piksel okumuyor, "o dosya numarası bir daha çizilebiliyor mu" diye soruyor.
+console.log('\n── [8] marka logosu ikon olarak kullanılamaz ──');
+{
+  const LOGO_SPRITE = '30';   // mavi daire + beyaz "f"
+  const eslenen = Object.entries(ICON).filter(([, n]) => n === LOGO_SPRITE).map(([k]) => k);
+  check('ikon haritasında logo sprite\'ına giden ad YOK', eslenen.length === 0, eslenen.join(','));
+  check('diriliş stat\'ının ikonu var (kontrol grubu: harita boşalmadı)',
+    typeof STAT_ICON.revival === 'string' && STAT_ICON.revival in ICON, String(STAT_ICON.revival));
+  check('diriliş ikonu logo sprite\'ı değil',
+    ICON[STAT_ICON.revival as keyof typeof ICON] !== LOGO_SPRITE);
+
+  /**
+   * Kaynak ağacında logo sprite'ına doğrudan başvuru arayan tarayıcı.
+   *
+   * ⚠️ YORUMLAR SÖKÜLÜYOR — ölçüldü, ilk sürüm KIRMIZI YAKTI: `lib/icons.ts`
+   * başlığı bu hatayı ANLATIRKEN logo adını ve dosya numarasını anıyor ve
+   * tarayıcı o açıklamayı kod sandı. Bu depoda mühürün kendi belgesiyle
+   * eşleşmesi daha önce üç kez yaşandı. Mühür GÖNDERİLEN kodu ölçmeli.
+   */
+  const yorumsuz = (s: string) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const logoIzi = (metin: string) => /Icon_30\b|name=["']sigil["']/.test(yorumsuz(metin));
+  const kok = new URL('..', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+  const sizanlar: string[] = [];
+  const gez = (d: string) => {
+    for (const ad of readdirSync(d)) {
+      const p = join(d, ad);
+      if (statSync(p).isDirectory()) { gez(p); continue; }
+      if (!/\.(tsx?|mts)$/.test(ad) || /\.test\.mts$/.test(ad)) continue;
+      if (logoIzi(readFileSync(p, 'utf8'))) sizanlar.push(p.slice(kok.length));
+    }
+  };
+  gez(kok);
+  check('hiçbir kaynak dosya logo sprite\'ını doğrudan çizmiyor', sizanlar.length === 0, sizanlar.join(', '));
+  // ⚠️ ÇİFT TARAFLI: tarayıcının gerçekten yakalayabildiğini kanıtla.
+  check('tarayıcı sahte bir başvuruyu YAKALIYOR', logoIzi('<Icon name="sigil" scale={1} />'));
+  check('tarayıcı gear slotu "sigil"i yakalaMIYOR (yanlış alarm yok)', !logoIzi(`slot: 'sigil'`));
+  check('tarayıcı YORUMDAKİ anmayı yakalaMIYOR (yanlış alarm yok)',
+    !logoIzi(`// eskiden <Icon name="sigil"> yazıyordu, Icon_30 bir logo`));
+
+  const rail = readFileSync(join(kok, 'components', 'BuildRail.tsx'), 'utf8');
+  check('koşu içi diriliş sayacı stat haritasından okuyor', /statIcon\('revival'\)/.test(rail));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ BEKÇİLER GEÇTİ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

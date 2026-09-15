@@ -27,6 +27,7 @@
 import { useState, type ReactNode } from 'react';
 import { PATTERN_TEXT } from '@/components/ui/cards';
 import { CooldownRing, Icon, Slot } from '@/components/ui/kit';
+import { statIcon } from '@/lib/icons';
 import { WeaponPreview } from '@/components/WeaponPreview';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { weaponById } from '@/game/config';
@@ -344,7 +345,11 @@ export function BuildRail({ weapons, passives, revivalLeft, dar }: {
               border: `1px solid ${C.ok}66`, background: 'rgba(6,5,4,0.6)',
               fontFamily: FONT.ui, fontSize: dar ? 10 : 11, fontWeight: 900, color: C.ok,
             }} title={`${revivalLeft} revival left — you get back up at half health`}>
-              <Icon name="sigil" scale={1} />
+              {/* ⚠️ `statIcon('revival')`, elle yazılmış ad DEĞİL: burada
+                  "sigil" yazıyordu ve o sprite bir Facebook logosuydu (bkz.
+                  `lib/icons.ts`). Forge/tılsım/ağaçla aynı kaynaktan okununca
+                  diriliş ikonu bir daha ekranlar arasında ayrışamaz. */}
+              <Icon name={statIcon('revival')} scale={1} />
               ×{revivalLeft}
             </div>
           )}
