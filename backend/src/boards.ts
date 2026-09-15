@@ -10,6 +10,7 @@
 // kaynaktan tarıyor.
 
 import { GUNLUK_TABLO } from '@game/daily';
+import { forgeLevelsOf } from '@game/forge';
 import { prisma } from './db.js';
 import { hazineAdresi } from './solPay.js';
 
@@ -57,6 +58,56 @@ export async function gunlukTablo(bas: Date): Promise<GunlukSatir[]> {
   return rows.map((r, i) => ({
     rank: i + 1, wallet: r.wallet, name: r.player.name, depth: r.awardedDepth ?? 0, hero: r.hero,
   }));
+}
+
+/**
+ * PANO SÜTUNLARINI SIFIRDAN KUR — `goldEarned` ve `forgeLevels`.
+ *
+ * Deploy sonrası bir kez (migration BİLEREK doldurmuyor, bkz. migration.sql)
+ * ve şüphe olduğunda. İDEMPOTENT: iki kez çalıştırmak aynı sonucu verir.
+ *
+ * ⚠️ `goldEarned` DEFTERDEN, `Run.awarded`dan DEĞİL: boss koşusu
+ * `Run.awarded`a HASAR yazıyor (bkz. `/boss/finish`) ve profildeki "gold
+ * earned" tam bu yüzden şişikti. Defterin `run` kaydı ise yalnız
+ * `/run/finish`in kampanya/descent yolunda, gold ile birlikte yazılıyor —
+ * sütunun canlıda artırıldığı AYNI yer. İki tanım tek kaynağa bağlı.
+ *
+ * ⚠️ Koşu başına `gold > 0`: canlı yazım `Math.max(0, …)` ile artırıyor.
+ * 🔴 Hazine 0: ultra hesabın koşuları defterde duruyor ama sayılmıyor.
+ */
+export async function panoSutunlariniKur(): Promise<{ gold: number; forge: number }> {
+  const h = hazineAdresi();
+  const gold = await prisma.$executeRaw`
+    UPDATE "Player" p SET "goldEarned" = COALESCE((
+      SELECT SUM(l.gold)::int FROM "Ledger" l
+      WHERE l.wallet = p.wallet AND l.kind = 'run' AND l.gold > 0
+    ), 0)
+    WHERE p.wallet <> ${h ?? ''}`;
+  if (h) await prisma.player.updateMany({ where: { wallet: h }, data: { goldEarned: 0 } });
+
+  // `upgrades` JSON — toplamı SQL'de değil, canlı yazımla AYNI fonksiyonla.
+  // İkinci bir SQL tanımı, kırpma kuralı değişince sessizce ayrışırdı.
+  let forge = 0;
+  let imlec: string | undefined;
+  for (;;) {
+    const sayfa = await prisma.player.findMany({
+      take: 500,
+      ...(imlec ? { skip: 1, cursor: { wallet: imlec } } : {}),
+      orderBy: { wallet: 'asc' },
+      select: { wallet: true, upgrades: true, forgeLevels: true },
+    });
+    if (sayfa.length === 0) break;
+    for (const p of sayfa) {
+      const ups = p.upgrades && typeof p.upgrades === 'object' ? (p.upgrades as Record<string, number>) : {};
+      const dogru = forgeLevelsOf(ups);
+      if (dogru !== p.forgeLevels) {
+        await prisma.player.updateMany({ where: { wallet: p.wallet }, data: { forgeLevels: dogru } });
+        forge += 1;
+      }
+    }
+    imlec = sayfa[sayfa.length - 1].wallet;
+  }
+  return { gold, forge };
 }
 
 /** Bir cüzdan panoda görünebilir mi — `Player` ilişkisi olmayan tablolar için */

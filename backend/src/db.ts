@@ -1,6 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import type { Progress } from '@game/progress';
 import { DEFAULT_HERO, heroById } from '@game/heroes';
+import { forgeLevelsOf } from '@game/forge';
 
 export const prisma = new PrismaClient();
 
@@ -75,6 +76,14 @@ export function fromProgress(p: Progress) {
     firstClear: p.firstClear as object,
     depthPaid: p.depthPaid as object,
     upgrades: p.upgrades as object,
+    /**
+     * ⚠️ FORGE PANOSU SÜTUNU `upgrades` İLE AYNI YAZIMDA. `upgrades` yalnız
+     * buradan yazılıyor (Forge alımı, koşu kapanışı, yönetici, ultra), yani
+     * sütun hiçbir yolda JSON'dan geri kalamaz. Ayrı bir "Forge alındı →
+     * sütunu artır" yazımı, `/run/finish` `upgrades`ı yeniden yazdığında
+     * sessizce ayrışırdı.
+     */
+    forgeLevels: forgeLevelsOf(p.upgrades),
     charms: p.charms as object,
     cosmetics: p.cosmetics as object,
     equipped: p.equipped as object,

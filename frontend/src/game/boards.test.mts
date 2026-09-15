@@ -32,6 +32,8 @@ const oku = (p: string) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const yorumsuz = (s: string) =>
   s.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
+const yorumsuzSql = (s: string) => s.replace(/--.*$/gm, '');
+
 const sezon = yorumsuz(oku('../../../backend/src/season.ts'));
 const panolar = yorumsuz(oku('../../../backend/src/boards.ts'));
 const pvp = yorumsuz(oku('../../../backend/src/pvpSeason.ts'));
@@ -88,6 +90,42 @@ console.log('\n── [3] adlar ──');
   check('düello sıralaması ADI çiziyor', /oyuncuAdi\(\{\s*wallet:\s*row\.wallet,\s*name:\s*row\.name\s*\}\)/.test(duelPanel));
   check('günlük kart ADI çiziyor', /oyuncuAdi\(\{\s*wallet:\s*r\.wallet,\s*name:\s*r\.name\s*\}\)/.test(gunlukKart));
   check('düello sıralamasında çıplak kısa cüzdan kalmadı', !/'You'\s*:\s*kisa\(row\.wallet\)/.test(duelPanel));
+}
+
+console.log('\n── [4] pano sütunları (goldEarned · forgeLevels) ──');
+{
+  const { readdirSync } = await import('node:fs');
+  const gocDizini = new URL('../../../backend/prisma/migrations/', import.meta.url);
+  const goc = readdirSync(gocDizini).find((d) => d.endsWith('_board_columns'));
+  const sql = goc ? yorumsuzSql(readFileSync(new URL(`${goc}/migration.sql`, gocDizini), 'utf8')) : '';
+  check('migration var', !!goc && /ADD COLUMN "goldEarned"/.test(sql) && /ADD COLUMN "forgeLevels"/.test(sql));
+  // 🔴 Doldurma migration'da YASAK: sıfır kesintili geçişte eski konteyner yazıyor
+  check('migration YALNIZ sütun + indeks (UPDATE/INSERT yok)', !!sql && !/\b(UPDATE|INSERT|DELETE)\b/i.test(sql));
+  check('dust indeksi de açılıyor', /CREATE INDEX "Player_dust_idx"/.test(sql));
+
+  const bitis = sunucu.slice(sunucu.indexOf("app.post('/run/finish'"), sunucu.indexOf('recordDescent(wallet'));
+  const islem = bitis.slice(bitis.indexOf('prisma.$transaction(['));
+  check('goldEarned artışı koşu kapanışı transaction\'ında', /goldEarned:\s*\{\s*increment:/.test(islem));
+  check('aynı transaction\'da defter `run` kaydı', /kind:\s*'run'/.test(islem));
+  check('ultra hesap kazanç yazmıyor', /goldEarned:\s*\{\s*increment:\s*ultraMi\(wallet\)\s*\?\s*0/.test(islem));
+  const tumKaynak = sunucu + yorumsuz(oku('../../../backend/src/ledger.ts')) + yorumsuz(oku('../../../backend/src/db.ts'));
+  check('goldEarned BAŞKA hiçbir yerde artırılmıyor',
+    (tumKaynak.match(/goldEarned:\s*\{\s*increment/g) ?? []).length === 1);
+
+  const db = yorumsuz(oku('../../../backend/src/db.ts'));
+  check('forgeLevels `fromProgress`te, upgrades ile aynı yazımda',
+    /forgeLevels:\s*forgeLevelsOf\(p\.upgrades\)/.test(govde(db, 'fromProgress')));
+  const kur = govde(panolar, 'panoSutunlariniKur');
+  check('yeniden kurma defterin YALNIZ `run` kaydını topluyor', /l\.kind\s*=\s*'run'/.test(kur));
+  check('yeniden kurma forge için AYNI fonksiyonu kullanıyor', /forgeLevelsOf\(/.test(kur));
+  check('yeniden kurma ucu yöneticiye kapalı', /app\.post\('\/admin\/boards\/recompute',\s*adminOnly/.test(sunucu));
+  check('yönetici panelinde düğme var', yorumsuz(oku('../app/gbadmin123/page.tsx')).includes("'/admin/boards/recompute'"));
+
+  const profil = yorumsuz(oku('../../../backend/src/profile.ts'));
+  check('profil "gold earned" sütundan okuyor (boss hasarı değil)',
+    /goldEarned:\s*player\?\.goldEarned/.test(profil) && !/_sum:\s*\{\s*awarded/.test(profil));
+  check('Tavern kartı panoyla aynı forge fonksiyonu',
+    /forgeLevelsOf\(progress\.upgrades\)/.test(yorumsuz(oku('../components/RecordsPanel.tsx'))));
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ PANOLAR MÜHÜRLÜ' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

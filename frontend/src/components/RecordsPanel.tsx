@@ -8,7 +8,7 @@
 import { oyuncuAdi } from '@/game/playerName';
 import { useEffect, useMemo, useState } from 'react';
 import { STAGES, depthGold, MAX_WEAPONS } from '@/game/config';
-import { FORGE, costOf, spentOn } from '@/game/forge';
+import { FORGE, costOf, forgeLevelsOf, spentOn } from '@/game/forge';
 import { paidDepth, type Progress } from '@/game/progress';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { Fade } from '@/components/ui/motion';
@@ -178,7 +178,8 @@ function MyRecord({ progress }: { progress: Progress }) {
   const stats = useMemo(() => {
     const cleared = STAGES.filter((s) => progress.cleared[s.id]).length;
     const deepest = Math.max(0, ...STAGES.map((s) => paidDepth(progress, s.id)));
-    const forgeLevels = FORGE.reduce((n, u) => n + Math.min(progress.upgrades[u.id] ?? 0, u.maxLevel), 0);
+    // ⚠️ Panonun sütunuyla AYNI fonksiyon — kart ile pano aynı sayıyı göstersin.
+    const forgeLevels = forgeLevelsOf(progress.upgrades);
     const forgeMax = FORGE.reduce((n, u) => n + u.maxLevel, 0);
     const spent = spentOn(progress.upgrades);
     // "Kazanılan toplam" ayrı tutulmuyor — harcanan + kalan ile türetiliyor.

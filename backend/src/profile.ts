@@ -55,7 +55,7 @@ export async function profileOf(wallet: string): Promise<ProfileData> {
   const [player, runs, agg] = await Promise.all([
     prisma.player.findUnique({
       where: { wallet },
-      select: { bestDepth: true, bestStage: true },
+      select: { bestDepth: true, bestStage: true, goldEarned: true },
     }),
     prisma.run.findMany({
       where: { wallet },
@@ -64,7 +64,6 @@ export async function profileOf(wallet: string): Promise<ProfileData> {
     }),
     prisma.run.aggregate({
       where: { wallet, claimedAt: { not: null } },
-      _sum: { awarded: true },
       _count: true,
     }),
   ]);
@@ -93,7 +92,10 @@ export async function profileOf(wallet: string): Promise<ProfileData> {
     totals: {
       runs: agg._count,
       playSec,
-      goldEarned: agg._sum.awarded ?? 0,
+      // 🔴 ESKİDEN `SUM(Run.awarded)`: boss koşusu oraya HASAR yazıyor, yani
+      // profil boss hasarını gold diye topluyordu. Artık pano ile AYNI sütun —
+      // oyuncu kartında ve panoda iki farklı "gold earned" görmesin.
+      goldEarned: player?.goldEarned ?? 0,
       abandoned: acikKosu,
       bestDepth: player?.bestDepth ?? 0,
       bestStage: player?.bestStage ?? 0,

@@ -233,6 +233,26 @@ export function spentOn(levels: Record<string, number>): number {
 }
 
 /**
+ * Ağaçta alınmış TOPLAM seviye — Forge panosunun değeri.
+ *
+ * ⚠️ TEK TANIM: sunucu `fromProgress`te bunu `forgeLevels` sütununa yazıyor,
+ * istemci kartında aynısını çiziyor. `RecordsPanel` kendi `reduce`unu
+ * taşıyordu; ikisi ayrışsaydı panodaki sayı ile oyuncunun kartı çelişirdi.
+ *
+ * ⚠️ `spentOn` ile AYNI KIRPMA (0..maxLevel) + tam sayı. Tanınmayan id
+ * sayılmıyor: kaldırılmış bir yükseltmenin artık seviyesi panoda puan olmasın.
+ */
+export function forgeLevelsOf(levels: Record<string, number>): number {
+  let n = 0;
+  for (const u of FORGE) {
+    const ham = Number(levels?.[u.id] ?? 0);
+    if (!Number.isFinite(ham)) continue;
+    n += Math.min(Math.max(0, Math.floor(ham)), u.maxLevel);
+  }
+  return n;
+}
+
+/**
  * Satın alınan yükseltmelerden istatistik farkını çıkar.
  * Motorun STAT_BASE'ine EKLENİR (recomputeStats bunu taban kabul eder).
  */

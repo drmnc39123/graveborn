@@ -20,7 +20,7 @@ import { rankOf, recomputeAll, recordDescent, top as lbTop } from './leaderboard
 import { awardsOf, recordSeason, seasonRankOf, settleSeasons, topSeason } from './season.js';
 import { claimCrypt, contributeToVault, deedList, vaultState } from './crypt.js';
 import { OdemeHatasi, hazineAdresi, odemeDogrula, solRayiAcik } from './solPay.js';
-import { gunlukTablo } from './boards.js';
+import { gunlukTablo, panoSutunlariniKur } from './boards.js';
 import { ultraDolumGerekli, ultraIlerleme, ultraMi } from './ultra.js';
 import { aglariDogrula, rpcCagir, rpcSaglik, rpcYapilandirildi } from './rpc.js';
 import { ReferralError, kodGir, kodTemizle, odulKontrol, referralDurum } from './referral.js';
@@ -1747,6 +1747,16 @@ app.post('/run/finish', wrap(async (req, res) => {
         // ÖNCESİ değerle yazıyor, üstüne düz atama yapmak eşzamanlı bir
         // Reliquary çekilişini silebilirdi.
         ...(bahisTozu > 0 ? { dust: { increment: bahisTozu } } : {}),
+        /**
+         * ⭐ GOLD PANOSU — defterin `run` kaydıyla AYNI transaction'da.
+         * Sütun, defterin `run` toplamının denormalize kopyası; ayrı bir
+         * yazım olsaydı çökme ikisini ayırırdı (`boards.test` eşitliği ölçüyor).
+         * ⚠️ `increment`: eşzamanlı başka bir kapanışı ezmesin.
+         * ⚠️ Kırpılmış koşu SAYILIR — ödemesini aldı, kazanç gerçek.
+         * 🔴 ULTRA SAYILMAZ: hazine d15'te her bölümü açık oynuyor.
+         */
+        // `Math.round`: `ledgerWrite` de yuvarlıyor — iki taraf aynı sayıyı görsün.
+        goldEarned: { increment: ultraMi(wallet) ? 0 : Math.max(0, Math.round(s.awarded)) },
       },
     }),
     prisma.run.update({
@@ -2822,6 +2832,17 @@ app.post('/admin/flags', adminOnly, wrap(async (req, res) => {
 app.post('/admin/leaderboard/recompute', adminOnly, wrap(async (_req, res) => {
   const out = await recomputeAll();
   console.warn('[admin] SIRALAMA YENİDEN KURULDU', JSON.stringify(out));
+  res.json(out);
+}));
+
+/**
+ * PANO SÜTUNLARINI YENİDEN KUR — `goldEarned` (defterden) + `forgeLevels`.
+ * ⚠️ Deploy sonrası BİR KEZ şart: migration sütunları 0 ile açıyor ve
+ * doldurmuyor (bkz. migration.sql). İdempotent.
+ */
+app.post('/admin/boards/recompute', adminOnly, wrap(async (_req, res) => {
+  const out = await panoSutunlariniKur();
+  console.warn('[admin] PANO SÜTUNLARI YENİDEN KURULDU', JSON.stringify(out));
   res.json(out);
 }));
 

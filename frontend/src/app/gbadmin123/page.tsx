@@ -553,6 +553,23 @@ export default function AdminPage() {
               style={btn}>
               sıralamayı yeniden kur
             </button>
+            {/* ⚠️ DEPLOY SONRASI BİR KEZ ŞART — migration `goldEarned` ve
+                `forgeLevels`i 0 ile açıyor, bilerek doldurmuyor (sıfır
+                kesintili geçişte eski konteyner hâlâ yazıyor). İdempotent. */}
+            <button
+              onClick={() => {
+                if (!confirm('GOLD EARNED (defterin run toplamından) ve FORGE panoları sıfırdan kurulacak.\n\nİdempotent — tekrar çalıştırmak zararsız. Devam?')) return;
+                void (async () => {
+                  try {
+                    const r = await call<{ gold: number; forge: number }>(
+                      '/admin/boards/recompute', { method: 'POST' });
+                    alert(`Bitti — gold: ${r.gold} satır yazıldı · forge: ${r.forge} satır düzeltildi.`);
+                  } catch { setErr('Pano sütunları yeniden kurulamadı.'); }
+                })();
+              }}
+              style={btn}>
+              panoları yeniden kur
+            </button>
             {/* ⚠️ BURADA, sıfırlama bölümünde DEĞİL — defter kapanış günü
                 değil, düzenli olarak alınmalı. Sıfırlamanın yanına koymak
                 "silmeden hemen önce bir kez" alışkanlığı doğururdu. */}

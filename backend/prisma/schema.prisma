@@ -39,7 +39,7 @@ model Player {
   /// ⚠️ Nullable: mevcut oyuncular adsiz kaliyor ve ilk giriste soruluyor.
   /// Zorunlu yapmak, calisan bir uretim veritabanina migration sirasinda
   /// deger uydurmak demekti.
-  name        String?
+  name    String?
   /// BENZERSIZLIK ANAHTARI — kucuk harf, ayraclar atilmis, karistirilabilir
   /// harfler Latin'e katlanmis hali (bkz. `@game/playerName` adAnahtari).
   /// 🔴 `name`i dogrudan @unique yapmak YETMEZ: Postgres karsilastirmasi
@@ -47,11 +47,11 @@ model Player {
   /// benzersizlik bir soz olmaktan oteye gecmezdi. Daha kotusu Kiril "а"
   /// ile Latin "a" ekranda AYNI gorunur — anahtar olmadan siralamada
   /// birinci olan oyuncunun adinin birebir kopyasi alinabilirdi.
-  nameKey     String? @unique
+  nameKey String? @unique
   /// Kac kez ad degistirdi — fiyat bundan turuyor (ilk ad BEDAVA).
   /// ⚠️ ARTAN FIYAT: sabit fiyat, ad degistirip itibardan kacmayi ucuz
   /// birakirdi. Adin benzersiz olmasinin anlami da buydu.
-  renames     Int     @default(0)
+  renames Int     @default(0)
 
   /// Bu oyuncunun paylastigi kod. Ilk istendiginde uretilir.
   /// ⚠️ @unique: iki oyuncuya ayni kod dusemez — kod bir KIMLIK.
@@ -189,6 +189,17 @@ model Player {
   seasonDepth  Int   @default(0)
   seasonRating Float @default(0)
 
+  // ── LEADERBOARDS (denormalize, bkz. boards.ts) ──
+  /// koşulardan KAZANILAN toplam gold — bakiye DEĞİL.
+  /// ⚠️ Kullanıcı kararı: bakiye Vigil ile satın alınabiliyor ve Forge'a
+  /// harcayanı cezalandırıyor. Yalnız `/run/finish` defter `run` kaydıyla
+  /// AYNI transaction'da artırır; ultra hesapta artmaz. Geri kurma:
+  /// `POST /admin/boards/recompute` (defterin `run` toplamından).
+  goldEarned  Int @default(0)
+  /// Forge ağacında alınmış toplam seviye (maxLevel ile kırpılmış).
+  /// ⚠️ `upgrades` JSON'undan SIRALANAMAZ; yalnız `fromProgress` yazar.
+  forgeLevels Int @default(0)
+
   runs      Run[]
   listings  Listing[]
   awards    SeasonAward[]
@@ -203,6 +214,9 @@ model Player {
   @@index([bestRating])
   @@index([guildId])
   @@index([seasonWeek, seasonRating])
+  @@index([goldEarned])
+  @@index([forgeLevels])
+  @@index([dust])
   /// ⚠️ Davet sayimi icin: "kac kisi benim kodumla geldi" sorgusu bu
   /// indeks olmadan tam tarama yapardi.
   @@index([referredBy])
