@@ -27,6 +27,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
 import { prisma } from './db.js';
+import { betaAnlikGoruntu } from './beta.js';
 
 /**
  * Admin kapısı. Sır ortam değişkeninde; TANIMLI DEĞİLSE tüm admin uçları
@@ -275,7 +276,28 @@ export async function betaSifirla(gercek: boolean): Promise<SifirlamaSayim> {
     paymentsKalacak: payments,
   });
 
+  // ⚠️ KURU ÇALIŞTIRMADA DA BİLDİRİLİYOR: "kaç cüzdan hediye kaydına
+  // geçecek" sayısı, silinecek satır sayıları kadar önemli — hediye sözünün
+  // dayanağı o liste (bkz. beta.ts başlığı).
+  Object.assign(sayim, { betaCuzdanKaydi: players });
+
   if (!gercek) return sayim;
+
+  /**
+   * 🔴 SİLMEDEN ÖNCE BETA KAYDI — VE BU PAZARLIKSIZ.
+   *
+   * Kullanıcı 2026-09-16'da halka açık söz verdi: beta'da cüzdan bağlayıp
+   * oynayan herkese açılışta hediye. O sözün tek dayanağı `Player` satırları
+   * ve aşağıdaki silme onların HEPSİNİ siliyor. Kayıt yönetici düğmesine
+   * bırakılsaydı, düğmeye basmayı unutan biri sözü tutulamaz hâle getirirdi.
+   *
+   * ⚠️ SİLME TRANSACTION'ININ DIŞINDA ve ÖNCESİNDE: içine konsaydı tek bir
+   * upsert hatası tüm sıfırlamayı geri alırdı; burada hata olursa silme HİÇ
+   * başlamaz — doğru sıra bu, çünkü kayıtsız silmek geri alınamaz.
+   */
+  const beta = await betaAnlikGoruntu();
+  Object.assign(sayim, { betaCuzdanKaydi: beta.kaydedilen, betaCuzdanToplam: beta.toplam });
+  console.warn('[beta-sifirla] cuzdan kaydi alindi:', JSON.stringify(beta));
 
   // ── SONRA SİL ── tek transaction: yarım silinmiş bir dünya kalmasın
   await prisma.$transaction([

@@ -41,6 +41,7 @@ import { cryptUpgradeCost, nextCryptTier } from '@game/crypt';
 import { seasonWeek } from '@game/season';
 import { paidDepth } from '@game/progress';
 import { adminOnly, listPlayers, listRuns, overview, playerDetail, setBanned, betaSifirla, buyume, defterAkisi } from './admin.js';
+import { betaAkisi, betaAnlikGoruntu, betaCuzdanlari } from './beta.js';
 import { esikAcikMi, esikKontrol, esikMetni } from './hold.js';
 import {
   MAX_ACTIVE_LISTINGS, MIN_GOLD, MarketError, cancelListing, createListing,
@@ -2801,6 +2802,45 @@ app.get('/admin/ledger/export', adminOnly, wrap(async (_req, res) => {
   }
   if (!kopuk) res.end('#EOF\n');
 }));
+
+/**
+ * BETA CUZDAN KAYDI - kapanis hediyesinin dayanagi (bkz. `beta.ts`).
+ *
+ * UC UC, UC AYRI IS: bakmak - kaydi tazelemek - tam listeyi indirmek.
+ * Kayit ayrica `betaSifirla` icinde SILMEDEN ONCE de aliniyor; bu dugme
+ * beta surerken istenildigi an bakabilmek icin var.
+ */
+app.get('/admin/beta/wallets', adminOnly, wrap(async (req, res) => {
+  const limit = Number(req.query.limit ?? 50);
+  res.json(await betaCuzdanlari(Number.isFinite(limit) ? limit : 50));
+}));
+
+app.post('/admin/beta/snapshot', adminOnly, wrap(async (_req, res) => {
+  const out = await betaAnlikGoruntu();
+  console.warn('[admin] BETA CUZDAN KAYDI', JSON.stringify(out));
+  res.json(out);
+}));
+
+app.get('/admin/beta/export', adminOnly, wrap(async (_req, res) => {
+  const damga = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '');
+  res.setHeader('content-type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('content-disposition', `attachment; filename="graveborn-beta-wallets-${damga}.ndjson"`);
+  // Kopma yonetimi `defterAkisi` ucundakiyle ayni - gerekce orada yazili.
+  let kopuk = false;
+  res.on('close', () => { kopuk = true; });
+  for await (const parca of betaAkisi()) {
+    if (kopuk) return;
+    if (!res.write(parca)) {
+      await new Promise<void>((r) => {
+        const bitir = () => { res.off('drain', bitir); res.off('close', bitir); r(); };
+        res.once('drain', bitir);
+        res.once('close', bitir);
+      });
+    }
+  }
+  if (!kopuk) res.end('#EOF\n');
+}));
+
 
 /**
  * ⭐ CANLI OPERASYON — bakım kapısı ve duyuru şeridi.

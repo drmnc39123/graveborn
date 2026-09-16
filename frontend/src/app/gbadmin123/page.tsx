@@ -162,6 +162,13 @@ interface BuyumeGun { gun: string; yeni: number; kalan1g: number | null; kalan7g
 interface Buyume { gunler: BuyumeGun[]; toplam: number }
 
 /** Beta sıfırlamanın kuru çalıştırma / sonuç sayımı: tablo adı → satır */
+interface BetaSatir {
+  wallet: string; name: string | null; runs: number; banned: boolean;
+  firstSeen: string; lastSeen: string; giftSentAt: string | null;
+}
+interface BetaListe {
+  toplam: number; oynayan: number; banli: number; hediyeli: number; rows: BetaSatir[];
+}
 type SifirSayim = Record<string, number>;
 
 /** Hata defteri satırı — aynı hata satır değil SAYAÇ olarak birikiyor */
@@ -210,6 +217,13 @@ export default function AdminPage() {
   const [sifirMesgul, setSifirMesgul] = useState(false);
   const [sifirNot, setSifirNot] = useState<string | null>(null);
   const [defterMesgul, setDefterMesgul] = useState(false);
+  /**
+   * BETA CUZDAN KAYDI — kapanis hediyesinin dayanagi (bkz. backend `beta.ts`).
+   * Sifirlama TUM oyuncu satirlarini siliyor; hediye sozunun listesi bu tabloda
+   * yasiyor ve sifirlamadan sag cikiyor.
+   */
+  const [beta, setBeta] = useState<BetaListe | null>(null);
+  const [betaMesgul, setBetaMesgul] = useState(false);
   /** ⭐ Hata defteri — "şu an ne kırık" ekranı */
   const [hata, setHata] = useState<HataDefteri | null>(null);
   const [acikYigin, setAcikYigin] = useState<string | null>(null);
@@ -382,6 +396,50 @@ export default function AdminPage() {
    * bağlantı. Sırrı URL'ye koymak (`?secret=`) daha kısa olurdu ama sır
    * tarayıcı geçmişine ve sunucu erişim kaydına yazılırdı.
    */
+  /** Beta cuzdan kaydini oku — panelde bakmak icin */
+  const betaOku = async () => {
+    try { setBeta(await call<BetaListe>('/admin/beta/wallets?limit=50')); }
+    catch { setErr('Beta cuzdan listesi okunamadi.'); }
+  };
+
+  /** Kaydi tazele — beta surerken istenildigi an alinabilir, idempotent */
+  const betaKaydet = async () => {
+    setBetaMesgul(true);
+    try {
+      const r = await call<{ kaydedilen: number; toplam: number }>('/admin/beta/snapshot', { method: 'POST' });
+      setSifirNot(`✓ Beta kaydi alindi — ${r.kaydedilen.toLocaleString('tr-TR')} cuzdan yazildi, tabloda ${r.toplam.toLocaleString('tr-TR')} kayit var.`);
+      await betaOku();
+    } catch { setErr('Beta kaydi alinamadi.'); }
+    finally { setBetaMesgul(false); }
+  };
+
+  /**
+   * Tam listeyi indir. ⚠️ `#EOF` muhru kontrol ediliyor — yarim inen bir
+   * dagitim listesi "hepsi bu kadarmis" diye okunur ve hak eden oyuncu
+   * hediyesiz kalir (defter indirmedeki gerekcenin aynisi).
+   */
+  const betaIndir = async () => {
+    setBetaMesgul(true);
+    try {
+      const res = await fetch(API + '/admin/beta/export', { headers: { 'x-admin-secret': secret } });
+      if (!res.ok) throw new Error(String(res.status));
+      const metin = await res.text();
+      if (!metin.endsWith('#EOF\n')) {
+        setErr('Beta listesi YARIM indi (muhur yok) — tekrar dene, bu dosyayi kullanma.');
+        return;
+      }
+      const url = URL.createObjectURL(new Blob([metin], { type: 'application/x-ndjson' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `graveborn-beta-wallets-${new Date().toISOString().slice(0, 10)}.ndjson`;
+      a.click();
+      URL.revokeObjectURL(url);
+      const satir = metin.split('\n').filter((l) => l && l !== '#EOF').length;
+      setSifirNot(`✓ Beta listesi indirildi — ${satir.toLocaleString('tr-TR')} cuzdan.`);
+    } catch { setErr('Beta listesi indirilemedi.'); }
+    finally { setBetaMesgul(false); }
+  };
+
   const defterIndir = async () => {
     setDefterMesgul(true);
     try {
@@ -1142,6 +1200,75 @@ export default function AdminPage() {
       )}
 
       {sekme === 'tehlikeli' && (<>
+      {/* BETA CUZDAN KAYDI — sifirlamanin HEMEN USTUNDE, bilerek.
+          🔴 Hediye sozu (2026-09-16 duyurusu) bu listeye dayaniyor ve
+          sifirlama tum `Player` satirlarini siliyor. Sifirlama dugmesine
+          uzanan kisi, once bu kutuyu gormeli. */}
+      <section style={{ marginTop: 28, padding: '12px 14px',
+        border: `1px solid ${C.candle}55`, borderRadius: 10, background: 'rgba(239,167,46,0.06)' }}>
+        <h2 style={{ margin: 0, fontSize: 15, color: C.candle }}>Beta cüzdanları — hediye listesi</h2>
+        <div style={{ fontSize: 11, color: C.boneDim, marginTop: 6, lineHeight: 1.65 }}>
+          Beta&apos;da giriş yapan cüzdanlar. Bu tablo <b>sıfırlamadan sağ çıkar</b> — sıfırlama
+          silmeden önce kaydı kendisi de alır. Dağıtımdan önce listeyi indir.
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <button onClick={() => { void betaOku(); }} style={btn}>listeyi göster</button>
+          <button onClick={() => { void betaKaydet(); }} disabled={betaMesgul} style={btn}>
+            {betaMesgul ? 'çalışıyor…' : 'kaydı tazele'}
+          </button>
+          <button onClick={() => { void betaIndir(); }} disabled={betaMesgul} style={btn}>
+            listeyi indir (.ndjson)
+          </button>
+        </div>
+
+        {beta && (
+          <>
+            <div style={{ display: 'flex', gap: 14, marginTop: 12, flexWrap: 'wrap', fontSize: 12 }}>
+              <span>kayıtlı cüzdan: <b style={{ color: C.bone }}>{beta.toplam.toLocaleString('tr-TR')}</b></span>
+              <span>oynamış (banlı değil): <b style={{ color: C.ok }}>{beta.oynayan.toLocaleString('tr-TR')}</b></span>
+              <span>banlı: <b style={{ color: C.badText }}>{beta.banli.toLocaleString('tr-TR')}</b></span>
+              <span>hediye gönderilmiş: <b style={{ color: C.bone }}>{beta.hediyeli.toLocaleString('tr-TR')}</b></span>
+            </div>
+            <div style={{ overflowX: 'auto', marginTop: 10 }}>
+              <table style={{ borderCollapse: 'collapse', fontSize: 11.5, width: '100%' }}>
+                <thead>
+                  <tr style={{ color: C.boneFaint, textAlign: 'left' }}>
+                    <th style={{ padding: '4px 8px' }}>cüzdan</th>
+                    <th style={{ padding: '4px 8px' }}>ad</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'right' }}>koşu</th>
+                    <th style={{ padding: '4px 8px' }}>ilk</th>
+                    <th style={{ padding: '4px 8px' }}>son</th>
+                    <th style={{ padding: '4px 8px' }}>durum</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {beta.rows.map((r) => (
+                    <tr key={r.wallet} style={{ borderTop: `1px solid ${C.border}` }}>
+                      <td style={{ padding: '4px 8px', fontFamily: 'ui-monospace, monospace' }}>{r.wallet}</td>
+                      <td style={{ padding: '4px 8px', color: C.boneDim }}>{r.name ?? '—'}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'right', color: r.runs > 0 ? C.bone : C.boneFaint }}>{r.runs}</td>
+                      <td style={{ padding: '4px 8px', color: C.boneFaint }}>{r.firstSeen.slice(0, 10)}</td>
+                      <td style={{ padding: '4px 8px', color: C.boneFaint }}>{r.lastSeen.slice(0, 10)}</td>
+                      <td style={{ padding: '4px 8px' }}>
+                        {r.banned ? <span style={{ color: C.badText }}>banlı</span>
+                          : r.giftSentAt ? <span style={{ color: C.ok }}>hediye gitti</span>
+                            : <span style={{ color: C.boneFaint }}>bekliyor</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {beta.rows.length === 0 && (
+              <div style={{ marginTop: 10, fontSize: 11.5, color: C.boneFaint }}>
+                Kayıt boş — &quot;kaydı tazele&quot; ile şu anki cüzdanları yaz.
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
       {/* ⭐ BETA SIFIRLAMA — panelin EN ALTINDA, bilerek.
           ⚠️ Yukarıdaki her şey günlük iş; bu yılda bir kez basılacak ve
           geri alınamaz. Canlı operasyon kutusunun yanına koymak, bakım

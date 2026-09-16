@@ -785,3 +785,37 @@ model DirectMessage {
   /// Okunmamis sayaci icin
   @@index([to, readAt])
 }
+
+/// BETA CÜZDAN KAYDI — beta kapanış hediyesinin TEK dayanağı.
+///
+/// 🔴 NİYE AYRI TABLO (2026-09-16, kullanıcı duyurusu): "beta'da cüzdan
+/// bağlayıp oynayan herkese açılışta hediye" sözü halka açık verildi. O sözün
+/// dayanağı `Player` satırlarıydı ve `betaSifirla()` TÜM `Player` satırlarını
+/// siliyor — yani sıfırlama anında kimin hak ettiği bilgisi de yok oluyordu.
+/// Bu tablo sıfırlamadan SAĞ ÇIKAR: `betaSifirla` silmeden ÖNCE buraya yazar.
+///
+/// ⚠️ `Player` İLİŞKİSİ YOK ve bu bilinçli: oyuncu satırı silindikten sonra
+/// da bu kayıt ayakta kalmalı. Cascade bağlasaydık tabloyla birlikte giderdi.
+///
+/// ⚠️ BİR KİMLİK DEĞİL, BİR MAKBUZ — `Payment` tablosuyla aynı gerekçe.
+model BetaWallet {
+  /// Solana cüzdanı — beta'da giriş yapmış hesap
+  wallet     String    @id
+  /// o günkü oyuncu adı (varsa) — dağıtım listesinde insan okuyabilsin
+  name       String?
+  /// hesabın beta'da ilk görüldüğü an (`Player.createdAt`)
+  firstSeen  DateTime
+  /// son görülme (`Player.lastSeen`)
+  lastSeen   DateTime
+  /// kapanmış koşu sayısı — "oynadı mı" sorusunun cevabı
+  runs       Int       @default(0)
+  /// anlık görüntü anında banlı mıydı — hak ediş kararını dağıtım anına bırakır
+  banned     Boolean   @default(false)
+  /// kaydın alındığı an
+  takenAt    DateTime  @default(now())
+  /// hediye gönderildiyse damgası — iki kez göndermeyi önler
+  giftSentAt DateTime?
+
+  @@index([runs])
+  @@index([giftSentAt])
+}
