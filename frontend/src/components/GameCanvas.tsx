@@ -699,8 +699,11 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           hintRef.current = { def: h, at: game.time };
           seenRef.current = [...seenRef.current, h.id];
           markHintSeen(h.id);
-          // Dokunmatik mi: kaba işaretçi (parmak) — Phantom/Safari/Android
-          setHint(hintText(h, window.matchMedia?.('(pointer: coarse)').matches ?? false));
+          // Dokunmatik mi — ⚠️ TEK KAYNAK YALAN SÖYLER (HubCanvas dersi):
+          // `pointer: coarse` bazı WebView'larda yanlış; `maxTouchPoints` da okunuyor
+          const dokunmatik = (window.matchMedia?.('(pointer: coarse)').matches ?? false)
+            || (navigator.maxTouchPoints ?? 0) > 0;
+          setHint(hintText(h, dokunmatik));
         }
       }
       /**

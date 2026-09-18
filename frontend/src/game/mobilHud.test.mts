@@ -40,7 +40,9 @@ console.log('\n[1] ** TUTORIAL DOKUNMATIKTE KLAVYE DEMIYOR');
     if (/WASD|arrow|keyboard|press [A-Z]\b/i.test(h.text))
       check(`'${h.id}' klavye diyor → textTouch sart`, !!h.textTouch && !/WASD|arrow|keyboard/i.test(h.textTouch));
   }
-  check('GameCanvas dokunmatigi olcuyor', /hintText\(h, window\.matchMedia\?\.\('\(pointer: coarse\)'\)/.test(oyun));
+  // ⚠️ İKİ KAYNAK: yalnız `pointer: coarse` bazı WebView'larda yanlış (HubCanvas'ta ölçüldü)
+  check('GameCanvas dokunmatigi IKI kaynaktan olcuyor',
+    /pointer: coarse/.test(oyun) && /maxTouchPoints \?\? 0\) > 0;\s*setHint\(hintText\(h, dokunmatik\)\)/.test(oyun));
   check('ipucu dar ekranda kurenin ustunde', /bottom: darHud \? 150 : 96/.test(oyun));
 }
 
