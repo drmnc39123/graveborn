@@ -60,7 +60,8 @@ console.log('\n[3] ** START HERE TELEFONDA TEK BASINA');
   check('telefon = dar VEYA kisa', /const telefon = ekranW < 640 \|\| kisaEkranMi\(ekranH\)/.test(play));
   check('sadeHud = telefon && ilkGorunur', /const sadeHud = telefon && ilkGorunur/.test(play));
   check('sohbet sadeHud iken gizli', /\{!panel && !sadeHud && \(\s*<ChatPanel/.test(play));
-  check('sag kolon kartlari sadeHud iken gizli', /\{!sadeHud && \(\(\) => \{\s*const kartlar = \[\s*<EventBanner/.test(play));
+  check('sag kolon kartlari sadeHud iken gizli',
+    /\{!sadeHud && !telefon && sagKartlar\(progress\)\}/.test(play) && /\{!sadeHud && telefon && \(\s*<KartCekmece/.test(play));
   check('cuzdan kapisi HER ZAMAN (kontrol grubu)', /\{getMode\(\) === 'demo' && <PlayConnect \/>\}\s*\{!sadeHud/.test(play));
   check('FirstRun kisa ekranda kompakt ve sag kolonu bosaltiyor',
     /kompakt=\{kisaEkranMi\(ekranH\)\}/.test(play) && /sagBosluk=\{kisaEkranMi\(ekranH\) \? kolon\.w/.test(play)
@@ -73,20 +74,28 @@ console.log('\n[3b] ** SAG KOLON KARTLARI KOLONA SIGIYOR');
   check('ReadyCard %100 genislikte border-box', /width: 'min\(214px, 100%\)',\s*boxSizing: 'border-box'/.test(hazir));
 }
 
-console.log('\n[3c] ** TELEFONDA KARTLAR YAN YANA SERIT (kullanici istegi)');
+console.log('\n[3c] ** TELEFONDA KARTLAR SAGDAN ACILAN CEKMECEDE (kullanici istegi)');
 {
   /**
-   * 🔴 Kullanıcı: *"mobilde sağa sola kaymalı tıklamalı olsun, desktop'taki
-   * gibi aşağı yukarı değil."* Üç kart alt alta ~480 px kaplıyordu.
+   * 🔴 Kullanıcı: *"sağda küçük ikon olacak, tıklayınca sola doğru açılan
+   * pencere; tekrar tıklayınca sağa doğru kapanacak."* Önce yan yana
+   * kaydırmalı şerit yapılmıştı — İSTENMEDİ, geri gelmemeli.
    */
-  const serit = yorumsuz(oku('../components/KartSeridi.tsx'));
-  check('telefonda KartSeridi, masaustunde sutun',
-    /return telefon \? <KartSeridi>\{kartlar\}<\/KartSeridi> : <>\{kartlar\}<\/>/.test(play));
-  check('yatay yapiskan kaydirma', /scrollSnapType: 'x mandatory'/.test(serit) && /flex: '0 0 100%'/.test(serit));
-  check('onceki/sonraki + nokta dugmeleri', /aria-label="Previous card"/.test(serit) && /aria-label="Next card"/.test(serit)
-    && /aria-label=\{`Card \$\{i \+ 1\}/.test(serit));
-  check('bos kart slayt sayilmiyor', /childElementCount === 0/.test(serit));
-  check('ok dugmeleri 32 px', /const DOKUNMA = (3[2-9]|[4-9]\d)/.test(serit));
+  const cek = yorumsuz(oku('../components/KartCekmece.tsx'));
+  check('telefonda cekmece, masaustunde sutun (tek kart tanimi)',
+    /telefon && \(\s*<KartCekmece[\s\S]{0,300}\{sagKartlar\(progress\)\}\s*<\/KartCekmece>/.test(play)
+    && /!telefon && sagKartlar\(progress\)/.test(play));
+  check('kapaliyken saga, acikken sola kayiyor',
+    /transform: acik \? 'translateX\(0\)' : `translateX\(\$\{genislik\}px\)`/.test(cek));
+  check('ayni sekme acar ve kapar', /onClick=\{\(\) => setAcik\(\(v\) => !v\)\}/.test(cek) && /aria-expanded=\{acik\}/.test(cek));
+  check('sekme dokunma hedefi >= 32', (+(cek.match(/CEKMECE_SEKME = (\d+)/)?.[1] ?? 0)) >= 32);
+  check('hareket kapaliysa gecis yok', /hareketYok \? 'none'/.test(cek));
+  check('varsayilan KAPALI', /useState\(false\)/.test(cek));
+  // 🔴 Ölçüldü 780x340: açık panel ekranın altına taşıyordu
+  check('acik panel ekrana sigiyor (yataya karsi yukari kayar)',
+    /const kayma = Math\.min\(0, ekranH - 12 - EN_AZ_H - ust\)/.test(cek) && /marginTop: kayma/.test(cek)
+    && /ekranH=\{ekranH\}/.test(play));
+  check('kaydirmali serit geri gelmedi', !/KartSeridi|scrollSnapType/.test(play));
 }
 
 console.log('\n[4] ** ANA SAYFA KAPISI GORUNUR YUKSEKLIKTE');

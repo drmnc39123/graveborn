@@ -92,10 +92,12 @@ console.log('\n── [5] Sayfa ──');
   check('panel kapanınca varsayılana dönüyor', /if \(panel !== 'leaderboard'\) setLbBaslangic\('descent'\)/.test(sayfa));
   const lb = sayfa.indexOf('{lbDugme.etiket}');
   const trials = sayfa.indexOf('<TrialsKarti');
-  const sagKolon = sayfa.indexOf('<EventBanner');
+  // ⚠️ Sağ kartlar tek tanımda (`sagKartlar`), sütunda `sagKartlar(progress)` ile çiziliyor
+  const sagKolon = sayfa.indexOf('!telefon && sagKartlar(progress)');
+  const etkinlik = sayfa.indexOf('<EventBanner');
   const boss = sayfa.indexOf('<BossKarti');
   check('Trials sol sütunda, LEADERBOARDS düğmesinin altında', lb > 0 && trials > lb && trials < sagKolon);
-  check('Boss sağ sütunda, etkinlik kartının altında', boss > sagKolon && boss - sagKolon < 400);
+  check('Boss sağ kartlarda, etkinlik kartının altında', boss > etkinlik && boss - etkinlik < 400);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ HUD KARTLARI SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

@@ -75,7 +75,7 @@ import {
 } from '@/lib/gameSession';
 import { panelUnlocked } from '@/lib/testMode';
 import { BossKarti, TrialsKarti } from '@/components/HudKartlari';
-import { KartSeridi } from '@/components/KartSeridi';
+import { KartCekmece, CEKMECE_SEKME } from '@/components/KartCekmece';
 
 type Screen =
   | { kind: 'hub' }
@@ -494,6 +494,24 @@ export default function PlayPage() {
    * telefonda yalnız cüzdan kapısı kalıyor, gerisi ilk koşudan sonra geliyor.
    */
   const sadeHud = telefon && ilkGorunur;
+  /** Sağ kolon kartları — masaüstünde sütunda, telefonda çekmecede (tek tanım) */
+  const sagKartlar = (p: Progress) => (<>
+    <EventBanner />
+    {/* Ortak boss'un canı — etkinliğin altında: ikisi de "bu hafta ne oluyor" */}
+    <BossKarti onOpen={() => hedefiAc('boss')} />
+    <NoticeBanner konum="sagKolon" />
+    <ReadyCard progress={p} />
+  </>);
+  /** Sağ kolonun ölçülen iç yüksekliği — çekmece onun ALTINDAN başlıyor */
+  const [kolonIcH, setKolonIcH] = useState(0);
+  const kolonGozlem = useRef<ResizeObserver | null>(null);
+  const kolonRef = useCallback((el: HTMLDivElement | null) => {
+    kolonGozlem.current?.disconnect();
+    if (!el) return;
+    const ro = new ResizeObserver(() => setKolonIcH(el.offsetHeight));
+    ro.observe(el);
+    kolonGozlem.current = ro;
+  }, []);
 
   /**
    * ⚠️ SON KAHRAMAN KAYDI UÇUŞTA MI — düello brifingi bunu BEKLEMEK ZORUNDA.
@@ -965,8 +983,8 @@ export default function PlayPage() {
           Etkinlik minimap'in hemen altında çünkü kullanıcının istediği yer
           orası; üçü de içeriği yoksa hiç çizilmiyor, yani sütun boşken köyü
           kapatmıyor. */}
-      {!panel && progress && (
-        <div style={{
+      {!panel && progress && (<>
+        <div ref={kolonRef} style={{
           /**
            * ⚠️ KONUM VE GENİŞLİK MİNİMAPIN KUTUSUNDAN TÜRÜYOR, sabit
            * yazılmıyor. `top: 146` · `width: 180` yazılıydı ve o sayılar
@@ -997,20 +1015,20 @@ export default function PlayPage() {
               ⚠️ Yalnız demo modunda; cüzdanla girmiş oyuncuya "bağlan"
               demek ona zaten yaptığı şeyi teklif etmektir. */}
           {getMode() === 'demo' && <PlayConnect />}
-          {!sadeHud && (() => {
-            const kartlar = [
-              <EventBanner key="etkinlik" />,
-              // Ortak boss'un canı — etkinliğin altında: ikisi de "bu hafta ne oluyor"
-              <BossKarti key="boss" onOpen={() => hedefiAc('boss')} />,
-              <NoticeBanner key="duyuru" konum="sagKolon" />,
-              <ReadyCard key="hazir" progress={progress} />,
-            ];
-            // 🔴 Kullanıcı isteği: telefonda alt alta DEĞİL, sağa-sola kaydırmalı
-            // tek kart (bkz. KartSeridi). Masaüstünde sütun olduğu gibi.
-            return telefon ? <KartSeridi>{kartlar}</KartSeridi> : <>{kartlar}</>;
-          })()}
+          {!sadeHud && !telefon && sagKartlar(progress)}
         </div>
-      )}
+        {/* 🔴 Kullanıcı isteği: telefonda kartlar sağ kenardaki sekmeden
+            SOLA açılan çekmecede; sekmeye tekrar dokununca SAĞA kapanıyor
+            (bkz. KartCekmece). Masaüstünde sütun olduğu gibi. */}
+        {!sadeHud && telefon && (
+          <KartCekmece
+            ust={kolon.y + (kolonIcH > 0 ? kolonIcH + 6 : 0)}
+            genislik={Math.min(240, ekranW - CEKMECE_SEKME - 24)}
+            ekranH={ekranH}>
+            {sagKartlar(progress)}
+          </KartCekmece>
+        )}
+      </>)}
 
       {/* Sunucu hatası oyuncudan GİZLENMEZ: cüzdan modunda ilerleme sunucuda,
           sessizce yerel kayda düşmek iki gerçeklik yaratırdı. */}
