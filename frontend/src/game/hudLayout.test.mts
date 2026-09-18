@@ -23,6 +23,7 @@ import {
   KOLON_ARA, MINI_DAR_ESIK, MINI_SAG, NAVBAR_ARA,
   LB_METIN_KISA, LB_METIN_TAM, PIXEL_DUGME_KENAR, SOL_KART_MAX,
   leaderboardDugmesi, minimapIc, minimapKutusu, sagKolon, solKolon,
+  kisaEkranMi, panelKutusu,
 } from './hudLayout.js';
 
 const FAIL: string[] = [];
@@ -48,9 +49,14 @@ console.log('\n[1] ** TARAYICIDA OLCULEN DEGERLER TUTUYOR');
   // 375 px · rihtim 48 px, sol kenar 10 (rihtim neredeyse tum satiri kapliyor)
   const m375 = minimapKutusu(375, 48, 10);
   check('375: kutu x=237 w=128', m375.x === 237 && m375.w === 128, `x=${m375.x} w=${m375.w}`);
+  /**
+   * 🔴 2026-09-18 (mobil-denetim, 375x560 Phantom): kolon kutuyla ayni
+   * 128 px'te kalinca "CONNECT WALLET" -> "CONNEC…", ReadyCard "one rur"
+   * diye kesiliyordu. Dar ekranda kolon SAGA DAYALI kalip 184'e genisliyor.
+   */
   const k375 = sagKolon(375, 48, 10);
-  check('375: kolon x=237 w=128 (tarayicida olculdu)',
-    k375.x === 237 && k375.w === 128, `x=${k375.x} w=${k375.w}`);
+  check('375: kolon x=181 w=184 (dar ekranda genisledi)',
+    k375.x === 181 && k375.w === 184, `x=${k375.x} w=${k375.w}`);
   check('375: kolon y=157 (tarayicida olculdu)', k375.y === 157, `y=${k375.y}`);
 
   // 1366 px · rihtim genis ama minimapa ULASMIYOR
@@ -69,6 +75,7 @@ console.log('\n[2] ** KOLON HER ZAMAN KUTUYLA AYNI HIZADA');
    */
   let enKotuGenislik = 0, enKotuBosluk = 0;
   for (let w = 320; w <= 1920; w += 7) {
+    if (w < MINI_DAR_ESIK) continue;   // dar ekran asagida ayri kuralla
     for (const [nh, ns] of [[48, 10], [80, 60], [48, 500], [120, 0]]) {
       const k = minimapKutusu(w, nh, ns);
       const c = sagKolon(w, nh, ns);
@@ -78,7 +85,17 @@ console.log('\n[2] ** KOLON HER ZAMAN KUTUYLA AYNI HIZADA');
       enKotuBosluk = Math.max(enKotuBosluk, Math.abs((c.y - (k.y + k.h)) - KOLON_ARA));
     }
   }
-  check('kolon genisligi/soli kutuyla BIREBIR', enKotuGenislik === 0, `en kotu sapma ${enKotuGenislik} px`);
+  check('GENIS ekranda kolon genisligi/soli kutuyla BIREBIR', enKotuGenislik === 0, `en kotu sapma ${enKotuGenislik} px`);
+  // Dar ekranda: sag kenar kutuyla AYNI, genislik kutudan az DEGIL, ekrana sigiyor
+  let darHata = '';
+  for (let w = 300; w < MINI_DAR_ESIK; w += 5) {
+    const k = minimapKutusu(w, 48, 10);
+    const c = sagKolon(w, 48, 10);
+    if (c.x + c.w !== k.x + k.w) darHata ||= `${w}: sag kenar kaydi`;
+    if (c.w < k.w) darHata ||= `${w}: kutudan dar`;
+    if (c.x < MINI_SAG) darHata ||= `${w}: soldan tasti x=${c.x}`;
+  }
+  check('DAR ekranda kolon saga dayali, kutudan genis, ekranda', !darHata, darHata);
   check('kutu ile kolon arasi HER ZAMAN ayni', enKotuBosluk === 0, `en kotu sapma ${enKotuBosluk} px`);
   // ⚠️ Sag kenarlar da ayni dikeyde — iddia buydu, artik her genislikte dogru
   const sagFark = [320, 375, 640, 768, 1024, 1366, 1920].map((w) => {
@@ -126,6 +143,38 @@ console.log('\n[4] IC ALAN VE DAR ESIK');
   check('esikte tam boy (kontrol grubu)', minimapKutusu(MINI_DAR_ESIK, 0, 9999).w === 180);
 }
 
+console.log('\n[4b] ** TELEFON: KOLON ALTI, PANEL KUTUSU (Phantom olculeri)');
+{
+  /**
+   * 🔴 OLCULDU (2026-09-18, mobil-denetim): yatay telefonda (780x340)
+   * kartlar ekranin altina, dar dikeyde sohbetin ustune tasiyordu; panel
+   * 48 px'lik nine-slice cercevesiyle (content-box) ekrandan buyuktu.
+   * Phantom gorunur alanlari: SE 375x560 · a360 360x640 · yatay 780x340.
+   */
+  const yatay = sagKolon(780, 48, 200, 340, 0);
+  check('yatay: kolon ekranin altinda bitiyor',
+    yatay.maxH !== undefined && yatay.y + yatay.maxH <= 340, `y=${yatay.y} maxH=${yatay.maxH}`);
+  const se = sagKolon(375, 48, 10, 560, 200);
+  check('SE: kolon sohbetin ustunde bitiyor',
+    se.maxH !== undefined && se.y + se.maxH <= 560 - 200, `alt=${se.y + (se.maxH ?? 0)}`);
+  const seKapali = sagKolon(375, 48, 10, 560, 0);
+  check('sohbet yokken daha uzun (kontrol grubu)', (seKapali.maxH ?? 0) > (se.maxH ?? 0));
+  check('ekranH verilmezse sinir yok (masaustu eski davranis)', sagKolon(1366, 48, 400).maxH === undefined);
+
+  check('kisaEkranMi: 340 kisa, 560 degil', kisaEkranMi(340) && !kisaEkranMi(560));
+  check('kisaEkranMi: olculmemis (0) kisa DEGIL', !kisaEkranMi(0));
+  for (const [w, h] of [[375, 560], [360, 640], [390, 700], [780, 340]]) {
+    const pk = panelKutusu(w, h, 48);
+    const toplam = pk.ustBosluk + (pk.maxH ?? 0) + pk.yanBosluk;
+    check(`panel ${w}x${h}: olcek 2, ekrana sigiyor`, pk.olcek === 2 && toplam <= h, `olcek=${pk.olcek} toplam=${toplam}`);
+  }
+  check('masaustunde olcek 3 (kontrol grubu)', panelKutusu(1366, 768, 48).olcek === 3);
+  check('panel border-box (cerceve maxH icinde)', /boxSizing: 'border-box'[\s\S]{0,200}maxHeight: pk\.maxH/.test(play)
+    || /maxHeight: pk\.maxH[\s\S]{0,200}boxSizing: 'border-box'/.test(play));
+  check('panel olcegi pk\'dan', /scale=\{pk\.olcek\}/.test(play));
+  check('kolon kaydirilabilir', /maxHeight: kolon\.maxH/.test(play));
+}
+
 console.log('\n[5] ** SABIT SAYILAR KAYNAKTAN SILINDI');
 {
   /**
@@ -133,7 +182,7 @@ console.log('\n[5] ** SABIT SAYILAR KAYNAKTAN SILINDI');
    * sabitini kullaniyorsa hicbir sey duzelmez. Bu depodaki en pahali hata
    * sinifi tam bu — kod calisir, veri gelir, son adimda olur.
    */
-  check('sayfa kolonu hudLayout\'tan aliyor', /sagKolon\(ekranW, dockH, dockLeft\)/.test(play));
+  check('sayfa kolonu hudLayout\'tan aliyor', /sagKolon\(ekranW, dockH, dockLeft, ekranH, sohbetH\)/.test(play));
   check('kolon konumu turetilmis deger kullaniyor',
     /top: kolon\.y, right: kolon\.right, width: kolon\.w/.test(play));
   check('sabit "top: 146" KALMADI', !/top: 146/.test(play));

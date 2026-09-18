@@ -106,6 +106,14 @@ export function HubCanvas({
    * ⚠️ Tek kaynağa geri dönme.
    */
   const [kaba, setKaba] = useState(false);
+  /** Dar ekran — kontrol ipucunun yeri buna bağlı (bkz. ipucu şeridi) */
+  const [darEkran, setDarEkran] = useState(false);
+  useEffect(() => {
+    const olc = () => setDarEkran(window.innerWidth < 640);
+    olc();
+    window.addEventListener('resize', olc);
+    return () => window.removeEventListener('resize', olc);
+  }, []);
   useEffect(() => {
     const olc = () => {
       const mq = typeof window.matchMedia === 'function'
@@ -447,7 +455,14 @@ export function HubCanvas({
           bilemez).
           ⚠️ Ölçüm ipucu üretimde de gerekli: yeni oyuncu köye düşünce nasıl
           yürüyeceğini bilmiyor. O kısım kalıyor. */}
-      <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 11, color: debug ? C.blood : C.boneFaint }}>
+      {/* 🔴 DAR EKRANDA SOL ÜSTTE — ölçüldü (2026-09-18, Phantom içi 375×560):
+          sağ alttaki şerit sohbet kutusunun (300 px) altında kalıyordu; iki
+          kutu 1.920 px² çakışıyordu. Dar ekranda profil sütunu gizli, yani
+          menünün hemen altındaki sol köşe boş — şerit oraya gidiyor. */}
+      <div style={{
+        position: 'absolute', fontSize: 11, color: debug ? C.blood : C.boneFaint, pointerEvents: 'none',
+        ...(darEkran ? { top: navbarH + 8, left: 12 } : { bottom: 10, right: 12 }),
+      }}>
         {/* ⚠️ TELEFONDA OLMAYAN TUŞLARI YAZMA. Bu şerit her cihazda
             "WASD / arrows · E to interact" diyordu; parmakla gelen oyuncuya
             hem yanlış hem de tek gerçek yolu (ekrana basılı tutup sürükle)

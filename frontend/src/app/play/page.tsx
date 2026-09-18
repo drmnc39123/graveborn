@@ -7,7 +7,7 @@ import { NameGate } from '@/components/NameGate';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
-import { leaderboardDugmesi, sagKolon, solKolon, SOL_ARA } from '@/game/hudLayout';
+import { kisaEkranMi, leaderboardDugmesi, panelKutusu, sagKolon, solKolon, SOL_ARA } from '@/game/hudLayout';
 import { KOLAY_TABAN, tabanDurum, tabanZorluk } from '@/game/descentBase';
 import { PlayConnect } from '@/components/PlayConnect';
 import { VigilBeacon } from '@/components/VigilBeacon';
@@ -75,6 +75,7 @@ import {
 } from '@/lib/gameSession';
 import { panelUnlocked } from '@/lib/testMode';
 import { BossKarti, TrialsKarti } from '@/components/HudKartlari';
+import { KartSeridi } from '@/components/KartSeridi';
 
 type Screen =
   | { kind: 'hub' }
@@ -473,13 +474,26 @@ export default function PlayPage() {
   }, [panel]);
 
   /** Minimapın altındaki kart sütunu — kutuyla AYNI kaynaktan (bkz. `hudLayout`) */
-  const kolon = useMemo(() => sagKolon(ekranW, dockH, dockLeft), [ekranW, dockH, dockLeft]);
+  const kolon = useMemo(() => sagKolon(ekranW, dockH, dockLeft, ekranH, sohbetH), [ekranW, dockH, dockLeft, ekranH, sohbetH]);
+  /** Panel kutusu — çerçeve ölçeği, boşluklar ve gerçek yükseklik (bkz. `hudLayout.panelKutusu`) */
+  const pk = useMemo(() => panelKutusu(ekranW, ekranH, dockH), [ekranW, ekranH, dockH]);
   /** Profil kartı ve altındaki kısayolların sütunu — sağ kolonun sol eşi */
   const sol = useMemo(() => solKolon(ekranH, dockLeft, sohbetH), [ekranH, dockLeft, sohbetH]);
   /** Profil altındaki düğme sığıyor mu, hangi etiketle (bkz. `hudLayout.leaderboardDugmesi`) */
   const lbDugme = useMemo(() => leaderboardDugmesi(sol.w), [sol.w]);
   /** Düğme görünmüyorsa kupa ikonu sohbet başlığına iner — sıralamaya her genişlikte bir yol kalsın */
   const lbProfilde = sol.gorunur && lbDugme.goster;
+  /** Telefon: dar dikey VEYA kısa yatay ekran (Phantom uygulama içi tarayıcı dahil) */
+  const telefon = ekranW < 640 || kisaEkranMi(ekranH);
+  /** Yeni oyuncunun "START HERE" kartı görünüyor mu — tek kaynak, aşağıda iki yerde okunuyor */
+  const ilkGorunur = !panel && !ilkGizli && !(wallet && progress?.name === null) && isNewcomer(progress);
+  /**
+   * 🔴 ÖLÇÜLDÜ (2026-09-18, mobil denetim 375x560 · 780x340): telefonda
+   * START HERE kartı etkinlik/boss kartlarının ve sohbetin ÜSTÜNE biniyordu.
+   * Yeni oyuncunun o anda yapacağı tek şey GO'ya basmak — kart görünürken
+   * telefonda yalnız cüzdan kapısı kalıyor, gerisi ilk koşudan sonra geliyor.
+   */
+  const sadeHud = telefon && ilkGorunur;
 
   /**
    * ⚠️ SON KAHRAMAN KAYDI UÇUŞTA MI — düello brifingi bunu BEKLEMEK ZORUNDA.
@@ -818,8 +832,11 @@ export default function PlayPage() {
         <NameGate onDone={(p) => setProgress(p)} />
       )}
 
-      {!panel && !ilkGizli && !(wallet && progress?.name === null) && isNewcomer(progress) && (
+      {ilkGorunur && (
         <FirstRun
+          kompakt={kisaEkranMi(ekranH)}
+          // Yatay telefonda kart sağ kolonu (cüzdan kapısı) kapatmasın
+          sagBosluk={kisaEkranMi(ekranH) ? kolon.w + kolon.right + 8 : 0}
           // ⚠️ Kahraman ve mod SORULMUYOR: ilk koşuda oyuncunun bunlara
           // verecek cevabı yok, sadece engel oluyorlar.
           onBegin={() => beginStage(STAGES[0].id, 'campaign')}
@@ -831,7 +848,7 @@ export default function PlayPage() {
           bakılan bir yer" yapardı; insanların orada olduğunu görmeyen oyuncu
           sohbet olduğunu da bilmez. Panel açıkken gizleniyor — üst üste
           binmesin ve panelin içindeki alanları kapatmasın. */}
-      {!panel && (
+      {!panel && !sadeHud && (
         <ChatPanel
           // 🔴 Kullanıcı isteği: guild ve friends "chatin yanına", küçük ikon.
           // ⚠️ Kupa (leaderboard) YALNIZ dar ekranda: geniş ekranda aynı kısayol
@@ -963,6 +980,12 @@ export default function PlayPage() {
           position: 'absolute', zIndex: 6,
           top: kolon.y, right: kolon.right, width: kolon.w,
           display: 'flex', flexDirection: 'column', gap: 8,
+          // ⚠️ ALT SINIR (ölçüldü, 2026-09-18): yatay telefonda kartlar ekranın
+          // altına, dar dikeyde sohbetin üstüne taşıyordu. Sığmazsa kendi
+          // içinde kayar — sol kolonun aynı kuralı. `overflowX` AÇIKÇA gizli:
+          // yalnız `overflowY:auto` yatayı da `auto` yapıyor (bilinen tuzak).
+          maxHeight: kolon.maxH, overflowY: 'auto', overflowX: 'hidden',
+          scrollbarWidth: 'thin',
         }}>
           {/* ⭐ DEMO OYUNCUSUNA CÜZDAN KAPISI — kullanıcı isteği.
               🔴 Huninin en pahalı adımı buydu: oyunu beğenen demo oyuncusu
@@ -974,11 +997,18 @@ export default function PlayPage() {
               ⚠️ Yalnız demo modunda; cüzdanla girmiş oyuncuya "bağlan"
               demek ona zaten yaptığı şeyi teklif etmektir. */}
           {getMode() === 'demo' && <PlayConnect />}
-          <EventBanner />
-          {/* Ortak boss'un canı — etkinliğin altında: ikisi de "bu hafta ne oluyor" */}
-          <BossKarti onOpen={() => hedefiAc('boss')} />
-          <NoticeBanner konum="sagKolon" />
-          <ReadyCard progress={progress} />
+          {!sadeHud && (() => {
+            const kartlar = [
+              <EventBanner key="etkinlik" />,
+              // Ortak boss'un canı — etkinliğin altında: ikisi de "bu hafta ne oluyor"
+              <BossKarti key="boss" onOpen={() => hedefiAc('boss')} />,
+              <NoticeBanner key="duyuru" konum="sagKolon" />,
+              <ReadyCard key="hazir" progress={progress} />,
+            ];
+            // 🔴 Kullanıcı isteği: telefonda alt alta DEĞİL, sağa-sola kaydırmalı
+            // tek kart (bkz. KartSeridi). Masaüstünde sütun olduğu gibi.
+            return telefon ? <KartSeridi>{kartlar}</KartSeridi> : <>{kartlar}</>;
+          })()}
         </div>
       )}
 
@@ -1300,7 +1330,7 @@ export default function PlayPage() {
           style={{
             position: 'absolute', inset: 0, zIndex: 5, background: 'rgba(10,8,6,0.84)',
             display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-            padding: `${dockH + 24}px 20px 20px`, overflowY: 'auto',
+            padding: `${pk.ustBosluk}px ${pk.yanBosluk}px ${pk.yanBosluk}px`, overflowY: 'auto',
             // ⚠️ KAPANAN PANEL TIKLAMA ALMAZ. Almasaydı kapanış animasyonu
             // sürerken ekrana yapılan ilk tıklama köye değil ölmekte olan
             // panele giderdi.
@@ -1317,14 +1347,20 @@ export default function PlayPage() {
               Yalnız `panel` okunsaydı kapanış sırasında panel varsayılan
               çerçeveye ve 560 px'e ATLAR, sonra sönerdi — geçiş bir hataya
               benzerdi. */}
-          <Panel variant={PANEL_CERCEVE[acik] || '07A'} scale={3} pad={6} onClick={(e) => e.stopPropagation()}
+          <Panel variant={PANEL_CERCEVE[acik] || '07A'} scale={pk.olcek} pad={6} onClick={(e) => e.stopPropagation()}
             style={{
               width: '100%',
               maxWidth: PANEL_GENISLIK[acik] || 560,
               animation: panel ? undefined : `gb-panel-out ${PANEL_KAPANIS_MS}ms ease-out both`,
               // ⚠️ `dockH` ÖLÇÜLEN değer, sabit sayı DEĞİL — 78 px sabiti
               // 9. düğme satırı sardırınca panelin ilk 31 pikselini örtmüştü.
-              maxHeight: `calc(100vh - ${dockH + 48}px)`,
+              // 🔴 `border-box` ŞART — ölçüldü: çerçeve (16 × ölçek, her kenarda)
+              // `content-box`ta sınırın ÜSTÜNE ekleniyordu; 375×560'ta kutu 374
+              // yerine 470 px çıktı ve panelin altı ekrandan taşıyordu.
+              // 🔴 `100vh` DEĞİL ölçülen yükseklik: Phantom iOS'ta 100vh alt
+              // araç çubuğunu da sayıyor. Ölçülmediyse (ilk kare) `100dvh`.
+              boxSizing: 'border-box',
+              maxHeight: pk.maxH ?? `calc(100dvh - ${dockH + 48}px)`,
               overflowY: 'auto',
             }}>
             {/* Panel içinde ikinci bir bina sırası YOK — navbar panelin üstünde

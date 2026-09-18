@@ -39,7 +39,7 @@ import { AD_MAX, AD_MIN, renameCost, validatePlayerName } from '@/game/playerNam
 import { checkPlayerName, setPlayerName } from '@/lib/gameSession';
 import { BTN, Panel, PixelButton } from '@/components/ui/kit';
 import { getMode } from '@/lib/session';
-import { C, FONT } from '@/lib/theme';
+import { C, FONT, GIRDI_PUNTO } from '@/lib/theme';
 import type { Progress } from '@/game/progress';
 
 export function NameGate({ onDone }: { onDone: (p: Progress) => void }) {
@@ -158,7 +158,7 @@ export function NameGate({ onDone }: { onDone: (p: Progress) => void }) {
               borderRadius: 6, textAlign: 'center',
               border: `1px solid ${durum === 'hata' ? C.blood : durum === 'musait' ? C.ok : C.border}`,
               background: 'rgba(0,0,0,0.35)', color: C.bone,
-              fontFamily: FONT.ui, fontSize: 15, fontWeight: 900, letterSpacing: 1,
+              fontFamily: FONT.ui, fontSize: GIRDI_PUNTO, fontWeight: 900, letterSpacing: 1,
               outline: 'none',
             }}
           />

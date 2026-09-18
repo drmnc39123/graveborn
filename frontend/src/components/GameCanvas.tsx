@@ -33,7 +33,7 @@ import { QualityPicker } from '@/components/QualityPicker';
 import { loadSettings, saveSettings } from '@/game/settings';
 import { KasmaOlcer, kareSayilsinMi } from '@/game/autoQuality';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
-import { loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
+import { hintText, loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
 import { isTestMode } from '@/lib/testMode';
 import { cubukCiz, cubukTak } from '@/lib/stick';
@@ -699,7 +699,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           hintRef.current = { def: h, at: game.time };
           seenRef.current = [...seenRef.current, h.id];
           markHintSeen(h.id);
-          setHint(h.text);
+          // Dokunmatik mi: kaba işaretçi (parmak) — Phantom/Safari/Android
+          setHint(hintText(h, window.matchMedia?.('(pointer: coarse)').matches ?? false));
         }
       }
       /**
@@ -773,6 +774,41 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   const xpPct = hud ? Math.min(100, (hud.xp / hud.xpNext) * 100) : 0;
   const hpPct = hud ? Math.max(0, (hud.hp / hud.maxHp) * 100) : 100;
 
+  /**
+   * SES + GRAFİK DÜĞMELERİ — tek tanım, iki yer.
+   * 🔴 ÖLÇÜLDÜ (2026-09-18, 375x560 Phantom): dar ekranda sağ blok
+   * (süre · ses · ayar · EXIT ≈190 px) ona düşen payı (≈116 px) aşıyor,
+   * bölüm adının ve "left" sayacının ÜSTÜNE biniyordu. Dar ekranda
+   * düğmeler sola (LV'nin yanına, orada ~75 px boş) iniyor ve dokunma
+   * hedefi 32 px'e çıkıyor; süre ortaya, sayacın yanına geçiyor.
+   */
+  const kontroller = hud && (
+    <>
+                <button
+                  onClick={() => { const next = !isSoundEnabled(); setSoundEnabled(next); setMuted(!next); unlockAudio(); }}
+                  aria-label={muted ? 'Unmute' : 'Mute'}
+                  style={{ pointerEvents: 'auto', width: darHud ? 32 : 26, height: darHud ? 30 : 22, borderRadius: 6, cursor: 'pointer',
+                    border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.4)', color: muted ? C.boneFaint : C.candle,
+                    fontSize: 12, lineHeight: 1, padding: 0 }}>
+                  {muted ? '🔇' : '🔊'}
+                </button>
+                {/* ⭐ GRAFİK AYARI — kullanıcı isteği: koşudan ÇIKMADAN
+                    kademe değiştirebilmek. Yeri mute düğmesinin yanı,
+                    ölçüsü onunla AYNI (26×22): üst şeridin sağ grubu
+                    zaten süre · kill · mute · EXIT taşıyor ve yeni bir
+                    ölçü eklemek satırı dar ekranda taşırırdı. */}
+                <button
+                  onClick={() => setGfxAcik((v) => !v)}
+                  aria-label="Graphics quality"
+                  aria-expanded={gfxAcik}
+                  style={{ pointerEvents: 'auto', width: darHud ? 32 : 26, height: darHud ? 30 : 22, borderRadius: 6, cursor: 'pointer',
+                    border: `1px solid ${gfxAcik ? C.candle : C.border}`, background: 'rgba(0,0,0,0.4)',
+                    color: gfxAcik ? C.candle : C.boneFaint, fontSize: 12, lineHeight: 1, padding: 0 }}>
+                  ⚙
+                </button>
+    </>
+  );
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: C.void }}>
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block', touchAction: 'none' }} />
@@ -801,7 +837,10 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 ⚠️ `minWidth: 0` ŞART: onsuz yan bloklar içeriklerinden
                 küçülemez ve dar ekranda satır taşar. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: darHud ? 5 : 8, padding: darHud ? '6px 7px' : '8px 12px', fontSize: darHud ? 11.5 : 13, fontWeight: 800 }}>
-              <span style={{ flex: 1, minWidth: 0, color: C.candle }}>LV {hud.level}</span>
+              <span style={{ flex: 1, minWidth: 0, color: C.candle, display: 'flex', alignItems: 'center', gap: 5 }}>
+                LV {hud.level}
+                {darHud && kontroller}
+              </span>
               {/* Bölüm ilerlemesi — bitirilebilir oyunda oyuncunun en çok istediği bilgi.
                   Descent'te bunun yerini DERİNLİK alır: tek anlamlı skor odur. */}
               <span style={{ flex: '0 0 auto', textAlign: 'center', lineHeight: 1.15 }}>
@@ -821,13 +860,18 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 <span style={{ display: 'block', fontSize: 19, color: C.bone, fontVariantNumeric: 'tabular-nums' }}>
                   {hud.remaining} <span style={{ fontSize: 11, color: C.boneDim }}>left</span>
                 </span>
+                {darHud && (
+                  <span style={{ display: 'block', fontSize: 11, color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmtTime(hud.time)}
+                  </span>
+                )}
               </span>
               <span style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center',
                 justifyContent: 'flex-end', gap: darHud ? 5 : 8 }}>
                 {/* ⚠️ Süre HUD'da HİÇ görünmüyordu — `fmtTime` tanımlıydı ama
                     sadece ölüm ekranında kullanılıyordu. Survivors türünde
                     "kaç dakikadayım" en temel bilgi. */}
-                <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(hud.time)}</span>
+                {!darHud && <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(hud.time)}</span>}
                 {/* ⚠️ Dar ekranda kill sayacı DÜŞÜYOR. Üç sayıdan en az
                     gerekli olan bu: kalan düşman ortada zaten duruyor ve
                     öldürme sayısı koşu sonunda tam olarak gösteriliyor.
@@ -836,28 +880,7 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
                 {!darHud && (
                   <span style={{ color: C.boneDim, fontVariantNumeric: 'tabular-nums' }}>{hud.kills} kill</span>
                 )}
-                <button
-                  onClick={() => { const next = !isSoundEnabled(); setSoundEnabled(next); setMuted(!next); unlockAudio(); }}
-                  aria-label={muted ? 'Unmute' : 'Mute'}
-                  style={{ pointerEvents: 'auto', width: 26, height: 22, borderRadius: 6, cursor: 'pointer',
-                    border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.4)', color: muted ? C.boneFaint : C.candle,
-                    fontSize: 12, lineHeight: 1, padding: 0 }}>
-                  {muted ? '🔇' : '🔊'}
-                </button>
-                {/* ⭐ GRAFİK AYARI — kullanıcı isteği: koşudan ÇIKMADAN
-                    kademe değiştirebilmek. Yeri mute düğmesinin yanı,
-                    ölçüsü onunla AYNI (26×22): üst şeridin sağ grubu
-                    zaten süre · kill · mute · EXIT taşıyor ve yeni bir
-                    ölçü eklemek satırı dar ekranda taşırırdı. */}
-                <button
-                  onClick={() => setGfxAcik((v) => !v)}
-                  aria-label="Graphics quality"
-                  aria-expanded={gfxAcik}
-                  style={{ pointerEvents: 'auto', width: 26, height: 22, borderRadius: 6, cursor: 'pointer',
-                    border: `1px solid ${gfxAcik ? C.candle : C.border}`, background: 'rgba(0,0,0,0.4)',
-                    color: gfxAcik ? C.candle : C.boneFaint, fontSize: 12, lineHeight: 1, padding: 0 }}>
-                  ⚙
-                </button>
+                {!darHud && kontroller}
                 {/* Koşudan çıkış — oyuncu bir run'a kilitlenmemeli */}
                 {hud.phase === 'running' && (
                   <PixelButton variant={BTN.strong} scale={2} onClick={() => setConfirmExit(true)}
@@ -1253,7 +1276,9 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           altındaki bir şeye basmaya çalışırken engellenmemeli. */}
       {hint && hud?.phase === 'running' && (
         <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 96,
+          // ⚠️ Dar ekranda can küresinin (sol alt, ~100 px) ÜSTÜNDE — ölçüldü
+          // 375x560: 96'da kartın sol ucu kürenin üstüne biniyordu.
+          position: 'absolute', left: 0, right: 0, bottom: darHud ? 150 : 96,
           display: 'flex', justifyContent: 'center', pointerEvents: 'none', padding: '0 16px',
         }}>
           <div style={{

@@ -36,17 +36,25 @@ export function isNewcomer(p: Progress | null): boolean {
   return !temizledi && !indi;
 }
 
-export function FirstRun({ onBegin, onDismiss }: {
+export function FirstRun({ onBegin, onDismiss, kompakt = false, sagBosluk = 0 }: {
   onBegin: () => void;
   onDismiss: () => void;
+  /**
+   * Kısa (yatay telefon) ekran: 🔴 ölçüldü 780x340 — kart ekranın üçte
+   * ikisini kaplıyor, cüzdan kapısının üstüne biniyordu. Boşluklar ve
+   * düğme ölçeği küçülüyor.
+   */
+  kompakt?: boolean;
+  /** Sağda boş bırakılacak px — sağ kolonun genişliği (yalnız kısa ekranda) */
+  sagBosluk?: number;
 }) {
   const [busy, setBusy] = useState(false);
   const ilk = STAGES[0];
 
   return (
     <div style={{
-      position: 'absolute', left: 0, right: 0, bottom: 18, zIndex: 7,
-      display: 'flex', justifyContent: 'center', padding: '0 16px',
+      position: 'absolute', left: 0, right: sagBosluk, bottom: kompakt ? 8 : 18, zIndex: 7,
+      display: 'flex', justifyContent: 'center', padding: kompakt ? '0 8px' : '0 16px',
       pointerEvents: 'none', fontFamily: FONT.ui,
     }}>
       <div style={{
@@ -54,7 +62,7 @@ export function FirstRun({ onBegin, onDismiss }: {
         // Alfa 0,82: bu kart yeni oyuncunun okuyacağı İLK metin, bu yüzden
         // etkinlik kartından bir tık daha kapalı — ama yine de arkasındaki
         // köyü gösteriyor, çünkü anlattığı şey tam olarak orası.
-        ...thinGlass(14, 0.82), width: '100%', maxWidth: 440, padding: '16px 18px',
+        ...thinGlass(14, 0.82), width: '100%', maxWidth: 440, padding: kompakt ? '10px 14px' : '16px 18px',
         pointerEvents: 'auto', textAlign: 'center',
         border: `1px solid ${C.blood}66`,
         boxShadow: `0 0 0 1px ${C.blood}22, 0 14px 40px rgba(0,0,0,0.55)`,
@@ -67,7 +75,7 @@ export function FirstRun({ onBegin, onDismiss }: {
         </div>
         {/* ⚠️ TEK CÜMLE. İlk ekranda paragraf okuyan yok; oyuncunun bilmesi
             gereken tek şey silahların kendiliğinden ateş ettiği. */}
-        <div style={{ fontSize: 12, color: C.boneDim, lineHeight: 1.55, margin: '6px 0 14px' }}>
+        <div style={{ fontSize: 12, color: C.boneDim, lineHeight: 1.55, margin: kompakt ? '4px 0 8px' : '6px 0 14px' }}>
           You only move. Your weapons swing on their own — stay alive and pick
           up what falls.
         </div>
@@ -75,7 +83,7 @@ export function FirstRun({ onBegin, onDismiss }: {
         {/* ⚠️ Oyunun İLK düğmesi — dokusu en güçlü olan bu olmalı. İkinci
             satır düz metin kalıyor: iki dokulu düğme yan yana konsaydı
             "hangisi asıl" sorusu geri gelirdi. */}
-        <PixelButton variant={BTN.strong} scale={4}
+        <PixelButton variant={BTN.strong} scale={kompakt ? 3 : 4}
           onClick={() => { if (!busy) { setBusy(true); onBegin(); } }}
           disabled={busy}
           style={{ width: '100%', fontSize: 15, letterSpacing: 1.2 }}>

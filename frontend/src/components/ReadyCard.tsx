@@ -62,6 +62,9 @@ export function ReadyCard({ progress }: { progress: Progress }) {
       // ⚠️ `min(...)` — dar ekranda içerik alanına oturur. Çıplak `214`
       // yazmak bu depoda ölçülmüş bir taşma sınıfı (bkz. panel ızgaraları).
       width: 'min(214px, 100%)',
+      // 🔴 `border-box` ŞART (ölçüldü 2026-09-18, 375x560): content-box'ta dolgu
+      // %100'ün DIŞINA ekleniyor, kart kolondan 24 px taşıp sağdan kesiliyordu.
+      boxSizing: 'border-box',
     }}>
       <div style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1.6, color: C.boneFaint }}>
         READY FOR THE DESCENT

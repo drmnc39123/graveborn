@@ -17,7 +17,7 @@ import { getMode } from '@/lib/session';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { HudKisayol } from '@/components/HudKisayol';
 import type { GlifAdi } from '@/lib/hudGlif';
-import { C, FONT, thinGlass } from '@/lib/theme';
+import { C, FONT, thinGlass, GIRDI_PUNTO } from '@/lib/theme';
 
 /** Sohbet başlığındaki bir kısayol — hangi paneli açacağını sayfa belirler */
 export type SohbetKisayolu = {
@@ -176,7 +176,9 @@ export function ChatPanel({ kisayollar = [], onOpen, onHeight }: {
             etiket={k.etiket}
             renk={k.renk}
             nokta={k.nokta}
-            boyut={24}
+            // 🔴 24 → 32 (2026-09-18): telefonda parmakla basılacak en küçük güvenli
+            // alan ~32 px; 24'te yan yana üç ikon birbirine basılıyordu.
+            boyut={32}
             onClick={() => onOpen?.(k.id)}
           />
         ))}
@@ -275,7 +277,7 @@ export function ChatPanel({ kisayollar = [], onOpen, onHeight }: {
               style={{
                 flex: 1, minWidth: 0, padding: '5px 8px', borderRadius: 6,
                 border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.35)',
-                color: C.bone, fontFamily: FONT.ui, fontSize: 11.5, outline: 'none',
+                color: C.bone, fontFamily: FONT.ui, fontSize: GIRDI_PUNTO, outline: 'none',
               }}
             />
             <PixelButton variant={BTN.action} scale={2} onClick={gonder}

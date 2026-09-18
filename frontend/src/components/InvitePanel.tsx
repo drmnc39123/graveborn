@@ -17,7 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { panelUnlocked } from '@/lib/testMode';
 import { getMode } from '@/lib/session';
 import { enterReferral, fetchReferral, type ReferralState } from '@/lib/gameSession';
-import { BRAND } from '@/lib/theme';
+import { BRAND, GIRDI_PUNTO } from '@/lib/theme';
 import { Card, CardSection, PanelHead, Tag } from '@/components/ui/cards';
 import { BTN, PixelButton } from '@/components/ui/kit';
 import { C, FONT, glass } from '@/lib/theme';
@@ -160,7 +160,7 @@ export function InvitePanel({ onError }: { onError: (msg: string) => void }) {
               style={{
                 flex: '1 1 120px', minWidth: 0, padding: '7px 10px', borderRadius: 6,
                 border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.35)',
-                color: C.bone, fontFamily: FONT.ui, fontSize: 14, fontWeight: 900,
+                color: C.bone, fontFamily: FONT.ui, fontSize: GIRDI_PUNTO, fontWeight: 900,
                 letterSpacing: 3, outline: 'none',
               }} />
             <PixelButton variant={BTN.strong} scale={2}

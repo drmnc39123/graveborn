@@ -81,11 +81,23 @@ console.log('\n[3] ** KONTROL_BOYU GERCEK YUKSEKLIK (border-box)');
    * cikiyordu. Sebep `content-box`: 1 px kenarlik boyu disari ekliyor.
    * Sabit, soyledigi seyi ifade etmiyorsa sabit degildir.
    */
-  check('hesap cipi border-box', /boxSizing: 'border-box',\s*\n\s*height: KONTROL_BOYU/.test(dock));
+  check('hesap cipi border-box', /boxSizing: 'border-box',\s*\n\s*height: (dar \? KONTROL_DOKUNMA : )?KONTROL_BOYU/.test(dock));
   check('rehber dugmesi border-box',
-    /all: 'unset', boxSizing: 'border-box'[\s\S]{0,300}width: KONTROL_BOYU/.test(dock));
+    /all: 'unset', boxSizing: 'border-box'[\s\S]{0,300}width: (dar \? KONTROL_DOKUNMA : )?KONTROL_BOYU/.test(dock));
   check('sosyal ikon border-box',
     /boxSizing: 'border-box',\s*\n\s*width: boyut, height: boyut/.test(sosyal));
+}
+
+console.log('\n[3b] ** TELEFONDA DOKUNMA HEDEFI >= 32 (Phantom)');
+{
+  /**
+   * 🔴 OLCULDU (2026-09-18, mobil-denetim): 24 px cipler parmakla
+   * komsusuna basiliyordu. Dar/kisa ekranda KONTROL_DOKUNMA kullanilir;
+   * yatay telefon (yukseklik < 450) da dar sayilir.
+   */
+  const m = dock.match(/export const KONTROL_DOKUNMA = (\d+)/);
+  check('KONTROL_DOKUNMA >= 32', !!m && +m[1] >= 32, m?.[1] ?? '');
+  check('dar kisa ekrani da kapsiyor', /kisaEkranMi\(window\.innerHeight\)/.test(dock));
 }
 
 console.log('\n[4] DAR EKRAN KURALLARI KORUNDU');

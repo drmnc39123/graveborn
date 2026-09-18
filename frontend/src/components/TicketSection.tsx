@@ -15,12 +15,12 @@ import { getMode } from '@/lib/session';
 import { CardSection } from '@/components/ui/cards';
 import { PixelButton, BTN } from '@/components/ui/kit';
 import { panelUnlocked, isTestMode, TEST_TICKETS } from '@/lib/testMode';
-import { C, FONT, glass } from '@/lib/theme';
+import { C, FONT, glass, GIRDI_PUNTO } from '@/lib/theme';
 
 const girdi = {
   width: '100%', boxSizing: 'border-box' as const, padding: '7px 9px',
   borderRadius: 6, border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.35)',
-  color: C.bone, fontFamily: FONT.ui, fontSize: 12, outline: 'none',
+  color: C.bone, fontFamily: FONT.ui, fontSize: GIRDI_PUNTO, outline: 'none',
 };
 
 /**

@@ -69,6 +69,17 @@ export const FONT = {
 } as const;
 
 /**
+ * YAZI GİRDİSİ PUNTOSU — 16 px ALTINA İNME.
+ *
+ * 🔴 ÖLÇÜLDÜ (2026-09-18, mobil denetim): iOS WebKit (Safari VE Phantom
+ * uygulama içi tarayıcı) 16 px altındaki bir girdiye odaklanınca sayfayı
+ * YAKINLAŞTIRIYOR. `userScalable: false` olduğu için oyuncu geri
+ * uzaklaştıramıyor — HUD ekrandan taşmış hâlde kalıyor. Sohbet 11,5,
+ * isim kapısı 15, pazar 12 px idi. `girdi.test` bunu bekliyor.
+ */
+export const GIRDI_PUNTO = 16;
+
+/**
  * ══════════════════════════════════════════════════════════════════════
  * YÜZEY DİLİ — hangi kutu nerede kullanılır. TEK KURAL, ÜÇ KATMAN.
  * ══════════════════════════════════════════════════════════════════════

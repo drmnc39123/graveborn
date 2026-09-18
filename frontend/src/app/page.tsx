@@ -119,7 +119,7 @@ export default function Home() {
           isteyen kaydırıp okur, istemeyen tek tıkla girer. Kapıyı içerikle
           doldurmak huniyi yavaşlatırdı. */}
       <div style={{
-        position: 'relative', zIndex: 1, minHeight: '100vh',
+        position: 'relative', zIndex: 1, minHeight: '100dvh', // ⚠️ dvh: Phantom/iOS'ta 100vh araç çubuğunu da sayıyor, kapının altı gizleniyordu
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', padding: '40px 20px', gap: 18,
       }}>

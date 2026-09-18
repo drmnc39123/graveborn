@@ -30,7 +30,7 @@ import { Card, PanelHead, Tag } from '@/components/ui/cards';
 import { Fade } from '@/components/ui/motion';
 import { play } from '@/game/sfx';
 import { isTestMode, TEST_LISTINGS, TEST_MY_LISTINGS } from '@/lib/testMode';
-import { C, glass } from '@/lib/theme';
+import { C, glass, GIRDI_PUNTO } from '@/lib/theme';
 import { kodMetni } from '@/lib/errors';
 
 /**
@@ -322,7 +322,7 @@ export function MarketPanel({
   const girdi = {
     width: '100%', boxSizing: 'border-box' as const, padding: '8px 10px', borderRadius: 8,
     border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.35)',
-    color: C.bone, fontSize: 13, fontWeight: 700, outline: 'none',
+    color: C.bone, fontSize: GIRDI_PUNTO, fontWeight: 700, outline: 'none',
   };
 
   return (
@@ -443,14 +443,14 @@ export function MarketPanel({
                   MIN GOLD
                 </div>
                 <input value={enAz} onChange={(e) => setEnAz(e.target.value.replace(/\D/g, ''))}
-                  inputMode="numeric" placeholder="any" style={{ ...girdi, fontSize: 12 }} />
+                  inputMode="numeric" placeholder="any" style={girdi} />
               </label>
               <label style={{ width: 96 }}>
                 <div style={{ fontSize: 9.5, fontWeight: 900, letterSpacing: 1.2, color: C.boneFaint, marginBottom: 4 }}>
                   MAX GOLD
                 </div>
                 <input value={enCok} onChange={(e) => setEnCok(e.target.value.replace(/\D/g, ''))}
-                  inputMode="numeric" placeholder="any" style={{ ...girdi, fontSize: 12 }} />
+                  inputMode="numeric" placeholder="any" style={girdi} />
               </label>
             </div>
 

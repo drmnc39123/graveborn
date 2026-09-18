@@ -19,6 +19,12 @@ export interface HintDef {
   id: string;
   /** ekranda görünen metin — İNGİLİZCE, tek nefeste okunacak kadar kısa */
   text: string;
+  /**
+   * Dokunmatik ekranda gösterilecek metin (yoksa `text`).
+   * 🔴 ÖLÇÜLDÜ (2026-09-18): telefonda "WASD or arrows" yazıyordu —
+   * Phantom uygulama içi tarayıcıda klavye YOK.
+   */
+  textTouch?: string;
   /** kaç saniye ekranda kalsın */
   hold: number;
   /** ⚠️ SAF ve YAN ETKİSİZ — sadece okur */
@@ -33,6 +39,7 @@ export const HINTS: readonly HintDef[] = [
   {
     id: 'move',
     text: 'WASD or arrows to move. You never swing — your weapons do that on their own.',
+    textTouch: 'Drag anywhere to move. You never swing — your weapons do that on their own.',
     hold: 6,
     when: (g) => g.time > 0.6 && g.time < 30,
   },
@@ -85,6 +92,11 @@ export const HINTS: readonly HintDef[] = [
 ] as const;
 
 /** Sırada gösterilecek ipucu — hiçbiri uymuyorsa null. SAF. */
+/** Oyuncuya gösterilecek metin — dokunmatikte `textTouch` varsa o */
+export function hintText(h: HintDef, dokunmatik: boolean): string {
+  return dokunmatik && h.textTouch ? h.textTouch : h.text;
+}
+
 export function nextHint(g: Game, seen: readonly string[]): HintDef | null {
   for (const h of HINTS) {
     if (seen.includes(h.id)) continue;

@@ -14,6 +14,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 import { PixelButton, Icon, BTN } from '@/components/ui/kit';
 import { useCountUpInt } from '@/components/ui/motion';
 import { SocialLinks } from '@/components/SocialLinks';
+import { kisaEkranMi } from '@/game/hudLayout';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
@@ -70,6 +71,13 @@ export const GROUPS: readonly DockGroup[] = [
  * Ayrı ayrı yazılan bir ölçü, biri değiştiğinde diğerleri eski kalır.
  */
 export const KONTROL_BOYU = 24;
+/**
+ * DAR/KISA EKRANDA (telefon) aynı çiplerin yüksekliği.
+ * 🔴 ÖLÇÜLDÜ (2026-09-18, Phantom içi): `?` düğmesi 24×24 idi — parmakla
+ * basılacak en küçük güvenli alan 32 px civarı; 24'te komşu çipe basılıyor.
+ * Tek sabit kuralı korunuyor: satırdaki HER çip aynı değeri alıyor.
+ */
+export const KONTROL_DOKUNMA = 32;
 // ⚠️ Bu sayının GERÇEK yükseklik olması için her çip `box-sizing:
 // border-box` kullanmak zorunda: `content-box`ta 1 px kenarlık boyu 26'ya
 // çıkarıyordu ve `?` düğmesi (border-box'lı) diğerlerinden 2 px kısa
@@ -257,7 +265,14 @@ export function BuildingDock({
    */
   const [dar, setDar] = useState(false);
   useEffect(() => {
-    const olc = () => setDar(window.innerWidth < 640);
+    /**
+     * 🔴 KISA EKRAN DA DAR SAYILIR — ölçüldü (2026-09-18, yatay telefon
+     * 780×340, Phantom içi): genişlik 640'ı geçtiği için tam menü açılıyor,
+     * iki satıra sarıp ekranın %26'sını (≈90 px) yiyordu. Yatay telefonda
+     * sorun genişlik değil YÜKSEKLİK. Eşik `hudLayout.KISA_EKRAN` — panel
+     * kutusuyla aynı tanım.
+     */
+    const olc = () => setDar(window.innerWidth < 640 || kisaEkranMi(window.innerHeight));
     olc();
     window.addEventListener('resize', olc);
     return () => window.removeEventListener('resize', olc);
@@ -409,7 +424,7 @@ export function BuildingDock({
             // ⚠️ Yükseklik `?` ve sosyal ikonlarla AYNI — bkz. KONTROL_BOYU
             // ⚠️ `border-box` — bkz. KONTROL_BOYU notu
             boxSizing: 'border-box',
-            height: KONTROL_BOYU, display: 'inline-flex', alignItems: 'center',
+            height: dar ? KONTROL_DOKUNMA : KONTROL_BOYU, display: 'inline-flex', alignItems: 'center',
             fontSize: 9, fontWeight: 900, letterSpacing: 0.8, padding: '0 7px',
             borderRadius: 5, whiteSpace: 'nowrap',
             color: wallet ? C.ok : C.candle,
@@ -452,7 +467,7 @@ export function BuildingDock({
             aria-label="Open the codex"
             style={{
               all: 'unset', boxSizing: 'border-box', cursor: 'pointer', flexShrink: 0,
-              width: KONTROL_BOYU, height: KONTROL_BOYU, borderRadius: 5,
+              width: dar ? KONTROL_DOKUNMA : KONTROL_BOYU, height: dar ? KONTROL_DOKUNMA : KONTROL_BOYU, borderRadius: 5,
               display: 'grid', placeItems: 'center',
               fontFamily: FONT.ui, fontSize: 13, fontWeight: 900,
               color: open === 'codex' ? C.bone : C.boneFaint,

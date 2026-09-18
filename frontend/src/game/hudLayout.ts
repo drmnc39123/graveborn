@@ -99,9 +99,51 @@ export function minimapIc(k: Kutu): Kutu {
  * Sabit 180 px yazılıydı ve dar ekranda minimap 128'e düşünce kart 52 px
  * soldan taşıyordu.
  */
-export function sagKolon(ekranW: number, navbarH: number, navbarSol: number): Kutu & { right: number } {
+/**
+ * Dar ekranda sağ kolonun EN AZ genişliği.
+ *
+ * 🔴 ÖLÇÜLDÜ (2026-09-18, Phantom içi, 375×560): kolon minimap kadar
+ * (136 px) idi ve iki şey kırılıyordu —
+ *   · demo oyuncusunun TEK cüzdan düğmesi "CONNEC…" diye kesiliyordu
+ *     (PixelButton kenarı 64 + "CONNECT WALLET" 104 = 168 px gerekiyor)
+ *   · "READY FOR THE DESCENT" kartının sağ sütunu kırpılıyordu
+ *     ("one run" → "one rur")
+ * Sağ kenar minimapla HÂLÂ aynı dikeyde — kolon yalnız SOLA doğru genişliyor.
+ * ⚠️ Yalnız DAR ekranda: geniş ekranda kolon minimap kadar kalır.
+ */
+export const KOLON_DAR_MIN = 184;
+
+/** Kolonun altında sohbetten önce bırakılan pay */
+export const KOLON_ALT_ARA = 8;
+
+export function sagKolon(
+  ekranW: number, navbarH: number, navbarSol: number,
+  /** Görünür yükseklik — verilirse kolon `maxH` alır (0 = sınırsız) */
+  ekranH = 0,
+  /** Sohbet kutusunun ölçülen yüksekliği — kolonun altı ona çarpmasın */
+  sohbetH = 0,
+): Kutu & { right: number; maxH: number | undefined } {
   const k = minimapKutusu(ekranW, navbarH, navbarSol);
-  return { x: k.x, y: k.y + k.h + KOLON_ARA, w: k.w, h: 0, right: MINI_SAG };
+  const dar = ekranW < MINI_DAR_ESIK;
+  const w = dar ? Math.max(k.w, Math.min(KOLON_DAR_MIN, ekranW - 2 * MINI_SAG)) : k.w;
+  const x = ekranW - MINI_SAG - w;
+  const y = k.y + k.h + KOLON_ARA;
+
+  /**
+   * ⚠️ ALT SINIR — ölçüldü: yatay telefonda (780×340) kartlar ekranın
+   * ALTINA taşıyordu, dar dikey ekranda sohbet kutusunun üstüne biniyordu.
+   * Sohbet sol altta ve genişliği min(300, ekran−24); kolonla YATAYDA
+   * kesişiyorsa kolon sohbetin üstünde bitmeli, kesişmiyorsa ekranın altında.
+   */
+  let maxH: number | undefined;
+  if (ekranH > 0) {
+    const sohbetSag = SOL_KENAR + Math.min(300, ekranW - 2 * SOL_KENAR);
+    const altSinir = sohbetH > 0 && x < sohbetSag
+      ? ekranH - SOHBET_ALT - sohbetH - KOLON_ALT_ARA
+      : ekranH - SOHBET_ALT;
+    maxH = Math.max(0, altSinir - y);
+  }
+  return { x, y, w, h: 0, right: MINI_SAG, maxH };
 }
 
 // ── SOL KOLON ─────────────────────────────────────────────────────────
@@ -181,4 +223,46 @@ export function solKolon(ekranH: number, navbarSol: number, sohbetH: number):
     gorunur: navbarSol > SOL_GORUNUR_ESIK,
     maxH: Math.max(0, ekranH - SOL_UST - SOHBET_ALT - sohbetH - SOL_ARA),
   };
+}
+
+// ── PANEL KUTUSU ──────────────────────────────────────────────────────
+//
+// 🔴 NİYE VAR — ölçüldü (2026-09-18, Phantom içi tarayıcı görüş alanı):
+//   1. PANEL EKRANDAN TAŞIYORDU. `maxHeight: calc(100vh − …)` 374 px
+//      hesaplanıyor, kutu 470 px çıkıyordu: dokuz-dilim çerçeve (16 × scale 3
+//      = 48 px her kenarda) `content-box`ta sınırın ÜSTÜNE ekleniyordu.
+//      375×560'ta panelin alt 72 px'i (kaydırma alanının sonu dahil) ekran
+//      dışındaydı.
+//   2. `100vh` PHANTOM iOS'TA YANLIŞ: tarayıcının alt çubuğunu da sayıyor.
+//      Sayfa gerçek yüksekliği zaten ölçüyor (`innerHeight`) — o kullanılıyor.
+//   3. ÇERÇEVE TELEFONDA PAHALIYDI: 375 px'te içerik alanı 225 px'e iniyordu
+//      (96 px çerçeve + 40 px dış boşluk + 12 px iç boşluk). Dar ekranda
+//      scale 2: çerçeve 64 px, dış boşluk 16 px → içerik ~283 px.
+//
+// ⚠️ SAF: DOM yok.
+
+/** Bu yüksekliğin altı "kısa ekran" — yatay telefon. Menü de sıkıştırılır. */
+export const KISA_EKRAN = 450;
+
+export function kisaEkranMi(ekranH: number): boolean {
+  return ekranH > 0 && ekranH < KISA_EKRAN;
+}
+
+export interface PanelKutusu {
+  /** dokuz-dilim çerçeve ölçeği */
+  olcek: 2 | 3;
+  /** karartma katmanının yan ve alt boşluğu */
+  yanBosluk: number;
+  /** panelin üstten başladığı yer (menünün altı) */
+  ustBosluk: number;
+  /** `border-box` en yükseklik — ölçülmediyse `undefined` */
+  maxH: number | undefined;
+}
+
+export function panelKutusu(ekranW: number, ekranH: number, dockH: number): PanelKutusu {
+  const dar = ekranW < MINI_DAR_ESIK || kisaEkranMi(ekranH);
+  const yanBosluk = dar ? 8 : 20;
+  const ustBosluk = Math.round(dockH) + (dar ? 10 : 24);
+  const maxH = ekranH > 0 ? Math.max(160, Math.floor(ekranH - ustBosluk - yanBosluk)) : undefined;
+  return { olcek: dar ? 2 : 3, yanBosluk, ustBosluk, maxH };
 }
