@@ -289,7 +289,12 @@ export function ProfileCard({ progress, wallet, onOpen, bekleyen = 0 }: {
               )}
               {tier && (
                 <Kutu ikon="damage" etiket="PIT" deger={tier.name.toUpperCase()}
-                  baslik={`Duel rating ${Math.round(ozet.duelRating)}`} />
+                  /* ⚠️ ZİRVE DE YAZIYOR: sezon yumuşak sıfırlanıyor ve
+                     zirve bilerek korunuyor (`pvpSeason.ts`), ama hiçbir yerde
+                     okunmuyordu — korunan şey görünmüyorsa korunmamış sayılır. */
+                  baslik={`Duel rating ${Math.round(ozet.duelRating)}`
+                    + (ozet.duelPeak && ozet.duelPeak > ozet.duelRating
+                      ? ` · peak ${Math.round(ozet.duelPeak)}` : '')} />
               )}
               {ozet.quests && (
                 /* ⚠️ ALINACAK ÖDÜL VARSA VURGULANIYOR. Günlük ödülün fark

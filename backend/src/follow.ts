@@ -24,6 +24,16 @@ export const FOLLOW_MAX = 50;
 
 export interface FollowRow {
   wallet: string;
+  /**
+   * ÖDENMİŞ AD — gold harcanarak alınıyor.
+   *
+   * 🔴 ÖLÇÜLDÜ (2026-09-20 denetimi): bu liste `name` alanını HİÇ seçmiyordu
+   * ve arayüz zorunlu olarak kısa cüzdana düşüyordu. Panolar (`boards.ts`)
+   * aynı kuralı başlığında yazıyor: *"ad ÜCRETLİ değişiyor; bayat ad servis
+   * etmek ödenen gold'un karşılığını vermemek demek"*. Takip listesi o kuralı
+   * çiğniyordu — oyuncu kendi ödediği adı kendi listesinde göremiyordu.
+   */
+  name: string | null;
   hero: string;
   online: boolean;
   duelRating: number;
@@ -51,7 +61,10 @@ export async function listFollows(
   const [oyuncular, kayitlar, sonMaclar] = await Promise.all([
     prisma.player.findMany({
       where: { wallet: { in: hedefler } },
-      select: { wallet: true, hero: true, duelRating: true, bestStage: true, bestDepth: true, banned: true },
+      select: {
+        wallet: true, name: true, hero: true, duelRating: true,
+        bestStage: true, bestDepth: true, banned: true,
+      },
     }),
     prisma.duelRecord.findMany({
       where: { wallet: { in: hedefler } },
@@ -82,7 +95,7 @@ export async function listFollows(
     const son = sonuncu.get(t);
     const saat = son ? (simdi - son.getTime()) / 3_600_000 : Infinity;
     out.push({
-      wallet: t, hero: p.hero, online: online.has(t),
+      wallet: t, name: p.name ?? null, hero: p.hero, online: online.has(t),
       duelRating: p.duelRating, bestStage: p.bestStage, bestDepth: p.bestDepth,
       recordId: k?.id ?? null,
       recordDepth: k?.depth ?? 0,

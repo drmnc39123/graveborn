@@ -596,6 +596,8 @@ export interface CardSummary {
   /** okunmamis ozel mesaj — kart rozeti */
   unreadDm?: number;
   duelRating: number;
+  /** sezonlar boyunca ulaşılan en yüksek puan — yumuşak sıfırlama bunu silmiyor */
+  duelPeak?: number;
   quests: { done: number; total: number; claimable: number } | null;
 }
 
@@ -1119,7 +1121,10 @@ export async function reforgeGear(id: string, action: 'promote' | 'reroll'): Pro
 // olmayan bir topluluğu varmış gibi göstermek olurdu.
 
 export interface DuelRow {
-  id: string; wallet: string; stageId: number; depth: number;
+  id: string; wallet: string;
+  /** ödenmiş ad — `answering` panosuyla AYNI kimlik (bkz. duel.ts) */
+  name: string | null;
+  stageId: number; depth: number;
   rating: number; duelRating: number; hero: string;
   /** meydan okunamıyorsa SEBEBİ */
   blocker: string | null;
@@ -1181,7 +1186,10 @@ export async function replyTicket(id: string, body: string): Promise<TicketView>
 // görünüyor (bkz. backend/follow.ts).
 
 export interface FollowRow {
-  wallet: string; hero: string; online: boolean;
+  wallet: string;
+  /** ödenmiş ad (gold harcanarak alınıyor) — yoksa kısa cüzdan gösterilir */
+  name: string | null;
+  hero: string; online: boolean;
   duelRating: number; bestStage: number; bestDepth: number;
   recordId: string | null; recordDepth: number;
   /** meydan okunamıyorsa SEBEBİ */

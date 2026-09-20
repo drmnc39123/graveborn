@@ -277,7 +277,9 @@ function Row({ row, onChallenge, onError }: {
         <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: t.color }} />
         <span style={{ minWidth: 0, flex: 1 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 900, color: C.bone }}>{kisa(row.wallet)}</span>
+            {/* ⚠️ ÖDENMİŞ AD — aynı oyuncu `answering` panosunda adıyla
+                görünüyordu, burada kısa cüzdan basılıyordu (bkz. duel.ts) */}
+            <span style={{ fontSize: 12, fontWeight: 900, color: C.bone }}>{oyuncuAdi(row)}</span>
             <Tag tone="dim">{t.name} {row.duelRating}</Tag>
           </span>
           <span style={{ display: 'block', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.4 }}>

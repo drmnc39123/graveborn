@@ -63,5 +63,47 @@ console.log('\n[3] ** PAZAR YAPILABILIR ISLE ACILIYOR');
   check('token yokken BUY dugmesi cizilmiyor', /tokenLive \? 'BUY' : 'AWAITING \$GRAVE'/.test(pazar));
 }
 
+console.log('\n[4] ** ODENMIS AD HER LISTEDE AYNI KIMLIK');
+{
+  /**
+   * 🔴 ÖLÇÜLDÜ (2026-09-20 denetimi): ad değiştirmek GOLD harcıyor, ama takip
+   * listesi ve düello tablosu `name` alanını hiç seçmiyordu — aynı oyuncu
+   * `answering` panosunda adıyla, düello tablosunda kısa cüzdanla
+   * görünüyordu. `boards.ts` kuralı yazıyor: bayat/eksik ad servis etmek,
+   * ödenen gold'un karşılığını vermemek.
+   */
+  const follow = yorumsuz(fs.readFileSync(
+    new URL('../../../backend/src/follow.ts', import.meta.url), 'utf8'));
+  const duelBe = yorumsuz(fs.readFileSync(
+    new URL('../../../backend/src/duel.ts', import.meta.url), 'utf8'));
+  const followUi = yorumsuz(oku('../components/FollowPanel.tsx'));
+  const duelUi = yorumsuz(oku('../components/DuelPanel.tsx'));
+
+  check('takip sorgusu adi ISTIYOR', /select: \{\s*wallet: true, name: true,/.test(follow));
+  check('takip satiri adi TASIYOR', /name: p\.name \?\? null/.test(follow));
+  check('takip arayuzu adi KULLANIYOR', /oyuncuAdi\(row\)/.test(followUi));
+  check('duello sorgusu adi ISTIYOR', /select: \{ duelRating: true, hero: true, name: true \}/.test(duelBe));
+  check('duello satiri adi TASIYOR', /name: r\.player\.name \?\? null/.test(duelBe));
+  check('duello arayuzu adi KULLANIYOR', /oyuncuAdi\(row\)/.test(duelUi));
+  // ⚠️ Kısa cüzdan YEDEK olarak kalmalı: adı olmayan oyuncu da görünmeli
+  check('adsiz oyuncu icin kisa cuzdan yedegi duruyor',
+    /export function oyuncuAdi/.test(yorumsuz(oku('./playerName.ts'))));
+}
+
+console.log('\n[5] ** ZIRVE PUAN OKUNUYOR');
+{
+  /**
+   * 🔴 `pvpSeason.ts` sezon kapanışında zirveyi BİLEREK koruyor ("sıfırlama
+   * kimliği silmemeli") ama tüm depoda tek bir okuma yoktu.
+   */
+  const be = yorumsuz(fs.readFileSync(
+    new URL('../../../backend/src/index.ts', import.meta.url), 'utf8'));
+  const kart = yorumsuz(oku('../components/ProfileCard.tsx'));
+  check('kart ozeti zirveyi tasiyor', /duelPeak: oyuncu\?\.duelPeak \?\? 0/.test(be));
+  check('profil kartinda gorunuyor', /peak \$\{Math\.round\(ozet\.duelPeak\)\}/.test(kart));
+  // ⚠️ Zirve mevcut puana eşitse yazılmıyor — gürültü olurdu
+  check('zirve = puan iken yazilmiyor', /ozet\.duelPeak > ozet\.duelRating/.test(kart));
+}
+
 if (FAIL.length) { console.log(`\n${FAIL.length} BASARISIZ: ${FAIL.join(', ')}`); process.exit(1); }
 console.log('\nBOS OYUN DURUSTLUGU SAGLAM');

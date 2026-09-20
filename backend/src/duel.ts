@@ -106,6 +106,13 @@ export async function publishRecord(
 export interface DuelBoardRow {
   id: string;
   wallet: string;
+  /**
+   * ÖDENMİŞ AD.
+   * 🔴 ÖLÇÜLDÜ (2026-09-20 denetimi): bu tablo adı hiç seçmiyordu ve arayüz
+   * kısa cüzdan basıyordu — AYNI oyuncu, sıralama panosundaki `answering`
+   * panosunda adıyla görünüyordu. Aynı veri, iki görünüm, iki kimlik.
+   */
+  name: string | null;
   stageId: number;
   depth: number;
   rating: number;
@@ -135,7 +142,7 @@ export async function board(wallet: string, cleared: Record<string, boolean>): P
     where: { wallet: { not: wallet }, player: { banned: false } },
     orderBy: { rating: 'desc' },
     take: DUEL.boardSize,
-    include: { player: { select: { duelRating: true, hero: true } } },
+    include: { player: { select: { duelRating: true, hero: true, name: true } } },
   });
 
   // ⚠️ SOĞUMA TEK SORGUDA. Satır başına sorgu atmak 20 istek demekti ve
@@ -163,7 +170,8 @@ export async function board(wallet: string, cleared: Record<string, boolean>): P
       const son = sonuncu.get(r.wallet);
       const saat = son ? (simdi - son.getTime()) / 3_600_000 : Infinity;
       return {
-        id: r.id, wallet: r.wallet, stageId: r.stageId, depth: r.depth, rating: r.rating,
+        id: r.id, wallet: r.wallet, name: r.player.name ?? null,
+        stageId: r.stageId, depth: r.depth, rating: r.rating,
         duelRating: r.player.duelRating, hero: r.player.hero,
         blocker: duelBlocker({
           challenger: wallet, defender: r.wallet, hoursSince: saat,
@@ -208,7 +216,7 @@ export async function findMatch(
   const adaylar = await prisma.duelRecord.findMany({
     where: { wallet: { not: wallet }, player: { banned: false } },
     take: 200,
-    include: { player: { select: { duelRating: true, hero: true } } },
+    include: { player: { select: { duelRating: true, hero: true, name: true } } },
   });
   if (adaylar.length === 0) throw new DuelError('Nobody has posted a record yet.');
 
@@ -262,7 +270,8 @@ export async function findMatch(
 
   const kazanan = uygun[0].r;
   return {
-    id: kazanan.id, wallet: kazanan.wallet, stageId: kazanan.stageId,
+    id: kazanan.id, wallet: kazanan.wallet, name: kazanan.player.name ?? null,
+    stageId: kazanan.stageId,
     depth: kazanan.depth, rating: kazanan.rating,
     duelRating: kazanan.player.duelRating, hero: kazanan.player.hero,
     blocker: null,

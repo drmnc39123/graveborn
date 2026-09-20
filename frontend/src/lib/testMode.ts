@@ -155,9 +155,9 @@ export const TEST_GUILDS = {
 export const TEST_FOLLOWS = {
   max: 20,
   rows: [
-    { wallet: 'Ashwa1ker00000000000000000000000000000000000', hero: 'knight', online: true,
+    { wallet: 'Ashwa1ker00000000000000000000000000000000000', name: 'Ashwalker', hero: 'knight', online: true,
       duelRating: 1420, bestStage: 18, bestDepth: 37, recordId: 'r1', recordDepth: 37, blocker: null },
-    { wallet: 'Cryptkeep3r000000000000000000000000000000000', hero: 'priestess', online: false,
+    { wallet: 'Cryptkeep3r000000000000000000000000000000000', name: null, hero: 'priestess', online: false,
       duelRating: 1180, bestStage: 12, bestDepth: 24, recordId: null, recordDepth: 0, blocker: 'offline' },
   ],
 } satisfies FollowState;
@@ -192,9 +192,9 @@ export const TEST_SKILLS = {
 export const TEST_DUELS = {
   me: { rating: 1290, wins: 14, losses: 9, rewardedToday: 2 },
   rows: [
-    { id: 'd1', wallet: W1, stageId: 18, depth: 37, rating: 1420, duelRating: 1420, hero: 'knight', blocker: null },
-    { id: 'd2', wallet: W2, stageId: 12, depth: 24, rating: 1180, duelRating: 1180, hero: 'priestess', blocker: null },
-    { id: 'd3', wallet: W3, stageId: 21, depth: 44, rating: 1610, duelRating: 1610, hero: 'bladekeeper', blocker: 'already answered today' },
+    { id: 'd1', wallet: W1, name: 'Ashwalker', stageId: 18, depth: 37, rating: 1420, duelRating: 1420, hero: 'knight', blocker: null },
+    { id: 'd2', wallet: W2, name: null, stageId: 12, depth: 24, rating: 1180, duelRating: 1180, hero: 'priestess', blocker: null },
+    { id: 'd3', wallet: W3, name: 'Bonesinger', stageId: 21, depth: 44, rating: 1610, duelRating: 1610, hero: 'bladekeeper', blocker: 'already answered today' },
   ],
   recent: [
     { challenger: ME, defender: W1, stageId: 18, depth: 39, target: 37, won: true, delta: 18, at: '2026-08-10T09:12:00Z' },

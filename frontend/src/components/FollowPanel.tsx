@@ -147,7 +147,9 @@ function Row({ row, busy, onChallenge, onError, onDrop }: {
         </span>
         <span style={{ minWidth: 0, flex: 1 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, fontWeight: 900, color: C.bone }}>{kisa(row.wallet)}</span>
+            {/* ⚠️ ÖDENMİŞ AD: `oyuncuAdi` adı varsa onu, yoksa kısa cüzdanı veriyor.
+                Liste eskiden `name` alanını hiç İSTEMİYORDU (bkz. follow.ts). */}
+            <span style={{ fontSize: 12, fontWeight: 900, color: C.bone }}>{oyuncuAdi(row)}</span>
             <Tag tone="dim">{t.name} {row.duelRating}</Tag>
           </span>
           <span style={{ display: 'block', fontSize: 10.5, color: C.boneFaint, lineHeight: 1.4 }}>

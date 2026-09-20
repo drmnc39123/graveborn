@@ -950,7 +950,7 @@ app.get('/me/card', wrap(async (req, res) => {
   const [lonca, oyuncu, gorevler, okunmamis] = await Promise.all([
     myGuild(wallet).catch(() => null),
     prisma.player.findUnique({
-      where: { wallet }, select: { duelRating: true, bestRating: true },
+      where: { wallet }, select: { duelRating: true, bestRating: true, duelPeak: true },
     }),
     listQuests(wallet).catch(() => null),
     // ⚠️ Okunmamis DM sayisi karta da giriyor: bekleyen bir mesaj yalniz
@@ -963,6 +963,14 @@ app.get('/me/card', wrap(async (req, res) => {
     guild: lonca ? { tag: lonca.tag, name: lonca.name, level: lonca.level } : null,
     unreadDm: okunmamis,
     duelRating: oyuncu?.duelRating ?? 0,
+    /**
+     * ZİRVE PUAN.
+     * 🔴 ÖLÇÜLDÜ (2026-09-20): `pvpSeason.ts` sezon kapanışında zirveyi
+     * BİLEREK koruyor ("sıfırlama kimliği silmemeli") ama tüm depoda tek bir
+     * OKUMA yoktu — oyuncu zirvesini hiç göremiyordu. Yumuşak sıfırlamanın
+     * anlamı ancak görünürse var.
+     */
+    duelPeak: oyuncu?.duelPeak ?? 0,
     quests: gorevler
       ? {
           // ⚠️ "Bitti" = ALINDI değil, TAMAMLANDI. Oyuncu ödülünü almamış
