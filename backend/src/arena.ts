@@ -38,7 +38,16 @@ interface Waiting {
   rating: number;
   heroId: string;
   permanent: Record<string, number>;
+  /**
+   * Kuyruğa İLK giriş anı — puan penceresi ve ekrandaki sayaç bunu kullanıyor.
+   * 🔴 ÖLÇÜLDÜ: eskiden kayıt 60 sn'de silinip yoklamayla yeniden kuruluyordu
+   * ve `since` sıfırlanıyordu. Sonuç: sayaç 60'ta başa dönüyor, puan penceresi
+   * (her 8 sn +160) tavana varmadan 120'ye geri düşüyordu — yani ekrandaki
+   * "the longer you wait, the wider the search" cümlesi YALANDI.
+   */
   since: number;
+  /** Son yoklama anı — bayatlık BUNDAN ölçülüyor, `since`ten değil */
+  gorulen: number;
   /** eşleşince buraya yazılıyor; oyuncu yoklamada okuyor */
   matched: ArenaSetup | null;
 }
@@ -252,6 +261,13 @@ export interface QueueResult {
   setup?: ArenaSetup;
   /** kuyrukta geçen saniye */
   waited?: number;
+  /**
+   * Kuyruktaki TOPLAM kişi (kendisi dahil).
+   * 🔴 NİYE DIŞARI ÇIKIYOR: `arenaStats()` yazılmıştı ama hiçbir yerden
+   * çağrılmıyordu; oyuncu boş kuyrukta süresiz "Looking for someone…"
+   * görüyordu. Kuyruğun boş olduğunu söylemek, oyuncuyu bekletmekten iyidir.
+   */
+  queued?: number;
 }
 
 /**
@@ -270,7 +286,13 @@ export async function joinQueue(wallet: string, heroId: string): Promise<QueueRe
     return { state: 'matched', setup: mevcut.matched };
   }
   if (mevcut) {
-    return { state: 'waiting', waited: Math.round((Date.now() - mevcut.since) / 1000) };
+    // ⚠️ `since` DEĞİŞMİYOR — bekleme süresi ve puan penceresi ondan okunuyor
+    mevcut.gorulen = Date.now();
+    return {
+      state: 'waiting',
+      waited: Math.round((Date.now() - mevcut.since) / 1000),
+      queued: queue.size,
+    };
   }
 
   const p = await prisma.player.findUnique({
@@ -281,7 +303,7 @@ export async function joinQueue(wallet: string, heroId: string): Promise<QueueRe
   const ben: Waiting = {
     wallet, rating: p.duelRating, heroId,
     permanent: await bonusOf(wallet),
-    since: Date.now(), matched: null,
+    since: Date.now(), gorulen: Date.now(), matched: null,
   };
 
   // ⚠️ EN YAKIN PUANLI RAKİP — VE PUAN PENCERESİ İÇİNDE.
@@ -327,11 +349,18 @@ export function leaveQueue(wallet: string) {
   queue.delete(wallet);
 }
 
-/** Bayat kuyruk kayıtlarını at — kopan sekme sonsuza kadar beklemesin */
+/**
+ * Bayat kuyruk kayıtlarını at — kopan sekme sonsuza kadar beklemesin.
+ *
+ * ⚠️ ÖLÇÜT `gorulen`, `since` DEĞİL. Sekmesi açık oyuncu 2 sn'de bir yokluyor,
+ * yani `gorulen` tazeleniyor ve kayıt DÜŞMÜYOR; sekmesi kapanan oyuncu
+ * `queueTimeoutSec` sonra düşüyor. Eskiden ölçüt `since` olduğu için sekmesi
+ * açık oyuncunun kaydı da 60 sn'de siliniyor, yoklama onu sıfırdan kuruyordu.
+ */
 function temizle() {
   const simdi = Date.now();
   for (const [k, w] of queue) {
-    if (!w.matched && (simdi - w.since) / 1000 > ARENA.queueTimeoutSec) queue.delete(k);
+    if (!w.matched && (simdi - w.gorulen) / 1000 > ARENA.queueTimeoutSec) queue.delete(k);
   }
 }
 
@@ -348,7 +377,15 @@ export function debugRoom(matchId: string) {
 /** SADECE TEST — kuyruktaki kaydı eskitir (uzun beklemiş gibi) */
 export function debugAge(wallet: string, since: number) {
   const w = queue.get(wallet);
+  // ⚠️ `gorulen` DOKUNULMUYOR: test "sekmesi açık, uzun süredir bekleyen"
+  // oyuncuyu taklit ediyor. Bayatlığı sınamak isteyen `debugSeen` kullanır.
   if (w) w.since = since;
+}
+
+/** SADECE TEST — son yoklama anını eskit (kopmuş sekme) */
+export function debugSeen(wallet: string, gorulen: number) {
+  const w = queue.get(wallet);
+  if (w) w.gorulen = gorulen;
 }
 
 /** SADECE TEST — kuyruk ve odaları sıfırla */

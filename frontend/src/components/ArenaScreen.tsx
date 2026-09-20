@@ -33,13 +33,28 @@ import { CUBUK_BOS, cubukCiz, cubukTak, type Cubuk } from '@/lib/stick';
 // ⚠️ YEREL KISALTMA SİLİNDİ — TEK ÇÖZÜCÜ `@game/playerName`.
 const kisa = (w: string) => oyuncuAdi({ wallet: w });
 
+/**
+ * BOŞ KUYRUĞU SÖYLEME EŞİĞİ (sn).
+ *
+ * 🔴 ÖLÇÜLDÜ (2026-09-20, canlı: 2 oyuncu): kuyrukta kimse yokken ekran
+ * süresiz "Looking for someone…" yazıyordu. Oyuncu bunu "oyun bozuk" ya da
+ * "ben yanlış yaptım" diye okuyor ve bir daha denemiyor.
+ * ⚠️ HEMEN söylenmiyor: ilk saniyelerde eşleşme gerçekten olabilir; 20 sn
+ * sonra hâlâ tek kişiysek bu artık bir bilgi.
+ */
+const YALNIZ_ESIK_SN = 20;
+
 type Durum =
   | { k: 'idle' }
-  | { k: 'queue'; waited: number }
+  | { k: 'queue'; waited: number; queued: number }
   | { k: 'match'; setup: ArenaSetup }
   | { k: 'result'; setup: ArenaSetup; end: ArenaEnd };
 
-export function ArenaScreen({ onExit }: { onExit: () => void }) {
+export function ArenaScreen({ onExit, onDuels }: {
+  onExit: () => void;
+  /** The Answering'e geç — boş kuyrukta tek dürüst alternatif (asenkron kol) */
+  onDuels?: () => void;
+}) {
   const [durum, setDurum] = useState<Durum>({ k: 'idle' });
   const [hata, setHata] = useState<string | null>(null);
   // ⚠️ Sezon SÜS: gelmezse lobi eskisi gibi çalışmaya devam eder, hata
@@ -66,7 +81,7 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
         const r = await pollQueue();
         if (bitti) return;
         if (r.state === 'matched' && r.setup) setDurum({ k: 'match', setup: r.setup });
-        else setDurum({ k: 'queue', waited: r.waited ?? 0 });
+        else setDurum({ k: 'queue', waited: r.waited ?? 0, queued: r.queued ?? 1 });
       } catch (e) {
         setHata(e instanceof Error ? e.message : 'Could not join the queue.');
         setDurum({ k: 'idle' });
@@ -95,7 +110,7 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
     );
   }
   if (durum.k === 'result') {
-    return <Result setup={durum.setup} end={durum.end} onAgain={() => setDurum({ k: 'queue', waited: 0 })} onExit={onExit} />;
+    return <Result setup={durum.setup} end={durum.end} onAgain={() => setDurum({ k: 'queue', waited: 0, queued: 1 })} onExit={onExit} />;
   }
 
   return (
@@ -192,6 +207,27 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
           <div style={{ marginBottom: 12, fontSize: 11.5, color: C.badText }}>{hata}</div>
         )}
 
+        {/* 🔴 BOŞ KUYRUK DÜRÜSTLÜĞÜ — `queued` sunucudan geliyor (`arenaStats`).
+            Oyuncuyu boş bir odada bekletmek yerine durumu söylüyoruz ve
+            asenkron kola (The Answering) kapı açıyoruz: orada rakibin
+            KAYDI oynanıyor, karşıda canlı birinin olması gerekmiyor. */}
+        {durum.k === 'queue' && durum.queued <= 1 && durum.waited >= YALNIZ_ESIK_SN && (
+          <div style={{
+            marginBottom: 14, padding: '10px 12px', borderRadius: 8,
+            border: `1px solid ${C.border}`, background: 'rgba(0,0,0,0.32)',
+            fontSize: 11.5, color: C.boneDim, lineHeight: 1.55,
+          }}>
+            Nobody else is in the queue right now. You can keep waiting — or go
+            answer a record instead.
+            {onDuels && (
+              <PixelButton variant={BTN.action} scale={2} onClick={onDuels}
+                style={{ width: '100%', marginTop: 10, fontSize: 11.5, fontWeight: 900, letterSpacing: 1 }}>
+                THE ANSWERING
+              </PixelButton>
+            )}
+          </div>
+        )}
+
         {durum.k === 'queue' ? (
           <PixelButton variant={BTN.action} scale={3}
             onClick={() => { void leaveQueue(); setDurum({ k: 'idle' }); }}
@@ -203,7 +239,7 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
             {/* ⚠️ BTN.strong — kuyruğa girmek bir MAÇ açıyor; taahhüt eden ama
                 gold harcamayan bir eylem, o yüzden altın DEĞİL. */}
             <PixelButton variant={BTN.strong} scale={3}
-              onClick={() => { setHata(null); setDurum({ k: 'queue', waited: 0 }); }}
+              onClick={() => { setHata(null); setDurum({ k: 'queue', waited: 0, queued: 1 }); }}
               style={{ width: '100%', fontSize: 13, fontWeight: 900, letterSpacing: 1.3 }}>
               FIND A MATCH
             </PixelButton>

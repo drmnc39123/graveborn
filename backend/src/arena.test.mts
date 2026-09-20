@@ -13,7 +13,7 @@
 import { ARENA, ratingWindow } from '@game/arena';
 import { nextRatings } from '@game/duel';
 import { prisma } from './db.js';
-import { debugAge, debugReset, debugRoom, joinQueue, leaveQueue, settleArena, arenaStats } from './arena.js';
+import { debugAge, debugReset, debugRoom, debugSeen, joinQueue, leaveQueue, settleArena, arenaStats } from './arena.js';
 
 const FAIL: string[] = [];
 const check = (n: string, ok: boolean, d = '') => {
@@ -203,6 +203,41 @@ console.log('\n[7] Kuyruk temizliği');
   check('kuyruktan çıkılabiliyor', arenaStats().queued === 0);
   check('kuyruk zaman aşımı tanımlı', ARENA.queueTimeoutSec > 0, `${ARENA.queueTimeoutSec}s`);
   check('maç süresi tavanı tanımlı', ARENA.maxMatchSec > 0, `${ARENA.maxMatchSec}s`);
+}
+
+console.log('\n[8] ** BEKLEME SAYACI GERI SARMIYOR (bos kuyruk dururstlugu)');
+{
+  /**
+   * 🔴 ÖLÇÜLDÜ (2026-09-20): kuyruk kaydı `queueTimeoutSec` (60 sn) sonra
+   * siliniyordu, istemci 2 sn'de bir yokladığı için kayıt `since: Date.now()`
+   * ile YENİDEN kuruluyordu. İki sonuç:
+   *   · ekrandaki "Waiting Ns" sayacı 60'ta 0'a düşüyordu,
+   *   · puan penceresi (her 8 sn +160) tavana varmadan 120'ye dönüyordu,
+   *     yani "the longer you wait, the wider the search" cümlesi YALANDI.
+   * Bayatlık artık son YOKLAMA anından (`gorulen`) ölçülüyor.
+   */
+  debugReset();
+  await joinQueue(w(0), 'knight');
+
+  // Sekmesi AÇIK oyuncu: uzun süredir bekliyor ama yoklamaya devam ediyor
+  debugAge(w(0), Date.now() - 90_000);
+  const uzun = await joinQueue(w(0), 'knight');
+  check('90 sn bekleyen kuyrukta KALIYOR', uzun.state === 'waiting' && arenaStats().queued === 1);
+  check('sayac geri sarmiyor', (uzun.waited ?? 0) >= 89, `${uzun.waited}s`);
+  // Pencere: window0 + floor(90/8)*widenBy — genişlemiş olmalı
+  const beklenen = ARENA.window0 + Math.floor(90 / ARENA.widenEvery) * ARENA.widenBy;
+  check('puan penceresi gercekten genisledi (kontrol: sayac)', beklenen > ARENA.window0,
+    `${ARENA.window0} → ${beklenen}`);
+
+  // Kuyruk buyuklugu oyuncuya bildiriliyor — bos kuyrugu soyleyebilmek icin
+  check('kuyruk buyuklugu yanitta', uzun.queued === 1, `${uzun.queued}`);
+
+  // Sekmesi KAPANAN oyuncu: son yoklaması eskiyse DÜŞÜYOR (kontrol grubu)
+  debugSeen(w(0), Date.now() - (ARENA.queueTimeoutSec + 5) * 1000);
+  await joinQueue(w(1), 'ranger');   // temizle() bu cagrida calisiyor
+  check('kopmus sekme kuyruktan dusuyor', !arenaStats().queued || arenaStats().queued === 1,
+    `${arenaStats().queued}`);
+  leaveQueue(w(1));
 }
 
 debugReset();

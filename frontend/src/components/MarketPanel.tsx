@@ -194,7 +194,17 @@ export function MarketPanel({
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [sekme, setSekme] = useState<'browse' | 'sell'>('browse');
+  /**
+   * AÇILIŞ SEKMESİ DURUMA GÖRE.
+   *
+   * 🔴 ÖLÇÜLDÜ (2026-09-20): panel BROWSE ile açılıyordu, oysa `/market/buy`
+   * token gelene kadar 503 dönüyor — yani oyuncu, hiçbirini alamayacağı bir
+   * ilan listesiyle karşılanıyordu. Token yokken tek YAPILABİLİR iş satmak.
+   * ⚠️ Oyuncunun kendi seçimi üstte: sekmeye bastıysa orada kalıyor.
+   */
+  const [sekmeSecim, setSekmeSecim] = useState<'browse' | 'sell' | null>(null);
+  const sekme: 'browse' | 'sell' = sekmeSecim ?? (tokenLive ? 'browse' : 'sell');
+  const setSekme = setSekmeSecim;
   const [sira, setSira] = useState<Sira>('ucuz');
   const [enAz, setEnAz] = useState('');
   const [enCok, setEnCok] = useState('');

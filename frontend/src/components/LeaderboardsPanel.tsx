@@ -228,7 +228,18 @@ function Tablo({ pano, tanim }: { pano: Board; tanim: PanoTanimi }) {
   return (
     <>
       {pano.rows.length === 0 ? (
-        <Not>No one is on this board yet. The first name on it can be yours.</Not>
+        <Not>
+          No one is on this board yet. The first name on it can be yours.
+          {/* 🔴 ÖLÇÜLDÜ (2026-09-20, canlı: 2 oyuncu): bu pano YERLEŞİM şartı
+              yüzünden (haftada `placement` maç) küçük nüfusta kalıcı boş
+              kalıyor ve oyuncu bunu "burada rekabet yok" diye okuyor. Kural
+              adalet kuralı, DEĞİŞMİYOR — ama sebebi yazılıyor. */}
+          {pano.id === 'pit' && pano.placement !== undefined && (
+            <div style={{ marginTop: 6, color: C.boneFaint }}>
+              Placement takes {pano.placement} matches this week — nobody has finished them yet.
+            </div>
+          )}
+        </Not>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
           {pano.rows.map((r) => (

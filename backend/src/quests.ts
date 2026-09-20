@@ -15,9 +15,10 @@ import {
   QUESTS, dayDustCeiling, questAccumulate, questById, questDone, questsFor,
   type QuestKind, type QuestProfile,
 } from '@game/quests';
-import { STAGES } from '@game/config';
+import { SIM_VERSION, STAGES } from '@game/config';
 import { paidDepth, utcDay, type Progress } from '@game/progress';
 import { eventMul } from '@game/events';
+import { seasonWeek } from '@game/season';
 import { prisma, toProgress } from './db.js';
 
 interface QuestState {
@@ -43,11 +44,73 @@ function bosDurum(day: string): QuestState {
 }
 
 /** Havuzu belirleyen durum — SUNUCUDAN, istemciden değil */
-function profil(p: Progress): QuestProfile {
+function profil(p: Progress, pvpAcik: boolean): QuestProfile {
   return {
     deepestDepth: STAGES.reduce((m, st) => Math.max(m, paidDepth(p, st.id)), 0),
     cleared: Object.values(p.cleared ?? {}).some(Boolean),
+    pvpAcik,
   };
+}
+
+/**
+ * OYNANACAK RAKİP VAR MI — PvP görevlerinin kapısı.
+ *
+ * 🔴 NİYE (2026-09-20, canlı ölçüm: 2 oyuncu): "Win a match in the Pit"
+ * görevi tek oyuncuya da düşüyordu ve yapılması İMKÂNSIZDI — kuyrukta kimse
+ * yok. Aynı tuzak bu dosyanın 1. gün havuzunda bir kez ölçülüp düzeltilmişti.
+ *
+ * İki kanıttan biri yetiyor:
+ *   · son 7 günde BAŞKASININ yayınladığı, BU motor sürümüyle oynanabilir bir
+ *     düello kaydı (asenkron kol — karşıda canlı kimse gerekmiyor), VEYA
+ *   · bu hafta arena maçı yapmış başka bir oyuncu (canlı kol işliyor).
+ *
+ * ⚠️ `simVersion` ŞART: eski sürümde yazılmış kayda meydan okunamıyor
+ * (`duel.ts` sürüm kapısı), yani o kayıt oynanacak bir rakip değil.
+ * ⚠️ Kendi kaydın sayılmıyor — kimse kendine görev açamaz.
+ * ⚠️ Hata durumunda `false`: olmayan rakibi vadetmektense görev eksik olsun.
+ *
+ * ⚠️ 5 DAKİKALIK ÖNBELLEK: `trackQuest` her koşu sonunda çağrılıyor ve görev
+ * seti orada da türeyebiliyor. Önbelleksiz her koşu iki ek sayım sorgusu
+ * demekti; bu cevap dakikalar ölçeğinde değişen bir cevap değil.
+ */
+const PVP_TTL_MS = 5 * 60_000;
+const pvpOnbellek = new Map<string, { at: number; val: boolean }>();
+
+async function pvpAcikMi(wallet: string): Promise<boolean> {
+  const simdi = Date.now();
+  const onbellek = pvpOnbellek.get(wallet);
+  if (onbellek && simdi - onbellek.at < PVP_TTL_MS) return onbellek.val;
+  // ⚠️ Sınırsız büyümesin — süresi dolanları at (oyuncu sayısı artabilir)
+  if (pvpOnbellek.size > 500) {
+    for (const [k, v] of pvpOnbellek) if (simdi - v.at >= PVP_TTL_MS) pvpOnbellek.delete(k);
+  }
+  let val = false;
+  try {
+    const kayit = await prisma.duelRecord.count({
+      where: {
+        wallet: { not: wallet },
+        simVersion: SIM_VERSION,
+        createdAt: { gte: new Date(simdi - 7 * 24 * 3600_000) },
+      },
+    });
+    // Arena maçı ayrı satır tutmuyor; haftalık sayaç oyuncu kaydında (`markPvpMatch`)
+    val = kayit > 0 || (await prisma.player.count({
+      where: {
+        wallet: { not: wallet },
+        duelWeek: seasonWeek(new Date(simdi)),
+        duelMatches: { gt: 0 },
+      },
+    })) > 0;
+  } catch {
+    val = false;
+  }
+  pvpOnbellek.set(wallet, { at: simdi, val });
+  return val;
+}
+
+/** SADECE TEST — rakip kapısını elle kur */
+export function debugPvpAcik(wallet: string, val: boolean) {
+  pvpOnbellek.set(wallet, { at: Date.now(), val });
 }
 
 /**
@@ -97,7 +160,7 @@ export async function listQuests(wallet: string, now = new Date()): Promise<Ques
   const day = utcDay(now);
   const row = await prisma.player.findUnique({ where: { wallet } });
   if (!row) throw new QuestError('oyuncu_yok', 404);
-  const st = oku(row.quests, wallet, day, profil(toProgress(row)));
+  const st = oku(row.quests, wallet, day, profil(toProgress(row), await pvpAcikMi(wallet)));
   // ⚠️ Seçilen set HEMEN yazılıyor: yoksa oyuncu paneli açtıktan sonra
   // derinleşirse bir sonraki okumada başka görevler görürdü.
   await yaz(wallet, row.quests, st);
@@ -164,7 +227,7 @@ export async function trackQuest(
     const day = utcDay(now);
     const row = await prisma.player.findUnique({ where: { wallet } });
     if (!row) return;
-    const st = oku(row.quests, wallet, day, profil(toProgress(row)));
+    const st = oku(row.quests, wallet, day, profil(toProgress(row), await pvpAcikMi(wallet)));
     const bugun = st.ids.map((id) => questById(id))
       .filter((q): q is NonNullable<typeof q> => !!q && q.kind === kind);
     if (bugun.length === 0) return;
@@ -198,7 +261,7 @@ export async function claimQuest(
   const day = utcDay(now);
   const row = await prisma.player.findUnique({ where: { wallet } });
   if (!row || row.banned) throw new QuestError('yasakli', 403);
-  const st = oku(row.quests, wallet, day, profil(toProgress(row)));
+  const st = oku(row.quests, wallet, day, profil(toProgress(row), await pvpAcikMi(wallet)));
 
   let toz = 0;
   if (questId === '__bonus') {

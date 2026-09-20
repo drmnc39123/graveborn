@@ -32,6 +32,8 @@ export interface QueueState {
   state: 'waiting' | 'matched';
   setup?: ArenaSetup;
   waited?: number;
+  /** kuyruktaki toplam kişi (kendisi dahil) — boş kuyruğu söyleyebilmek için */
+  queued?: number;
 }
 
 /** Kuyruğa gir / yoklama yap — eşleşince `setup` döner */

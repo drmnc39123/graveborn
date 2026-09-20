@@ -17,13 +17,15 @@ import { QUESTS, QUEST_POOL, questAccumulate, questsFor, dayDustCeiling } from '
  * Testin profili açıkça vermesi ŞART: varsayılan bir profil koymak, 1. gün
  * hatasını testin gözünden kaçırırdı — zaten öyle kaçmıştı.
  */
-const DENEYIMLI = { deepestDepth: 40, cleared: true };
-const YENI = { deepestDepth: 0, cleared: false };
+const DENEYIMLI = { deepestDepth: 40, cleared: true, pvpAcik: true };
+const YENI = { deepestDepth: 0, cleared: false, pvpAcik: false };
+/** Deneyimli ama ortalıkta rakip YOK — tek oyunculu dünya */
+const YALNIZ = { deepestDepth: 40, cleared: true, pvpAcik: false };
 import { utcDay } from '@game/progress';
 import fs from 'node:fs';
 import { prisma } from './db.js';
 import {
-  claimQuest as claimQuestAt, listQuests as listQuestsAt, trackQuest as trackQuestAt,
+  claimQuest as claimQuestAt, debugPvpAcik, listQuests as listQuestsAt, trackQuest as trackQuestAt,
 } from './quests.js';
 
 const FAIL: string[] = [];
@@ -62,12 +64,18 @@ const trackQuest = (
 // derinlikten süzüyor, testin `DENEYIMLI` sabitinden değil. Kurulum eksik
 // kalsaydı sunucu başlangıç görevlerini dondurur ve testin beklentileriyle
 // ayrışırdı.
-await prisma.player.createMany({
-  data: [0, 1].map((n) => ({
-    wallet: w(n), gold: 100_000,
-    depthPaid: { '1': 40 }, cleared: { '1': true },
-  })),
-});
+await prisma.player.createMany({
+  data: [0, 1].map((n) => ({
+    wallet: w(n), gold: 100_000,
+    depthPaid: { '1': 40 }, cleared: { '1': true },
+  })),
+});
+
+// ⚠️ RAKİP KAPISI DA KURULUYOR — aynı gerekçe: sunucu `pvpAcikMi` ile
+// gerçek veriye bakıyor, test `DENEYIMLI` sabitini kullanıyor. İkisi
+// ayrışırsa sunucu BAŞKA üç görev türetir ve test kendi hedefini bulamaz
+// (ölçüldü: `[3] ilerleme işlendi` bu yüzden çöktü).
+for (const n of [0, 1]) debugPvpAcik(w(n), true);
 
 console.log('\n═══ GÜNLÜK GÖREVLER ═══');
 
@@ -323,6 +331,38 @@ console.log('\n[8] * HER GOREV TURUNUN CALISAN BIR SAYACI VAR');
   // HARCAMA SAYACI DEFTERIN ICINDE olmali - harcama noktalarina tek tek
   // serpilseydi yeni bir sink eklendiginde biri unutulurdu.
   check('harcama sayaci tek gecitte (ledger)', /trackQuest[^;]{0,120}'spend'/.test(oku('src/ledger.ts')));
+}
+
+console.log('\n[9] ** RAKIP YOKKEN PvP GOREVI VERILMIYOR');
+{
+  /**
+   * 🔴 ÖLÇÜLDÜ (2026-09-20, canlı: 2 oyuncu, kuyruk boş): "Win a match in the
+   * Pit" görevi yalnız `needsCleared` ile süzülüyordu ve tek oyuncuya da
+   * düşüyordu — yapılması İMKÂNSIZ bir görev. Aynı tuzak 1. gün havuzunda
+   * bir kez ölçülüp düzeltilmişti; PvP tarafında duruyordu.
+   */
+  const pvpIdler = QUEST_POOL.filter((q) => q.needsPvp).map((q) => q.id);
+  check('havuzda PvP gorevi isaretli (kontrol grubu)', pvpIdler.length >= 3, pvpIdler.join(', '));
+
+  // 200 cüzdan × 5 gün — rakipsiz dünyada PvP görevi ASLA düşmemeli
+  let kacak = '';
+  let pvpliGun = 0;
+  for (let i = 0; i < 200 && !kacak; i++) {
+    for (let g = 0; g < 5; g++) {
+      const gun = `2026-09-${String(10 + g).padStart(2, '0')}`;
+      const yalniz = questsFor(`W${i}`, gun, YALNIZ).map((q) => q.id);
+      const kacakId = yalniz.find((id) => pvpIdler.includes(id));
+      if (kacakId) { kacak = `W${i} ${gun} → ${kacakId}`; break; }
+      // Kontrol grubu: AYNI cüzdan/gün, rakip varken PvP görevi düşebiliyor mu
+      if (questsFor(`W${i}`, gun, DENEYIMLI).some((q) => pvpIdler.includes(q.id))) pvpliGun++;
+    }
+  }
+  check('rakipsiz dunyada PvP gorevi HIC dusmuyor', !kacak, kacak);
+  check('rakip varken PvP gorevi dusebiliyor (kontrol grubu)', pvpliGun > 0, `${pvpliGun} gun`);
+
+  // Görev sayısı azalmamalı: rakipsiz oyuncu da üç görev almalı
+  const uc = questsFor('W7', '2026-09-12', YALNIZ);
+  check('rakipsiz oyuncu yine UC gorev aliyor', uc.length === 3, `${uc.length}`);
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ GÜNLÜK GÖREVLER SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);

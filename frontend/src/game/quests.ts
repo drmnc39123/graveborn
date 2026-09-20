@@ -60,6 +60,8 @@ export interface QuestDef {
   minDepth?: number;
   /** en az bir bölüm temizlenmiş olmalı (PvP görevleri) */
   needsCleared?: boolean;
+  /** oynanacak bir rakip gerekiyor — bkz. QuestProfile.pvpAcik */
+  needsPvp?: boolean;
 }
 
 /** Oyuncunun görev havuzunu belirleyen durumu — SUNUCU doldurur */
@@ -68,6 +70,22 @@ export interface QuestProfile {
   deepestDepth: number;
   /** en az bir bölüm temizlendi mi */
   cleared: boolean;
+  /**
+   * OYNANACAK BİR RAKİP VAR MI — PvP görevleri buna bağlı.
+   *
+   * 🔴 ÖLÇÜLDÜ (2026-09-20, canlı: 2 oyuncu): "Win a match in the Pit" görevi
+   * yalnız `needsCleared` ile süzülüyordu, yani tek oyuncuya da düşüyordu ve
+   * o oyuncu için YAPILMASI İMKÂNSIZDI — kuyrukta kimse yok. Aynı tuzak bu
+   * dosyanın 1. gün havuzunda bir kez ölçülüp düzeltilmişti; PvP tarafında
+   * duruyordu.
+   *
+   * ⚠️ SUNUCU HESAPLIYOR (`backend/src/quests.ts listQuests`): son 24 saatte
+   * kapanmış arena maçı ya da son 7 günde yayınlanmış düello kaydı. Bu
+   * fonksiyon SAF kalıyor — aynı girdiye iki taraf da aynı üç görevi üretmeli.
+   * ⚠️ Bilinmiyorsa `false`: olmayan bir rakip vadetmektense bir görev eksik
+   * vermek yeğdir.
+   */
+  pvpAcik: boolean;
 }
 
 /**
@@ -91,9 +109,9 @@ export const QUEST_POOL: readonly QuestDef[] = [
   // ⚠️ PvP görevleri en az bir TEMİZLENMİŞ bölüm istiyor: düelloda rakibin
   // bölümünü temizlemiş olman şart (bkz. duelBlocker), yoksa görev
   // yapılamaz bir şey olurdu.
-  { id: 'q_duel1', kind: 'duel', goal: 1, dust: 30, text: 'Answer a rival and win', needsCleared: true },
-  { id: 'q_duel2', kind: 'duel', goal: 2, dust: 50, text: 'Win 2 duels', needsCleared: true, minDepth: 10 },
-  { id: 'q_arena1', kind: 'arena', goal: 1, dust: 40, text: 'Win a match in the Pit', needsCleared: true },
+  { id: 'q_duel1', kind: 'duel', goal: 1, dust: 30, text: 'Answer a rival and win', needsCleared: true, needsPvp: true },
+  { id: 'q_duel2', kind: 'duel', goal: 2, dust: 50, text: 'Win 2 duels', needsCleared: true, minDepth: 10, needsPvp: true },
+  { id: 'q_arena1', kind: 'arena', goal: 1, dust: 40, text: 'Win a match in the Pit', needsCleared: true, needsPvp: true },
   { id: 'q_spend2k', kind: 'spend', goal: 2000, dust: 25, text: 'Spend 2,000 gold', minDepth: 5 },
   { id: 'q_spend8k', kind: 'spend', goal: 8000, dust: 45, text: 'Spend 8,000 gold', minDepth: 15 },
   // ⚠️ Ekipman ancak Wilderness'tan çıkıyor; hiç parçası olmayan oyuncuya
@@ -117,7 +135,9 @@ export function questsFor(wallet: string, day: string, p: QuestProfile): QuestDe
   // görev vermek, oyuncuya "bu panel bana göre değil" dedirtiyordu.
   const havuz = QUEST_POOL.filter((q) =>
     (q.minDepth === undefined || p.deepestDepth >= q.minDepth)
-    && (!q.needsCleared || p.cleared));
+    && (!q.needsCleared || p.cleared)
+    // ⚠️ Rakip yoksa PvP görevi DÜŞMÜYOR — bkz. QuestProfile.pvpAcik
+    && (!q.needsPvp || p.pvpAcik));
   const out: QuestDef[] = [];
   const kullanilan = new Set<QuestKind>();
   // Deterministik karıştırma — `Math.random()` YASAK, sunucu aynı sonucu

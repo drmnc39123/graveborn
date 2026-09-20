@@ -720,7 +720,13 @@ export default function PlayPage() {
   const odemeToplam = useCountUpInt(payout ? payout.progressGold + payout.dropGold : 0, 700);
 
   if (screen.kind === 'arena') {
-    return <ArenaScreen onExit={() => setScreen({ kind: 'hub' })} />;
+    return (
+      <ArenaScreen
+        onExit={() => setScreen({ kind: 'hub' })}
+        // Boş kuyrukta tek dürüst alternatif: asenkron düello kolu
+        onDuels={() => { setScreen({ kind: 'hub' }); hedefiAc('duel'); }}
+      />
+    );
   }
 
   if (screen.kind === 'boss') {
