@@ -691,11 +691,12 @@ export default function PlayPage() {
   useEffect(() => {
     if (process.env.NODE_ENV === 'production') return;
     const w = window as unknown as { __gb?: unknown };
-    w.__gb = { panel: setPanel, finish: finishRun, screen: setScreen };
+    // `begin` — promo telefon kaydı (`promo/tools/telefon-kayit.mjs`) bölümü doğrudan açıyor
+    w.__gb = { panel: setPanel, finish: finishRun, screen: setScreen, begin: beginStage };
     const q = new URLSearchParams(window.location.search).get('panel');
     if (q) setPanel(q);
     return () => { delete w.__gb; };
-  }, [finishRun]);
+  }, [finishRun, beginStage]);
 
   /**
    * KOŞU ÖDEMESİ — oyunun en büyük ödül anı.

@@ -35,6 +35,9 @@ import { KasmaOlcer, kareSayilsinMi } from '@/game/autoQuality';
 import { passiveIcon, weaponArt } from '@/game/combatArt';
 import { hintText, loadSeenHints, markHintSeen, nextHint, type HintDef } from '@/game/tutorial';
 import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
+import { getMode } from '@/lib/session';
+import { fetchReferral } from '@/lib/gameSession';
+import { paylasimXLinki } from '@/game/paylas';
 import { isTestMode } from '@/lib/testMode';
 import { cubukCiz, cubukTak } from '@/lib/stick';
 
@@ -306,6 +309,24 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
   const choose = useCallback((id: string) => {
     gameRef.current?.choose(id);
   }, []);
+
+  /**
+   * PAYLAŞIM KODU — koşu bittiğinde bir kez okunuyor.
+   *
+   * ⚠️ KOŞU SIRASINDA İSTENMİYOR: koşu 60 Hz çiziyor ve ağ isteği kare
+   * bütçesinden çalıyor. Demo modunda hiç istenmiyor — demo'nun kuralı sıfır
+   * backend çağrısı. Kod gelmezse paylaşım düz site adresiyle çalışıyor.
+   */
+  const [paylasimKodu, setPaylasimKodu] = useState<string | null>(null);
+  useEffect(() => {
+    if (hud?.phase !== 'dead' && hud?.phase !== 'won') return;
+    if (paylasimKodu || getMode() === 'demo') return;
+    let iptal = false;
+    fetchReferral()
+      .then((r) => { if (!iptal) setPaylasimKodu(r.code ?? null); })
+      .catch(() => { /* kod yoksa düz adres — paylaşım yine çalışır */ });
+    return () => { iptal = true; };
+  }, [hud?.phase, paylasimKodu]);
 
   /** Koşuyu köye taşı. Ödülü İSTEMCİ hesaplamaz — progress.ts yapar. */
   const finish = useCallback(() => {
@@ -1378,6 +1399,26 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
               RETURN TO VILLAGE
             </PixelButton>
           </div>
+          {/* ⭐ PAYLAŞ — koşuyu anlatan cümle ve oyuncunun kendi bağlantısı
+              hazır geliyor (bkz. `game/paylas.ts`).
+              ⚠️ ÜÇÜNCÜ DOKULU DÜĞME DEĞİL: buradaki asıl karar "tekrar mı,
+              köye mi". Paylaşım onların altında düz bir satır — istemeyen
+              fark etmeden geçiyor.
+              ⚠️ `noopener`: açılan sayfa `window.opener` ile bu sekmeyi
+              yönlendirebilirdi. */}
+          <button
+            onClick={() => window.open(paylasimXLinki({
+              mode: hud.mode, stageName: hud.stageName, depth: hud.depth,
+              deepestCleared: hud.deepestCleared, level: hud.level, kills: hud.kills,
+              kazandi: hud.phase === 'won', kod: paylasimKodu,
+            }), '_blank', 'noopener,noreferrer')}
+            style={{
+              all: 'unset', cursor: 'pointer', marginTop: 14, padding: '10px 14px',
+              fontFamily: FONT.ui, fontSize: 11.5, fontWeight: 900, letterSpacing: 1.1,
+              color: C.candle, borderBottom: `1px solid ${C.candle}55`,
+            }}>
+            SHARE THIS RUN ↗
+          </button>
         </div>
       )}
     </div>

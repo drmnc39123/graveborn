@@ -25,6 +25,7 @@ import {
 import { MenuBackground } from '@/components/MenuBackground';
 import { duelTier } from '@/game/duel';
 import { fetchPvpSeason, type PvpSeasonState } from '@/lib/gameSession';
+import { PVP_PAYOUT_DEPTH } from '@/game/pvpSeason';
 import { isTestMode, TEST_PVP_SEASON } from '@/lib/testMode';
 import { C, FONT, glass } from '@/lib/theme';
 import { CUBUK_BOS, cubukCiz, cubukTak, type Cubuk } from '@/lib/stick';
@@ -174,9 +175,17 @@ export function ArenaScreen({ onExit }: { onExit: () => void }) {
         <div style={{
           marginBottom: 14, fontSize: 11, color: C.boneFaint, lineHeight: 1.55,
         }}>
-          The Pit pays <b style={{ color: C.bone }}>standing only</b> — no dust,
-          no gold. It is the <b style={{ color: C.bone }}>same standing</b> the
-          Answering uses: win here and your duel rating moves too.
+          {/* 🔴 ÖLÇÜLDÜ (2026-09-20): burada "The Pit pays standing only — no
+              dust, no gold" yazıyordu, oysa hafta kapanınca ilk 10 TOZ ve
+              ÜNVAN alıyor (`pvpReward`: 1. 400 · 2. 300 · 3. 240 · 4-5. 170 ·
+              6-10. 100). Panel oyuncuya kendi ödülünü inkâr ediyordu —
+              "görünmeyen ödül, olmayan ödüldür" kuralının tersi. Maç ile
+              HAFTA artık ayrı cümlede. */}
+          A match pays <b style={{ color: C.bone }}>standing only</b> — no dust,
+          no gold. When the week closes, the season&apos;s{' '}
+          <b style={{ color: C.bone }}>top {PVP_PAYOUT_DEPTH}</b> are paid in
+          dust and a title. It is the <b style={{ color: C.bone }}>same standing</b>{' '}
+          the Answering uses: win here and your duel rating moves too.
         </div>
 
         {hata && (

@@ -9,6 +9,8 @@
 // Çalıştır:  npx tsx src/game/arena.test.mts
 
 import { ARENA, arenaWinner, buildArenaGame, type ArenaSetup, type InputFrame } from './arena.js';
+import fs from 'node:fs';
+import { PVP_PAYOUT_DEPTH, pvpReward } from './pvpSeason.js';
 import type { Game } from './engine.js';
 
 const FAIL: string[] = [];
@@ -131,6 +133,27 @@ console.log('\n[6] Protokol sabitleri tutarlı');
   console.log(`     kaba bant genişliği ≈ ${(bytePerSec / 1024).toFixed(1)} KB/sn`);
   check('bant genişliği 5 KB/sn altında', bytePerSec < 5120, `${bytePerSec.toFixed(0)} B/sn`);
   check('maç süresi tavanı var', ARENA.maxMatchSec > 0 && ARENA.maxMatchSec <= 3600);
+}
+
+console.log('\n[7] ** LOBI ODULU INKAR ETMIYOR');
+{
+  /**
+   * 🔴 ÖLÇÜLDÜ (2026-09-20): lobide "The Pit pays standing only — no dust,
+   * no gold" yazıyordu, oysa hafta kapanınca ilk 10 TOZ ve ÜNVAN alıyor.
+   * Panel oyuncuya kendi ödülünü inkâr ediyordu. Bu mühür ikisini BAĞLIYOR:
+   * ödül tablosu toz ödüyorsa lobi metni bunu söylemek ZORUNDA.
+   */
+  const ekran = fs.readFileSync(new URL('../components/ArenaScreen.tsx', import.meta.url), 'utf8')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+  const tozOduyor = (pvpReward(1)?.dust ?? 0) > 0;
+  check('odul tablosu haftalik toz oduyor (kontrol grubu)', tozOduyor, `1. sira ${pvpReward(1)?.dust} toz`);
+  if (tozOduyor) {
+    check('lobi "The Pit pays standing only" DEMIYOR', !/The Pit pays[\s\S]{0,40}standing only/.test(ekran));
+    check('lobi haftalik toz odulunu soyluyor',
+      /top \{PVP_PAYOUT_DEPTH\}[\s\S]{0,90}paid in[\s\S]{0,40}dust/.test(ekran));
+    check('sira sayisi elle yazilmamis', ekran.includes('PVP_PAYOUT_DEPTH') && !/top 10[ <]/.test(ekran),
+      `PVP_PAYOUT_DEPTH = ${PVP_PAYOUT_DEPTH}`);
+  }
 }
 
 console.log(`\n${FAIL.length === 0 ? '✅ ARENA SÖZLEŞMESİ SAĞLAM' : `❌ ${FAIL.length} BAŞARISIZ: ${FAIL.join(', ')}`}\n`);
