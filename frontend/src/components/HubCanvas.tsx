@@ -16,6 +16,7 @@ import { koyTutamagi } from '@/lib/chat';
 import { unlockAudio, play } from '@/game/sfx';
 import { BEKLEME_ZEMINI, C, thinGlass } from '@/lib/theme';
 import { cubukCiz, cubukTak } from '@/lib/stick';
+import { useDokunmatik } from '@/lib/dokunmatik';
 
 type Hint = { kind: 'door' | 'fight' | 'travel'; title: string; sub: string };
 
@@ -105,7 +106,9 @@ export function HubCanvas({
    *   3. İLK `touchstart` — kanıtın kendisi; parmak ekrana değdiyse tartışma biter
    * ⚠️ Tek kaynağa geri dönme.
    */
-  const [kaba, setKaba] = useState(false);
+  // ⚠️ ALGILAMA ORTAK MODÜLDE (`lib/dokunmatik`): aynı üç kaynaklı okuma
+  // burada, koşu ekranında ve panolarda ayrı ayrı yazılıydı.
+  const kaba = useDokunmatik();
   /** Dar ekran — kontrol ipucunun yeri buna bağlı (bkz. ipucu şeridi) */
   const [darEkran, setDarEkran] = useState(false);
   useEffect(() => {
@@ -113,24 +116,6 @@ export function HubCanvas({
     olc();
     window.addEventListener('resize', olc);
     return () => window.removeEventListener('resize', olc);
-  }, []);
-  useEffect(() => {
-    const olc = () => {
-      const mq = typeof window.matchMedia === 'function'
-        && window.matchMedia('(pointer: coarse)').matches;
-      if (mq || (navigator.maxTouchPoints ?? 0) > 0) setKaba(true);
-    };
-    olc();
-    // ⚠️ Bir kez: parmak değdiyse geri dönüş yok, dinleyiciyi tutmaya gerek yok.
-    const dokunma = () => setKaba(true);
-    window.addEventListener('touchstart', dokunma, { once: true, passive: true });
-    const mq = typeof window.matchMedia === 'function'
-      ? window.matchMedia('(pointer: coarse)') : null;
-    mq?.addEventListener('change', olc);
-    return () => {
-      window.removeEventListener('touchstart', dokunma);
-      mq?.removeEventListener('change', olc);
-    };
   }, []);
 
   const [hint, setHint] = useState<Hint | null>(null);

@@ -38,6 +38,7 @@ import { joinBossRoom, type PresenceHandle } from '@/lib/presence';
 import { getMode } from '@/lib/session';
 import { fetchReferral } from '@/lib/gameSession';
 import { paylasimXLinki } from '@/game/paylas';
+import { dokunmatikMi } from '@/lib/dokunmatik';
 import { isTestMode } from '@/lib/testMode';
 import { cubukCiz, cubukTak } from '@/lib/stick';
 
@@ -720,11 +721,8 @@ export function GameCanvas({ stage, permanent, mode = 'campaign', hero, seed, st
           hintRef.current = { def: h, at: game.time };
           seenRef.current = [...seenRef.current, h.id];
           markHintSeen(h.id);
-          // Dokunmatik mi — ⚠️ TEK KAYNAK YALAN SÖYLER (HubCanvas dersi):
-          // `pointer: coarse` bazı WebView'larda yanlış; `maxTouchPoints` da okunuyor
-          const dokunmatik = (window.matchMedia?.('(pointer: coarse)').matches ?? false)
-            || (navigator.maxTouchPoints ?? 0) > 0;
-          setHint(hintText(h, dokunmatik));
+          // ⚠️ Algılama ortak modülde — tek kaynak (`lib/dokunmatik`)
+          setHint(hintText(h, dokunmatikMi()));
         }
       }
       /**

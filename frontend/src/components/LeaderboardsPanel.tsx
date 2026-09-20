@@ -16,6 +16,7 @@
 // ⚠️ METİN İSTEMCİDE: sunucu `value` (sıralama anahtarı) gönderiyor, cümleyi
 // burada kuruyoruz — oyuncu metni tek yerde yaşar.
 
+import { DOKUNMA_HEDEFI, useDokunmatik } from '@/lib/dokunmatik';
 import { useEffect, useState, type ReactNode } from 'react';
 import { STAGES } from '@/game/config';
 import { cosmeticById } from '@/game/cosmetics';
@@ -161,6 +162,8 @@ export function LeaderboardsPanel({ baslangic = 'descent', gomulu = false }: {
 
 function Secici({ id, onSec }: { id: BoardId; onSec: (id: BoardId) => void }) {
   const grup = PANOLAR.find((p) => p.id === id)!.grup;
+  /** Parmakla mi kullaniliyor — sekme cipleri buna gore buyuyor (tek kaynak) */
+  const dokunmatik = useDokunmatik();
   return (
     <div style={{ marginBottom: 12 }}>
       {/* 🔴 PIXELBUTTON DEĞİL — ölçüldü (375 px): panel içi 227 px, her
@@ -176,7 +179,9 @@ function Secici({ id, onSec }: { id: BoardId; onSec: (id: BoardId) => void }) {
               onClick={() => { if (!secili) onSec(PANOLAR.find((p) => p.grup === g)!.id); }}
               style={{
                 all: 'unset', boxSizing: 'border-box', cursor: 'pointer', textAlign: 'center',
-                padding: '7px 4px', borderRadius: 6, fontFamily: FONT.ui,
+                /* 🔴 Parmak hedefi: grup sekmeleri 28 px, pano cipleri 22 px idi */
+                minHeight: dokunmatik ? DOKUNMA_HEDEFI : undefined,
+                padding: dokunmatik ? '9px 4px' : '7px 4px', borderRadius: 6, fontFamily: FONT.ui,
                 fontSize: 11, fontWeight: 900, letterSpacing: 1.2,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 color: secili ? C.void : C.bone,
@@ -197,7 +202,8 @@ function Secici({ id, onSec }: { id: BoardId; onSec: (id: BoardId) => void }) {
             <button key={p.id} role="tab" aria-selected={secili} onClick={() => onSec(p.id)}
               style={{
                 all: 'unset', boxSizing: 'border-box', cursor: 'pointer', flexShrink: 0,
-                padding: '4px 10px', borderRadius: 999, fontFamily: FONT.ui,
+                minHeight: dokunmatik ? DOKUNMA_HEDEFI : undefined,
+                padding: dokunmatik ? '0 14px' : '4px 10px', borderRadius: 999, fontFamily: FONT.ui,
                 fontSize: 10, fontWeight: 900, letterSpacing: 1, whiteSpace: 'nowrap',
                 color: secili ? C.candle : C.boneDim,
                 background: secili ? 'rgba(239,167,46,0.13)' : 'rgba(255,255,255,0.05)',
@@ -360,6 +366,7 @@ function degerOf(pano: Board, row: BoardRow): { etiket: ReactNode; alt?: ReactNo
  */
 function WatchButton({ wallet }: { wallet: string }) {
   const [durum, setDurum] = useState<'idle' | 'busy' | 'ok' | 'err'>('idle');
+  const dokunmatik = useDokunmatik();
   if (!panelUnlocked(getMode())) return null;
   const metin = durum === 'ok' ? 'WATCHING' : durum === 'err' ? 'FAILED' : 'WATCH';
   return (
@@ -373,7 +380,15 @@ function WatchButton({ wallet }: { wallet: string }) {
       }}
       style={{
         all: 'unset', flexShrink: 0, cursor: durum === 'idle' ? 'pointer' : 'default',
-        padding: '2px 7px', borderRadius: 4, fontSize: 8.5, fontWeight: 900,
+        boxSizing: 'border-box',
+        /* 🔴 OLCULDU (mobil denetim): dugme 15 px yuksekti, parmakla komsu
+           satira basiliyordu. Dokunmatikte DOKUNMA_HEDEFI, faresinde eski
+           kompakt hali — masaustunde 32 px'lik cip satiri sisirirdi. */
+        minHeight: dokunmatik ? DOKUNMA_HEDEFI : undefined,
+        display: dokunmatik ? 'inline-flex' : undefined,
+        alignItems: dokunmatik ? 'center' : undefined,
+        padding: dokunmatik ? '0 12px' : '2px 7px',
+        borderRadius: 4, fontSize: dokunmatik ? 10 : 8.5, fontWeight: 900,
         letterSpacing: 1, fontFamily: FONT.ui,
         color: durum === 'ok' ? C.ok : durum === 'err' ? C.badText : C.boneFaint,
         border: `1px solid ${durum === 'ok' ? `${C.ok}66` : C.border}`,

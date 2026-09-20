@@ -40,9 +40,11 @@ console.log('\n[1] ** TUTORIAL DOKUNMATIKTE KLAVYE DEMIYOR');
     if (/WASD|arrow|keyboard|press [A-Z]\b/i.test(h.text))
       check(`'${h.id}' klavye diyor → textTouch sart`, !!h.textTouch && !/WASD|arrow|keyboard/i.test(h.textTouch));
   }
-  // ⚠️ İKİ KAYNAK: yalnız `pointer: coarse` bazı WebView'larda yanlış (HubCanvas'ta ölçüldü)
-  check('GameCanvas dokunmatigi IKI kaynaktan olcuyor',
-    /pointer: coarse/.test(oyun) && /maxTouchPoints \?\? 0\) > 0;\s*setHint\(hintText\(h, dokunmatik\)\)/.test(oyun));
+  // ⚠️ Algılama ORTAK modülden (`lib/dokunmatik`) — tek kaynak, üç sinyal.
+  // Kendi satır içi kopyasını yazan dosya [3d]'de de yakalanıyor.
+  check('GameCanvas ipucu ortak algilamayi kullaniyor',
+    /setHint\(hintText\(h, dokunmatikMi\(\)\)\)/.test(oyun)
+    && /from '@\/lib\/dokunmatik'/.test(oku('../components/GameCanvas.tsx')));
   check('ipucu dar ekranda kurenin ustunde', /bottom: darHud \? 150 : 96/.test(oyun));
 }
 
@@ -96,6 +98,37 @@ console.log('\n[3c] ** TELEFONDA KARTLAR SAGDAN ACILAN CEKMECEDE (kullanici iste
     /const kayma = Math\.min\(0, ekranH - 12 - EN_AZ_H - ust\)/.test(cek) && /marginTop: kayma/.test(cek)
     && /ekranH=\{ekranH\}/.test(play));
   check('kaydirmali serit geri gelmedi', !/KartSeridi|scrollSnapType/.test(play));
+}
+
+console.log('\n[3d] ** PARMAK HEDEFLERI VE TEK KAYNAK ALGILAMA');
+{
+  /**
+   * 🔴 ÖLÇÜLDÜ (mobil denetim): pano WATCH düğmesi 15 px, yükseliş çipleri
+   * 20x20 idi — parmakla komşusuna basılıyordu.
+   * 🔴 ALGILAMA ÜÇ YERDE AYRI YAZILIYDI ve biri yalnız `(pointer: coarse)`
+   * okuyordu; o kaynak tek başına YALAN SÖYLÜYOR (HubCanvas'ta ölçüldü).
+   */
+  const dok = yorumsuz(oku('../lib/dokunmatik.ts'));
+  const pano = yorumsuz(oku('../components/LeaderboardsPanel.tsx'));
+  const m = dok.match(/DOKUNMA_HEDEFI = (\d+)/);
+  check('DOKUNMA_HEDEFI >= 32', !!m && +m[1] >= 32, m?.[1] ?? '');
+  check('uc kaynak: coarse + maxTouchPoints + touchstart',
+    /pointer: coarse/.test(dok) && /maxTouchPoints/.test(dok) && /'touchstart'/.test(dok));
+  check('WATCH dugmesi dokunmatikte buyuyor', /minHeight: dokunmatik \? DOKUNMA_HEDEFI/.test(pano));
+  check('yukselis cipleri dokunmatikte buyuyor',
+    /minWidth: dokunmatik \? DOKUNMA_HEDEFI/.test(play) && /minHeight: dokunmatik \? DOKUNMA_HEDEFI/.test(play));
+
+  /**
+   * ⚠️ TEK KAYNAK: `(pointer: coarse)` sorgusunu ortak modülden BAŞKA yerde
+   * kimse okumamalı. `quality.ts` hariç — o cihaz KADEMESİ tahmin ediyor
+   * (başka soru), burada dokunma hedefi konuşuluyor.
+   */
+  const kacak: string[] = [];
+  for (const f of ['../components/HubCanvas.tsx', '../components/GameCanvas.tsx',
+    '../components/LeaderboardsPanel.tsx', '../app/play/page.tsx']) {
+    if (/matchMedia[^\n]*pointer: coarse/.test(yorumsuz(oku(f)))) kacak.push(f);
+  }
+  check('algilama yalniz lib/dokunmatik icinde', kacak.length === 0, kacak.join(', '));
 }
 
 console.log('\n[4] ** ANA SAYFA KAPISI GORUNUR YUKSEKLIKTE');

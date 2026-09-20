@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
 import { kisaEkranMi, leaderboardDugmesi, panelKutusu, sagKolon, solKolon, SOL_ARA } from '@/game/hudLayout';
+import { DOKUNMA_HEDEFI, useDokunmatik } from '@/lib/dokunmatik';
 import { KOLAY_TABAN, tabanDurum, tabanZorluk } from '@/game/descentBase';
 import { PlayConnect } from '@/components/PlayConnect';
 import { VigilBeacon } from '@/components/VigilBeacon';
@@ -485,6 +486,8 @@ export default function PlayPage() {
   const lbProfilde = sol.gorunur && lbDugme.goster;
   /** Telefon: dar dikey VEYA kısa yatay ekran (Phantom uygulama içi tarayıcı dahil) */
   const telefon = ekranW < 640 || kisaEkranMi(ekranH);
+  /** Parmakla mi kullaniliyor — kucuk cipler buna gore buyuyor (tek kaynak) */
+  const dokunmatik = useDokunmatik();
   /** Yeni oyuncunun "START HERE" kartı görünüyor mu — tek kaynak, aşağıda iki yerde okunuyor */
   const ilkGorunur = !panel && !ilkGizli && !(wallet && progress?.name === null) && isNewcomer(progress);
   /**
@@ -1672,6 +1675,8 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, genelEnDerin
 }) {
   // Taban süre: düşmanlar spawn hızından çabuk sahneye çıkamaz, hepsi ölmeden
   // bölüm bitmez. Gerçek koşu bundan uzun sürer — "en az" diyoruz.
+  /** Parmakla mi kullaniliyor — yukselis cipleri buna gore buyuyor (tek kaynak) */
+  const dokunmatik = useDokunmatik();
   const tabanSn = Math.round(s.enemyCount / s.spawnRate);
   // hpMul 1 → 14 aralığında; beş kademeye indiriyoruz
   const zorluk = Math.max(1, Math.min(5, Math.ceil(Math.log(s.hpMul) / Math.log(1.72) + 1)));
@@ -1845,8 +1850,16 @@ function StageCard({ stage: s, locked, cleared, claimed, bestDepth, genelEnDerin
                     title={i === 0 ? 'Standard descent' :
                       `Enemies ×${ascensionHpMul(i).toFixed(1)} health, ×${ascensionDamageMul(i).toFixed(2)} damage, +${Math.round((ascensionDropMul(i) - 1) * 100)}% drop value`}
                     style={{
-                      all: 'unset', cursor: 'pointer', minWidth: 20, padding: '2px 7px',
-                      borderRadius: 5, textAlign: 'center', fontSize: 11, fontWeight: 900,
+                      all: 'unset', cursor: 'pointer', boxSizing: 'border-box',
+                      /* 🔴 OLCULDU (mobil denetim, 375x560): cipler 20x20 idi,
+                         parmakla komsu kademeye basiliyordu. Dokunmatikte kare
+                         bir DOKUNMA_HEDEFI; faresinde eski kompakt hali. */
+                      minWidth: dokunmatik ? DOKUNMA_HEDEFI : 20,
+                      minHeight: dokunmatik ? DOKUNMA_HEDEFI : undefined,
+                      display: dokunmatik ? 'inline-flex' : undefined,
+                      alignItems: 'center', justifyContent: 'center',
+                      padding: dokunmatik ? '0 8px' : '2px 7px',
+                      borderRadius: 5, textAlign: 'center', fontSize: dokunmatik ? 13 : 11, fontWeight: 900,
                       fontFamily: FONT.ui,
                       color: kademe === i ? '#1a0508' : C.boneDim,
                       background: kademe === i
