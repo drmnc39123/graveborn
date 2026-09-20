@@ -23,13 +23,20 @@ export const CEKMECE_SEKME = 36;
 /** Açık çekmecenin en az yüksekliği — altta yer yoksa panel yukarı kayar */
 const EN_AZ_H = 180;
 
-export function KartCekmece({ ust, genislik, ekranH, children }: {
+export function KartCekmece({ ust, genislik, ekranH, nokta = false, children }: {
   /** Ekran üstünden px — sağ kolonun kalan kısmının başladığı yer */
   ust: number;
   /** Açıkken çekmecenin genişliği */
   genislik: number;
   /** Görünür ekran yüksekliği — panel ekranın altına taşmasın */
   ekranH: number;
+  /**
+   * İçeride ZAMANA BAĞLI bir şey var mı (bkz. `useBossVurulmadi`).
+   * ⚠️ Kapalı çekmece bilgi saklamamalı: haftalık boss kaçırılırsa bir daha
+   * o boss gelmiyor. Nokta yalnız YAPILABİLİR iş için yanıyor ve iş bitince
+   * sönüyor — sürekli yanan bir süs, rozetlerin tamamını değersizleştirir.
+   */
+  nokta?: boolean;
   children: React.ReactNode;
 }) {
   const [acik, setAcik] = useState(false);
@@ -58,6 +65,7 @@ export function KartCekmece({ ust, genislik, ekranH, children }: {
         aria-expanded={acik}
         style={{
           all: 'unset', boxSizing: 'border-box', cursor: 'pointer', pointerEvents: 'auto',
+          position: 'relative',
           width: CEKMECE_SEKME, height: 44, marginTop: 6,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           ...thinGlass(0, 0.85),
@@ -67,6 +75,14 @@ export function KartCekmece({ ust, genislik, ekranH, children }: {
           color: acik ? C.candle : C.bone,
         }}>
         {acik ? '›' : '‹'}
+        {/* ⚠️ Yalnız KAPALIYKEN: açıkken içerik zaten görünüyor */}
+        {nokta && !acik && (
+          <span aria-hidden style={{
+            position: 'absolute', top: -3, left: -3, width: 9, height: 9,
+            borderRadius: 9, background: C.candle,
+            boxShadow: `0 0 0 2px rgba(10,8,6,0.9), 0 0 8px ${C.candle}`,
+          }} />
+        )}
       </button>
       <div style={{
         boxSizing: 'border-box', width: genislik, maxHeight: maxH, marginTop: kayma,

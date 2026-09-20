@@ -15,6 +15,7 @@ import { PixelButton, Icon, BTN } from '@/components/ui/kit';
 import { useCountUpInt } from '@/components/ui/motion';
 import { SocialLinks } from '@/components/SocialLinks';
 import { kisaEkranMi } from '@/game/hudLayout';
+import { grupRozeti, type Rozetler } from '@/game/rozet';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 export interface DockEntry {
@@ -160,12 +161,36 @@ export const BUILDINGS: readonly DockEntry[] = [
  * Sabit sayı yerine GERÇEK yükseklik ölçülüyor; düğme sayısı ya da ekran
  * genişliği değişince kendiliğinden doğru kalıyor.
  */
+/**
+ * ROZET NOKTASI — `BuildRail` köşe noktasının rıhtımdaki eşi.
+ * ⚠️ Düğmenin İÇİNE değil, sarmalayıcıya konuyor: `PixelButton` dokuz-dilim
+ * çerçeve çiziyor ve içine mutlak konumlu bir şey koymak kenarlığın altında
+ * kalıyordu (ölçüldü).
+ */
+function Nokta({ renk = C.candle }: { renk?: string }) {
+  return (
+    <span aria-hidden style={{
+      position: 'absolute', top: -3, right: -3, width: 9, height: 9,
+      borderRadius: 9, background: renk,
+      boxShadow: `0 0 0 2px rgba(10,8,6,0.9), 0 0 8px ${renk}`,
+      pointerEvents: 'none',
+    }} />
+  );
+}
+
 export function BuildingDock({
   /** oyuncunun adı — yoksa kısa cüzdan gösterilir */
-  ad = null, open, onOpen, onClose, gold, grave = 0, wallet, style, onHeight, onLeft, footer }: {
+  ad = null, open, onOpen, onClose, gold, grave = 0, wallet, style, onHeight, onLeft, footer,
+  rozetler = {} }: {
   /** açık olan panel — buton "Selected" görünür */
   open: string | null;
   onOpen: (id: string) => void;
+  /**
+   * Bina kimliği → "burada alınacak bir şey var" (bkz. `game/rozet.ts`).
+   * ⚠️ Rozet = YAPILABİLİR İŞ. Oyuncu gidip bir şey alamıyorsa rozet yalan
+   * söylemiş olur ve hiçbirine bir daha güvenmez.
+   */
+  rozetler?: Rozetler;
   /**
    * Açık paneli kapat.
    *
@@ -294,8 +319,11 @@ export function BuildingDock({
   const grupDugmeleri = (
     <>
         {GROUPS.map((g) => (
+          // ⚠️ Grup çipi de işaretleniyor: alt satır YALNIZ açık grubu
+          // gösteriyor, yani kapalı bir gruptaki rozet başka türlü
+          // görünmezdi — rozetin tüm amacı o.
+          <span key={g.id} style={{ position: 'relative', display: 'inline-flex' }}>
           <PixelButton
-            key={g.id}
             variant={BTN.action}
             scale={2}
             active={acikGrup?.id === g.id}
@@ -312,6 +340,8 @@ export function BuildingDock({
           >
             {g.label}
           </PixelButton>
+          {acikGrup?.id !== g.id && grupRozeti(g.members, rozetler) && <Nokta renk={g.color} />}
+          </span>
         ))}
         <PixelButton
           variant={BTN.action}
@@ -508,17 +538,19 @@ export function BuildingDock({
             const b = BUILDINGS.find((x) => x.id === id);
             if (!b) return null;
             return (
-              <PixelButton
-                key={id}
-                variant={BTN.action}
-                scale={2}
-                active={open === id}
-                onClick={() => onOpen(id)}
-                title={b.sub}
-                style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
-              >
-                {b.label}
-              </PixelButton>
+              <span key={id} style={{ position: 'relative', display: 'inline-flex' }}>
+                <PixelButton
+                  variant={BTN.action}
+                  scale={2}
+                  active={open === id}
+                  onClick={() => onOpen(id)}
+                  title={b.sub}
+                  style={{ fontSize: 11, fontWeight: 900, letterSpacing: 0.9 }}
+                >
+                  {b.label}
+                </PixelButton>
+                {rozetler[id] && <Nokta />}
+              </span>
             );
           })}
         </div>

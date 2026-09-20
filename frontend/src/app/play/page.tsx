@@ -9,6 +9,8 @@ import { useRouter } from 'next/navigation';
 import { HubCanvas } from '@/components/HubCanvas';
 import { kisaEkranMi, leaderboardDugmesi, panelKutusu, sagKolon, solKolon, SOL_ARA } from '@/game/hudLayout';
 import { DOKUNMA_HEDEFI, useDokunmatik } from '@/lib/dokunmatik';
+import { dockRozetleri } from '@/game/rozet';
+import { sonrakiAdim } from '@/game/sonrakiAdim';
 import { KOLAY_TABAN, tabanDurum, tabanZorluk } from '@/game/descentBase';
 import { PlayConnect } from '@/components/PlayConnect';
 import { VigilBeacon } from '@/components/VigilBeacon';
@@ -59,7 +61,7 @@ import {
 } from '@/components/DescentCurtain';
 import { PixelText } from '@/components/ui/PixelText';
 import { GEAR, SLOT_NAME, affixText, rarityOf } from '@/game/gear';
-import { loadProgress, resolveRunPets, paidDepth, type Progress, type RunResult } from '@/game/progress';
+import { loadProgress, resolveRunPets, paidDepth, utcDay, type Progress, type RunResult } from '@/game/progress';
 import { newlyUnlocked, unlockedWeapons, weaponName } from '@/game/unlocks';
 import type { CSSProperties } from 'react';
 import type { RunMode } from '@/game/engine';
@@ -75,7 +77,7 @@ import {
   type BoardId, type CardSummary, type RunKind, type RunTicket, type Settled,
 } from '@/lib/gameSession';
 import { panelUnlocked } from '@/lib/testMode';
-import { BossKarti, TrialsKarti } from '@/components/HudKartlari';
+import { BossKarti, TrialsKarti, useBossVurulmadi } from '@/components/HudKartlari';
 import { KartCekmece, CEKMECE_SEKME } from '@/components/KartCekmece';
 
 type Screen =
@@ -488,6 +490,25 @@ export default function PlayPage() {
   const telefon = ekranW < 640 || kisaEkranMi(ekranH);
   /** Parmakla mi kullaniliyor — kucuk cipler buna gore buyuyor (tek kaynak) */
   const dokunmatik = useDokunmatik();
+  /** Telefonda kapalı çekmece bilgi saklamasın — haftalık boss kaçırılabilir */
+  const bossVurulmadi = useBossVurulmadi();
+  /**
+   * RIHTIM ROZETLERI — "su an alinacak bir seyin var" (bkz. `game/rozet.ts`).
+   * ⚠️ Yeni ag istegi YOK: `progress` yerel, `ozet` profil kartinin zaten
+   * yaptigi 30 sn'lik paylasilan istekten geliyor.
+   */
+  const rozetler = useMemo(
+    () => dockRozetleri({ progress, ozet, gun: utcDay(new Date()) }),
+    [progress, ozet],
+  );
+  /**
+   * Koşu bittiğinde önerilecek TEK adım — ödeme ekranında gösteriliyor.
+   * ⚠️ Rozetlerle aynı girdiden türüyor: yeni ağ isteği yok.
+   */
+  const adim = useMemo(
+    () => sonrakiAdim({ progress, ozet, gun: utcDay(new Date()) }),
+    [progress, ozet],
+  );
   /** Yeni oyuncunun "START HERE" kartı görünüyor mu — tek kaynak, aşağıda iki yerde okunuyor */
   const ilkGorunur = !panel && !ilkGizli && !(wallet && progress?.name === null) && isNewcomer(progress);
   /**
@@ -826,6 +847,7 @@ export default function PlayPage() {
       {/* ⚠️ Rıhtım ve köy kapısı AYNI fonksiyonu çağırıyor (`hedefiAc`) —
           ikisi ayrı yazıldığında `pit` yalnız rıhtımdan çalışıyordu. */}
       <BuildingDock open={panel} onOpen={hedefiAc} onClose={() => setPanel(null)}
+        rozetler={rozetler}
         gold={progress?.gold ?? 0} wallet={wallet} ad={progress?.name ?? null}
         onHeight={setDockH}
         onLeft={setDockLeft}
@@ -1034,7 +1056,8 @@ export default function PlayPage() {
           <KartCekmece
             ust={kolon.y + (kolonIcH > 0 ? kolonIcH + 6 : 0)}
             genislik={Math.min(240, ekranW - CEKMECE_SEKME - 24)}
-            ekranH={ekranH}>
+            ekranH={ekranH}
+            nokta={bossVurulmadi}>
             {sagKartlar(progress)}
           </KartCekmece>
         )}
@@ -1340,8 +1363,27 @@ export default function PlayPage() {
                 </div>
               </div>
             )}
+            {/* ⭐ SIRADAKİ ADIM — "kazandım, şimdi ne?" boşluğu (bkz.
+                `game/sonrakiAdim.ts`). Ödeme ekranı GEÇMİŞİ anlatıyordu;
+                oturumu uzatan tek doğal kanca burası ve boştu.
+                ⚠️ Yapılabilir bir iş yoksa `null` → satır hiç çizilmiyor. */}
+            {adim && (
+              <div style={{
+                marginTop: 16, padding: '11px 13px', borderRadius: 9,
+                border: `1px solid ${C.candle}44`, background: 'rgba(239,167,46,0.08)',
+                display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                justifyContent: 'center', textAlign: 'center',
+              }}>
+                <span style={{ fontSize: 12, color: C.boneDim, lineHeight: 1.5 }}>{adim.metin}</span>
+                <PixelButton variant={BTN.action} scale={2}
+                  onClick={() => { setPayout(null); hedefiAc(adim.panel); }}
+                  style={{ minWidth: 150, fontSize: 11, fontWeight: 900, letterSpacing: 1 }}>
+                  {adim.etiket}
+                </PixelButton>
+              </div>
+            )}
             <PixelButton variant={BTN.strong} scale={3} onClick={() => setPayout(null)}
-              style={{ marginTop: 18, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
+              style={{ marginTop: 12, width: '100%', fontSize: 13, letterSpacing: 0.6 }}>
               CONTINUE
             </PixelButton>
           </div>

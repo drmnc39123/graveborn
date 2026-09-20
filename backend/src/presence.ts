@@ -251,6 +251,9 @@ function koyYayini(list: Peer[], now: number) {
     listeler.set(k, aday.slice(0, KOY_TAVAN).map((p) => ({ w: p.wallet, o: ozet(p, now) })));
   }
 
+  // Köydeki toplam kişi — yayının içinde gidiyor (bkz. `n`)
+  const koyToplam = list.length;
+
   // 3) Gönder — herkes kendi hücresinin listesini alır, KENDİSİ çıkarılmış
   for (const p of list) {
     if (p.ws.readyState !== WebSocket.OPEN) continue;
@@ -259,7 +262,12 @@ function koyYayini(list: Peer[], now: number) {
     // kişiye özel kopya çıkarmak paylaşmanın anlamını yok ederdi.
     const others = liste ? liste.filter((x) => x.w !== p.wallet).map((x) => x.o) : [];
     try {
-      p.ws.send(JSON.stringify({ t: 'peers', peers: others }));
+      // ⚠️ `n` = KÖYDEKİ TOPLAM kişi, listedeki değil. Liste hücre başına
+      // `KOY_TAVAN` ile sınırlı ve komşu hücreleri kapsıyor; oyuncunun
+      // sorduğu soru ise "şu an burada kaç kişi var". Sayı yayının içinde
+      // gidiyor: ayrı bir uç açmak 5 Hz'lik bir kanalın yanında ikinci bir
+      // istek ömrü yönetmek olurdu.
+      p.ws.send(JSON.stringify({ t: 'peers', peers: others, n: koyToplam }));
     } catch { /* yazılamıyorsa bir sonraki turda düşecek */ }
   }
 }

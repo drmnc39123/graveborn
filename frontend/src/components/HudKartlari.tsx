@@ -15,7 +15,7 @@
 import { useEffect, useState } from 'react';
 import { seasonEndsAt, seasonWeek } from '@/game/season';
 import { Bar, Icon } from '@/components/ui/kit';
-import { fetchWorldBoss, sunucuSimdi, type BossState } from '@/lib/gameSession';
+import { fetchWorldBoss, sunucuSimdi, worldBossAvailable, type BossState } from '@/lib/gameSession';
 import { C, FONT, thinGlass } from '@/lib/theme';
 
 /** "5d 4h" · "3h 12m" · "9m" — dakikada bir yeniden çizilir, saniye yok */
@@ -96,6 +96,35 @@ function bossOku(): Promise<BossState> {
   bossOnbellek = { at: t, soz };
   soz.catch(() => { if (bossOnbellek?.soz === soz) bossOnbellek = null; });
   return soz;
+}
+
+/**
+ * BU HAFTAKİ BOSS'A HİÇ VURDUN MU — telefondaki çekmece rozeti bunu soruyor.
+ *
+ * 🔴 NİYE (2026-09-20): telefonda sağ kolon kartları varsayılan KAPALI bir
+ * çekmecede duruyor (kullanıcı kararı). Kapalı çekmece bilgi saklamamalı:
+ * haftalık boss kaçırılırsa bir daha o boss gelmiyor.
+ * ⚠️ AYNI 60 sn'lik önbellekten okuyor — kart zaten çekiyor, ikinci istek yok.
+ * ⚠️ Cüzdansız oyuncu boss'a vuramaz; onda rozet YANMAZ (yapılamayacak işe
+ * çağırmak yalan olurdu).
+ * ⚠️ Vurduğun an sönüyor — rozet kalıcı bir süs değil.
+ */
+export function useBossVurulmadi(): boolean {
+  const [v, setV] = useState(false);
+  useEffect(() => {
+    if (!worldBossAvailable()) return;
+    let iptal = false;
+    const oku = () => bossOku()
+      .then((b) => {
+        if (iptal) return;
+        setV(!b.defeated && b.hp > 0 && (b.me?.damage ?? 0) === 0);
+      })
+      .catch(() => { /* sessiz — rozet yoksa kart yine duruyor */ });
+    oku();
+    const t = setInterval(() => { if (!document.hidden) oku(); }, BOSS_TTL_MS);
+    return () => { iptal = true; clearInterval(t); };
+  }, []);
+  return v;
 }
 
 /** HAFTALIK BOSS canı — sağ sütun, etkinlik kartının altı. Tıklanınca boss paneli. */

@@ -48,6 +48,17 @@ export function ChatPanel({ kisayollar = [], onOpen, onHeight }: {
   // arayüz "bağlı değil" gösteriyordu — soket gayet açıkken. Ölçüldü.
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [bagli, setBagli] = useState(false);
+  /**
+   * KÖYDE KAÇ KİŞİ VAR — yayının içinden geliyor (`presence` `n` alanı).
+   * ⚠️ Ayrı istek YOK: sayı 5 Hz'lik köy yayınına eklendi.
+   * ⚠️ Sayaç 1 sn'de bir okunuyor, her karede değil: 5 Hz'lik bir sayıyı
+   * React durumuna yazmak başlığı saniyede beş kez yeniden çizerdi.
+   */
+  const [koydeki, setKoydeki] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setKoydeki(handleRef.current?.koydeki ?? 0), 1000);
+    return () => clearInterval(t);
+  }, []);
   const [acik, setAcik] = useState(true);
   const [metin, setMetin] = useState('');
   const [kanal, setKanal] = useState<Kanal>('world');
@@ -165,6 +176,17 @@ export function ChatPanel({ kisayollar = [], onOpen, onHeight }: {
           <span style={{ fontSize: 10.5, fontWeight: 900, letterSpacing: 1.6, color: C.ice }}>
             THE SQUARE
           </span>
+          {/* 🔴 "ŞU AN BURADA KAÇ KİŞİ VAR" — sunucu bunu sayıyordu ama yalnız
+              admin ucundan okunuyordu. Sayı olmadan oyuncu, köyde kimseyi
+              görmediğinde sistemin bozuk mu yoksa boş mu olduğunu
+              ayırt edemiyordu.
+              ⚠️ BOŞKEN GİZLENMİYOR: ana sayfadaki "<25 ise gizle" kuralı
+              pazarlama sayacı içindi; burası oyunun o anki durumu. */}
+          {bagli && (
+            <span style={{ fontSize: 10, color: C.boneFaint, letterSpacing: 0.4 }}>
+              {koydeki} here
+            </span>
+          )}
           <span style={{ marginLeft: 'auto', fontSize: 11, color: C.boneFaint }}>
             {acik ? '▾' : '▴'}
           </span>

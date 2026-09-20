@@ -49,6 +49,15 @@ export interface ChatHandle {
   messages: ChatMessage[];
   /** bağlı mı (arayüz "bağlanıyor…" gösterebilsin) */
   bagli: boolean;
+  /**
+   * KÖYDE ŞU AN KAÇ KİŞİ VAR (kendisi dahil).
+   * 🔴 NİYE (2026-09-20): `presenceCount()` sunucuda yazılıydı ama yalnız
+   * admin ucundan okunuyordu; oyuncu köye girip kimseyi göremediğinde
+   * sistemin bozuk mu yoksa boş mu olduğunu ayırt edemiyordu.
+   * ⚠️ BOŞKEN GİZLENMİYOR: ana sayfadaki "<25 ise sayaç gizli" kuralı
+   * pazarlama sayacı içindi; bu ise oyunun o anki DURUMU.
+   */
+  koydeki: number;
   say(text: string, kanal?: Kanal): void;
   /**
    * KÖYDEKİ DİĞER OYUNCULAR — her karede okunur, kopyalanmaz.
@@ -120,7 +129,7 @@ export function joinChat(
    */
   onLonca?: (tag: string | null) => void,
 ): ChatHandle {
-  const bos: ChatHandle = { messages: [], bagli: false, ghosts: [], say() {}, push() {}, close() {} };
+  const bos: ChatHandle = { messages: [], bagli: false, koydeki: 0, ghosts: [], say() {}, push() {}, close() {} };
 
   const token = getToken();
   if (!token || typeof window === 'undefined') return bos;
@@ -166,6 +175,7 @@ export function joinChat(
   const handle: ChatHandle = {
     messages: [],
     bagli: false,
+    koydeki: 0,
     ghosts: [],
     push(x, y, facingRight) {
       if (ws.readyState !== WebSocket.OPEN) return;
@@ -274,7 +284,7 @@ export function joinChat(
     try {
       const m = JSON.parse(String(ev.data)) as {
         t?: string; msg?: ChatMessage; msgs?: ChatMessage[]; peers?: Ghost[];
-        g?: string | null;
+        g?: string | null; /** köydeki toplam kişi */ n?: number;
       };
       if (m.t === 'me') { if (!iptal) onLonca?.(m.g ?? null); return; }
       if (m.t === 'chat_history' && Array.isArray(m.msgs)) {
@@ -289,6 +299,9 @@ export function joinChat(
         // ⚠️ Referans DEĞİŞTİRİLİYOR: çizim döngüsü her karede okuyor, yerinde
         // değiştirmek yarım güncellenmiş bir kare gösterebilirdi.
         handle.ghosts = m.peers;
+        // ⚠️ `n` KÖYDEKİ TOPLAM: hayalet listesi hücre başına sınırlı ve
+        // komşu hücreleri kapsıyor, yani uzunluğu "kaç kişi var"ı ölçmüyor.
+        if (typeof m.n === 'number') handle.koydeki = m.n;
       }
     } catch { /* bozuk mesaj — yok say */ }
   };
