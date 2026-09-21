@@ -19,8 +19,16 @@ const check = (n: string, ok: boolean, d = '') => {
   if (!ok) FAIL.push(n);
 };
 
-const YENI: QuestProfile = { deepestDepth: 0, cleared: false };
-const USTA: QuestProfile = { deepestDepth: 999, cleared: true };
+const YENI: QuestProfile = { deepestDepth: 0, cleared: false, pvpAcik: false };
+/**
+ * ⚠️ `pvpAcik: true` — "her şeyi açmış" oyuncu. PvP görevleri artık oynanacak
+ * bir RAKİP varlığına bağlı (2026-09-20: tek oyuncuya "Win a match in the Pit"
+ * düşüyordu ve yapılamıyordu). Alan eklenmeden bu profil üç görevi ÖLÜ
+ * gösteriyordu ve [4] tam da onu yakaladı.
+ */
+const USTA: QuestProfile = { deepestDepth: 999, cleared: true, pvpAcik: true };
+/** Rakipsiz dünya — aynı usta oyuncu, ortalıkta kimse yok */
+const YALNIZ: QuestProfile = { ...USTA, pvpAcik: false };
 const gun = (i: number) => new Date(Date.UTC(2026, 0, 1 + i)).toISOString().slice(0, 10);
 
 console.log('\n═══ GÜNLÜK GÖREVLER ═══');
@@ -96,6 +104,32 @@ console.log('\n[4] ⭐ ÖLÜ GÖREV YOK — havuzdaki her görev gerçekten dü�
   }
   const olu = QUEST_POOL.filter((q) => !gorulen.has(q.id)).map((q) => q.id);
   check('her görev en az bir kez düşüyor', olu.length === 0, olu.join(',') || `${gorulen.size}/${QUEST_POOL.length}`);
+}
+
+console.log('\n[4b] ** RAKIP YOKKEN PvP GOREVI DUSMUYOR');
+{
+  /**
+   * 🔴 ÖLÇÜLDÜ (2026-09-20, canlı: 2 oyuncu): "Win a match in the Pit" tek
+   * oyuncuya da düşüyordu ve kuyrukta kimse olmadığı için YAPILAMAZDI.
+   * Sunucu tarafındaki kapı `backend/src/quests.test.mts [9]`da mühürlü;
+   * burası saf fonksiyonun kendi süzgecini ölçüyor.
+   */
+  const pvpIdler = QUEST_POOL.filter((q) => q.needsPvp).map((q) => q.id);
+  check('havuzda PvP gorevi isaretli (kontrol grubu)', pvpIdler.length >= 3, pvpIdler.join(','));
+  let sizma = 0;
+  const yalnizGorulen = new Set<string>();
+  for (let w = 0; w < 300; w++) {
+    for (let d = 0; d < 6; d++) {
+      for (const q of questsFor(`y${w}`, gun(d), YALNIZ)) {
+        yalnizGorulen.add(q.id);
+        if (pvpIdler.includes(q.id)) sizma++;
+      }
+    }
+  }
+  check('rakipsiz dunyada PvP gorevi HIC dusmuyor', sizma === 0, `${sizma} sizma`);
+  check('rakipsiz oyuncu yine gorev aliyor (kontrol grubu)',
+    yalnizGorulen.size >= QUEST_POOL.length - pvpIdler.length,
+    `${yalnizGorulen.size} farkli gorev`);
 }
 
 console.log('\n[5] GÜN İÇİ KURALLAR');
